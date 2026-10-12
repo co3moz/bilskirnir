@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=GPU application terminal
+Comment=Run OpenGL applications with gpu-run (VirtualGL EGL)
+Exec=xfce4-terminal --title=GPU --command=bash
+Icon=utilities-terminal
+Categories=System;

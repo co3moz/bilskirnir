@@ -1,0 +1,5 @@
+https://{$DESKTOP_HOST} {
+    tls internal
+    reverse_proxy manager:8080
+}
+

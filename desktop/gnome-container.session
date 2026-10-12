@@ -1,0 +1,4 @@
+[GNOME Session]
+Name=Ubuntu (container)
+# Keep desktop/input/audio services; host power/login management is external to the container.
+RequiredComponents=org.gnome.Shell;org.gnome.SettingsDaemon.A11ySettings;org.gnome.SettingsDaemon.Housekeeping;org.gnome.SettingsDaemon.Keyboard;org.gnome.SettingsDaemon.MediaKeys;org.gnome.SettingsDaemon.Sound;org.gnome.SettingsDaemon.XSettings;

@@ -1,0 +1,9 @@
+/target/
+/node_modules/
+/web/dist/
+/data/
+.env
+*.sqlite*
+__pycache__/
+*.py[cod]
+

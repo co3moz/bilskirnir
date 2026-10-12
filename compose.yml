@@ -1,0 +1,73 @@
+name: bilskirnir
+
+services:
+  manager:
+    build: .
+    image: bilskirnir/manager:local
+    container_name: ${MANAGER_CONTAINER:-bilskirnir-manager}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+    labels:
+      io.wsl-desktop.manager: "true"
+    environment:
+      MANAGER_CONTAINER: ${MANAGER_CONTAINER:-bilskirnir-manager}
+      AUTH_MODE: ${AUTH_MODE:-password}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SECURE_COOKIE: ${SECURE_COOKIE:-false}
+      DESKTOP_IMAGE: ${DESKTOP_IMAGE:-bilskirnir/ubuntu-xfce:24.04}
+      WSL_GPU: ${WSL_GPU:-true}
+      NVIDIA_COMPUTE: ${NVIDIA_COMPUTE:-true}
+      GPU_ADAPTER: ${GPU_ADAPTER:-}
+      AUDIO_ENABLED: ${AUDIO_ENABLED:-true}
+      MICROPHONE_ENABLED: ${MICROPHONE_ENABLED:-true}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
+      RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - manager-data:/data
+    networks:
+      - management
+
+  desktop:
+    profiles: [images]
+    build:
+      context: desktop
+      target: xfce
+    image: bilskirnir/ubuntu-xfce:24.04
+    entrypoint: ["/bin/true"]
+
+  desktop-gnome:
+    profiles: [images]
+    build:
+      context: desktop
+      target: gnome
+    image: bilskirnir/ubuntu-gnome:24.04
+    entrypoint: ["/bin/true"]
+
+  https:
+    profiles: [https]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
+    environment:
+      DESKTOP_HOST: ${DESKTOP_HOST:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - management
+    depends_on:
+      - manager
+
+networks:
+  management:
+volumes:
+  manager-data:
+    name: ${MANAGER_DATA_VOLUME:-bilskirnir-data}
+  caddy-data:
+  caddy-config:
+
