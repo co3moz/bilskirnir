@@ -137,6 +137,8 @@ To add a profile, extend `desktop/profiles.json` with its ID, name, reference, `
 
 Choose an image or snapshot, resolution, GPU, internet, CPU/memory limits, sudo, audio/microphone and named volumes. Use **Connect** to open the desktop. The actions menu provides start, stop, restart, snapshots, logs, diagnostics and deletion.
 
+Deletion jobs record container and network cleanup, then confirm that named volumes and saved images were preserved. Older jobs without detailed logs show a result summary.
+
 Environment count has no application quota. Empty CPU/memory fields use Docker's unlimited defaults; available host resources still constrain workloads. GPU access does not reserve or limit VRAM.
 
 A private internal bridge connects each desktop to the manager; VNC is not published on the host. A separate egress bridge is attached or detached by the internet switch. This controls Docker egress, not a separate LAN firewall. Desktop containers do not receive the Docker socket. The manager uses the host Engine socket rather than a nested daemon.

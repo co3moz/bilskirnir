@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, imageTree, imageChoices } from '../web/helpers.mjs';
+import { escapeHtml, imageTree, imageChoices, jobLogText } from '../web/helpers.mjs';
+test('completed legacy deletion explains the result rather than waiting or displaying an ID', () => {
+  const log = jobLogText({status:'completed',log:'',result:{deleted:'old-environment-id',volumes_preserved:true}});
+  assert.equal(log,'Environment deleted. Named volumes were preserved.');
+  assert.equal(jobLogText({status:'queued',log:''}),'Waiting to start…');
+  assert.equal(jobLogText({status:'failed',log:''}),'Operation failed. No detailed log was recorded.');
+  assert.equal(jobLogText({status:'failed',log:'Ownership check failed.'}),'Ownership check failed.');
+});
 test('deep snapshot history cannot overflow the JavaScript call stack', () => {
   const records = Array.from({length:20000},(_,i)=>({id:`r${i}`,image_id:`image${i}`,parent_image_id:i?`image${i-1}`:null}));
   const tree=imageTree(records); assert.equal(tree.length,20000); assert.equal(tree.at(-1).depth,19999);

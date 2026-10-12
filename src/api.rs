@@ -191,10 +191,12 @@ pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resu
         app,
         "delete",
         format!("environment:{id}"),
-        move |app, _| async move {
+        move |app, job_id| async move {
             let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
-            app.remove_environment(&env).await?;
-            Ok(json!({"deleted":id,"volumes_preserved":true}))
+            app.remove_environment(&env, &job_id).await?;
+            Ok(
+                json!({"deleted":id,"name":env.spec.name,"volumes_preserved":true,"images_preserved":true}),
+            )
         },
     )
 }

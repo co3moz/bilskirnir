@@ -374,7 +374,13 @@ try:
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)
     for eid in list(environment_ids):
-        job(api(f"environments/{eid}", method="DELETE")); environment_ids.remove(eid)
+        deletion = api(f"environments/{eid}", method="DELETE")
+        result = job(deletion)
+        environment_ids.remove(eid)
+        log = api(f"jobs/{deletion['job_id']}")["log"]
+        assert "Checking ownership" in log and "Removed the desktop container" in log, log
+        assert "Named volumes and saved images were preserved" in log, log
+        assert result["name"] and result["volumes_preserved"] and result["images_preserved"], result
     assert not api("environments")
     assert docker("volume", "inspect", share)
     print("PASS environment cleanup preserves volumes", flush=True)

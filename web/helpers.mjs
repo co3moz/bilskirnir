@@ -1,6 +1,19 @@
 export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const memory = (bytes) => bytes ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : '—';
 export const date = (seconds) => new Date(seconds * 1000).toLocaleString('en-US');
+export function jobLogText(job) {
+  if (job.log?.trim()) return job.log;
+  if (job.status === 'queued') return 'Waiting to start…';
+  if (job.status === 'running') return 'Operation in progress…';
+  if (job.status === 'completed') {
+    if (job.result?.deleted) {
+      const name = job.result.name;
+      return `${name ? `Deleted "${name}".` : 'Environment deleted.'}${job.result.volumes_preserved ? ' Named volumes were preserved.' : ''}${job.result.images_preserved ? ' Saved images were preserved.' : ''}`;
+    }
+    return 'Operation completed successfully. No detailed log was recorded.';
+  }
+  return job.status === 'failed' ? 'Operation failed. No detailed log was recorded.' : 'Operation interrupted. No detailed log was recorded.';
+}
 export function imageChoices(profiles, records, defaultImage, selected) {
   const choices = new Map();
   for (const item of profiles) choices.set(item.profile.reference, { value: item.profile.reference, label: item.profile.name, disabled: !item.available });

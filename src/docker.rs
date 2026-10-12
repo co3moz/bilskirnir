@@ -330,7 +330,11 @@ impl App {
         self.db.put("environment", &env.id, env)?;
         Ok(())
     }
-    pub async fn remove_environment(&self, env: &Environment) -> Result<()> {
+    pub async fn remove_environment(&self, env: &Environment, job_id: &str) -> Result<()> {
+        self.append_log(
+            job_id,
+            &format!("Checking ownership before deleting \"{}\".", env.spec.name),
+        )?;
         let container = match self.optional_inspect("container", &env.container).await? {
             Some(_) => Some(self.owned(env).await?),
             None => None,
@@ -362,18 +366,44 @@ impl App {
         }
         if let Some(id) = container_id {
             self.docker(&["rm", "--force", id]).await?;
+            self.append_log(
+                job_id,
+                "Removed the desktop container and its writable layer.",
+            )?;
+        } else {
+            self.append_log(job_id, "Desktop container was already absent.")?;
         }
         for info in networks {
             let id = info["Id"].as_str().context("Missing network ID")?;
+            let role = if info["Internal"] == true {
+                "private"
+            } else {
+                "internet"
+            };
             if let Some(manager) = &manager
                 && info["Containers"].get(manager).is_some()
             {
                 self.docker(&["network", "disconnect", "--force", id, manager])
                     .await?;
+                self.append_log(
+                    job_id,
+                    &format!("Disconnected the manager from the {role} network."),
+                )?;
             }
             self.docker(&["network", "rm", id]).await?;
+            self.append_log(
+                job_id,
+                &format!("Removed the environment's {role} network."),
+            )?;
         }
         self.db.remove("environment", &env.id)?;
+        self.append_log(
+            job_id,
+            &format!(
+                "Deleted \"{}\". Named volumes and saved images were preserved.",
+                env.spec.name
+            ),
+        )?;
         Ok(())
     }
     pub async fn address(&self, env: &Environment) -> Result<String> {

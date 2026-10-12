@@ -1,7 +1,7 @@
 import RFB from '@novnc/novnc';
 import { DesktopMedia } from './media.mjs';
 import { icon } from './icons.mjs';
-import { escapeHtml as e, memory, date, imageTree, imageChoices } from './helpers.mjs';
+import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText } from './helpers.mjs';
 
 const app = document.querySelector('#app');
 const modal = document.querySelector('#modal');
@@ -136,10 +136,11 @@ async function openJob(id) {
 function updateJob(data) {
   if (!modal.open || data.id !== activeJob) return;
   const log = document.querySelector('#job-log'), follow = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
-  if (log.textContent !== data.log) { log.textContent = data.log || 'Waiting…'; if (follow) log.scrollTop = log.scrollHeight; }
+  const text = jobLogText(data);
+  if (log.textContent !== text) { log.textContent = text; if (follow) log.scrollTop = log.scrollHeight; }
   document.querySelector('#job-status').innerHTML = `<p>${badge(data.status)} <span class="hint">${e(jobNames[data.kind] || data.kind)} · ${date(data.created_at)}</span></p>`;
   const result = data.result;
-  document.querySelector('#job-result').innerHTML = result ? `<p class="hint">${e(result.reference || result.environment_id || result.deleted || '')}</p>${result.image_id && result.reference ? `<button data-profile-create="${e(result.image_id)}">Create environment ↗</button>` : ''}${result.environment_id ? '<button data-job-environments>View environments ↗</button>' : ''}` : '';
+  document.querySelector('#job-result').innerHTML = result ? `${result.reference ? `<p class="hint">${e(result.reference)}</p>` : ''}${result.image_id && result.reference ? `<button data-profile-create="${e(result.image_id)}">Create environment ↗</button>` : ''}${result.environment_id ? '<button data-job-environments>View environments ↗</button>' : ''}` : '';
 }
 async function pollJob() {
   if (!activeJob || !modal.open || jobRefreshing) return;
