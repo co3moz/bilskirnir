@@ -4,6 +4,20 @@ on:
   push:
     branches: [master]
     tags: ['v*']
+    paths:
+      - '.github/workflows/publish.yml'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'compose*.yml'
+      - '.env.example'
+      - 'Cargo.*'
+      - 'package*.json'
+      - 'src/**'
+      - 'web/**'
+      - 'desktop/**'
+      - 'scripts/**'
+      - 'deploy/**'
+      - 'tests/**'
   workflow_dispatch:
 
 permissions:
@@ -106,6 +120,7 @@ jobs:
             org.opencontainers.image.title=${{ matrix.title }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - name: Build and publish
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.context }}
@@ -117,6 +132,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      - name: Verify registry manifest
+        env:
+          IMAGE: ${{ steps.names.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: docker buildx imagetools inspect "$IMAGE@$DIGEST"
       - name: Published image
         env:
           TAGS: ${{ steps.meta.outputs.tags }}

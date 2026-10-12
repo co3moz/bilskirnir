@@ -6,7 +6,13 @@ Ubuntu container desktops with GPU access, browser VNC, layered snapshots and pe
 
 Requires x86_64 WSL2 Ubuntu, Docker Engine and Compose v2. WSL graphics require `/dev/dxg` and `/usr/lib/wsl`. CUDA additionally requires NVIDIA Container Toolkit on the host Engine.
 
-Install without building or accessing the source repository. Run in a new directory in WSL:
+Packages are currently private. The installing GitHub account must have package access. Sign in to GHCR using a classic personal access token with `read:packages` as the password:
+
+```bash
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```
+
+This step is unnecessary once the packages are public. Install without building or accessing the source checkout. Run in a new directory in WSL:
 
 ```bash
 mkdir bilskirnir && cd bilskirnir
@@ -50,7 +56,7 @@ GitHub Actions runs frontend/backend checks and publishes three `linux/amd64` im
 | Lightweight XFCE | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04` |
 | GNOME | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04` |
 
-Every publication also has a `sha-<full-commit>` tag. Desktop images receive `latest` in addition to `24.04`. A tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images, without replacing the moving `master` tags. **Publish containers** can also be dispatched manually on `master`. Each image has a separate BuildKit cache; official actions are pinned to verified commits.
+Every publication also has a `sha-<full-commit>` tag. Desktop images receive `latest` in addition to `24.04`. A tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images, without replacing the moving `master` tags. **Publish containers** can also be dispatched manually on `master`. Image-affecting changes on `master` trigger publication; documentation-only changes do not rebuild images. Each image has a separate BuildKit cache; official actions are pinned to verified commits. After publishing, the workflow reads each registry manifest back by digest to verify authenticated access.
 
 GHCR creates new packages as private. For unauthenticated installation, set **Package settings → Change visibility → Public** for the manager and both desktop packages after their first publication. The source repository can remain private. See [GitHub's container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry). If a package remains private, the installing host needs `docker login ghcr.io` with a classic personal access token that has `read:packages`.
 
