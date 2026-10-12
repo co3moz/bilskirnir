@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const DEFAULT_IMAGE: &str = "bilskirnir/ubuntu-xfce:24.04";
+pub const DEFAULT_IMAGE: &str = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Profile {
     pub id: String,

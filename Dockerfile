@@ -23,6 +23,9 @@ COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/l
 COPY --from=backend /build/target/release/bilskirnir /usr/local/bin/bilskirnir
 COPY --from=ui /build/web/dist /app/web
 COPY desktop /app/desktop
+COPY compose.ghcr.yml /app/install/compose.yml
+COPY .env.example /app/install/.env.example
+COPY deploy/Caddyfile /app/install/deploy/Caddyfile
 COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
 ENV DATA_DIR=/data WEB_DIR=/app/web DESKTOP_CONTEXT=/app/desktop LISTEN_ADDR=0.0.0.0:8080
 WORKDIR /app

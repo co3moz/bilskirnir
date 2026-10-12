@@ -16,7 +16,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECURE_COOKIE: ${SECURE_COOKIE:-false}
-      DESKTOP_IMAGE: ${DESKTOP_IMAGE:-bilskirnir/ubuntu-xfce:24.04}
+      DESKTOP_IMAGE: ${DESKTOP_IMAGE:-ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04}
       WSL_GPU: ${WSL_GPU:-true}
       NVIDIA_COMPUTE: ${NVIDIA_COMPUTE:-true}
       GPU_ADAPTER: ${GPU_ADAPTER:-}
@@ -35,7 +35,7 @@ services:
     build:
       context: desktop
       target: xfce
-    image: bilskirnir/ubuntu-xfce:24.04
+    image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
     entrypoint: ["/bin/true"]
 
   desktop-gnome:
@@ -43,7 +43,7 @@ services:
     build:
       context: desktop
       target: gnome
-    image: bilskirnir/ubuntu-gnome:24.04
+    image: ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
     entrypoint: ["/bin/true"]
 
   https:

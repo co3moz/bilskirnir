@@ -2,7 +2,7 @@
   {
     "id": "ubuntu-xfce",
     "name": "Ubuntu 24.04 · Lightweight XFCE",
-    "reference": "bilskirnir/ubuntu-xfce:24.04",
+    "reference": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
     "session": "xfce",
     "build_target": "xfce",
     "description": "Lightweight XFCE desktop.",
@@ -11,7 +11,7 @@
   {
     "id": "ubuntu-gnome",
     "name": "Ubuntu 24.04 · GNOME",
-    "reference": "bilskirnir/ubuntu-gnome:24.04",
+    "reference": "ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04",
     "session": "gnome",
     "build_target": "gnome",
     "description": "GNOME Shell with the Ubuntu session and Yaru theme.",

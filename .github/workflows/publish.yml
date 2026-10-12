@@ -1,0 +1,124 @@
+name: Publish containers
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Check frontend
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+      - name: Check backend
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+      - name: Validate installation manifests
+        run: |
+          docker compose --env-file .env.example --profile images config --quiet
+          docker compose -f compose.ghcr.yml --env-file .env.example --profile images --profile https config --quiet
+
+  publish:
+    needs: checks
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: manager
+            suffix: ''
+            context: .
+            file: Dockerfile
+            target: ''
+            title: Bilskirnir
+            desktop: false
+          - image: ubuntu-xfce
+            suffix: /ubuntu-xfce
+            context: desktop
+            file: desktop/Dockerfile
+            target: xfce
+            title: Ubuntu 24.04 · Lightweight XFCE
+            desktop: true
+          - image: ubuntu-gnome
+            suffix: /ubuntu-gnome
+            context: desktop
+            file: desktop/Dockerfile
+            target: gnome
+            title: Ubuntu 24.04 · GNOME
+            desktop: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image names
+        id: names
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SUFFIX: ${{ matrix.suffix }}
+        run: echo "image=ghcr.io/${REPOSITORY,,}${SUFFIX}" >> "$GITHUB_OUTPUT"
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.names.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=24.04,enable=${{ matrix.desktop && github.ref == 'refs/heads/master' }}
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: Build and publish
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      - name: Published image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          printf '### %s\n\n```text\n%s\n```\n' '${{ matrix.title }}' "$TAGS" >> "$GITHUB_STEP_SUMMARY"

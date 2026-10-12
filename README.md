@@ -6,27 +6,64 @@ Ubuntu container desktops with GPU access, browser VNC, layered snapshots and pe
 
 Requires x86_64 WSL2 Ubuntu, Docker Engine and Compose v2. WSL graphics require `/dev/dxg` and `/usr/lib/wsl`. CUDA additionally requires NVIDIA Container Toolkit on the host Engine.
 
-From the checkout in WSL:
+Install without building or accessing the source repository. Run in a new directory in WSL:
 
 ```bash
-cp .env.example .env
+mkdir bilskirnir && cd bilskirnir
+docker pull ghcr.io/co3moz/bilskirnir:latest
+docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/compose.yml > compose.yml
+docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/.env.example > .env
 # Set ADMIN_PASSWORD, or use AUTH_MODE=none.
-docker compose --profile images build desktop desktop-gnome manager
-docker compose up -d manager
+nano .env
+docker compose --profile images pull manager desktop desktop-gnome
+docker compose up -d --no-build manager
 ```
 
 Open <http://localhost:8080>. Credentials come from `ADMIN_USERNAME` and `ADMIN_PASSWORD`. Sessions expire after 12 hours. Signing out or session expiry closes active VNC, audio and microphone connections. Recreate the manager after changing its environment variables.
 
 Set `BIND_ADDRESS=0.0.0.0` for LAN access. Add DNS names to `ALLOWED_HOSTS`; localhost and private IP addresses are accepted by default. Windows firewall and WSL forwarding remain host configuration.
 
+From a source checkout, use `docker compose -f compose.ghcr.yml --profile images pull manager desktop desktop-gnome` and `docker compose -f compose.ghcr.yml up -d manager` for the same prebuilt installation. Desktop profile services are used to pull images; the manager creates the actual desktop containers.
+
+To update a prebuilt installation, run the same pull command and recreate the manager with `docker compose up -d --no-build manager`. Existing desktops and snapshots retain their image IDs and data; newly created desktops use the pulled profile images. Do not delete the manager data volume when upgrading. `MANAGER_IMAGE` can pin a version tag or image digest instead of `latest`.
+
+## Build from source
+
+From the checkout in WSL:
+
+```bash
+cp .env.example .env
+# Set ADMIN_PASSWORD, or use AUTH_MODE=none.
+docker compose --profile images build desktop desktop-gnome manager
+docker compose up -d --no-build manager
+```
+
+Source builds use the same desktop image references as the registry installation. The source manager is tagged `bilskirnir/manager:local`.
+
+## Container publishing
+
+GitHub Actions runs frontend/backend checks and publishes three `linux/amd64` images using the repository's `GITHUB_TOKEN`:
+
+| Image | Moving tag on `master` |
+| --- | --- |
+| Manager | `ghcr.io/co3moz/bilskirnir:latest` |
+| Lightweight XFCE | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04` |
+| GNOME | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04` |
+
+Every publication also has a `sha-<full-commit>` tag. Desktop images receive `latest` in addition to `24.04`. A tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images, without replacing the moving `master` tags. **Publish containers** can also be dispatched manually on `master`. Each image has a separate BuildKit cache; official actions are pinned to verified commits.
+
+GHCR creates new packages as private. For unauthenticated installation, set **Package settings → Change visibility → Public** for the manager and both desktop packages after their first publication. The source repository can remain private. See [GitHub's container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry). If a package remains private, the installing host needs `docker login ghcr.io` with a classic personal access token that has `read:packages`.
+
+Hosted CI checks builds and unit tests. WSL GPU acceptance remains a separate host test.
+
 ## Desktop profiles
 
 | Profile | Image |
 | --- | --- |
-| Ubuntu 24.04 · Lightweight XFCE | `bilskirnir/ubuntu-xfce:24.04` |
-| Ubuntu 24.04 · GNOME | `bilskirnir/ubuntu-gnome:24.04` |
+| Ubuntu 24.04 · Lightweight XFCE | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04` |
+| Ubuntu 24.04 · GNOME | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04` |
 
-Build both profiles with the setup command, or build only `desktop manager` for XFCE and prepare GNOME later from **Images**. `DESKTOP_IMAGE` controls the default selection. Each profile has its own image and preserves its desktop metadata through custom builds and snapshots.
+Pull both profiles with the setup command, or pull only `desktop manager` for XFCE and prepare GNOME later by pulling its image or building it from **Images**. `DESKTOP_IMAGE` controls the default selection. Each profile has its own image and preserves its desktop metadata through custom builds and snapshots.
 
 GNOME uses an independent X11 session with the Ubuntu shell and Yaru theme. GDM, systemd/logind, Wayland sessions and host power/USB management are outside the container desktop. Screen locking is disabled for this session; panel authentication controls access. GNOME requires more resources than XFCE.
 
@@ -83,6 +120,13 @@ Audio uses 48 kHz float32 PCM over authenticated WebSockets: stereo output (~384
 
 For LAN HTTPS with Caddy's local CA:
 
+For the standalone registry installation, export the bundled Caddy configuration first:
+
+```bash
+mkdir -p deploy
+docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/deploy/Caddyfile > deploy/Caddyfile
+```
+
 ```dotenv
 BIND_ADDRESS=0.0.0.0
 DESKTOP_HOST=desktop.lan
@@ -112,11 +156,11 @@ Existing database records, snapshots and desktop containers remain compatible. P
 New packages, binaries, Compose defaults and image tags use Bilskirnir. Existing profile images can be retagged without rebuilding:
 
 ```bash
-docker image tag wsl-desktop/ubuntu-xfce:24.04 bilskirnir/ubuntu-xfce:24.04
-docker image tag wsl-desktop/ubuntu-gnome:24.04 bilskirnir/ubuntu-gnome:24.04
+docker image tag bilskirnir/ubuntu-xfce:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
+docker image tag bilskirnir/ubuntu-gnome:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
 ```
 
-Before replacing a previous Compose installation, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The new default is `bilskirnir-data`. Remove the previous manager/Compose deployment without deleting its data volume, then start Bilskirnir against that volume. Existing desktops can continue running during the manager replacement.
+For older `wsl-desktop/ubuntu-*` tags, use the same retagging commands with the old tag as the source. Before replacing a previous Compose installation, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The new default is `bilskirnir-data`. Remove the previous manager/Compose deployment without deleting its data volume, then start Bilskirnir against that volume. Existing desktops can continue running during the manager replacement.
 
 The development preview is at <http://localhost:8088>, bound only to localhost with login disabled. Its manager is `bilskirnir-preview`; the existing `wsl-desktop-preview-data` volume is reused. Environment names and settings remain user-controlled.
 
@@ -125,6 +169,8 @@ The development preview is at <http://localhost:8088>, bound only to localhost w
 The [design system](docs/DESIGN.md) defines the palette, typography, components and responsive behavior used by the frontend.
 
 ## Development
+
+Read [AGENTS.md](AGENTS.md) for the project map, implementation constraints, verification and commit rules.
 
 ```bash
 npm ci
