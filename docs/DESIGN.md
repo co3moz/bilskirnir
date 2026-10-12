@@ -38,7 +38,7 @@ Blue indicates activity and interaction; violet groups image-related information
 
 ## Components
 
-**Navigation:** a fixed 232 px shell, a faceted hammer mark and four SVG navigation icons. Active navigation uses a thin blue rail, brighter text and a contained blue surface.
+**Navigation:** a fixed 232 px shell, a pendant-shaped hammer mark and four SVG navigation icons. The mark has a peaked head, tapered stem, flared foot, simplified spiral engravings and a blue inset, following the supplied pendant reference. Active navigation uses a thin blue rail, brighter text and a contained blue surface.
 
 **Page headers:** one title, the relevant actions and a short illuminated rule. Copy uses direct names such as Environments, Images, Volumes and Jobs.
 
@@ -66,7 +66,7 @@ Interactive controls preserve keyboard focus indicators and descriptive labels. 
 
 - `web/style.css`: shared tokens, surfaces, component rules and responsive behavior.
 - `web/icons.mjs`: consistent 24 px stroke icons.
-- `web/mark.svg`: the faceted Bilskirnir hammer mark and favicon.
+- `web/mark.svg`: the Bilskirnir pendant mark and favicon.
 - `web/app.js`: existing interactions and concise English copy.
 
 Reference images guide the visual language. The application artwork is implemented with CSS and SVG, keeping the bundle self-contained.
