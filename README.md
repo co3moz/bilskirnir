@@ -1,37 +1,95 @@
 # Bilskirnir
 
+![Bilskirnir interface](docs/screenshots/bilskirnir.png)
+
 Ubuntu container desktops with GPU access, browser VNC, layered snapshots and persistent volumes. Built with Rust and Docker. The name is a nod to Thor.
 
-## Setup
+## Getting started
 
-Requires x86_64 WSL2 Ubuntu, Docker Engine and Compose v2. WSL graphics require `/dev/dxg` and `/usr/lib/wsl`. CUDA additionally requires NVIDIA Container Toolkit on the host Engine.
+Run this in **x86_64 WSL2 Ubuntu with Docker Engine and Compose v2**. GPU support requires working WSL GPU drivers (`/dev/dxg` and `/usr/lib/wsl`); NVIDIA CUDA also requires NVIDIA Container Toolkit in the WSL Docker Engine.
 
-Packages are currently private. The installing GitHub account must have package access. Sign in to GHCR using a classic personal access token with `read:packages` as the password:
+Save the following as `compose.yml`, replace `ADMIN_PASSWORD` with your own password (at least 8 characters), then start it. No source checkout, local image builds or `.env` file are required.
 
-```bash
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```yaml
+name: bilskirnir
+
+services:
+  manager:
+    image: ghcr.io/co3moz/bilskirnir:latest
+    container_name: bilskirnir-manager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080" # Use 0.0.0.0 instead for LAN access.
+    labels:
+      io.wsl-desktop.manager: "true"
+    environment:
+      MANAGER_CONTAINER: bilskirnir-manager
+      AUTH_MODE: password # Use none to disable login.
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: "replace-with-your-password"
+      DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
+      # These settings apply GPU access to desktops created in the UI.
+      WSL_GPU: "true"
+      NVIDIA_COMPUTE: "true" # Set false for AMD/Intel or without CUDA support.
+      GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
+      AUDIO_ENABLED: "true"
+      MICROPHONE_ENABLED: "true"
+      ALLOWED_HOSTS: localhost
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - manager-data:/data
+    depends_on:
+      desktop:
+        condition: service_completed_successfully
+      desktop-gnome:
+        condition: service_completed_successfully
+
+  # Prepare both desktop images automatically; these services exit normally.
+  desktop:
+    image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
+    entrypoint: ["/bin/true"]
+    restart: "no"
+    network_mode: none
+    healthcheck:
+      disable: true
+
+  desktop-gnome:
+    image: ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
+    entrypoint: ["/bin/true"]
+    restart: "no"
+    network_mode: none
+    healthcheck:
+      disable: true
+
+volumes:
+  manager-data:
+    name: bilskirnir-data
 ```
 
-This step is unnecessary once the packages are public. Install without building or accessing the source checkout. Run in a new directory in WSL:
+Packages are currently **private**. Before the first start, run `docker login ghcr.io -u YOUR_GITHUB_USERNAME` and enter a classic token with `read:packages` as the password. Your account needs package access. This login step disappears when the packages become public.
 
 ```bash
-mkdir bilskirnir && cd bilskirnir
-docker pull ghcr.io/co3moz/bilskirnir:latest
-docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/compose.yml > compose.yml
-docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/.env.example > .env
-# Set ADMIN_PASSWORD, or use AUTH_MODE=none.
-nano .env
-docker compose --profile images pull manager desktop desktop-gnome
-docker compose up -d --no-build manager
+docker compose up -d
 ```
 
-Open <http://localhost:8080>. Credentials come from `ADMIN_USERNAME` and `ADMIN_PASSWORD`. Sessions expire after 12 hours. Signing out or session expiry closes active VNC, audio and microphone connections. Recreate the manager after changing its environment variables.
+Open <http://localhost:8080>, sign in with the credentials above, then choose **New environment → XFCE or GNOME → Create → Connect**. The first start downloads all three images. Desktop containers are created and managed from the web interface.
 
-Set `BIND_ADDRESS=0.0.0.0` for LAN access. Add DNS names to `ALLOWED_HOSTS`; localhost and private IP addresses are accepted by default. Windows firewall and WSL forwarding remain host configuration.
+For LAN access, change the port binding to `0.0.0.0:8080:8080`. Private IP addresses are accepted; add DNS names to `ALLOWED_HOSTS` if needed. Windows firewall and WSL forwarding remain host configuration.
 
-From a source checkout, use `docker compose -f compose.ghcr.yml --profile images pull manager desktop desktop-gnome` and `docker compose -f compose.ghcr.yml up -d manager` for the same prebuilt installation. Desktop profile services are used to pull images; the manager creates the actual desktop containers.
+## Configuration and updates
 
-To update a prebuilt installation, run the same pull command and recreate the manager with `docker compose up -d --no-build manager`. Existing desktops and snapshots retain their image IDs and data; newly created desktops use the pulled profile images. Do not delete the manager data volume when upgrading. `MANAGER_IMAGE` can pin a version tag or image digest instead of `latest`.
+Credentials come from `ADMIN_USERNAME` and `ADMIN_PASSWORD`. Sessions expire after 12 hours. Signing out or session expiry closes active VNC, audio and microphone connections. Recreate the manager after changing its environment variables.
+
+For a checkout-based registry installation, copy `.env.example` to `.env`, set the password and run `docker compose -f compose.ghcr.yml up -d`. This manifest also supports optional HTTPS. The same manifest and environment example are bundled inside the manager at `/app/install/compose.yml` and `/app/install/.env.example`.
+
+Update a prebuilt installation with:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Existing desktops and snapshots retain their image IDs and data; newly created desktops use the pulled profile images. Do not delete the manager data volume when upgrading. Pin the manager image to a version or digest instead of `latest` when needed; the full manifest accepts `MANAGER_IMAGE`.
 
 ## Build from source
 
@@ -69,7 +127,7 @@ Hosted CI checks builds and unit tests. WSL GPU acceptance remains a separate ho
 | Ubuntu 24.04 · Lightweight XFCE | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04` |
 | Ubuntu 24.04 · GNOME | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04` |
 
-Pull both profiles with the setup command, or pull only `desktop manager` for XFCE and prepare GNOME later by pulling its image or building it from **Images**. `DESKTOP_IMAGE` controls the default selection. Each profile has its own image and preserves its desktop metadata through custom builds and snapshots.
+The quick-start Compose file prepares both profiles automatically. `DESKTOP_IMAGE` controls the default selection. Each profile has its own image and preserves its desktop metadata through custom builds and snapshots. Source installations can also build missing profiles from **Images**.
 
 GNOME uses an independent X11 session with the Ubuntu shell and Yaru theme. GDM, systemd/logind, Wayland sessions and host power/USB management are outside the container desktop. Screen locking is disabled for this session; panel authentication controls access. GNOME requires more resources than XFCE.
 
@@ -124,7 +182,7 @@ docker cp wsld-ENVIRONMENT_ID:/home/desktop/Downloads/result ./result
 
 Audio uses 48 kHz float32 PCM over authenticated WebSockets: stereo output (~384 KB/s), mono input (~192 KB/s). Browser microphone permission is required. Localhost works over HTTP; other devices require HTTPS.
 
-For LAN HTTPS with Caddy's local CA:
+For LAN HTTPS with Caddy's local CA, use the full `compose.ghcr.yml` manifest and `.env` configuration instead of the minimal quick-start example. The source-build manifest also includes this service.
 
 For the standalone registry installation, export the bundled Caddy configuration first:
 
@@ -141,8 +199,8 @@ SECURE_COOKIE=true
 ```
 
 ```bash
-docker compose --profile https up -d manager https
-docker compose cp https:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+docker compose -f compose.ghcr.yml --profile https up -d manager https
+docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
 ```
 
 Point the hostname at the host and trust the CA on the client device. Open <https://desktop.lan:8443>. Secure cookies require HTTPS.

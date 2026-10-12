@@ -54,7 +54,7 @@ jobs:
       - name: Validate installation manifests
         run: |
           docker compose --env-file .env.example --profile images config --quiet
-          docker compose -f compose.ghcr.yml --env-file .env.example --profile images --profile https config --quiet
+          docker compose -f compose.ghcr.yml --env-file .env.example --profile https config --quiet
 
   publish:
     needs: checks
