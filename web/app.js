@@ -1,5 +1,6 @@
 import RFB from '@novnc/novnc';
 import { DesktopMedia } from './media.mjs';
+import { icon } from './icons.mjs';
 import { escapeHtml as e, memory, date, imageTree, imageChoices } from './helpers.mjs';
 
 const app = document.querySelector('#app');
@@ -20,11 +21,10 @@ const media = new DesktopMedia({
   },
 });
 const labels = { running: 'Running', exited: 'Stopped', created: 'Starting', missing: 'Missing', unavailable: 'Docker unavailable', restarting: 'Restarting', paused: 'Paused', queued: 'Queued', completed: 'Completed', failed: 'Failed', interrupted: 'Interrupted', ready: 'Ready', not_ready: 'Not built', unhealthy: 'Desktop error' };
-const icon = (name) => ({ environments: '▦', images: '◇', volumes: '▱', jobs: '≋' }[name] || '↗');
 
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   const response = await fetch(`/api/${path}`, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Wsld-Request': '1' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  if (response.status === 401 && path !== 'login') { if (!document.querySelector('#login-form')) loginPage(); throw new Error('Audiosion expired. Sign in again.'); }
+  if (response.status === 401 && path !== 'login') { if (!document.querySelector('#login-form')) loginPage(); throw new Error('Session expired. Sign in again.'); }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || `Request failed (${response.status})`);
@@ -36,7 +36,7 @@ function toast(message, error = false) {
   document.querySelector('#toasts').append(node); setTimeout(() => node.remove(), 6500);
 }
 function show(title, html) {
-  content.innerHTML = `<header class="dialog-head"><h2>${e(title)}</h2><button class="icon-button" data-close aria-label="Close">×</button></header>${html}`;
+  content.innerHTML = `<header class="dialog-head"><h2>${e(title)}</h2><button class="icon-button" data-close aria-label="Close">${icon('close')}</button></header>${html}`;
   activeJob = null; if (!modal.open) modal.showModal();
 }
 function badge(value) { return `<span class="badge ${e(value)}">${e(labels[value] || value)}</span>`; }
@@ -56,19 +56,19 @@ function render() {
   const target = document.querySelector('#main-content');
   if (state.tab === 'environments') {
     const running = state.environments.filter(x => x.state === 'running').length;
-    target.innerHTML = `<section class="page-head"><h1>Environments</h1><button class="primary" data-new>＋ New environment</button></section>
-      <section class="metrics"><div><span>TOTAL</span><strong>${state.environments.length}</strong></div><div><span>RUNNING</span><strong class="mint">${running}</strong></div><div><span>CPU</span><strong>${state.system.cpus || '—'}</strong></div><div><span>MEMORY</span><strong>${memory(state.system.memory_bytes)}</strong></div></section>
+    target.innerHTML = `<section class="page-head"><h1>Environments</h1><button class="primary" data-new>${icon('plus')}New environment</button></section>
+      <section class="metrics"><div><span>TOTAL</span><strong>${state.environments.length}</strong></div><div><span>RUNNING</span><strong class="accent">${running}</strong></div><div><span>CPU</span><strong>${state.system.cpus || '—'}</strong></div><div><span>MEMORY</span><strong>${memory(state.system.memory_bytes)}</strong></div></section>
       ${state.system.connected === false ? `<div class="notice error">${e(state.system.error || 'Cannot connect to Docker.')}</div>` : ''}
-      ${state.environments.length ? `<section class="cards">${state.environments.map(card).join('')}</section>` : '<div class="empty"><h2>No environments</h2><button class="primary" data-new>＋ New environment</button></div>'}`;
+      ${state.environments.length ? `<section class="cards">${state.environments.map(card).join('')}</section>` : `<div class="empty"><h2>No environments</h2><button class="primary" data-new>${icon('plus')}New environment</button></div>`}`;
   } else if (state.tab === 'images') {
-    target.innerHTML = `<section class="page-head"><h1>Images</h1><div class="actions"><button data-import>Import image</button><button class="primary" data-build>＋ Build image</button></div></section>
+    target.innerHTML = `<section class="page-head"><h1>Images</h1><div class="actions"><button data-import>Import image</button><button class="primary" data-build>${icon('plus')}Build image</button></div></section>
       <div class="section-line"><h2>Profiles</h2></div>
       <section class="profile-grid">${state.profiles.map(item => `<article class="profile-card"><div class="card-title"><h3>${e(item.profile.name)}</h3>${badge(item.available ? 'ready' : 'not_ready')}</div><code>${e(item.profile.reference)}</code><div class="card-footer">${item.available ? `<button class="primary" data-profile-create="${e(item.profile.reference)}">Create environment ↗</button>` : `<button class="primary" data-profile-build="${e(item.profile.id)}">Build image</button>`}</div>${item.error ? `<p class="inline-error">${e(item.error)}</p>` : ''}</article>`).join('')}</section>
       <div class="section-line"><h2>Snapshots & custom images</h2></div>
-      <section class="panel image-tree">${state.images.length ? imageTree(state.images).map(r => `<article style="--depth:${Math.min(r.depth,8)}"><span class="tree-mark">${r.kind === 'snapshot' ? '↳' : '◇'}</span><div><h3>${e(r.name)} ${badge(r.kind)}</h3><code>${e(r.reference)}</code>${r.description ? `<p>${e(r.description)}</p>` : ''}<small>${date(r.created_at)}${r.parent_image_id ? ` · Parent ${e(r.parent_image_id.slice(0,19))}…` : ''}</small></div><button data-clone="${e(r.id)}" ${r.available === false ? 'disabled title="Image no longer available"' : ''}>Create environment ↗</button></article>`).join('') : '<div class="empty"><h2>No saved images</h2></div>'}</section>`;
+      <section class="panel image-tree">${state.images.length ? imageTree(state.images).map(r => `<article style="--depth:${Math.min(r.depth,8)}"><span class="tree-mark">${icon('images')}</span><div><h3>${e(r.name)} ${badge(r.kind)}</h3><code>${e(r.reference)}</code>${r.description ? `<p>${e(r.description)}</p>` : ''}<small>${date(r.created_at)}${r.parent_image_id ? ` · Parent ${e(r.parent_image_id.slice(0,19))}…` : ''}</small></div><button data-clone="${e(r.id)}" ${r.available === false ? 'disabled title="Image no longer available"' : ''}>Create environment ↗</button></article>`).join('') : '<div class="empty"><h2>No saved images</h2></div>'}</section>`;
   } else if (state.tab === 'volumes') {
-    target.innerHTML = `<section class="page-head"><h1>Volumes</h1><button class="primary" data-volume>＋ New volume</button></section>
-      <section class="panel table-wrap"><table><thead><tr><th>NAME</th><th>DRIVER</th><th>SCOPE</th></tr></thead><tbody>${state.volumes.map(v => `<tr><td><span class="mint">▱</span> <code>${e(v.Name)}</code></td><td>${e(v.Driver)}</td><td>${e(v.Scope)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No volumes.</td></tr>'}</tbody></table></section>`;
+    target.innerHTML = `<section class="page-head"><h1>Volumes</h1><button class="primary" data-volume>${icon('plus')}New volume</button></section>
+      <section class="panel table-wrap"><table><thead><tr><th>NAME</th><th>DRIVER</th><th>SCOPE</th></tr></thead><tbody>${state.volumes.map(v => `<tr><td><span class="accent">${icon('volumes')}</span> <code>${e(v.Name)}</code></td><td>${e(v.Driver)}</td><td>${e(v.Scope)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No volumes.</td></tr>'}</tbody></table></section>`;
   } else {
     target.innerHTML = `<section class="page-head"><h1>Jobs</h1></section><section class="panel table-wrap"><table><thead><tr><th>ACTION</th><th>STATUS</th><th>STARTED</th><th></th></tr></thead><tbody>${state.jobs.map(j => `<tr><td>${e(jobNames[j.kind] || j.kind)}</td><td>${badge(j.status)}</td><td>${date(j.created_at)}</td><td><button data-job="${e(j.id)}">View log</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No jobs.</td></tr>'}</tbody></table></section>`;
   }
@@ -76,10 +76,10 @@ function render() {
 }
 function card(item) {
   const env = item.environment, spec = env.spec, running = item.state === 'running', retry = !running && (item.state === 'missing' || !!env.last_error);
-  return `<article class="environment-card"><div class="preview"><div class="preview-placeholder"><span>▦</span><small>${running ? 'Loading preview' : 'Desktop stopped'}</small></div>${running ? `<img alt="${e(spec.name)} desktop preview" src="/api/environments/${env.id}/screenshot?t=${Math.floor(Date.now()/10000)}" loading="lazy">` : ''}<span class="preview-tag">${e(spec.resolution)}</span></div>
-    <div class="card-body"><div class="card-title"><h3>${e(spec.name)}</h3>${badge(item.health === 'unhealthy' ? 'unhealthy' : item.health === 'starting' && running ? 'created' : item.state)}</div><p class="desktop-profile">${e(env.desktop?.title || state.profiles.find(p => p.profile.reference === spec.image)?.profile.name || (spec.image === 'wsl-desktop/ubuntu:24.04' ? 'Ubuntu 24.04 · Lightweight XFCE (legacy)' : 'Custom desktop'))}</p><div class="chips"><span>${spec.gpu ? '◈ GPU' : 'CPU only'}</span><span>${spec.cpus ? `${spec.cpus} CPU` : 'Unlimited CPU'}</span><span>${spec.memory_mb ? `${spec.memory_mb} MB` : 'Unlimited RAM'}</span>${spec.audio ? '<span>♫ Audio</span>' : ''}</div>
+  return `<article class="environment-card"><div class="preview"><div class="preview-placeholder"><span>${icon('display')}</span><small>${running ? 'Loading preview' : 'Desktop stopped'}</small></div>${running ? `<img alt="${e(spec.name)} desktop preview" src="/api/environments/${env.id}/screenshot?t=${Math.floor(Date.now()/10000)}" loading="lazy">` : ''}<span class="preview-tag">${e(spec.resolution)}</span></div>
+    <div class="card-body"><div class="card-title"><h3>${e(spec.name)}</h3>${badge(item.health === 'unhealthy' ? 'unhealthy' : item.health === 'starting' && running ? 'created' : item.state)}</div><p class="desktop-profile">${e(env.desktop?.title || state.profiles.find(p => p.profile.reference === spec.image)?.profile.name || (spec.image === 'wsl-desktop/ubuntu:24.04' ? 'Ubuntu 24.04 · Lightweight XFCE (legacy)' : 'Custom desktop'))}</p><div class="chips"><span>${spec.gpu ? `${icon('gpu')}GPU` : 'CPU only'}</span><span>${spec.cpus ? `${spec.cpus} CPU` : 'Unlimited CPU'}</span><span>${spec.memory_mb ? `${spec.memory_mb} MB` : 'Unlimited RAM'}</span>${spec.audio ? '<span>♫ Audio</span>' : ''}</div>
     <div class="internet-row"><span>Internet</span><button class="toggle ${spec.internet ? 'on' : ''}" data-internet="${env.id}" role="switch" aria-checked="${spec.internet}" aria-label="${e(spec.name)} internet access"><i></i></button></div>
-    ${env.last_error ? `<p class="inline-error">${e(env.last_error)}</p>` : ''}<div class="card-footer"><button class="${running ? 'primary' : ''}" ${running ? `data-connect="${env.id}"` : retry ? `data-retry="${env.id}"` : `data-action="start" data-id="${env.id}"`}>${running ? 'Connect ↗' : retry ? '↻ Retry setup' : '▶ Start'}</button><button class="icon-button" data-details="${env.id}" aria-label="Environment actions">•••</button></div></div></article>`;
+    ${env.last_error ? `<p class="inline-error">${e(env.last_error)}</p>` : ''}<div class="card-footer"><button class="${running ? 'primary' : ''}" ${running ? `data-connect="${env.id}"` : retry ? `data-retry="${env.id}"` : `data-action="start" data-id="${env.id}"`}>${running ? 'Connect ↗' : retry ? '↻ Retry setup' : '▶ Start'}</button><button class="icon-button" data-details="${env.id}" aria-label="Environment actions">${icon('more')}</button></div></div></article>`;
 }
 async function refresh() {
   if (refreshing || !document.querySelector('#main-content')) return;
@@ -173,7 +173,7 @@ function connectRfb() {
     const connection = new RFB(document.querySelector('#screen'), wsUrl(`environments/${id}/vnc`));
     rfb = connection;
     rfb.scaleViewport = true; rfb.resizeSession = true; rfb.showDotCursor = true; rfb.focusOnClick = true;
-    rfb.addEventListener('connect', () => { if (rfb !== connection) return; status.textContent = 'Connected'; status.className = 'mint'; });
+    rfb.addEventListener('connect', () => { if (rfb !== connection) return; status.textContent = 'Connected'; status.className = 'accent'; });
     rfb.addEventListener('disconnect', event => { if (rfb !== connection) return; media.close(); status.textContent = event.detail.clean ? 'Disconnected' : 'Connection failed'; status.className = 'muted'; });
     rfb.addEventListener('clipboard', event => { if (rfb !== connection) return; remoteClipboard = event.detail.text; if (document.querySelector('#clipboard-text')) document.querySelector('#clipboard-text').value = event.detail.text; });
   } catch (error) { status.textContent = error.message; }

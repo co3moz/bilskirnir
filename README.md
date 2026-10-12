@@ -120,6 +120,10 @@ Before replacing a previous Compose installation, set `MANAGER_DATA_VOLUME` to i
 
 The development preview is at <http://localhost:8088>, bound only to localhost with login disabled. Its manager is `bilskirnir-preview`; the existing `wsl-desktop-preview-data` volume is reused. Environment names and settings remain user-controlled.
 
+## Interface design
+
+The [design system](docs/DESIGN.md) defines the palette, typography, components and responsive behavior used by the frontend.
+
 ## Development
 
 ```bash
