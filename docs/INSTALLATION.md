@@ -13,7 +13,7 @@ cp .env.example .env
 docker compose -f compose.ghcr.yml up -d
 ```
 
-For an installation without a checkout, the manager image includes the same files. After signing in to GHCR if required, export them into your installation directory:
+For an installation without a checkout, the manager image includes the same files. Export them into your installation directory:
 
 ```bash
 mkdir -p deploy
@@ -137,7 +137,7 @@ If the manager is not reachable, check its startup log:
 docker compose logs --tail=100 manager
 ```
 
-Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A GHCR access error happens before startup; check your registry login and package access.
+Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A registry error happens before startup; check that the host can reach GHCR.
 
 If the dashboard opens but an environment fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate environment with GPU disabled to check the basic desktop path without deleting the failed environment's files.
 

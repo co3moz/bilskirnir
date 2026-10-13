@@ -26,14 +26,6 @@ Run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Com
 
 The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; the GPU option is then unavailable when creating a desktop.
 
-**The images are currently private.** Your GitHub account needs access to the packages. Sign in to GHCR with a classic personal access token that has `read:packages`:
-
-```bash
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
-```
-
-Enter the token when Docker asks for a password. Public packages will not need this step.
-
 Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for the NVIDIA setup:
 
 ```yaml

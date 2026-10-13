@@ -116,8 +116,6 @@ Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1
 
 The workflow uses `GITHUB_TOKEN` with package write access, separate BuildKit caches for each image and official actions pinned to commit SHAs. It reads each published manifest back by digest to check registry access. Hosted CI cannot verify WSL GPU behavior.
 
-The packages are currently private. Maintainers can make each package public through its GitHub package settings without making the source repository public. Until then, installation needs a GitHub account with package access and a classic token with `read:packages`.
-
 ## Keep older installations working
 
 Human-facing names use Bilskirnir. Ownership labels (`io.wsl-desktop.*`), `wsld-*` resource IDs, the session cookie and API request header retain their existing identifiers. Changing them requires a migration, not a branding edit.
