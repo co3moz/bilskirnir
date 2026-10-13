@@ -21,6 +21,8 @@ pub struct Config {
     pub adapter: String,
     pub allowed_hosts: Vec<String>,
     pub upload_limit: u64,
+    pub mcp_enabled: bool,
+    pub mcp_token: String,
 }
 fn flag(key: &str, default: bool) -> Result<bool> {
     match env::var(key).as_deref() {
@@ -56,6 +58,9 @@ impl Config {
             None
         };
         let audio = flag("AUDIO_ENABLED", true)?;
+        let mcp_enabled = flag("MCP_ENABLED", false)?;
+        let mcp_token = env::var("MCP_TOKEN").unwrap_or_default();
+        validate_mcp_token(mcp_enabled, &mcp_token)?;
         let upload_mb = env::var("UPLOAD_MAX_MB")
             .unwrap_or_else(|_| "1024".into())
             .parse::<u64>()?;
@@ -93,6 +98,8 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .collect(),
             upload_limit: upload_mb * 1024 * 1024,
+            mcp_enabled,
+            mcp_token,
         };
         super::model::image_ref(&cfg.base_image)?;
         if cfg.auth && (cfg.username.trim().is_empty() || cfg.username.len() > 256) {
@@ -100,4 +107,13 @@ impl Config {
         }
         Ok(cfg)
     }
+}
+
+pub(crate) fn validate_mcp_token(enabled: bool, token: &str) -> Result<()> {
+    if enabled
+        && (!(32..=256).contains(&token.len()) || !token.bytes().all(|b| b.is_ascii_graphic()))
+    {
+        bail!("MCP_TOKEN must contain 32–256 visible ASCII characters when MCP_ENABLED=true");
+    }
+    Ok(())
 }

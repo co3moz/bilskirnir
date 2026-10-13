@@ -2,9 +2,13 @@ mod api;
 mod auth;
 mod config;
 mod db;
+mod desktop_input;
 mod docker;
 mod error;
+mod exec;
+mod files;
 mod jobs;
+mod mcp;
 mod media;
 mod model;
 mod process;
@@ -15,7 +19,7 @@ use axum::{
     Router,
     http::{HeaderValue, header},
     middleware,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use std::{
     collections::HashMap,
@@ -34,6 +38,7 @@ pub struct App {
     session_events: tokio::sync::Notify,
     screenshots: tokio::sync::Semaphore,
     uploads: tokio::sync::Semaphore,
+    desktop_inputs: tokio::sync::Semaphore,
 }
 fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
@@ -46,11 +51,18 @@ fn router(app: Arc<App>) -> Router {
             "/api/environments",
             get(api::environments).post(api::create),
         )
-        .route("/api/environments/{id}", delete(api::remove))
+        .route(
+            "/api/environments/{id}",
+            get(api::environment).delete(api::remove),
+        )
         .route("/api/environments/{id}/action", post(api::action))
         .route("/api/environments/{id}/retry", post(api::retry))
         .route("/api/environments/{id}/internet", post(api::internet))
         .route("/api/environments/{id}/snapshot", post(api::snapshot))
+        .route("/api/environments/{id}/exec", post(exec::execute))
+        .route("/api/environments/{id}/files/read", post(files::read))
+        .route("/api/environments/{id}/files/write", post(files::write))
+        .route("/api/environments/{id}/input", post(desktop_input::input))
         .route("/api/environments/{id}/logs", get(api::logs))
         .route("/api/environments/{id}/diagnostics", get(api::diagnostics))
         .route("/api/environments/{id}/screenshot", get(api::screenshot))
@@ -71,7 +83,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
-    Router::new().merge(protected)
+    Router::new().merge(protected).merge(mcp::router(app.clone()))
         .route("/api/session",get(api::session))
         .route("/api/login",post(auth::login))
         .route("/healthz",get(||async { "ok" }))
@@ -80,7 +92,7 @@ fn router(app: Arc<App>) -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(app.clone(), auth::check_host))
         .layer(middleware::from_fn(|req:axum::extract::Request,next:middleware::Next|async move {
-            let api=req.uri().path().starts_with("/api/");
+            let api=req.uri().path().starts_with("/api/") || req.uri().path().starts_with("/mcp");
             let mut res=next.run(req).await;
             let h=res.headers_mut();
             h.insert(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff"));
@@ -124,6 +136,7 @@ async fn main() -> anyhow::Result<()> {
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),
         uploads: tokio::sync::Semaphore::new(2),
+        desktop_inputs: tokio::sync::Semaphore::new(4),
     });
     let reconcile = app.clone();
     let cleanup = app.clone();

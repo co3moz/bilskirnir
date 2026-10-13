@@ -2,7 +2,10 @@ use crate::{App, model::*};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{process::Stdio, time::Duration};
-use tokio::{io::AsyncReadExt, process::Command};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command,
+};
 
 impl App {
     pub fn command(&self, args: &[String]) -> Command {
@@ -426,13 +429,34 @@ impl App {
         self.db.put("job", id, &job)
     }
     pub async fn docker_logged(&self, id: &str, args: &[String]) -> Result<()> {
+        self.docker_logged_input(id, args, None).await
+    }
+    pub async fn docker_logged_input(
+        &self,
+        id: &str,
+        args: &[String],
+        input: Option<Vec<u8>>,
+    ) -> Result<()> {
         let mut child = self
             .command(args)
+            .stdin(if input.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
         let out = child.stdout.take().unwrap();
         let err = child.stderr.take().unwrap();
+        let stdin = child.stdin.take();
+        let write = async move {
+            if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                stdin.write_all(&input).await?;
+                stdin.shutdown().await?;
+            }
+            anyhow::Ok(())
+        };
         let read = async {
             let (mut out, mut err) = (out, err);
             let (mut a, mut b) = (false, false);
@@ -447,12 +471,18 @@ impl App {
                     n = err.read(&mut buf_b), if !b => { let n=n?; b=n==0; let text=if b {dec_b.finish()} else {dec_b.push(&buf_b[..n])}; if !text.is_empty() { self.append_log(id,&text)?; } },
                 }
             }
-            if !child.wait().await?.success() {
-                bail!("Docker operation failed; check the job log");
+            let status = child.wait().await?;
+            if !status.success() {
+                self.append_log(id, &format!("Docker command exited with {status}."))?;
+                bail!("Docker operation failed ({status}); check the job log");
             }
             anyhow::Ok(())
         };
-        let result = tokio::time::timeout(Duration::from_secs(3600), read).await;
+        let result = tokio::time::timeout(Duration::from_secs(3600), async {
+            tokio::try_join!(write, read)?;
+            anyhow::Ok(())
+        })
+        .await;
         if !matches!(result, Ok(Ok(()))) {
             let _ = child.kill().await;
             let _ = child.wait().await;

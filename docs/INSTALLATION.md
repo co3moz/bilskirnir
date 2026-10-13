@@ -33,6 +33,8 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
+| `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
+| `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled; 32–256 visible ASCII characters. |
 | `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
@@ -56,6 +58,8 @@ The full manifests also accept these Compose settings:
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
+
+Agent access uses a separate token rather than the dashboard session. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
 
 ## Access from another device
 

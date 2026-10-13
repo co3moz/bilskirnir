@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
 };
 
@@ -42,24 +42,46 @@ pub(crate) async fn read_limited(
     }
 }
 pub async fn capture(
-    mut command: Command,
+    command: Command,
     timeout: Duration,
     limit: usize,
     overflow: Overflow,
 ) -> Result<Output> {
+    capture_input(command, timeout, limit, overflow, None).await
+}
+pub async fn capture_input(
+    mut command: Command,
+    timeout: Duration,
+    limit: usize,
+    overflow: Overflow,
+    input: Option<Vec<u8>>,
+) -> Result<Output> {
     let mut child = command
         .kill_on_drop(true)
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .context("Could not start Docker CLI")?;
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
+    let stdin = child.stdin.take();
     let result = tokio::time::timeout(timeout, async {
-        let (stdout, stderr, status) = tokio::try_join!(
+        let (stdout, stderr, status, _) = tokio::try_join!(
             read_limited(stdout, limit, overflow),
             read_limited(stderr, limit, overflow),
-            async { Ok::<_, anyhow::Error>(child.wait().await?) }
+            async { Ok::<_, anyhow::Error>(child.wait().await?) },
+            async move {
+                if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                    stdin.write_all(&input).await?;
+                    stdin.shutdown().await?;
+                }
+                Ok::<_, anyhow::Error>(())
+            }
         )?;
         Ok::<_, anyhow::Error>(Output {
             status,

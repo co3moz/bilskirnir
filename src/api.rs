@@ -122,6 +122,20 @@ pub async fn environments(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     Ok(Json(json!(items)))
 }
 
+pub async fn environment(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>> {
+    app.environment(&id)?;
+    let Json(items) = environments(State(app)).await?;
+    let item = items
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["environment"]["id"] == id))
+        .cloned()
+        .ok_or_else(missing)?;
+    Ok(Json(item))
+}
+
 pub async fn create(
     State(app): State<Arc<App>>,
     Json(spec): Json<EnvironmentSpec>,

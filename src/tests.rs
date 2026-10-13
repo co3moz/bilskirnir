@@ -26,6 +26,8 @@ fn app(auth: bool) -> Arc<App> {
             adapter: String::new(),
             allowed_hosts: vec![],
             upload_limit: 1024 * 1024,
+            mcp_enabled: false,
+            mcp_token: String::new(),
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -35,11 +37,348 @@ fn app(auth: bool) -> Arc<App> {
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),
         uploads: tokio::sync::Semaphore::new(2),
+        desktop_inputs: tokio::sync::Semaphore::new(4),
     })
 }
 fn spec() -> model::EnvironmentSpec {
     serde_json::from_value(serde_json::json!({"name":"Unity","image":"wsl-desktop/ubuntu:24.04"}))
         .unwrap()
+}
+
+fn mcp_app() -> Arc<App> {
+    let mut app = app(true);
+    let config = &mut Arc::get_mut(&mut app).unwrap().config;
+    config.mcp_enabled = true;
+    config.mcp_token = "test-token-with-at-least-32-characters".into();
+    app
+}
+async fn mcp_request(
+    app: Arc<App>,
+    method: &str,
+    params: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/mcp")
+                .header("host", "localhost:8080")
+                .header(
+                    "authorization",
+                    "Bearer test-token-with-at-least-32-characters",
+                )
+                .header("content-type", "application/json")
+                .header("accept", "application/json, text/event-stream")
+                .header("mcp-protocol-version", "2025-11-25")
+                .body(Body::from(
+                    serde_json::json!({"jsonrpc":"2.0","id":1,"method":method,"params":params})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 8 * 1024 * 1024)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&bytes).unwrap())
+}
+#[test]
+fn mcp_token_and_script_validation() {
+    for token in [
+        "",
+        "too-short",
+        "01234567890123456789012345678901 ",
+        "01234567890123456789012345678901\n",
+    ] {
+        assert!(config::validate_mcp_token(true, token).is_err());
+    }
+    assert!(config::validate_mcp_token(false, "").is_ok());
+    assert!(config::validate_mcp_token(true, "01234567890123456789012345678901").is_ok());
+    for body in [
+        serde_json::json!({"script":""}),
+        serde_json::json!({"script":"echo ok","timeout_seconds":0}),
+        serde_json::json!({"script":"echo ok","timeout_seconds":3501}),
+        serde_json::json!({"script":"echo\0ok"}),
+    ] {
+        assert!(
+            serde_json::from_value::<exec::Execute>(body)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+    let body: exec::Execute = serde_json::from_value(serde_json::json!({"script":"id"})).unwrap();
+    assert!(!body.root);
+    assert_eq!(body.timeout_seconds, 300);
+    assert!(body.validate().is_ok());
+}
+#[tokio::test]
+async fn mcp_requires_its_own_token_and_rejects_cross_origin_access() {
+    for (enabled, token, host, origin, expected) in [
+        (false, None, "localhost:8080", None, StatusCode::NOT_FOUND),
+        (true, None, "localhost:8080", None, StatusCode::UNAUTHORIZED),
+        (
+            true,
+            Some("Bearer wrong"),
+            "localhost:8080",
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            true,
+            Some("Bearer test-token-with-at-least-32-characters"),
+            "evil.example",
+            None,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            true,
+            Some("Bearer test-token-with-at-least-32-characters"),
+            "localhost:8080",
+            Some("https://evil.example"),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let mut app = mcp_app();
+        Arc::get_mut(&mut app).unwrap().config.mcp_enabled = enabled;
+        let mut req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("host", host);
+        if let Some(token) = token {
+            req = req.header("authorization", token);
+        }
+        if let Some(origin) = origin {
+            req = req.header("origin", origin);
+        }
+        let response = router(app)
+            .oneshot(req.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+    }
+}
+#[tokio::test]
+async fn mcp_negotiates_and_lists_tools_with_useful_results() {
+    let app = mcp_app();
+    let (status, body) = mcp_request(app.clone(), "initialize", serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["serverInfo"]["name"], "bilskirnir");
+    let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let tools = body["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 27);
+    let delete = tools
+        .iter()
+        .find(|t| t["name"] == "delete_environment")
+        .unwrap();
+    assert_eq!(delete["annotations"]["destructiveHint"], true);
+    let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
+    assert_eq!(screenshot["annotations"]["readOnlyHint"], true);
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"get_settings","arguments":{}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], false, "{body}");
+    assert!(body["result"]["structuredContent"]["base_image"].is_string());
+    assert!(!body.to_string().contains("test-token"));
+    let (_, body) = mcp_request(
+        app,
+        "tools/call",
+        serde_json::json!({"name":"delete_environment","arguments":{"environment_id":"missing"}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(
+        body["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("not found")
+    );
+}
+#[tokio::test]
+async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
+    let app = mcp_app();
+    for args in [
+        serde_json::json!({"name":"not_a_tool","arguments":{}}),
+        serde_json::json!({"name":"delete_environment","arguments":{}}),
+        serde_json::json!({"name":"create_environment","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+    ] {
+        let (_, body) = mcp_request(app.clone(), "tools/call", args).await;
+        assert_eq!(body["error"]["code"], -32602, "{body}");
+    }
+    let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_environment","arguments":{"environment_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    let (_,body)=mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"create_environment","arguments":{"name":"test","image":"ubuntu","mounts":[{"volume":"project","target":"/workspace","read_only":true}]}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+}
+
+#[test]
+fn file_paths_and_vnc_actions_reject_invalid_requests() {
+    for path in [
+        "",
+        "/",
+        "relative.txt",
+        "/home/desktop/../root/file",
+        "/home//file",
+        "/home/file/",
+        "/home/./file",
+        "/home/file\0",
+    ] {
+        assert!(files::split_path(path).is_err(), "{path}");
+    }
+    assert_eq!(
+        files::split_path("/etc/os-release").unwrap(),
+        ("/etc", "os-release")
+    );
+    for body in [
+        serde_json::json!({"actions":[]}),
+        serde_json::json!({"actions":[{"type":"click","x":800,"y":0}]}),
+        serde_json::json!({"actions":[{"type":"click","x":0,"y":0,"count":0}]}),
+        serde_json::json!({"actions":[{"type":"drag","from_x":1,"from_y":1,"to_x":2,"to_y":2,"duration_ms":99999}]}),
+        serde_json::json!({"actions":[{"type":"key_press","keys":["Control","Ctrl"]}]}),
+        serde_json::json!({"actions":[{"type":"wait","milliseconds":2000}]}),
+        serde_json::json!({"actions":[{"type":"type_text","text":"\0"}]}),
+    ] {
+        let input = serde_json::from_value(body).unwrap();
+        assert!(desktop_input::plan(&input, 800, 600).is_err());
+    }
+    assert_eq!(desktop_input::keysym("Control").unwrap(), 0xffe3);
+    assert_eq!(desktop_input::keysym("Ω").unwrap(), 0x010003a9);
+    assert_eq!(desktop_input::keysym("\n").unwrap(), 0xff0d);
+    assert!(desktop_input::keysym("F13").is_err());
+    let input = serde_json::from_value(serde_json::json!({"actions":[{"type":"key_press","keys":["Control","a"]},{"type":"click","x":20,"y":30}]})).unwrap();
+    let plan = desktop_input::plan(&input, 800, 600).unwrap();
+    assert_eq!(
+        plan[0].0,
+        [
+            vec![4, 1, 0, 0, 0, 0, 255, 227],
+            vec![4, 1, 0, 0, 0, 0, 0, 97],
+            vec![4, 0, 0, 0, 0, 0, 0, 97],
+            vec![4, 0, 0, 0, 0, 0, 255, 227]
+        ]
+        .concat()
+    );
+    assert_eq!(plan[1].0, vec![5, 1, 0, 20, 0, 30]);
+    assert_eq!(plan[2].0, vec![5, 0, 0, 20, 0, 30]);
+}
+
+#[tokio::test]
+async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
+    for route in ["exec", "files/read", "files/write", "input"] {
+        for (auth, csrf, status) in [
+            (true, true, StatusCode::UNAUTHORIZED),
+            (false, false, StatusCode::FORBIDDEN),
+        ] {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri(format!("/api/environments/missing/{route}"))
+                .header("host", "localhost")
+                .header("content-type", "application/json");
+            if csrf {
+                request = request.header("x-wsld-request", "1");
+            }
+            let response = router(app(auth))
+                .oneshot(request.body(Body::from("{}")).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), status, "{route}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn single_environment_api_returns_the_same_state_as_the_list() {
+    let app = app(false);
+    let env = model::Environment {
+        id: "test-id".into(),
+        container: "test-container".into(),
+        private_network: "test-private".into(),
+        egress_network: "test-egress".into(),
+        source_image_id: "sha256:test".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+    };
+    app.db.put("environment", &env.id, &env).unwrap();
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .uri("/api/environments/test-id")
+                .header("host", "localhost")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["environment"]["id"], "test-id");
+    assert_eq!(body["state"], "unavailable");
+}
+
+#[tokio::test]
+async fn mcp_transport_bounds_messages_and_accepts_notifications() {
+    let app = mcp_app();
+    for (method, version, payload, expected) in [
+        (
+            "POST",
+            "2025-11-25",
+            serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}).to_string(),
+            StatusCode::ACCEPTED,
+        ),
+        (
+            "GET",
+            "2025-11-25",
+            String::new(),
+            StatusCode::METHOD_NOT_ALLOWED,
+        ),
+        (
+            "POST",
+            "1900-01-01",
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"ping"}).to_string(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "POST",
+            "2025-11-25",
+            "x".repeat(1_100_001),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+    ] {
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri("/mcp")
+                    .header("host", "localhost")
+                    .header(
+                        "authorization",
+                        "Bearer test-token-with-at-least-32-characters",
+                    )
+                    .header("content-type", "application/json")
+                    .header("accept", "application/json, text/event-stream")
+                    .header("mcp-protocol-version", version)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{method} {version}");
+    }
 }
 #[test]
 fn uploads_only_accept_canonical_paths_in_writable_locations() {

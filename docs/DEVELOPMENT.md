@@ -28,6 +28,8 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
 | Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
+| MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
+| File read/write API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |
 | Dashboard and desktop interface | `web/app.js`, `web/media.mjs`, `web/style.css`, `web/icons.mjs`, `web/mark.svg` |
 | Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh` |
@@ -38,6 +40,8 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 ## How the containers connect
 
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
+
+The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement.
 
 Each environment has a private internal bridge to the manager. Browser desktop and media connections pass through the manager; VNC ports are not published on the host. A second bridge provides internet egress and is attached or detached by the environment's internet setting.
 

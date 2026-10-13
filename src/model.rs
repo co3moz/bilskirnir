@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub const LABEL: &str = "io.wsl-desktop.managed";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Mount {
     pub volume: String,
     pub target: String,

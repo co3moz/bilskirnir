@@ -16,6 +16,7 @@ The name is a nod to Thor.
 - Start new desktops from saved images and see how snapshots relate to their parents.
 - Turn an environment's internet connection on or off without closing its desktop.
 - Drag files onto a desktop or environment card to upload them to Downloads or a mounted volume.
+- Let an agent manage desktops through the built-in MCP server, including files, command execution and mouse/keyboard control.
 
 Bilskirnir currently serves one administrator on a local machine or LAN. The desktops are containers sharing the WSL kernel. The manager controls them through the host Docker socket; it does not run a nested Docker daemon.
 
@@ -130,6 +131,8 @@ Hardware OpenGL has been verified with VirtualGL and Mesa D3D12 on WSL Ubuntu 22
 - [Using Bilskirnir](docs/USAGE.md): desktops, custom images, snapshots, files and volumes.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
 - [Development](docs/DEVELOPMENT.md): source builds, project structure, checks and image publishing.
+- [Agent access with MCP](docs/MCP.md): connection settings, tools and automation workflows.
+- [HTTP API](docs/API.md): use the same operations from scripts or another application.
 - [Interface design](docs/DESIGN.md): visual choices and guidance for interface changes.
 - [Verification notes](docs/BUG_HUNT.md): the earlier bug audit and what was checked.
 

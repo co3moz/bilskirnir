@@ -127,13 +127,35 @@ pub async fn upload(
             "Send a binary file body".into(),
         ));
     }
+    save_file(
+        &app,
+        id,
+        request,
+        body,
+        app.session_revoked(auth::cookie(&headers)),
+    )
+    .await
+}
+
+pub(crate) async fn save_file(
+    app: &Arc<App>,
+    id: String,
+    request: Upload,
+    body: Body,
+    revoked: impl std::future::Future<Output = ()>,
+) -> Result<Json<Value>> {
+    if request.size > app.config.upload_limit {
+        return Err(Error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "File exceeds the configured upload limit".into(),
+        ));
+    }
     let _permit = app.uploads.try_acquire().map_err(|_| {
         Error(
             StatusCode::TOO_MANY_REQUESTS,
             "Two uploads are already in progress. Try again shortly.".into(),
         )
     })?;
-    let token = auth::cookie(&headers);
     let transfer = async {
         let lock = app.resource_lock(&format!("environment:{id}"));
         let _guard = lock.lock().await;
@@ -256,6 +278,6 @@ pub async fn upload(
     };
     tokio::select! {
         result = tokio::time::timeout(Duration::from_secs(3600), transfer) => result.map_err(|_| Error(StatusCode::REQUEST_TIMEOUT, "Upload timed out".into()))?,
-        _ = app.session_revoked(token) => Err(Error(StatusCode::UNAUTHORIZED, "Session expired. Sign in again.".into())),
+        _ = revoked => Err(Error(StatusCode::UNAUTHORIZED, "Session expired. Sign in again.".into())),
     }
 }

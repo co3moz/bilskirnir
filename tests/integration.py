@@ -86,6 +86,7 @@ volume = f"wsld-test-data-{tag}"
 share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 password = uuid.uuid4().hex
+mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 environment_ids = []
 image_refs = []
 foreign = f"wsld-test-foreign-{tag}"
@@ -126,13 +127,37 @@ def job(response):
 
 
 def start_manager():
-    docker("run", "-d", "--name", manager, "--label", "io.wsl-desktop.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
+    docker("run", "-d", "--name", manager, "--label", "io.wsl-desktop.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "MCP_ENABLED=true", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
     return int(docker("port", manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
 
 
 def login():
     wait_for(lambda: api("session", anonymous=True))
     api("login", {"username": "admin", "password": password})
+
+
+def mcp(method, params=None, token=mcp_token):
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=json.dumps({"jsonrpc":"2.0","id":1,"method":method,"params":params or {}}).encode(), headers={"Content-Type":"application/json","Accept":"application/json, text/event-stream","MCP-Protocol-Version":"2025-11-25","Authorization":f"Bearer {token}"})
+    with urllib.request.urlopen(request, timeout=120) as response:
+        result = json.loads(response.read())
+    assert "error" not in result, result
+    return result["result"]
+
+
+def tool(name, arguments=None, allow_error=False):
+    result = mcp("tools/call", {"name":name,"arguments":arguments or {}})
+    if not allow_error:
+        assert not result.get("isError"), result
+    return result
+
+
+def mcp_job(response, success=True):
+    jid = response["structuredContent"]["job_id"]
+    result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
+    assert result["status"] == ("completed" if success else "failed"), result
+    if success and result["result"] and result["result"].get("reference") and "profile_id" not in result["result"]:
+        image_refs.append(result["result"]["reference"])
+    return result
 
 
 def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False):
@@ -166,6 +191,15 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     print("PASS password login and API access checks", flush=True)
+    try:
+        mcp("tools/list", token="wrong")
+        raise AssertionError("MCP accepted the wrong token")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401
+    assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
+    assert len(mcp("tools/list")["tools"]) == 27
+    assert tool("get_system")["structuredContent"]["connected"]
+    print("PASS MCP authentication, negotiation and discovery", flush=True)
     assert api("system")["connected"]
     profiles = api("profiles")
     assert {p["profile"]["session"] for p in profiles} == {"xfce", "gnome"}
@@ -173,7 +207,7 @@ try:
     xfce = next(p for p in profiles if p["profile"]["session"] == "xfce")
     gnome = next(p for p in profiles if p["profile"]["session"] == "gnome")
     # A profile build through the manager must work from its bundled Docker context.
-    assert job(api("profiles/ubuntu-xfce/build", {}))["profile_id"] == "ubuntu-xfce"
+    assert mcp_job(tool("build_profile", {"profile_id":"ubuntu-xfce"}))["result"]["profile_id"] == "ubuntu-xfce"
     print("PASS distinct desktop profile catalog and built-in image preparation", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
@@ -200,6 +234,65 @@ try:
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
     ready(container)
+    default_exec = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
+    assert "1001" in default_exec["log"] and default_exec["result"]["user"] == "1001:1001"
+    root_exec = mcp_job(tool("exec_environment", {"environment_id":env_id,"root":True,"script":"id -u\ninstall -m 644 /home/desktop/agent-marker /opt/agent-install"}))
+    assert root_exec["result"]["user"] == "root"
+    assert docker("exec",container,"cat","/opt/agent-install") == b"agent-install"
+    failure = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"echo EXPECTED_EXEC_FAILURE\nexit 17"}), success=False)
+    assert "EXPECTED_EXEC_FAILURE" in failure["log"] and "17" in failure["log"]
+    timeout = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"sleep 5\nprintf must-not-exist > /home/desktop/after-timeout","timeout_seconds":1}), success=False)
+    assert "124" in timeout["log"]
+    time.sleep(1)
+    assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
+    written = tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
+    assert written["bytes"] == 15
+    read = api(f"environments/{env_id}/files/read", {"path":written["path"]})
+    assert read["data"] == "Hello from MCP\n" and read["eof"]
+    assert docker("exec",container,"stat","-c","%u:%g %a",written["path"]).strip() == b"1001:1001 600"
+    conflict = tool("write_file", {"environment_id":env_id,"path":written["path"],"data":"no overwrite"}, allow_error=True)
+    assert conflict["isError"]
+    api(f"environments/{env_id}/files/write", {"path":written["path"],"data":"Updated","replace":True})
+    page = tool("read_file", {"environment_id":env_id,"path":written["path"],"offset":2,"limit":3})["structuredContent"]
+    assert page["data"] == "dat" and page["next_offset"] == 5 and not page["eof"]
+    binary = bytes(range(256))
+    tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64","data":base64.b64encode(binary).decode()})
+    assert base64.b64decode(tool("read_file", {"environment_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64"})["structuredContent"]["data"]) == binary
+    assert tool("read_file", {"environment_id":env_id,"path":"/dev/zero"}, allow_error=True)["isError"]
+    tool("upload_file", {"environment_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})
+    assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
+    image = tool("screenshot", {"environment_id":env_id})["content"][0]
+    assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")
+    assert tool("read_file", {"environment_id":env_id,"path":"/home/desktop/../etc/passwd"}, allow_error=True)["isError"]
+    docker("exec", "--user", "desktop", container, "ln", "-s", "/home/desktop/agent-files", "/home/desktop/agent-link")
+    assert tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-link/blocked.txt","data":"blocked"}, allow_error=True)["isError"]
+    assert tool("read_file", {"environment_id":env_id,"path":"/home/desktop/agent-link/hello.txt"}, allow_error=True)["isError"]
+    print("PASS MCP/HTTP execution, exit failures, timeout, bounded file read/write, upload and screenshot", flush=True)
+    docker("exec", "--detach", "--user", "desktop", "--env", "DISPLAY=:0", container, "bash", "-c", 'exec xev -geometry 320x180+80+80 -name "Bilskirnir input test" -event mouse -event keyboard > /home/desktop/input-events.log 2>&1')
+    def input_position():
+        info = docker("exec", "--env", "DISPLAY=:0",container,"xwininfo","-name","Bilskirnir input test").decode()
+        import re
+        x = int(re.search(r"Absolute upper-left X:\s+(-?\d+)", info)[1]) + 160
+        y = int(re.search(r"Absolute upper-left Y:\s+(-?\d+)", info)[1]) + 120
+        return x,y
+    x,y = wait_for(input_position)
+    viewer = WebSocket(port, f"/api/environments/{env_id}/vnc", "; ".join(f"{c.name}={c.value}" for c in cookies))
+    assert viewer.read(12).startswith(b"RFB ")
+    viewer.send(b"RFB 003.008\n")
+    types = viewer.read(viewer.read(1)[0]); assert 1 in types
+    viewer.send(b"\x01"); assert viewer.read(4)==b"\0"*4
+    viewer.send(b"\x01"); init=viewer.read(24); viewer.read(int.from_bytes(init[20:24],"big"))
+    result = tool("desktop_input", {"environment_id":env_id,"actions":[{"type":"move","x":x,"y":y},{"type":"click","x":x,"y":y},{"type":"type_text","text":"agent"},{"type":"key_press","keys":["Control","a"]},{"type":"scroll","x":x,"y":y,"direction":"up","steps":2}]})["structuredContent"]
+    assert result["applied_actions"] == 5 and result["width"]==1280 and result["height"]==720
+    api(f"environments/{env_id}/input", {"actions":[{"type":"drag","from_x":x,"from_y":y,"to_x":x+20,"to_y":y+10},{"type":"key_press","keys":["Escape"]}]})
+    events = wait_for(lambda: (data if b"KeyPress" in (data:=docker("exec",container,"cat","/home/desktop/input-events.log")) and b"ButtonPress" in data and b"Control_L" in data else None))
+    assert b"button 1" in events and b"button 4" in events and b"Escape" in events, events
+    viewer.send(b"\x03\x00" + struct.pack("!HHHH",0,0,1,1))
+    assert viewer.read(4)[0] == 0, "Agent input disconnected the existing VNC viewer"
+    viewer.close()
+    rejected = tool("desktop_input", {"environment_id":env_id,"actions":[{"type":"click","x":2000,"y":y}]}, allow_error=True)
+    assert rejected["isError"]
+    print("PASS MCP/HTTP shared VNC mouse, keyboard, drag, scroll, Fence acknowledgement and bounds", flush=True)
     payload = bytes(range(256)) * 5000
     uploaded = upload(env_id,"binary & notes.bin",payload)
     assert docker("exec",container,"cat",uploaded["path"]) == payload
@@ -426,6 +519,32 @@ try:
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{bad['job_id']}")==b""
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)
+    agent_image = mcp_job(tool("build_image", {"name":"agent-build","base_image":xfce["profile"]["reference"],"internet":False,"script":f"# acceptance {tag}\nprintf mcp-built > /opt/mcp-built"}))["result"]
+    agent_env = mcp_job(tool("create_environment", {"name":"Agent lifecycle","image":agent_image["image_id"],"internet":False,"gpu":False}))["result"]["environment_id"]
+    environment_ids.append(agent_env)
+    ready(f"wsld-{agent_env}")
+    assert tool("get_environment", {"environment_id":agent_env})["structuredContent"]["state"] == "running"
+    assert tool("read_file", {"environment_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
+    tool("write_file", {"environment_id":agent_env,"path":"/home/desktop/from-agent.txt","data":"snapshot from MCP"})
+    agent_snapshot = mcp_job(tool("snapshot", {"environment_id":agent_env,"name":"Agent snapshot"}))["result"]
+    assert agent_snapshot["parent_image_id"] == agent_image["image_id"]
+    assert any(image["id"] == agent_snapshot["id"] for image in tool("list_images")["structuredContent"]["items"])
+    mcp_job(tool("set_internet", {"environment_id":agent_env,"enabled":True}))
+    mcp_job(tool("set_internet", {"environment_id":agent_env,"enabled":False}))
+    mcp_job(tool("environment_action", {"environment_id":agent_env,"action":"stop"}))
+    mcp_job(tool("environment_action", {"environment_id":agent_env,"action":"start"}))
+    ready(f"wsld-{agent_env}")
+    deleted = mcp_job(tool("delete_environment", {"environment_id":agent_env}))
+    assert deleted["result"]["volumes_preserved"] and deleted["result"]["images_preserved"]
+    assert "Named volumes and saved images were preserved" in deleted["log"]
+    environment_ids.remove(agent_env)
+    clone = mcp_job(tool("create_environment", {"name":"Agent snapshot clone","image":agent_snapshot["image_id"],"gpu":False,"internet":False}))["result"]["environment_id"]
+    environment_ids.append(clone)
+    ready(f"wsld-{clone}")
+    assert tool("read_file", {"environment_id":clone,"path":"/home/desktop/from-agent.txt"})["structuredContent"]["data"] == "snapshot from MCP"
+    mcp_job(tool("delete_environment", {"environment_id":clone}))
+    environment_ids.remove(clone)
+    print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
     for eid in list(environment_ids):
         deletion = api(f"environments/{eid}", method="DELETE")
         result = job(deletion)

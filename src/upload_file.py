@@ -11,12 +11,13 @@ def timed_out(*_):
 
 signal.signal(signal.SIGALRM, timed_out)
 signal.alarm(3600)
-directory, name, size, replace = sys.argv[1:]
+directory, name, size, replace = sys.argv[1:5]
+mode = int(sys.argv[5], 8) if len(sys.argv) > 5 else 0o644
 expected = int(size)
 folder = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
 temporary = None
 try:
-    for part in directory.lstrip("/").split("/"):
+    for part in filter(None, directory.lstrip("/").split("/")):
         try:
             os.mkdir(part, 0o755, dir_fd=folder)
         except FileExistsError:
@@ -25,7 +26,7 @@ try:
         os.close(folder)
         folder = child
     temporary = ".bilskirnir-upload-" + uuid.uuid4().hex
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=folder)
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=folder)
     received = 0
     with os.fdopen(descriptor, "wb") as output:
         while chunk := sys.stdin.buffer.read(65536):
