@@ -490,6 +490,9 @@ try:
     diag = api(f"environments/{env_id}/diagnostics")["output"]
     assert "D3D12 (NVIDIA" in diag, diag
     assert "Default Source: browser-microphone" in diag, diag
+    # gpu-run applies VirtualGL's Chrome workaround to Chromium-family command names only.
+    hack = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"mkdir -p /tmp/gr && ln -sf /usr/bin/env /tmp/gr/google-chrome && ln -sf /usr/bin/env /tmp/gr/MyGame\ngpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\nVGL_CHROMEHACK=0 gpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\ngpu-run /tmp/gr/MyGame | grep -c VGL_CHROMEHACK || true\n"}))["log"]
+    assert "VGL_CHROMEHACK=1\n" in hack and "VGL_CHROMEHACK=0\n" in hack and "\n0\n" in hack, hack
     print("PASS independent desktop, hardware OpenGL and virtual audio devices", flush=True)
     jpeg = api(f"environments/{env_id}/screenshot", raw=True)
     assert jpeg.startswith(b"\xff\xd8") and len(jpeg) > 1000
