@@ -16,7 +16,7 @@ The name is a nod to Thor.
 - Start new desktops from saved images and see how snapshots relate to their parents.
 - Turn an environment's internet connection on or off without closing its desktop.
 - Drag files onto a desktop or environment card to upload them to Downloads or a mounted volume.
-- Let an agent manage desktops through the built-in MCP server, including files, command execution, background applications, window control and mouse/keyboard input with screenshots.
+- Let an agent manage desktops through the built-in MCP server, including files, command execution, background applications, window control, mouse/keyboard input with screenshots, waits, recordings and environment resets.
 
 Bilskirnir currently serves one administrator on a local machine or LAN. The desktops are containers sharing the WSL kernel. The manager controls them through the host Docker socket; it does not run a nested Docker daemon.
 

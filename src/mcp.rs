@@ -1,5 +1,6 @@
 use crate::{
-    App, api, apps, auth, capture, desktop_input, error, exec, files, uploads, waits, windows,
+    App, api, apps, auth, capture, desktop_input, error, exec, files, recordings, uploads, waits,
+    windows,
 };
 use axum::{
     Json, Router,
@@ -327,6 +328,17 @@ impl BilskirnirMcp {
                 let options: apps::Metrics = parse(args)?;
                 apps::sample_metrics(&self.app, &id.unwrap(), &application, options.duration_ms)
                     .await?
+            }
+            "start_recording" => {
+                recordings::start_recording(&self.app, &id.unwrap(), &parse(args)?).await?
+            }
+            "stop_recording" => {
+                recordings::stop_recording(&self.app, &id.unwrap(), &string(&args, "recording_id")?)
+                    .await?
+            }
+            "list_recordings" => recordings::list_recordings(&self.app, &id.unwrap()).await?,
+            "export_artifacts" => {
+                recordings::export_artifacts(&self.app, &id.unwrap(), &parse(args)?).await?
             }
             "list_windows" => windows::list_windows(&self.app, &id.unwrap()).await?,
             "focus_window" => {
@@ -699,6 +711,27 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(tool("reset_environment", "Recreate a desktop from its saved source image. The container and its unsaved changes are discarded; named volumes, networks and the environment ID are kept. Returns job_id.", env(), &["environment_id"], false, true, false));
     tools.push(tool("application_diagnostics", "Inspect a launched application: state, exit status, process tree with memory, open files, threads and the latest log lines.", json!({"environment_id": id, "application_id": application}), &["environment_id", "application_id"], true, false, false));
     tools.push(derived::<apps::Metrics>("sample_metrics", "Sample CPU and memory use of a launched application's processes over duration_ms, with container memory figures. Frame rate is not available.", &[environment.clone(), ("application_id", application.clone(), true)], true, false, false));
+    tools.push(derived::<recordings::StartRecording>("start_recording", "Record the desktop as a sequence of JPEG frames at 1–5 fps until stop_recording or max_seconds, within 3000 frames and 256 MiB. Frames are stored under /tmp in the desktop; read them with read_file or package them with export_artifacts.", std::slice::from_ref(&environment), false, false, false));
+    let recording = json!({"type":"string","minLength":1,"description":"Recording ID returned by start_recording."});
+    tools.push(tool(
+        "stop_recording",
+        "Stop a recording and return its frame count, size and timing.",
+        json!({"environment_id": id, "recording_id": recording}),
+        &["environment_id", "recording_id"],
+        false,
+        false,
+        false,
+    ));
+    tools.push(tool(
+        "list_recordings",
+        "List recordings of an environment with their state and frame counts.",
+        env(),
+        &["environment_id"],
+        true,
+        false,
+        false,
+    ));
+    tools.push(derived::<recordings::Export>("export_artifacts", "Package recording frames and application logs into a tar.gz with a manifest, saved in Downloads or a writable mounted volume. Existing archives need replace=true.", std::slice::from_ref(&environment), false, true, false));
     let mut input_schema =
         serde_json::to_value(rmcp::schemars::schema_for!(desktop_input::Input)).unwrap();
     input_schema["properties"]["environment_id"] = id;

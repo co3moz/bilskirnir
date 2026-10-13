@@ -188,6 +188,14 @@ pub struct Application {
     pub created_at: u64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Recording {
+    pub id: String,
+    pub environment_id: String,
+    pub name: String,
+    pub fps: u8,
+    pub created_at: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Job {
     pub id: String,
     pub kind: String,

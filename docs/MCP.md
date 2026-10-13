@@ -64,7 +64,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 43 tools:
+The server currently exposes 47 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -72,6 +72,7 @@ The server currently exposes 43 tools:
 | Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `environment_action`, `set_internet`, `retry_environment`, `reset_environment`, `delete_environment` |
 | Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `environment_logs`, `environment_diagnostics` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
+| Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Reusable images | `list_images`, `import_image`, `build_image`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
 | Operation results | `list_jobs`, `get_job` |
@@ -126,6 +127,12 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 Supervisor files live under `/tmp` in the desktop, so they are not part of snapshots and do not survive a desktop restart; afterwards the state is `unknown`. Application records are removed with their environment. A launched application does not hold the environment lock, so scripts, file access and desktop input keep working while it runs.
 
 `list_windows` returns visible X11 windows with their IDs, titles, PIDs, geometry and the active window. `focus_window` raises a window so keyboard input reaches it, and `set_window_geometry` moves or resizes it so that screenshots and coordinates stay predictable. These tools, window screenshots and relative pointer movement use `xdotool` and `wmctrl` in the desktop image; desktops built from images that predate them need an updated image.
+
+## Record and export evidence
+
+`start_recording` captures the desktop as JPEG frames at `fps` (1–5) until `stop_recording`, `max_seconds` (up to 600), 3000 frames or 256 MiB. `max_width` scales frames (default 960) and `region` limits them to part of the desktop. `list_recordings` shows each recording's state, frame count and size; frames are regular files under `/tmp/bilskirnir-recordings/<recording_id>` and can be read with `read_file`. The frames are a sequence, not an encoded video.
+
+`export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in Downloads or a writable mounted volume so the files outlive the desktop or can be collected from the host. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting an environment.
 
 ## Use the mouse and keyboard
 

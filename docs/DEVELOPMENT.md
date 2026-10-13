@@ -30,6 +30,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
 | Background applications, windows, screenshots and waits | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs`, `src/waits.rs` |
+| Recordings and artifact export | `src/recordings.rs`, `src/recorder.py`, `src/export_artifacts.py` |
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |

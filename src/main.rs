@@ -15,6 +15,7 @@ mod media;
 mod model;
 mod process;
 mod profiles;
+mod recordings;
 mod uploads;
 mod waits;
 mod windows;
@@ -96,6 +97,15 @@ fn router(app: Arc<App>) -> Router {
             get(apps::metrics),
         )
         .route("/api/environments/{id}/wait", post(waits::wait))
+        .route(
+            "/api/environments/{id}/recordings",
+            get(recordings::list).post(recordings::start),
+        )
+        .route(
+            "/api/environments/{id}/recordings/{recording}/stop",
+            post(recordings::stop),
+        )
+        .route("/api/environments/{id}/artifacts", post(recordings::export))
         .route("/api/environments/{id}/reset", post(api::reset))
         .route("/api/environments/{id}/windows", get(windows::list))
         .route(

@@ -56,6 +56,10 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/environments/{id}/applications/{application_id}/metrics` | CPU and memory sampled over `duration_ms`. |
 | POST | `/api/environments/{id}/wait` | Wait for a window, application state, log text or a stable screen. |
 | POST | `/api/environments/{id}/reset` | Recreate the container from its source image; returns a job. |
+| GET | `/api/environments/{id}/recordings` | Recordings and their state. |
+| POST | `/api/environments/{id}/recordings` | Start recording desktop frames. |
+| POST | `/api/environments/{id}/recordings/{recording_id}/stop` | Stop a recording. |
+| POST | `/api/environments/{id}/artifacts` | Package recordings and application logs as a tar.gz. |
 | GET | `/api/environments/{id}/windows` | Visible X11 windows and the active window. |
 | POST | `/api/environments/{id}/windows/{window_id}/focus` | Raise and focus a window. |
 | POST | `/api/environments/{id}/windows/{window_id}/geometry` | Move or resize a window. |
@@ -209,6 +213,8 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 `POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100–60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`.
 
 `POST .../reset` recreates the container from the environment's saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the environment ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
+
+`POST .../recordings` with `{"fps":2,"max_seconds":60,"max_width":960,"region":"0,0,1280,720","name":"level 1"}` starts capturing JPEG frames into `/tmp/bilskirnir-recordings/{recording_id}` inside the desktop and returns `recording_id`. Recording stops at `max_seconds`, after 3000 frames or 256 MiB, or on `POST .../recordings/{recording_id}/stop`, which returns `frames`, `bytes`, `started_at`, `ended_at` and `reason`. Frames are named `frame-00000-<unix ms>.jpg` and can be read with the file routes. `POST .../artifacts` with `{"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":[...],"application_ids":[...],"replace":false}` writes an archive containing `recordings/<id>/` frames, `applications/<id>/` logs and a `manifest.json`; the destination follows the upload rules and existing archives return 409 unless `replace` is set. Recording files live in tmpfs and disappear when the desktop restarts.
 
 `GET .../windows` lists visible windows with `window_id`, `title`, `pid`, `x`, `y`, `width`, `height` and `active`. `POST .../windows/{window_id}/focus` activates a window, and `POST .../windows/{window_id}/geometry` with `x`,`y` and/or `width`,`height` moves or resizes it and returns the resulting geometry. Window IDs are hexadecimal X11 IDs such as `0x3a00007`. The window routes, window screenshots and relative pointer movement need `xdotool` and `wmctrl` in the desktop image.
 

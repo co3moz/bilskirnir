@@ -422,6 +422,11 @@ impl App {
                 self.db.remove("application", &application.id)?;
             }
         }
+        for recording in self.db.list::<Recording>("recording")? {
+            if recording.environment_id == environment_id {
+                self.db.remove("recording", &recording.id)?;
+            }
+        }
         Ok(())
     }
     /// Discard the container's writable layer and recreate it from the pinned source image.

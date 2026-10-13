@@ -177,7 +177,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 43);
+    assert_eq!(tools.len(), 47);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -320,6 +320,9 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "act-and-observe",
         "wait",
         "reset",
+        "recordings",
+        "recordings/x/stop",
+        "artifacts",
         "applications",
         "applications/x/stop",
         "windows/0x1/focus",
@@ -1198,6 +1201,44 @@ async fn metric_sampling_rejects_bad_durations_before_docker() {
     assert!(
         apps::sample_metrics(&app, "missing", "app", 10_001)
             .await
+            .is_err()
+    );
+}
+
+#[test]
+fn recording_requests_are_validated() {
+    let start = |value: serde_json::Value| {
+        serde_json::from_value::<recordings::StartRecording>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(start(serde_json::json!({})).is_ok());
+    assert!(
+        start(
+            serde_json::json!({"fps":5,"max_seconds":600,"max_width":320,"region":"0,0,100,100"})
+        )
+        .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"fps":0}),
+        serde_json::json!({"fps":6}),
+        serde_json::json!({"max_seconds":601}),
+        serde_json::json!({"max_width":8}),
+        serde_json::json!({"region":"1,2"}),
+    ] {
+        assert!(start(bad).is_err());
+    }
+    let export = |value: serde_json::Value| {
+        serde_json::from_value::<recordings::Export>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(
+        export(serde_json::json!({"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":["a"]}))
+            .is_ok()
+    );
+    assert!(
+        export(serde_json::json!({"destination":"/home/desktop/Downloads","name":"run.tar.gz"}))
             .is_err()
     );
 }
