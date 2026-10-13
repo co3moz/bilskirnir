@@ -76,9 +76,12 @@ pub async fn capture_input(
             read_limited(stderr, limit, overflow),
             async { Ok::<_, anyhow::Error>(child.wait().await?) },
             async move {
-                if let (Some(mut stdin), Some(input)) = (stdin, input) {
-                    stdin.write_all(&input).await?;
-                    stdin.shutdown().await?;
+                // A process that exits before consuming its input closes the pipe. Its exit
+                // status and stderr describe that better than the resulting EPIPE.
+                if let (Some(mut stdin), Some(input)) = (stdin, input)
+                    && let Err(e) = deliver(&mut stdin, &input).await
+                {
+                    tracing::debug!("Process input was not fully delivered: {e}");
                 }
                 Ok::<_, anyhow::Error>(())
             }
@@ -102,6 +105,11 @@ pub async fn capture_input(
             }
         }
     }
+}
+
+async fn deliver(stdin: &mut tokio::process::ChildStdin, input: &[u8]) -> std::io::Result<()> {
+    stdin.write_all(input).await?;
+    stdin.shutdown().await
 }
 
 // Preserve split UTF-8 sequences; non-text script output must not abort a successful build.

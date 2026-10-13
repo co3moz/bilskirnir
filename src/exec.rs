@@ -8,6 +8,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+// The script is copied to an unlinked temporary file first, so commands that read stdin see
+// end-of-file instead of consuming the rest of the script, and large scripts avoid argument limits.
+const WRAPPER: &str = "script=$(mktemp /tmp/bilskirnir-exec.XXXXXX) && cat >\"$script\" && exec 3<\"$script\" && rm -f -- \"$script\" && exec bash -e /dev/fd/3 </dev/null";
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Execute {
@@ -80,7 +84,8 @@ pub async fn execute(
                 "--kill-after=5s".into(),
                 format!("{}s", body.timeout_seconds),
                 "bash".into(),
-                "-se".into(),
+                "-c".into(),
+                WRAPPER.into(),
             ];
             app.docker_logged_input(&job_id, &args, Some(body.script.into_bytes()))
                 .await?;

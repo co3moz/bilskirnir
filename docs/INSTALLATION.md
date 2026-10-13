@@ -35,7 +35,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
 | `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
 | `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled; 32–256 visible ASCII characters. |
-| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. |
+| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
 | `AUDIO_ENABLED` | `true` | Allows environments to use browser sound. |
@@ -139,7 +139,7 @@ docker compose logs --tail=100 manager
 
 Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A GHCR access error happens before startup; check your registry login and package access.
 
-If the dashboard opens but an environment fails, read its job log and **Diagnostics**. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate environment with GPU disabled to check the basic desktop path without deleting the failed environment's files.
+If the dashboard opens but an environment fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate environment with GPU disabled to check the basic desktop path without deleting the failed environment's files.
 
 If file uploads report a permission error, check that the chosen volume is writable by UID/GID 1001:1001. Raising the upload size limit will not fix destination permissions.
 

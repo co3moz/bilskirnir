@@ -66,7 +66,7 @@ async fn bridge(socket: WebSocket, stream: TcpStream) {
             match message? {
                 Message::Binary(bytes) => write.write_all(&bytes).await?,
                 Message::Close(_) => break,
-                Message::Text(_) => anyhow::bail!("Binary WebSocket gerekli"),
+                Message::Text(_) => anyhow::bail!("Binary WebSocket frames are required"),
                 _ => {}
             }
         }

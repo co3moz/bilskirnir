@@ -47,7 +47,12 @@ case ${DESKTOP_SESSION:-xfce} in
     *) echo "Unknown DESKTOP_SESSION: ${DESKTOP_SESSION}" >&2; exit 1 ;;
 esac
 if [[ ${DESKTOP_GPU:-false} == true ]]; then
-    gpu-run glxinfo -B > /run/desktop/gpu-info 2>&1
+    # Record the renderer check even when it fails: a restarting container cannot run diagnostics.
+    if ! gpu-run glxinfo -B > /run/desktop/gpu-info 2>&1; then
+        cat /run/desktop/gpu-info
+        echo 'GPU requested, but OpenGL initialization failed. Check /dev/dxg, WSL libraries and GPU_ADAPTER.' >&2
+        exit 1
+    fi
     cat /run/desktop/gpu-info
     if grep -Eqi 'OpenGL renderer string:.*(llvmpipe|softpipe|Software Rasterizer)' /run/desktop/gpu-info; then
         echo 'GPU requested, but renderer is software. Check /dev/dxg, WSL libraries and GPU_ADAPTER.' >&2

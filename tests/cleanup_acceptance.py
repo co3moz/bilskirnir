@@ -21,7 +21,7 @@ assert info and info["Config"]["Labels"].get("io.wsl-desktop.manager") == "true"
 assert f"MANAGER_CONTAINER={manager}" in info["Config"]["Env"]
 volume = f"wsld-test-data-{tag}"
 assert any(m.get("Name") == volume and m["Destination"] == "/data" for m in info["Mounts"])
-records = json.loads(docker("run", "--rm", "--entrypoint", "python3", "--mount", f"type=volume,src={volume},dst=/data", "bilskirnir/ubuntu-xfce:24.04", "-c", "import sqlite3,json; c=sqlite3.connect('file:/data/state.sqlite?mode=ro',uri=True); print(json.dumps([(kind,json.loads(data)) for kind,data in c.execute(\"SELECT kind,data FROM records WHERE kind IN ('environment','image')\")]))"))
+records = json.loads(docker("run", "--rm", "--entrypoint", "python3", "--mount", f"type=volume,src={volume},dst=/data", "bilskirnir/manager:local", "-c", "import sqlite3,json; c=sqlite3.connect('file:/data/state.sqlite?mode=ro',uri=True); print(json.dumps([(kind,json.loads(data)) for kind,data in c.execute(\"SELECT kind,data FROM records WHERE kind IN ('environment','image')\")]))"))
 for kind, record in records:
     if kind != "environment":
         continue

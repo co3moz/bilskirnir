@@ -10,7 +10,7 @@ Select **New environment** and choose a desktop profile, custom image or snapsho
 
 After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, inspect or delete it.
 
-There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
+The GPU option is available only when the installation enables `WSL_GPU` or `NVIDIA_COMPUTE`. There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
 
 ## Choose XFCE or GNOME
 
@@ -32,7 +32,7 @@ gpu-run /path/to/MyLinuxGame -force-glcore
 
 The Unity and game commands are launch examples, not confirmation that a particular application version works. Install your Linux application first and test its graphics requirements. Windows executables and Wine are not included.
 
-Open **Diagnostics** if a GPU desktop fails to start or rendering does not work. GPU-enabled startup checks the renderer and rejects software rendering. Hardware OpenGL has been verified on NVIDIA RTX 4080; Unity itself, Vulkan and AMD/Intel graphics have not been verified.
+GPU-enabled startup checks the renderer and rejects software rendering. If a GPU desktop fails to start, open **Logs**: the renderer check is written to the container log before the desktop exits, and **Diagnostics** needs a running desktop. Use **Diagnostics** when the desktop runs but rendering does not work. Hardware OpenGL has been verified on NVIDIA RTX 4080; Unity itself, Vulkan and AMD/Intel graphics have not been verified.
 
 `WSL_GPU` enables WSL graphics support at installation level. `NVIDIA_COMPUTE` separately requests NVIDIA CUDA access. Turning CUDA off leaves WSL graphics available when `WSL_GPU=true`. `GPU_ADAPTER` selects a Mesa adapter by name, such as `NVIDIA`, `AMD`, `Intel` or part of its model name. Each environment still has its own GPU setting.
 

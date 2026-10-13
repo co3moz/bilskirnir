@@ -107,6 +107,11 @@ impl App {
         if spec.microphone && !self.config.microphone {
             bail!("Microphone is disabled for this installation");
         }
+        if spec.gpu && !self.config.wsl_gpu && !self.config.cuda {
+            bail!(
+                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); create the environment without GPU"
+            );
+        }
         let manager = self
             .config
             .manager
@@ -451,9 +456,15 @@ impl App {
         let err = child.stderr.take().unwrap();
         let stdin = child.stdin.take();
         let write = async move {
-            if let (Some(mut stdin), Some(input)) = (stdin, input) {
-                stdin.write_all(&input).await?;
-                stdin.shutdown().await?;
+            // Scripts may exit before reading all of their input; the exit status is authoritative.
+            if let (Some(mut stdin), Some(input)) = (stdin, input)
+                && let Err(e) = async {
+                    stdin.write_all(&input).await?;
+                    stdin.shutdown().await
+                }
+                .await
+            {
+                tracing::debug!("Job input was not fully delivered: {e}");
             }
             anyhow::Ok(())
         };

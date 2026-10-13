@@ -18,6 +18,8 @@ on:
       - 'scripts/**'
       - 'deploy/**'
       - 'tests/**'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.md'
   workflow_dispatch:
 
 permissions:
