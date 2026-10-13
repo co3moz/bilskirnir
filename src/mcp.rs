@@ -1,6 +1,6 @@
 use crate::{
-    App, api, apps, auth, capture, desktop_input, error, exec, files, recordings, uploads, waits,
-    windows,
+    App, api, apps, audio, auth, capture, desktop_input, error, exec, files, gamepad, recordings,
+    terminal, uploads, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -208,6 +208,16 @@ fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
     result.structured_content = Some(summary);
     result
 }
+fn sound(mut value: Value) -> CallToolResult {
+    let wav = value
+        .as_object_mut()
+        .and_then(|object| object.remove("wav_base64"))
+        .and_then(|data| data.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let mut result = CallToolResult::success(vec![ContentBlock::audio(wav, "audio/wav")]);
+    result.structured_content = Some(value);
+    result
+}
 fn structured(value: Value) -> CallToolResult {
     // Keep an object result for clients using the 2025 protocol versions.
     CallToolResult::structured(if value.is_object() {
@@ -270,6 +280,36 @@ impl BilskirnirMcp {
                     .0
             }
             "list_files" => files::list_files(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "download_file" => files::download_file(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "capture_audio" => {
+                let value = audio::capture_audio(&self.app, &id.unwrap(), &parse(args)?).await?;
+                return Ok(sound(value));
+            }
+            "inject_audio" => audio::inject_audio(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "open_terminal" => {
+                terminal::open_terminal(&self.app, &id.unwrap(), &parse(args)?).await?
+            }
+            "list_terminals" => terminal::list_terminals(&self.app, &id.unwrap()).await?,
+            "terminal_input" => {
+                let terminal_id = string(&args, "terminal_id")?;
+                args.as_object_mut().unwrap().remove("terminal_id");
+                terminal::terminal_input(&self.app, &id.unwrap(), &terminal_id, &parse(args)?)
+                    .await?
+            }
+            "terminal_output" => {
+                let terminal_id = string(&args, "terminal_id")?;
+                args.as_object_mut().unwrap().remove("terminal_id");
+                terminal::terminal_output(&self.app, &id.unwrap(), &terminal_id, &parse(args)?)
+                    .await?
+            }
+            "close_terminal" => {
+                terminal::close_terminal(&self.app, &id.unwrap(), &string(&args, "terminal_id")?)
+                    .await?
+            }
+            "inspect_ui" => windows::inspect_ui(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "gamepad_input" => {
+                gamepad::gamepad_input(&self.app, &id.unwrap(), &parse(args)?).await?
+            }
             "move_file" => files::move_file(&self.app, &id.unwrap(), &parse(args)?).await?,
             "delete_file" => files::delete_file(&self.app, &id.unwrap(), &parse(args)?).await?,
             "desktop_input" => {
@@ -517,6 +557,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
+                "gamepad":{"type":"boolean","default":false,"description":"Attach /dev/uinput so gamepad_input can create a virtual controller."},
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64,"default":512},
                 "mounts":{"type":"array","default":[],"items":schema(json!({"volume":text,"target":text,"readonly":{"type":"boolean","default":false}}), &["volume","target"])}
@@ -732,6 +773,33 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         false,
     ));
     tools.push(derived::<recordings::Export>("export_artifacts", "Package recording frames and application logs into a tar.gz with a manifest, saved in Downloads or a writable mounted volume. Existing archives need replace=true.", std::slice::from_ref(&environment), false, true, false));
+    tools.push(derived::<files::Download>("download_file", "Read a whole regular file (up to max_bytes, at most 5 MiB) as base64 with its size and a guessed MIME type. Larger files are available through the HTTP download route.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(derived::<audio::CaptureAudio>("capture_audio", "Record what the desktop plays (or what reaches its microphone) for up to 10 seconds and return a 16-bit stereo 48 kHz WAV audio block, with peak and RMS levels and a silent flag in structuredContent. Needs audio enabled for the environment.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(derived::<audio::InjectAudio>("inject_audio", "Play a 16-bit PCM WAV into the desktop's microphone (needs microphone enabled) or its speakers. Use it to test voice features or sound playback.", std::slice::from_ref(&environment), false, true, false));
+    tools.push(derived::<terminal::OpenTerminal>("open_terminal", "Open an interactive bash session on a pseudo-terminal inside the desktop and return terminal_id. Use terminal_input and terminal_output for installers, debuggers and other interactive programs. root=true runs the shell as root.", std::slice::from_ref(&environment), false, true, true));
+    tools.push(tool(
+        "list_terminals",
+        "List terminal sessions of an environment with their state.",
+        env(),
+        &["environment_id"],
+        true,
+        false,
+        false,
+    ));
+    let terminal_id = json!({"type":"string","minLength":1,"description":"Terminal ID returned by open_terminal."});
+    tools.push(derived::<terminal::TerminalInput>("terminal_input", "Type text into a terminal session; press_enter appends a newline so the shell runs it. Send control characters as text, for example the character U+0003 for Ctrl+C.", &[environment.clone(), ("terminal_id", terminal_id.clone(), true)], false, true, true));
+    tools.push(derived::<terminal::TerminalOutput>("terminal_output", "Read terminal output from a byte offset; pass next_offset from the previous call to read incrementally. Escape sequences are stripped unless strip_ansi=false.", &[environment.clone(), ("terminal_id", terminal_id.clone(), true)], true, false, false));
+    tools.push(tool(
+        "close_terminal",
+        "Close a terminal session by hanging up its shell.",
+        json!({"environment_id": id, "terminal_id": terminal_id}),
+        &["environment_id", "terminal_id"],
+        false,
+        true,
+        false,
+    ));
+    tools.push(derived::<windows::Inspect>("inspect_ui", "Read the AT-SPI accessibility tree of applications that expose it (GTK, Qt with QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1, Electron): roles, names, states, screen extents, text and actions. Filter by pid or name; games usually expose nothing.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(derived::<gamepad::GamepadInput>("gamepad_input", "Drive a virtual Xbox-style controller in an environment created with gamepad=true: press or release buttons, set stick, trigger and d-pad axes, wait, or reset. The device is created on first use and keeps its state between requests.", std::slice::from_ref(&environment), false, true, true));
     let mut input_schema =
         serde_json::to_value(rmcp::schemars::schema_for!(desktop_input::Input)).unwrap();
     input_schema["properties"]["environment_id"] = id;

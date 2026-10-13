@@ -6,7 +6,7 @@ An environment is an Ubuntu desktop running in a Docker container. An image is t
 
 ## Create and connect
 
-Select **New environment** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone and volume mounts.
+Select **New environment** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and volume mounts.
 
 After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, inspect or delete it.
 

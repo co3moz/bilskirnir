@@ -177,7 +177,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 47);
+    assert_eq!(tools.len(), 57);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -323,6 +323,12 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "recordings",
         "recordings/x/stop",
         "artifacts",
+        "audio-capture",
+        "audio-inject",
+        "terminals",
+        "terminals/x/input",
+        "terminals/x/close",
+        "gamepad",
         "applications",
         "applications/x/stop",
         "windows/0x1/focus",
@@ -1241,4 +1247,112 @@ fn recording_requests_are_validated() {
         export(serde_json::json!({"destination":"/home/desktop/Downloads","name":"run.tar.gz"}))
             .is_err()
     );
+}
+
+#[test]
+fn audio_terminal_download_and_inspection_requests_are_validated() {
+    assert!(
+        serde_json::from_value::<audio::CaptureAudio>(serde_json::json!({}))
+            .unwrap()
+            .validate()
+            .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"seconds":0}),
+        serde_json::json!({"seconds":11}),
+        serde_json::json!({"source":"line-in"}),
+    ] {
+        assert!(
+            serde_json::from_value::<audio::CaptureAudio>(bad)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+    assert_eq!(
+        serde_json::from_value::<audio::InjectAudio>(serde_json::json!({"data_base64":"AAAA"}))
+            .unwrap()
+            .validate()
+            .unwrap(),
+        "browser-mic-sink"
+    );
+    assert!(
+        serde_json::from_value::<audio::InjectAudio>(
+            serde_json::json!({"data_base64":"AAAA","target":"headphones"})
+        )
+        .unwrap()
+        .validate()
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<terminal::TerminalInput>(serde_json::json!({"text":"ls\n"}))
+            .unwrap()
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        serde_json::from_value::<terminal::TerminalInput>(serde_json::json!({"text":""}))
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<terminal::TerminalOutput>(serde_json::json!({"limit":0}))
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<terminal::OpenTerminal>(serde_json::json!({"cwd":"relative"}))
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<windows::Inspect>(serde_json::json!({"max_depth":21}))
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<windows::Inspect>(serde_json::json!({"pid":12,"name":"Term"}))
+            .unwrap()
+            .validate()
+            .is_ok()
+    );
+    assert_eq!(files::mime_type("shot.PNG"), "image/png");
+    assert_eq!(files::mime_type("archive.tar.gz"), "application/gzip");
+    assert_eq!(files::mime_type("binary"), "application/octet-stream");
+}
+#[test]
+fn gamepad_requests_are_validated_and_default_off() {
+    assert!(!spec().gamepad);
+    let check = |value: serde_json::Value| {
+        serde_json::from_value::<gamepad::GamepadInput>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(
+        check(serde_json::json!({"actions":[
+            {"type":"button","button":"a"},
+            {"type":"axis","axis":"left_x","value":-0.5},
+            {"type":"axis","axis":"right_trigger","value":1},
+            {"type":"axis","axis":"dpad_y","value":-1},
+            {"type":"wait","milliseconds":100},
+            {"type":"button","button":"a","pressed":false},
+            {"type":"reset"}
+        ]}))
+        .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"actions":[]}),
+        serde_json::json!({"actions":[{"type":"button","button":"select"}]}),
+        serde_json::json!({"actions":[{"type":"axis","axis":"left_x","value":1.5}]}),
+        serde_json::json!({"actions":[{"type":"axis","axis":"left_trigger","value":-0.1}]}),
+        serde_json::json!({"actions":[{"type":"axis","axis":"dpad_x","value":0.5}]}),
+        serde_json::json!({"actions":[{"type":"wait","milliseconds":10001}]}),
+        serde_json::json!({"actions":(0..4).map(|_| serde_json::json!({"type":"wait","milliseconds":10000})).collect::<Vec<_>>()}),
+    ] {
+        assert!(check(bad).is_err());
+    }
 }

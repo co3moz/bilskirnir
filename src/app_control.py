@@ -2,6 +2,7 @@
 import json
 import os
 import signal
+import struct
 import sys
 import time
 
@@ -171,6 +172,76 @@ def metrics(directory, duration_ms):
             "fps": None}
 
 
+def jpeg_size(data):
+    position = 2
+    while position + 9 < len(data):
+        if data[position] != 0xFF:
+            return None
+        marker = data[position + 1]
+        if marker == 0xFF:
+            position += 1
+            continue
+        if marker == 0x01 or 0xD0 <= marker <= 0xD8:
+            position += 2
+            continue
+        if marker in (0xD9, 0xDA):
+            return None
+        length = int.from_bytes(data[position + 2:position + 4], "big")
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            return (int.from_bytes(data[position + 7:position + 9], "big"),
+                    int.from_bytes(data[position + 5:position + 7], "big"))
+        position += 2 + length
+    return None
+
+
+def build_video(directory, fps):
+    """Write recording.avi (MJPEG) from the frame sequence without external encoders."""
+    frames = sorted(name for name in os.listdir(directory) if name.startswith("frame-") and name.endswith(".jpg"))
+    if not frames:
+        return None
+    with open(os.path.join(directory, frames[0]), "rb") as handle:
+        size = jpeg_size(handle.read())
+    if not size:
+        return None
+    width, height = size
+    sizes = [os.path.getsize(os.path.join(directory, name)) for name in frames]
+    chunk_sizes = [8 + length + (length % 2) for length in sizes]
+    movi_size = 4 + sum(chunk_sizes)
+    index_size = 16 * len(frames)
+    rate, scale = int(round(fps * 1000)), 1000
+
+    def chunk(fourcc, data):
+        return fourcc + struct.pack("<I", len(data)) + data + (b"\0" if len(data) % 2 else b"")
+
+    avih = struct.pack("<IIIIIIIIII4I", int(1000000 / fps), 0, 0, 0x10 | 0x100, len(frames), 0, 1, 0,
+                       width, height, 0, 0, 0, 0)
+    strh = (b"vids" + b"MJPG" + struct.pack("<IHHIIIIIIII", 0, 0, 0, 0, scale, rate, 0, len(frames), 0,
+                                               0xFFFFFFFF, 0) + struct.pack("<hhhh", 0, 0, width, height))
+    strf = struct.pack("<IiiHH4sIiiII", 40, width, height, 1, 24, b"MJPG", width * height * 3, 0, 0, 0, 0)
+    strl = chunk(b"LIST", b"strl" + chunk(b"strh", strh) + chunk(b"strf", strf))
+    hdrl = chunk(b"LIST", b"hdrl" + chunk(b"avih", avih) + strl)
+    riff_size = 4 + len(hdrl) + 8 + movi_size + 8 + index_size
+    path = os.path.join(directory, "recording.avi")
+    temporary = path + ".tmp"
+    with open(temporary, "wb") as out:
+        out.write(b"RIFF" + struct.pack("<I", riff_size) + b"AVI " + hdrl)
+        out.write(b"LIST" + struct.pack("<I", movi_size) + b"movi")
+        offsets = []
+        offset = 4
+        for name, length in zip(frames, sizes):
+            with open(os.path.join(directory, name), "rb") as handle:
+                data = handle.read()
+            out.write(chunk(b"00dc", data))
+            offsets.append((offset, length))
+            offset += 8 + length + (length % 2)
+        out.write(b"idx1" + struct.pack("<I", index_size))
+        for offset, length in offsets:
+            out.write(b"00dc" + struct.pack("<III", 0x10, offset, length))
+    os.replace(temporary, path)
+    return {"path": path, "bytes": os.path.getsize(path), "width": width, "height": height,
+            "codec": "MJPEG", "container": "AVI", "fps": fps}
+
+
 def recording_status(directory):
     data = read(directory, "status")
     if data:
@@ -188,7 +259,17 @@ def recording_stop(directory, wait_seconds):
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline and recording_status(directory).get("state") in ("recording", "starting"):
         time.sleep(0.1)
-    return recording_status(directory)
+    info = recording_status(directory)
+    if info.get("state") == "finished" and not info.get("video") and info.get("frames"):
+        try:
+            info["video"] = build_video(directory, float(info.get("fps") or 2))
+        except Exception as error:
+            info["video"] = {"error": str(error)}
+        temporary = os.path.join(directory, "status.tmp")
+        with open(temporary, "w") as handle:
+            json.dump(info, handle)
+        os.replace(temporary, os.path.join(directory, "status"))
+    return info
 
 
 command, *arguments = sys.argv[1:]

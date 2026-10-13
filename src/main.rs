@@ -1,5 +1,6 @@
 mod api;
 mod apps;
+mod audio;
 mod auth;
 mod capture;
 mod config;
@@ -9,6 +10,7 @@ mod docker;
 mod error;
 mod exec;
 mod files;
+mod gamepad;
 mod jobs;
 mod mcp;
 mod media;
@@ -16,6 +18,7 @@ mod model;
 mod process;
 mod profiles;
 mod recordings;
+mod terminal;
 mod uploads;
 mod waits;
 mod windows;
@@ -70,6 +73,30 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/files/list", post(files::list))
         .route("/api/environments/{id}/files/move", post(files::move_))
         .route("/api/environments/{id}/files/delete", post(files::delete))
+        .route(
+            "/api/environments/{id}/files/download",
+            get(files::download),
+        )
+        .route("/api/environments/{id}/audio-capture", post(audio::capture))
+        .route("/api/environments/{id}/audio-inject", post(audio::inject))
+        .route(
+            "/api/environments/{id}/terminals",
+            get(terminal::list).post(terminal::open),
+        )
+        .route(
+            "/api/environments/{id}/terminals/{terminal}/input",
+            post(terminal::input),
+        )
+        .route(
+            "/api/environments/{id}/terminals/{terminal}/output",
+            get(terminal::output),
+        )
+        .route(
+            "/api/environments/{id}/terminals/{terminal}/close",
+            post(terminal::close),
+        )
+        .route("/api/environments/{id}/ui", get(windows::inspect))
+        .route("/api/environments/{id}/gamepad", post(gamepad::input))
         .route("/api/environments/{id}/input", post(desktop_input::input))
         .route("/api/environments/{id}/act-and-observe", post(capture::act))
         .route(

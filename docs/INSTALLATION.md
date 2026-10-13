@@ -59,6 +59,8 @@ The full manifests also accept these Compose settings:
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
 
+Environments created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
+
 Agent access uses a separate token rather than the dashboard session. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
 
 ## Access from another device

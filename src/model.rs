@@ -28,6 +28,9 @@ pub struct EnvironmentSpec {
     pub microphone: bool,
     #[serde(default = "yes")]
     pub sudo: bool,
+    /// Attach /dev/uinput so a virtual controller can be created inside the desktop.
+    #[serde(default)]
+    pub gamepad: bool,
     pub cpus: Option<f64>,
     pub memory_mb: Option<u64>,
     #[serde(default = "shm")]
@@ -185,6 +188,14 @@ pub struct Application {
     pub args: Vec<String>,
     pub cwd: String,
     pub gpu: bool,
+    pub created_at: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Terminal {
+    pub id: String,
+    pub environment_id: String,
+    pub root: bool,
+    pub cwd: String,
     pub created_at: u64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]

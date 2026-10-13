@@ -6,14 +6,17 @@ use crate::{
 use anyhow::{Context, bail};
 use axum::{
     Json,
-    extract::{Path, State},
-    http::StatusCode,
+    body::Body,
+    extract::{Path, Query, State},
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{sync::Arc, time::Duration};
+use std::{process::Stdio, sync::Arc, time::Duration};
+use tokio::io::AsyncReadExt;
 
 pub const FILE_LIMIT: usize = 512 * 1024;
 #[derive(Default, Deserialize)]
@@ -331,4 +334,192 @@ pub async fn delete(
     Json(body): Json<DeleteFile>,
 ) -> Result<Json<Value>> {
     Ok(Json(delete_file(&app, &id, &body).await?))
+}
+
+const DOWNLOAD: &str = include_str!("download_file.py");
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Download {
+    /// Canonical absolute path of a regular file.
+    pub path: String,
+    /// Maximum bytes to return (1–5242880).
+    #[serde(default = "download_limit")]
+    pub max_bytes: usize,
+}
+fn download_limit() -> usize {
+    4 * 1024 * 1024
+}
+#[derive(Deserialize)]
+pub struct DownloadQuery {
+    pub path: String,
+}
+pub fn mime_type(name: &str) -> &'static str {
+    let extension = name
+        .rsplit('.')
+        .next()
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "txt" | "log" | "md" | "cfg" | "ini" | "csv" => "text/plain; charset=utf-8",
+        "json" => "application/json",
+        "html" | "htm" => "text/html; charset=utf-8",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "gz" | "tgz" => "application/gzip",
+        "tar" => "application/x-tar",
+        "wav" => "audio/wav",
+        "avi" => "video/x-msvideo",
+        "mp4" => "video/mp4",
+        _ => "application/octet-stream",
+    }
+}
+fn percent_encode(name: &str) -> String {
+    name.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+async fn running_container(app: &App, id: &str) -> Result<Value> {
+    let env = app.environment(id)?;
+    let container = app.owned(&env).await?;
+    if container["State"]["Running"] != true {
+        return Err(Error(
+            StatusCode::CONFLICT,
+            "Start the environment before using its files".into(),
+        ));
+    }
+    Ok(container)
+}
+pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value> {
+    let (_, name) = split_path(&body.path)?;
+    if body.max_bytes == 0 || body.max_bytes > 5 * 1024 * 1024 {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "max_bytes must be 1–5242880".into(),
+        ));
+    }
+    let lock = app.resource_lock(&format!("environment:{id}"));
+    let _guard = lock.lock().await;
+    let container = running_container(app, id).await?;
+    let args = [
+        "exec",
+        "--user",
+        "1001:1001",
+        container["Id"].as_str().context("Missing container ID")?,
+        "python3",
+        "-c",
+        DOWNLOAD,
+        &body.path,
+        &body.max_bytes.to_string(),
+    ]
+    .map(str::to_owned);
+    let output = process::capture(
+        app.command(&args),
+        Duration::from_secs(120),
+        body.max_bytes + 1,
+        process::Overflow::Reject,
+    )
+    .await?;
+    if !output.status.success() {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(json!({
+        "path": body.path,
+        "name": name,
+        "bytes": output.stdout.len(),
+        "mime_type": mime_type(name),
+        "data_base64": STANDARD.encode(&output.stdout),
+    }))
+}
+/// Stream a file from the desktop with its size known up front; limited by UPLOAD_MAX_MB.
+pub async fn download(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Query(query): Query<DownloadQuery>,
+) -> Result<Response> {
+    let (_, name) = split_path(&query.path)?;
+    let lock = app.resource_lock(&format!("environment:{id}"));
+    let _guard = lock.lock().await;
+    let container = running_container(&app, &id).await?;
+    let cid = container["Id"].as_str().context("Missing container ID")?;
+    let probe = app
+        .docker(&[
+            "exec",
+            "--user",
+            "1001:1001",
+            cid,
+            "python3",
+            "-c",
+            include_str!("read_file.py"),
+            &query.path,
+            "0",
+            "0",
+        ])
+        .await?;
+    let info: Value = serde_json::from_slice(&probe).map_err(|e| anyhow::anyhow!(e))?;
+    let size = info["size"].as_u64().context("Missing file size")?;
+    if size > app.config.upload_limit {
+        return Err(Error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "File exceeds the configured transfer limit (UPLOAD_MAX_MB)".into(),
+        ));
+    }
+    let args = [
+        "exec",
+        "--user",
+        "1001:1001",
+        cid,
+        "python3",
+        "-c",
+        DOWNLOAD,
+        &query.path,
+        &app.config.upload_limit.to_string(),
+    ]
+    .map(str::to_owned);
+    let mut child = app
+        .command(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(anyhow::Error::from)?;
+    let stdout = child.stdout.take().unwrap();
+    let stream = futures_util::stream::unfold((child, stdout), |(child, mut stdout)| async move {
+        let mut buffer = vec![0; 65536];
+        match stdout.read(&mut buffer).await {
+            Ok(0) | Err(_) => None,
+            Ok(n) => {
+                buffer.truncate(n);
+                Some((
+                    Ok::<_, std::io::Error>(axum::body::Bytes::from(buffer)),
+                    (child, stdout),
+                ))
+            }
+        }
+    });
+    Ok((
+        [
+            (header::CONTENT_TYPE, mime_type(name).to_string()),
+            (header::CONTENT_LENGTH, size.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename*=UTF-8''{}", percent_encode(name)),
+            ),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+        ],
+        Body::from_stream(stream),
+    )
+        .into_response())
 }

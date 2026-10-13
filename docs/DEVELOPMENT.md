@@ -31,6 +31,10 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
 | Background applications, windows, screenshots and waits | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs`, `src/waits.rs` |
 | Recordings and artifact export | `src/recordings.rs`, `src/recorder.py`, `src/export_artifacts.py` |
+| Audio capture and injection | `src/audio.rs`, `src/audio_tools.py` |
+| Interactive terminals | `src/terminal.rs`, `src/terminal_runner.py`, `src/terminal_control.py` |
+| Virtual gamepad | `src/gamepad.rs`, `src/gamepad_daemon.py`, `src/gamepad_control.py` |
+| Accessibility inspection and file download | `src/inspect_ui.py` (in `src/windows.rs`), `src/download_file.py` (in `src/files.rs`) |
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |
@@ -44,7 +48,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
 
-The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement; keys and buttons held within a request are released when it ends, and relative movement is emulated from the position reported by `xdotool`. Scripts run from an unlinked temporary file with stdin closed. Background applications are supervised by `app_runner.py` inside the desktop, which keeps a bounded log under `/tmp`; `app_control.py` reports, reads and stops them. Window tools use `xdotool` and `wmctrl`, and `desktop-screenshot` accepts a maximum width, a region and a window ID.
+The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement; keys and buttons held within a request are released when it ends, and relative movement is emulated from the position reported by `xdotool`. Scripts run from an unlinked temporary file with stdin closed. Background applications are supervised by `app_runner.py` inside the desktop, which keeps a bounded log under `/tmp`; `app_control.py` reports, reads and stops them. Window tools use `xdotool` and `wmctrl`, and `desktop-screenshot` accepts a maximum width, a region and a window ID. Accessibility inspection uses `python3-pyatspi` and the session's AT-SPI bus. Terminals run bash on a pseudo-terminal supervised by `terminal_runner.py`. Environments created with `gamepad=true` get `/dev/uinput` and a device cgroup rule for input devices; `gamepad_daemon.py` runs as root inside the desktop only, creates the virtual controller and its `/dev/input` nodes, and never touches the host.
 
 Each environment has a private internal bridge to the manager. Browser desktop and media connections pass through the manager; VNC ports are not published on the host. A second bridge provides internet egress and is attached or detached by the environment's internet setting.
 

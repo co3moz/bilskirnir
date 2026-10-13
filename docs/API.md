@@ -60,6 +60,15 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/recordings` | Start recording desktop frames. |
 | POST | `/api/environments/{id}/recordings/{recording_id}/stop` | Stop a recording. |
 | POST | `/api/environments/{id}/artifacts` | Package recordings and application logs as a tar.gz. |
+| POST | `/api/environments/{id}/audio-capture` | Record desktop or microphone audio as WAV. |
+| POST | `/api/environments/{id}/audio-inject` | Play WAV data into the microphone or speakers. |
+| GET | `/api/environments/{id}/terminals` | Terminal sessions and their state. |
+| POST | `/api/environments/{id}/terminals` | Open an interactive shell. |
+| POST | `/api/environments/{id}/terminals/{terminal_id}/input` | Type into a terminal. |
+| GET | `/api/environments/{id}/terminals/{terminal_id}/output` | Read terminal output from an offset. |
+| POST | `/api/environments/{id}/terminals/{terminal_id}/close` | Hang up a terminal. |
+| GET | `/api/environments/{id}/ui` | AT-SPI accessibility tree of applications. |
+| POST | `/api/environments/{id}/gamepad` | Feed the virtual controller. |
 | GET | `/api/environments/{id}/windows` | Visible X11 windows and the active window. |
 | POST | `/api/environments/{id}/windows/{window_id}/focus` | Raise and focus a window. |
 | POST | `/api/environments/{id}/windows/{window_id}/geometry` | Move or resize a window. |
@@ -68,6 +77,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/files/list` | List a directory without following symlinks. |
 | POST | `/api/environments/{id}/files/move` | Rename or move within the same volume. |
 | POST | `/api/environments/{id}/files/delete` | Delete a file, symlink or directory. |
+| GET | `/api/environments/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/environments/{id}/files` | Stream a binary upload. |
 | GET | `/api/images` | Saved images, snapshots, ancestry and availability. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
@@ -107,6 +117,7 @@ Creation accepts `name`, `image` and these optional fields:
 | `internet` | `true` | Attach the Docker egress network. |
 | `audio`, `microphone` | `false` | Enable supported browser media; microphone also needs audio. |
 | `sudo` | `true` | Allow the desktop user to use sudo. |
+| `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. |
@@ -147,7 +158,7 @@ Write request:
 
 Writes are atomic, create missing parent directories and use mode 0600. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
 
-`POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. Use the read route with base64 encoding to download a file.
+`POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks and files larger than `UPLOAD_MAX_MB`.
 
 For larger uploads, POST the raw file body with `Content-Type: application/octet-stream` to `/api/environments/{id}/files`. Supply `destination`, `name`, `size` and optional `replace` as query parameters:
 
@@ -214,7 +225,17 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 `POST .../reset` recreates the container from the environment's saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the environment ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
 
-`POST .../recordings` with `{"fps":2,"max_seconds":60,"max_width":960,"region":"0,0,1280,720","name":"level 1"}` starts capturing JPEG frames into `/tmp/bilskirnir-recordings/{recording_id}` inside the desktop and returns `recording_id`. Recording stops at `max_seconds`, after 3000 frames or 256 MiB, or on `POST .../recordings/{recording_id}/stop`, which returns `frames`, `bytes`, `started_at`, `ended_at` and `reason`. Frames are named `frame-00000-<unix ms>.jpg` and can be read with the file routes. `POST .../artifacts` with `{"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":[...],"application_ids":[...],"replace":false}` writes an archive containing `recordings/<id>/` frames, `applications/<id>/` logs and a `manifest.json`; the destination follows the upload rules and existing archives return 409 unless `replace` is set. Recording files live in tmpfs and disappear when the desktop restarts.
+`POST .../recordings` with `{"fps":2,"max_seconds":60,"max_width":960,"region":"0,0,1280,720","name":"level 1"}` starts capturing JPEG frames into `/tmp/bilskirnir-recordings/{recording_id}` inside the desktop and returns `recording_id`. Recording stops at `max_seconds`, after 3000 frames or 256 MiB, or on `POST .../recordings/{recording_id}/stop`, which returns `frames`, `bytes`, `started_at`, `ended_at` and `reason`. Frames are named `frame-00000-<unix ms>.jpg` and can be read with the file routes; stopping also writes `recording.avi`, an MJPEG video playable with VLC, mpv or ffmpeg, whose details are returned under `video`. `POST .../artifacts` with `{"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":[...],"application_ids":[...],"replace":false}` writes an archive containing `recordings/<id>/` frames, `applications/<id>/` logs and a `manifest.json`; the destination follows the upload rules and existing archives return 409 unless `replace` is set. Recording files live in tmpfs and disappear when the desktop restarts.
+
+## Audio, terminals, accessibility and gamepad
+
+`POST .../audio-capture` with `{"seconds":3,"source":"desktop"}` records what the desktop plays (or, with `microphone`, what reaches its microphone) as 16-bit stereo 48 kHz WAV and returns `wav_base64`, `peak`, `rms` and `silent`. `POST .../audio-inject` with `{"data_base64":"...","target":"microphone"}` plays 16-bit PCM WAV data into the desktop's microphone (needs the microphone option) or, with `speakers`, into its audio output. Both need audio enabled for the environment.
+
+`POST .../terminals` with an optional `{"cwd":"/home/desktop","root":false}` opens bash on a pseudo-terminal and returns `terminal_id`. `POST .../terminals/{terminal_id}/input` with `{"text":"ls","press_enter":true}` types into it; `GET .../terminals/{terminal_id}/output?offset=0&limit=65536&strip_ansi=true` returns `output`, `next_offset`, `more` and the shell state, keeping about the latest 1 MiB. `POST .../terminals/{terminal_id}/close` hangs up the shell. Root shells are an explicit administrator choice.
+
+`GET .../ui?pid=1234&name=&max_depth=6&max_nodes=500` returns the AT-SPI accessibility tree of applications that expose one (GTK, Electron, Qt with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`): roles, names, states, screen extents, text and actions. Games usually expose nothing.
+
+`POST .../gamepad` with `{"actions":[{"type":"button","button":"a"},{"type":"axis","axis":"left_x","value":0.5},{"type":"wait","milliseconds":100},{"type":"reset"}]}` drives a virtual Xbox-style controller in an environment created with `gamepad:true`. The device is created on first use as `/dev/input/eventN` inside the desktop and keeps button and axis state between requests until `reset` or a desktop restart. Buttons: a, b, x, y, lb, rb, back, start, guide, ls, rs. Axes: left_x, left_y, right_x, right_y (-1 to 1), left_trigger, right_trigger (0 to 1), dpad_x, dpad_y (-1, 0, 1). SDL applications that use udev can set `SDL_JOYSTICK_DISABLE_UDEV=1` to scan `/dev/input` directly.
 
 `GET .../windows` lists visible windows with `window_id`, `title`, `pid`, `x`, `y`, `width`, `height` and `active`. `POST .../windows/{window_id}/focus` activates a window, and `POST .../windows/{window_id}/geometry` with `x`,`y` and/or `width`,`height` moves or resizes it and returns the resulting geometry. Window IDs are hexadecimal X11 IDs such as `0x3a00007`. The window routes, window screenshots and relative pointer movement need `xdotool` and `wmctrl` in the desktop image.
 

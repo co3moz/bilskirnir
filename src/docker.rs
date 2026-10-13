@@ -306,6 +306,16 @@ impl App {
                 ]);
             }
         }
+        if env.spec.gamepad {
+            // The virtual controller is created by a root helper inside the desktop; input
+            // device nodes (major 13) are made there, so the cgroup rule must allow them.
+            args.extend([
+                "--device".into(),
+                "/dev/uinput".into(),
+                "--device-cgroup-rule".into(),
+                "c 13:* rmw".into(),
+            ]);
+        }
         // Use immutable ID, not a tag that could change between inspect and create.
         args.push(env.source_image_id.clone());
         self.docker_args(&args).await?;
@@ -425,6 +435,11 @@ impl App {
         for recording in self.db.list::<Recording>("recording")? {
             if recording.environment_id == environment_id {
                 self.db.remove("recording", &recording.id)?;
+            }
+        }
+        for terminal in self.db.list::<Terminal>("terminal")? {
+            if terminal.environment_id == environment_id {
+                self.db.remove("terminal", &terminal.id)?;
             }
         }
         Ok(())

@@ -12,6 +12,7 @@ import struct
 import subprocess
 import time
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -209,7 +210,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 47
+    assert len(mcp("tools/list")["tools"]) == 57
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -242,7 +243,7 @@ try:
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     built = job(api("images/build", {"name": "offline-script-test", "base_image": xfce["profile"]["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}))
     print("PASS custom script image, offline build and persisted build log", flush=True)
-    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}]}
+    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}]}
     env_id = job(api("environments", spec))["environment_id"]
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
@@ -376,6 +377,71 @@ try:
     assert docker("exec",container,"test","!","-e","/home/desktop/agent-files") == b""
     tool("stop_application", {"environment_id":env_id,"application_id":second})
     print("PASS waits, diagnostics, metrics, frame recordings, artifact export and file tools", flush=True)
+    assert finished["video"]["codec"] == "MJPEG" and finished["video"]["bytes"] > 0, finished
+    assert f"recordings/{recording['recording_id']}/recording.avi" in listing, listing
+    downloaded = tool("download_file", {"environment_id":env_id,"path":exported["path"]})["structuredContent"]
+    assert downloaded["bytes"] == exported["bytes"] and downloaded["mime_type"] == "application/gzip", downloaded["bytes"]
+    assert base64.b64decode(downloaded["data_base64"])[:2] == b"\x1f\x8b"
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/environments/{env_id}/files/download?" + urllib.parse.urlencode({"path":exported["path"]}))
+    with client.open(request, timeout=60) as response:
+        assert response.headers["Content-Length"] == str(exported["bytes"]) and "evidence.tar.gz" in response.headers["Content-Disposition"], dict(response.headers)
+        assert len(response.read()) == exported["bytes"]
+    assert tool("download_file", {"environment_id":env_id,"path":"/home/desktop/agent-link"}, allow_error=True)["isError"]
+    tone = b"".join(struct.pack("<ff", 0.25 * math.sin(i * 2 * math.pi * 440 / 48000), 0.25 * math.sin(i * 2 * math.pi * 440 / 48000)) for i in range(72000))
+    player = subprocess.Popen(["docker", "exec", "-i", "--user", "desktop", container, "pacat", "--playback", "--device=desktop-output", "--format=float32le", "--rate=48000", "--channels=2"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    threading.Thread(target=lambda: (player.stdin.write(tone), player.stdin.close()), daemon=True).start()
+    time.sleep(0.3)
+    heard = tool("capture_audio", {"environment_id":env_id,"seconds":1.0})
+    assert heard["content"][0]["type"] == "audio" and heard["content"][0]["mimeType"] == "audio/wav", heard["content"][0].keys()
+    assert heard["structuredContent"]["peak"] > 0.01 and not heard["structuredContent"]["silent"], heard["structuredContent"]
+    assert base64.b64decode(heard["content"][0]["data"])[:4] == b"RIFF"
+    player.wait(timeout=20)
+    pcm = b"".join(struct.pack("<h", int(8000 * math.sin(i * 2 * math.pi * 440 / 48000))) for i in range(72000))
+    wav = b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 48000, 96000, 2, 16) + b"data" + struct.pack("<I", len(pcm)) + pcm
+    injector = threading.Thread(target=lambda: tool("inject_audio", {"environment_id":env_id,"data_base64":base64.b64encode(wav).decode()}), daemon=True)
+    injector.start()
+    time.sleep(0.3)
+    spoken = tool("capture_audio", {"environment_id":env_id,"seconds":1.0,"source":"microphone"})["structuredContent"]
+    assert spoken["peak"] > 0.01, spoken
+    injector.join(timeout=30)
+    print("PASS file download, MJPEG video, audio capture and microphone injection", flush=True)
+    term = tool("open_terminal", {"environment_id":env_id})["structuredContent"]
+    assert term["state"] in ("running", "starting"), term
+    tool("terminal_input", {"environment_id":env_id,"terminal_id":term["terminal_id"],"text":"echo TERMINAL_$((20+22)); pwd"})
+    shown = wait_for(lambda: (o if "TERMINAL_42" in (o := tool("terminal_output", {"environment_id":env_id,"terminal_id":term["terminal_id"]})["structuredContent"])["output"] and "/home/desktop" in o["output"] else None))
+    assert shown["state"] == "running" and shown["next_offset"] > 0, shown
+    later = tool("terminal_output", {"environment_id":env_id,"terminal_id":term["terminal_id"],"offset":shown["next_offset"]})["structuredContent"]
+    assert "TERMINAL_42" not in later["output"], later
+    root_term = tool("open_terminal", {"environment_id":env_id,"root":True,"cwd":"/opt"})["structuredContent"]
+    tool("terminal_input", {"environment_id":env_id,"terminal_id":root_term["terminal_id"],"text":"id -u; pwd"})
+    wait_for(lambda: "\n0\n" in tool("terminal_output", {"environment_id":env_id,"terminal_id":root_term["terminal_id"]})["structuredContent"]["output"] and "/opt" in tool("terminal_output", {"environment_id":env_id,"terminal_id":root_term["terminal_id"]})["structuredContent"]["output"])
+    for handle in (term, root_term):
+        closed = tool("close_terminal", {"environment_id":env_id,"terminal_id":handle["terminal_id"]})["structuredContent"]
+        assert closed["state"] == "exited", closed
+    assert len(tool("list_terminals", {"environment_id":env_id})["structuredContent"]["items"]) == 2
+    print("PASS interactive terminals as the desktop user and root", flush=True)
+    gtk = tool("launch_application", {"environment_id":env_id,"command":"xfce4-terminal","args":["--title","Bilskirnir a11y test","--disable-server"],"env":{"GTK_MODULES":"atk-bridge"}})["structuredContent"]
+    assert wait_for(lambda: tool("wait_for_condition", {"environment_id":env_id,"window_title":"Bilskirnir a11y test","timeout_ms":20000})["structuredContent"]["satisfied"] or None)
+    gtk_pid = tool("get_application", {"environment_id":env_id,"application_id":gtk["application_id"]})["structuredContent"]["pid"]
+    tree = wait_for(lambda: (t if (t := tool("inspect_ui", {"environment_id":env_id,"pid":gtk_pid,"max_depth":8})["structuredContent"])["applications"] else None), 30)
+    assert tree["nodes"] > 1 and tree["applications"][0]["role"] == "application", tree
+    def roles(node):
+        yield node["role"]
+        for child in node.get("children", []):
+            yield from roles(child)
+    assert "frame" in set(roles(tree["applications"][0])), set(roles(tree["applications"][0]))
+    tool("stop_application", {"environment_id":env_id,"application_id":gtk["application_id"]})
+    print("PASS accessibility tree inspection of a GTK application", flush=True)
+    pad = tool("gamepad_input", {"environment_id":env_id,"actions":[{"type":"reset"}]})["structuredContent"]
+    assert pad["state"] == "running" and pad["device"].startswith("/dev/input/event"), pad
+    reader = subprocess.Popen(["docker", "exec", "--user", "desktop", container, "python3", "-c", "import struct,sys,time\nf=open(sys.argv[1],'rb',buffering=0)\nseen=[]\nwhile len(seen)<3:\n    data=f.read(24)\n    if not data: break\n    _,_,t,c,v=struct.unpack('<qqHHi',data)\n    if t in (1,3): seen.append((t,c,v))\nprint(seen)", pad["device"]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    time.sleep(0.5)
+    pad = tool("gamepad_input", {"environment_id":env_id,"actions":[{"type":"button","button":"a"},{"type":"axis","axis":"left_x","value":0.5},{"type":"wait","milliseconds":100},{"type":"button","button":"a","pressed":False}]})["structuredContent"]
+    assert pad["applied_actions"] == 4 and pad["buttons"].get("a") is False and abs(pad["axes"]["left_x"] - 0.5) < 1e-6, pad
+    events = reader.communicate(timeout=20)[0].decode()
+    assert "(1, 304, 1)" in events and "(3, 0, 16384)" in events and "(1, 304, 0)" in events, events
+    assert tool("gamepad_input", {"environment_id":clone_id if False else env_id,"actions":[{"type":"button","button":"select"}]}, allow_error=True)["isError"]
+    print("PASS virtual gamepad device, button and axis events", flush=True)
     payload = bytes(range(256)) * 5000
     uploaded = upload(env_id,"binary & notes.bin",payload)
     assert docker("exec",container,"cat",uploaded["path"]) == payload
@@ -484,7 +550,7 @@ try:
     base_layers = json.loads(docker("image", "inspect", built["image_id"]))[0]["RootFS"]["Layers"]
     snap_layers = json.loads(docker("image", "inspect", snap["image_id"]))[0]["RootFS"]["Layers"]
     assert snap_layers[:len(base_layers)] == base_layers and len(snap_layers) > len(base_layers)
-    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}]})
+    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}]})
     clone_id = job(api("environments", spec))["environment_id"]
     environment_ids.append(clone_id)
     clone = f"wsld-{clone_id}"

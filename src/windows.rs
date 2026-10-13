@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{Context, bail};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use rmcp::schemars::{self, JsonSchema};
@@ -223,4 +223,71 @@ pub async fn geometry(
     Json(body): Json<Geometry>,
 ) -> Result<Json<Value>> {
     Ok(Json(set_window_geometry(&app, &id, &window, &body).await?))
+}
+
+const INSPECT: &str = include_str!("inspect_ui.py");
+#[derive(Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Inspect {
+    /// Only the application with this process ID (from get_application).
+    #[serde(default)]
+    pub pid: Option<u64>,
+    /// Only applications whose accessible name contains this text.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Tree depth to descend (1–20).
+    #[serde(default = "inspect_depth")]
+    pub max_depth: u8,
+    /// Maximum nodes to return (1–2000).
+    #[serde(default = "inspect_nodes")]
+    pub max_nodes: u32,
+}
+fn inspect_depth() -> u8 {
+    6
+}
+fn inspect_nodes() -> u32 {
+    500
+}
+impl Inspect {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if !(1..=20).contains(&self.max_depth) {
+            bail!("max_depth must be 1–20");
+        }
+        if !(1..=2000).contains(&self.max_nodes) {
+            bail!("max_nodes must be 1–2000");
+        }
+        if let Some(name) = &self.name
+            && (name.is_empty() || name.len() > 200)
+        {
+            bail!("name must be 1–200 bytes");
+        }
+        Ok(())
+    }
+}
+/// Read the AT-SPI accessibility tree of applications that expose one.
+pub async fn inspect_ui(app: &App, id: &str, options: &Inspect) -> Result<Value> {
+    options.validate()?;
+    let pid = options.pid.map(|p| p.to_string()).unwrap_or_default();
+    let output = x11(
+        app,
+        id,
+        &[
+            "python3",
+            "-c",
+            INSPECT,
+            &pid,
+            options.name.as_deref().unwrap_or(""),
+            &options.max_depth.to_string(),
+            &options.max_nodes.to_string(),
+        ],
+    )
+    .await?;
+    serde_json::from_slice(&output).map_err(|e| anyhow::anyhow!(e).into())
+}
+pub async fn inspect(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Query(options): Query<Inspect>,
+) -> Result<Json<Value>> {
+    Ok(Json(inspect_ui(&app, &id, &options).await?))
 }
