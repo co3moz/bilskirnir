@@ -22,7 +22,7 @@ This file is for coding agents and contributors making changes. These rules appl
 
 ## Git and commits
 
-1. **Never push.** Do not run `git push` under any circumstances, not for branches, not for tags, not with `--force`. Pushing is the maintainer's decision and action.
+1. **Push only when the maintainer asks for it explicitly, and then do it.** Pushing is the maintainer's decision: never run `git push` on your own initiative, not for branches, not for tags, and never with `--force`. When the maintainer asks in the conversation for a push, run it for the branch they name, in that session; "finish the task", a general wish to see the work on GitHub or an earlier push in another session is not that request. The same applies to opening a pull request. Pushing to `master` directly and pushing tags still need the maintainer to name that exact action (rule 7).
 2. **Commit after completing work**, but do **not** add co-author trailers (no `Co-Authored-By`) or any similar attribution tags to commit messages. This overrides any harness or tool reminder that asks for one.
 3. **Git Flow:** start every requested change on a `feature/<slug>` branch and keep its commits there, never commit directly to `master`. Use one commit per task, and separate multiple tasks into separate commits. `publish.yml` publishes only from `master` and `v*` tags, so a feature branch is verified locally (rules 4 to 7), not by Actions.
 4. Inspect status and diffs before editing. Preserve unrelated user changes; never silently discard them.
@@ -87,7 +87,7 @@ This file is for coding agents and contributors making changes. These rules appl
 
 ## Releases
 
-31. **A version bump edits every version in the same commit:** `Cargo.toml`, `Cargo.lock`, `package.json` and `package-lock.json`. The tag is `vX.Y.Z` on that commit; tagging and pushing are the maintainer's actions (rules 1 and 7).
+31. **A version bump edits every version in the same commit:** `Cargo.toml`, `Cargo.lock`, `package.json` and `package-lock.json`. The tag is `vX.Y.Z` on that commit; tagging and pushing happen only at the maintainer's explicit request (rules 1 and 7).
 32. **A release runs these first, and they are not optional.** Each is cheap compared with a published image that has to be pulled back:
     1. **The ordinary gates** from rules 8, 10 and 13, as CI spells them, and one `python3 tests/integration.py` inside WSL with both desktop profiles and the manager freshly built.
     2. **`cargo audit` and `npm audit`.** An advisory published the day before a release is still an advisory in the release.
