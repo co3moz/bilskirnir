@@ -174,10 +174,14 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "initialize", serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["result"]["serverInfo"]["name"], "bilskirnir");
+    let instructions = body["result"]["instructions"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 57);
+    assert_eq!(tools.len(), 58);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -186,6 +190,44 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
     assert_eq!(screenshot["annotations"]["readOnlyHint"], true);
     assert!(screenshot["inputSchema"]["properties"]["max_width"].is_object());
+    assert!(
+        screenshot["description"]
+            .as_str()
+            .unwrap()
+            .contains("save_screenshot")
+    );
+    let save = tools
+        .iter()
+        .find(|t| t["name"] == "save_screenshot")
+        .unwrap();
+    assert_eq!(save["annotations"]["readOnlyHint"], false);
+    assert!(save["inputSchema"]["properties"]["capture"].is_object());
+    assert_eq!(
+        save["inputSchema"]["required"],
+        serde_json::json!(["path", "environment_id"])
+    );
+    for name in ["save_screenshot", "download_file", "export_artifacts"] {
+        let tool = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert!(
+            tool["description"]
+                .as_str()
+                .unwrap()
+                .contains("download_url"),
+            "{name} must tell agents how to hand files to the user"
+        );
+    }
+    // Agents reached for docker and wsl on the host when a client hid a returned image. The
+    // instructions must steer them to the download link instead, and the guide must document it.
+    assert!(instructions.contains("download_url") && instructions.contains("wsl"));
+    let guide = include_str!("../docs/MCP.md");
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        assert!(
+            guide.contains(&format!("`{name}`")),
+            "docs/MCP.md must mention {name}"
+        );
+    }
+    assert!(guide.contains("`download_url`"));
     assert_eq!(
         screenshot["inputSchema"]["required"],
         serde_json::json!(["environment_id"])
@@ -1355,4 +1397,38 @@ fn gamepad_requests_are_validated_and_default_off() {
     ] {
         assert!(check(bad).is_err());
     }
+}
+
+#[test]
+fn screenshot_save_targets_and_download_links_are_shaped_for_users() {
+    let save = |path: &str| capture::SaveCapture {
+        path: path.into(),
+        replace: false,
+        capture: capture::Capture::default(),
+    };
+    assert_eq!(
+        save("/home/desktop/Downloads/clock.jpg").target().unwrap(),
+        ("/home/desktop/Downloads".into(), "clock.jpg".into())
+    );
+    for invalid in [
+        "Downloads/clock.jpg",
+        "/home/desktop/Downloads/",
+        "/clock.jpg",
+        "",
+    ] {
+        assert!(save(invalid).target().is_err(), "{invalid}");
+    }
+    // The directory part still has to pass the upload destination rules.
+    assert!(
+        uploads::validate_target(&spec(), "/home/desktop/Downloads/../.ssh", "id_rsa").is_err()
+    );
+    assert!(uploads::validate_target(&spec(), "/home/desktop/Downloads", "clock.jpg").is_ok());
+    assert_eq!(
+        files::download_url("abc123", "/home/desktop/Downloads/saat 17:20.jpg"),
+        "/api/environments/abc123/files/download?path=/home/desktop/Downloads/saat%2017%3A20.jpg"
+    );
+    assert_eq!(
+        files::download_url("abc123", "/shared/ölçüm.tar.gz"),
+        "/api/environments/abc123/files/download?path=/shared/%C3%B6l%C3%A7%C3%BCm.tar.gz"
+    );
 }

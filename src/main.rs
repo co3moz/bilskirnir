@@ -99,6 +99,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/gamepad", post(gamepad::input))
         .route("/api/environments/{id}/input", post(desktop_input::input))
         .route("/api/environments/{id}/act-and-observe", post(capture::act))
+        .route("/api/environments/{id}/screenshots", post(capture::save))
         .route(
             "/api/environments/{id}/applications",
             get(apps::list).post(apps::launch),
