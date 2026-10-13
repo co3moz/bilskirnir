@@ -43,7 +43,7 @@ function show(title, html) {
   activeJob = null; if (!modal.open) modal.showModal();
 }
 function badge(value) { return `<span class="badge ${e(value)}">${e(labels[value] || value)}</span>`; }
-const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile',snapshot:'Snapshot',exec:'Run script'};
+const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile',snapshot:'Snapshot',exec:'Run script',reset:'Reset environment'};
 function shell() {
   app.innerHTML = `<aside><a class="brand" href="/"><img class="brand-mark" src="/mark.svg" alt=""><span>Bilskirnir</span></a>
     <nav>${[['environments','Environments'],['images','Images'],['volumes','Volumes'],['jobs','Jobs']].map(([id,label]) => `<button data-tab="${id}" class="${state.tab === id ? 'active' : ''}"><span>${icon(id)}</span>${label}${id === 'jobs' ? '<small id="job-count"></small>' : ''}</button>`).join('')}</nav>

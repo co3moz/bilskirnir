@@ -1,4 +1,6 @@
-use crate::{App, api, apps, auth, capture, desktop_input, error, exec, files, uploads, windows};
+use crate::{
+    App, api, apps, auth, capture, desktop_input, error, exec, files, uploads, waits, windows,
+};
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
@@ -305,6 +307,25 @@ impl BilskirnirMcp {
                 args.as_object_mut().unwrap().remove("application_id");
                 let options: apps::Stop = parse(args)?;
                 apps::stop_application(&self.app, &id.unwrap(), &application, options.grace_seconds)
+                    .await?
+            }
+            "wait_for_condition" => {
+                waits::wait_for_condition(&self.app, &id.unwrap(), &parse(args)?).await?
+            }
+            "reset_environment" => api::reset(state, Path(id.unwrap())).await?.0,
+            "application_diagnostics" => {
+                apps::application_diagnostics(
+                    &self.app,
+                    &id.unwrap(),
+                    &string(&args, "application_id")?,
+                )
+                .await?
+            }
+            "sample_metrics" => {
+                let application = string(&args, "application_id")?;
+                args.as_object_mut().unwrap().remove("application_id");
+                let options: apps::Metrics = parse(args)?;
+                apps::sample_metrics(&self.app, &id.unwrap(), &application, options.duration_ms)
                     .await?
             }
             "list_windows" => windows::list_windows(&self.app, &id.unwrap()).await?,
@@ -674,6 +695,10 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(derived::<files::ListFiles>("list_files", "List a directory inside a running environment as the desktop user: name, type (file, directory, symlink, special), size, modified_at and mode. Symlinks in the path are rejected.", std::slice::from_ref(&environment), true, false, false));
     tools.push(derived::<files::MoveFile>("move_file", "Rename or move a file or directory within the same volume as the desktop user. Existing destinations need replace=true; path symlinks are rejected.", std::slice::from_ref(&environment), false, true, false));
     tools.push(derived::<files::DeleteFile>("delete_file", "Delete a file, symlink or directory as the desktop user. Directories need recursive=true to remove their contents; top-level directories, the desktop home and mounted volume roots are refused.", std::slice::from_ref(&environment), false, true, false));
+    tools.push(derived::<waits::WaitFor>("wait_for_condition", "Wait until conditions hold instead of sleeping: a window title appears, a launched application reaches a state or logs text, or the screen stops changing. Returns satisfied=false after timeout_ms with the last observation.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(tool("reset_environment", "Recreate a desktop from its saved source image. The container and its unsaved changes are discarded; named volumes, networks and the environment ID are kept. Returns job_id.", env(), &["environment_id"], false, true, false));
+    tools.push(tool("application_diagnostics", "Inspect a launched application: state, exit status, process tree with memory, open files, threads and the latest log lines.", json!({"environment_id": id, "application_id": application}), &["environment_id", "application_id"], true, false, false));
+    tools.push(derived::<apps::Metrics>("sample_metrics", "Sample CPU and memory use of a launched application's processes over duration_ms, with container memory figures. Frame rate is not available.", &[environment.clone(), ("application_id", application.clone(), true)], true, false, false));
     let mut input_schema =
         serde_json::to_value(rmcp::schemars::schema_for!(desktop_input::Input)).unwrap();
     input_schema["properties"]["environment_id"] = id;

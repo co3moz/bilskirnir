@@ -52,6 +52,10 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/environments/{id}/applications/{application_id}` | One application's state, pid and exit status. |
 | GET | `/api/environments/{id}/applications/{application_id}/logs` | Tail of the application's log. |
 | POST | `/api/environments/{id}/applications/{application_id}/stop` | Stop the application. |
+| GET | `/api/environments/{id}/applications/{application_id}/diagnostics` | Process tree, resources and latest log lines. |
+| GET | `/api/environments/{id}/applications/{application_id}/metrics` | CPU and memory sampled over `duration_ms`. |
+| POST | `/api/environments/{id}/wait` | Wait for a window, application state, log text or a stable screen. |
+| POST | `/api/environments/{id}/reset` | Recreate the container from its source image; returns a job. |
 | GET | `/api/environments/{id}/windows` | Visible X11 windows and the active window. |
 | POST | `/api/environments/{id}/windows/{window_id}/focus` | Raise and focus a window. |
 | POST | `/api/environments/{id}/windows/{window_id}/geometry` | Move or resize a window. |
@@ -199,6 +203,12 @@ Put the actions you need in your request's `actions` array. Batches allow 1–10
 POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"env":{"MY_SETTING":"1"},"name":"gears"}` to `/api/environments/{id}/applications`. The program runs in the background as the desktop user; `gpu` runs it through `gpu-run` and needs a GPU-enabled environment. The response includes `application_id`, `state`, `pid` and, once the program ends, `exit_code` or the terminating `signal`. States are `starting`, `running`, `exited`, `failed` and `unknown`.
 
 `GET .../applications/{application_id}/logs?tail_bytes=65536` returns the end of the combined stdout/stderr log, which keeps about the latest 1 MiB. `POST .../applications/{application_id}/stop` with an optional `{"grace_seconds":5}` body sends SIGTERM to the process group, then SIGKILL. Supervisor files live under `/tmp` in the desktop and disappear when it restarts, after which the state is `unknown`.
+
+`GET .../applications/{application_id}/diagnostics` returns the application's state, exit status, its session's processes with memory use, open file count, thread count and the latest log lines. `GET .../applications/{application_id}/metrics?duration_ms=1000` samples CPU time and resident memory of those processes over the window (100–10000 ms) and reports container memory from cgroups; frame rate is not available.
+
+`POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100–60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`.
+
+`POST .../reset` recreates the container from the environment's saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the environment ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
 
 `GET .../windows` lists visible windows with `window_id`, `title`, `pid`, `x`, `y`, `width`, `height` and `active`. `POST .../windows/{window_id}/focus` activates a window, and `POST .../windows/{window_id}/geometry` with `x`,`y` and/or `width`,`height` moves or resizes it and returns the resulting geometry. Window IDs are hexadecimal X11 IDs such as `0x3a00007`. The window routes, window screenshots and relative pointer movement need `xdotool` and `wmctrl` in the desktop image.
 

@@ -16,6 +16,7 @@ mod model;
 mod process;
 mod profiles;
 mod uploads;
+mod waits;
 mod windows;
 
 use axum::{
@@ -86,6 +87,16 @@ fn router(app: Arc<App>) -> Router {
             "/api/environments/{id}/applications/{application}/stop",
             post(apps::stop),
         )
+        .route(
+            "/api/environments/{id}/applications/{application}/diagnostics",
+            get(apps::diagnostics),
+        )
+        .route(
+            "/api/environments/{id}/applications/{application}/metrics",
+            get(apps::metrics),
+        )
+        .route("/api/environments/{id}/wait", post(waits::wait))
+        .route("/api/environments/{id}/reset", post(api::reset))
         .route("/api/environments/{id}/windows", get(windows::list))
         .route(
             "/api/environments/{id}/windows/{window}/focus",

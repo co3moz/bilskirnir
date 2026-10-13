@@ -104,4 +104,4 @@ Sound and microphone must be enabled both for the installation and for the envir
 
 Longer operations appear under **Jobs**. Open a job to see its status and output; the dialog updates while work continues. Image builds show script output. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
 
-If environment creation failed partway through, **Retry setup** can complete missing setup without replacing an existing container. See [recovery](INSTALLATION.md#when-setup-is-interrupted) for what can and cannot be restored.
+If environment creation failed partway through, **Retry setup** can complete missing setup without replacing an existing container. Agents can also reset an environment through the API, which recreates the container from its saved image while keeping named volumes. See [recovery](INSTALLATION.md#when-setup-is-interrupted) for what can and cannot be restored.

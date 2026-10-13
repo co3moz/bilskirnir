@@ -177,7 +177,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 39);
+    assert_eq!(tools.len(), 43);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -318,6 +318,8 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "files/delete",
         "input",
         "act-and-observe",
+        "wait",
+        "reset",
         "applications",
         "applications/x/stop",
         "windows/0x1/focus",
@@ -1157,5 +1159,45 @@ fn file_tool_requests_are_validated() {
         }
         .validate(&spec)
         .is_ok()
+    );
+}
+
+#[test]
+fn wait_conditions_are_validated() {
+    let check = |value: serde_json::Value| {
+        serde_json::from_value::<waits::WaitFor>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(check(serde_json::json!({"window_title":"Game"})).is_ok());
+    assert!(
+        check(serde_json::json!({"application_id":"a","log_contains":"ready","timeout_ms":60000}))
+            .is_ok()
+    );
+    assert!(check(serde_json::json!({"screen_stable_ms":1000,"region":"0,0,100,100"})).is_ok());
+    for bad in [
+        serde_json::json!({}),
+        serde_json::json!({"application_state":"running"}),
+        serde_json::json!({"application_id":"a","application_state":"paused"}),
+        serde_json::json!({"log_contains":"x"}),
+        serde_json::json!({"window_title":"x","timeout_ms":60001}),
+        serde_json::json!({"screen_stable_ms":20000,"timeout_ms":10000}),
+        serde_json::json!({"window_title":"x","region":"0,0,1,1"}),
+    ] {
+        assert!(check(bad).is_err());
+    }
+}
+#[tokio::test]
+async fn metric_sampling_rejects_bad_durations_before_docker() {
+    let app = app(false);
+    assert!(
+        apps::sample_metrics(&app, "missing", "app", 50)
+            .await
+            .is_err()
+    );
+    assert!(
+        apps::sample_metrics(&app, "missing", "app", 10_001)
+            .await
+            .is_err()
     );
 }

@@ -60,6 +60,16 @@ pub struct Logs {
 fn tail() -> usize {
     65536
 }
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Metrics {
+    /// Sampling window in milliseconds (100–10000).
+    #[serde(default = "duration")]
+    pub duration_ms: u64,
+}
+fn duration() -> u64 {
+    1000
+}
 fn text(value: &str, what: &str, limit: usize) -> anyhow::Result<()> {
     if value.is_empty() || value.len() > limit || value.chars().any(char::is_control) {
         bail!("{what} must be 1–{limit} bytes without control characters");
@@ -365,6 +375,63 @@ pub async fn stop_application(
         .map(|status| json!([status]))?,
     )?;
     Ok(describe(&record, status))
+}
+pub async fn application_diagnostics(app: &App, id: &str, application: &str) -> Result<Value> {
+    let record = record(app, id, application)?;
+    let (_, info) = running(app, id).await?;
+    let container = info["Id"].as_str().context("Missing container ID")?;
+    let status = control(
+        app,
+        container,
+        &["diagnostics", &format!("{ROOT}/{}", record.id)],
+    )
+    .await?;
+    Ok(describe(&record, status))
+}
+pub async fn sample_metrics(
+    app: &App,
+    id: &str,
+    application: &str,
+    duration_ms: u64,
+) -> Result<Value> {
+    if !(100..=10_000).contains(&duration_ms) {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "duration_ms must be 100–10000".into(),
+        ));
+    }
+    let record = record(app, id, application)?;
+    let (_, info) = running(app, id).await?;
+    let container = info["Id"].as_str().context("Missing container ID")?;
+    let mut value = control(
+        app,
+        container,
+        &[
+            "metrics",
+            &format!("{ROOT}/{}", record.id),
+            &duration_ms.to_string(),
+        ],
+    )
+    .await?;
+    value["application_id"] = json!(record.id);
+    Ok(value)
+}
+pub async fn diagnostics(
+    State(app): State<Arc<App>>,
+    Path((id, application)): Path<(String, String)>,
+) -> Result<Json<Value>> {
+    Ok(Json(
+        application_diagnostics(&app, &id, &application).await?,
+    ))
+}
+pub async fn metrics(
+    State(app): State<Arc<App>>,
+    Path((id, application)): Path<(String, String)>,
+    Query(options): Query<Metrics>,
+) -> Result<Json<Value>> {
+    Ok(Json(
+        sample_metrics(&app, &id, &application, options.duration_ms).await?,
+    ))
 }
 pub async fn launch(
     State(app): State<Arc<App>>,

@@ -247,6 +247,15 @@ pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resul
         move |app, _| async move { app.retry_environment(&id).await },
     )
 }
+pub async fn reset(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
+    app.environment(&id)?;
+    launch(
+        app,
+        "reset",
+        format!("environment:{id}"),
+        move |app, job_id| async move { app.reset_environment(&id, &job_id).await },
+    )
+}
 pub async fn screenshot(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,

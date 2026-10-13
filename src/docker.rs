@@ -404,11 +404,7 @@ impl App {
                 &format!("Removed the environment's {role} network."),
             )?;
         }
-        for application in self.db.list::<Application>("application")? {
-            if application.environment_id == env.id {
-                self.db.remove("application", &application.id)?;
-            }
-        }
+        self.remove_environment_records(&env.id)?;
         self.db.remove("environment", &env.id)?;
         self.append_log(
             job_id,
@@ -418,6 +414,58 @@ impl App {
             ),
         )?;
         Ok(())
+    }
+    /// Remove records that describe processes inside a container that no longer exists.
+    pub fn remove_environment_records(&self, environment_id: &str) -> Result<()> {
+        for application in self.db.list::<Application>("application")? {
+            if application.environment_id == environment_id {
+                self.db.remove("application", &application.id)?;
+            }
+        }
+        Ok(())
+    }
+    /// Discard the container's writable layer and recreate it from the pinned source image.
+    pub async fn reset_environment(&self, id: &str, job_id: &str) -> Result<Value> {
+        let mut env = self.environment(id).map_err(|e| anyhow::anyhow!(e.1))?;
+        let manager = self
+            .config
+            .manager
+            .as_deref()
+            .context("MANAGER_CONTAINER is required")?;
+        let info = self.inspect("container", manager).await?;
+        if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+            bail!("Manager label does not match");
+        }
+        // Check the image before touching the container, so a missing image leaves the desktop intact.
+        self.inspect("image", &env.source_image_id)
+            .await
+            .context("Source image is missing; the desktop was left unchanged")?;
+        if self
+            .optional_inspect("container", &env.container)
+            .await?
+            .is_some()
+        {
+            let owned = self.owned(&env).await?;
+            self.docker(&[
+                "rm",
+                "--force",
+                owned["Id"].as_str().context("Missing container ID")?,
+            ])
+            .await?;
+            self.append_log(
+                job_id,
+                "Removed the desktop container and its writable layer. Named volumes were preserved.",
+            )?;
+        } else {
+            self.append_log(job_id, "Desktop container was already absent.")?;
+        }
+        self.remove_environment_records(id)?;
+        let result = self.provision(&env, manager).await;
+        env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
+        self.db.put("environment", id, &env)?;
+        result?;
+        self.append_log(job_id, "Recreated the desktop from its saved source image.")?;
+        Ok(json!({"environment_id": id, "volumes_preserved": true, "images_preserved": true}))
     }
     pub async fn address(&self, env: &Environment) -> Result<String> {
         let info = self.owned(env).await?;
