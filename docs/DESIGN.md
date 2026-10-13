@@ -1,74 +1,79 @@
-# Bilskirnir design system
+# Interface design
 
-## Direction
+[Back to the README](../README.md)
 
-The references suggest dark orbital space, substantial metal hulls, pale blue illumination and violet architectural details. Bilskirnir translates that atmosphere into a calm control interface: graphite surfaces, distinct panel boundaries, small illuminated edges and concise English labels.
+Bilskirnir's appearance draws on the Asgard ships and interiors that inspired the project: dark metal, pale blue lights and a little violet. That influence belongs in the surfaces and details. The interface still needs to feel like a useful desktop manager, with readable previews and controls you can find quickly.
 
-The ship exteriors inform the steel-blue panels and angular brand mark. Blue engine light informs primary actions and active navigation. The interior reference informs the violet accent and etched header lines. Its warm illumination appears only in pending and warning states.
+## What the interface should communicate
 
-## Palette
+A user should be able to see which desktops are running, open one, and understand whether an operation succeeded. Make those actions and states easy to recognize before adding decoration.
 
-| CSS token | Value | Role |
+Use familiar names: **Environments**, **Images**, **Volumes** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
+
+Keep visible copy in English. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID.
+
+## Color
+
+Use the shared tokens in `web/style.css` rather than introducing slightly different colors for each component.
+
+| Token | Value | Use |
 | --- | --- | --- |
-| `--bg` | `#070b12` | Deep-space workspace background |
-| `--sidebar` | `#0a101a` | Navigation shell |
-| `--panel` | `#101925` | Main metal panels |
+| `--bg` | `#070b12` | Page background |
+| `--sidebar` | `#0a101a` | Navigation background |
+| `--panel` | `#101925` | Cards and panels |
 | `--panel-raised` | `#162232` | Raised surfaces |
-| `--input` | `#0a121e` | Recessed input and code surfaces |
-| `--line` | `#2b3b50` | Panel seams and separators |
-| `--line-bright` | `#49657f` | Interactive boundaries |
-| `--text` | `#e4edf7` | Primary text |
-| `--muted` | `#a0afc3` | Secondary text |
-| `--accent` | `#92d5f3` | Ice-blue focus, active controls and running state |
-| `--accent-soft` | `#142c40` | Primary button surface |
-| `--violet` | `#aaa0ed` | Image lineage and secondary instrumentation |
-| `--violet-soft` | `#26213d` | Image-type badges |
-| `--warning` | `#e3c88f` | Pending and paused states |
+| `--input` | `#0a121e` | Inputs and code backgrounds |
+| `--line` | `#2b3b50` | Borders and separators |
+| `--line-bright` | `#49657f` | Hovered or emphasized borders |
+| `--text` | `#e4edf7` | Main text |
+| `--muted` | `#a0afc3` | Supporting text |
+| `--accent` | `#92d5f3` | Primary actions, focus and active states |
+| `--accent-soft` | `#142c40` | Primary button backgrounds |
+| `--violet` | `#aaa0ed` | Image relationships and badges |
+| `--violet-soft` | `#26213d` | Image badge backgrounds |
+| `--warning` | `#e3c88f` | Pending or paused states |
 | `--danger` | `#f3a0ad` | Errors and destructive actions |
+| `--success` | `#a9dfcd` | Successful outcomes |
 
-Blue indicates activity and interaction; violet groups image-related information. Status labels and shapes communicate state alongside color. The background gradients stay subtle, and desktop previews retain their original colors.
+Blue draws attention to things the user can act on. Violet helps identify images and their relationships. Always pair a status color with text or a recognizable shape. Keep background lighting subtle and leave remote desktop screenshots in their original colors.
 
-## Typography and spacing
+## Type and spacing
 
-- System UI typography: Segoe UI Variable / Segoe UI / Arial. No network font dependency.
-- Monospace typography: Cascadia Code / SFMono-Regular / Consolas for metrics, image references and logs.
-- Desktop page title: 30 px; section title: 16 px; card title: 15 px; body: 14 px; secondary labels: 12 px.
-- A 4 px spacing grid, with 8–12 px within controls, 18–22 px inside cards and 24–36 px around sections.
-- Panel corners: 6 px. Environment cards and dialogs: 8 px. Chips and preview frames: 3 px.
+Use the system UI font stack: Segoe UI Variable, Segoe UI and Arial. Logs, image references and metrics use Cascadia Code, SFMono-Regular or Consolas. There is no downloaded font dependency.
+
+Page titles are 30 px, section titles 16 px, card titles 15 px, body text 14 px and supporting labels 12 px. Use a 4 px spacing grid: usually 8–12 px within controls, 18–22 px inside cards and 24–36 px between page sections.
+
+Most panels have 6 px corners; cards and dialogs use 8 px. Small badges and preview frames use 3 px. Keep related elements close enough that their relationship is obvious.
 
 ## Components
 
-**Navigation:** a fixed 232 px shell, a pendant-shaped hammer mark and four SVG navigation icons. The mark has a peaked head, tapered stem, flared foot, simplified spiral engravings and a blue inset, following the supplied pendant reference. Active navigation uses a thin blue rail, brighter text and a contained blue surface.
+The desktop navigation is 232 px wide. The pendant-shaped hammer mark follows the supplied reference with a peaked head, tapered stem, flared foot, simple spirals and a blue inset. Active navigation has a blue rail and a stronger background.
 
-**Page headers:** one title, the relevant actions and a short illuminated rule. Copy uses direct names such as Environments, Images, Volumes and Jobs.
+Page headers need a title and relevant actions. Metrics should be easy to scan, without competing with environment previews.
 
-**Metrics:** four distinct metal panels. Monospace values and short labels provide hierarchy; small blue/violet edge details connect them to the visual references.
+Environment cards show the desktop preview, name, state, profile, resources and actions. Preserve the full screenshot instead of cropping away parts of the desktop. Hover can strengthen the border but should not move the card.
 
-**Environment cards:** a recessed desktop display, name and state, desktop profile, resource chips, internet switch and actions. The preview frame preserves the full screenshot. Hover strengthens the frame without moving the card.
+Image cards use a violet upper border. Parent relationships, descriptions and dates help users decide which image to start from.
 
-**Image cards:** violet upper seams distinguish the image library. Parent relationships, dates and user descriptions retain their existing roles.
+Primary buttons use the blue accent; destructive buttons use muted red. Normal controls are at least 40 px high, with 34 px controls in the compact desktop toolbar. The toolbar should leave as much room as possible for the remote desktop.
 
-**Primary controls:** a deep-blue metal fill, pale text and a restrained illuminated border. Destructive controls use muted red. Buttons have a minimum height of 40 px; compact toolbar controls use 34 px.
+Dialogs use recessed inputs and a visible header separator. Explain consequences beside the relevant control: whether a file will be replaced, what a snapshot excludes or why a script runs as root.
 
-**Forms and dialogs:** recessed inputs, an etched header separator, a visible focus ring and native dialog focus management. Descriptions explain decisions such as snapshot exclusions and root script execution.
+File uploads use a dashed drop target and a compact queue with progress and explicit **Uploaded**, **Failed** or **Cancelled** results. Keep completed outcomes visible and make retry available for unfinished files. Do not offer read-only destinations.
 
-**Tables and logs:** quiet panel framing, monospace table headings, subtle row hover and a darker log surface. Notifications use a colored edge with an explicit message.
+## Small screens and accessibility
 
-**Desktop toolbar:** the same metal surfaces and blue action states. The remote desktop remains a functional canvas with its original application colors.
+At 1100 px the navigation and page spacing narrow. Below 700 px navigation becomes a horizontal row, metrics use two columns and environment cards use one column. Below 400 px forms use one column and main page actions can fill the available width.
 
-**File uploads:** an ice-blue upload icon, a dashed drop target, destination controls and a compact file queue. Per-file progress and explicit Uploaded/Failed/Cancelled labels communicate outcomes. Read-only destinations are excluded, replacement is opt-in, and smaller screens stack the destination fields.
+Keep keyboard focus visible, give icon buttons accessible names and preserve dialog focus handling. Decorative SVGs use `aria-hidden`. Sign-out must remain reachable on narrow screens.
 
-## Responsive behavior and accessibility
+Check text contrast against the actual surface, not just the page background. Respect reduced-motion and reduced-transparency preferences. A narrow viewport should not need horizontal scrolling to reach a form field or action.
 
-At 1100 px, the sidebar and workspace spacing narrow. At 700 px, navigation becomes a horizontal row, metrics use two columns and environment cards use one column. At 400 px, forms use one column and primary page actions can span the full width.
+## Files to change
 
-Interactive controls preserve keyboard focus indicators and descriptive labels. Icons are decorative SVGs with `aria-hidden`; text supplies their accessible names. Sign-out remains available on narrow screens. Text and status colors are chosen for contrast on their actual surfaces. Reduced-motion preferences remove transitions; reduced-transparency preferences simplify the dialog backdrop.
+- `web/style.css` holds colors, spacing, component styles and responsive rules.
+- `web/icons.mjs` supplies the shared 24 px stroke icons.
+- `web/mark.svg` is the product mark and favicon.
+- `web/app.js` contains the interface and its copy.
 
-## Implementation
-
-- `web/style.css`: shared tokens, surfaces, component rules and responsive behavior.
-- `web/icons.mjs`: consistent 24 px stroke icons.
-- `web/mark.svg`: the Bilskirnir pendant mark and favicon.
-- `web/app.js`: existing interactions and concise English copy.
-
-Reference images guide the visual language. The application artwork is implemented with CSS and SVG, keeping the bundle self-contained.
+The references guide the design; CSS and SVG provide the application artwork. Keep the bundle self-contained and verify changes in the live browser before updating screenshots.

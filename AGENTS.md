@@ -1,5 +1,7 @@
 # Bilskirnir contributor instructions
 
+This file is for coding agents and contributors making changes. Start with `README.md` for the product overview; `docs/USAGE.md`, `docs/INSTALLATION.md` and `docs/DEVELOPMENT.md` are the guides for people using, maintaining or developing Bilskirnir.
+
 ## Project structure
 
 - `src/`: Rust/Axum API, authentication, Docker operations, SQLite metadata, jobs and WebSocket proxies. `src/tests.rs` holds backend unit tests.
@@ -11,7 +13,7 @@
 - `compose.yml`: source builds and development installation. `compose.ghcr.yml`: installation from published GHCR images.
 - `.github/workflows/`: checks and GHCR publishing. The root `Dockerfile` builds the manager and bundles installation files under `/app/install`.
 - `scripts/`: frontend build utilities. `tests/`: JavaScript tests and WSL/Docker acceptance tests.
-- `docs/`: design rules, verification notes and screenshots. `README.md` and `.env.example` describe installation and configuration.
+- `docs/`: user, installation and development guides, design rules, historical verification notes and screenshots. `README.md` provides the product overview and quick start; `.env.example` lists installation settings.
 
 ## Implementation rules
 

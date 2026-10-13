@@ -1,0 +1,107 @@
+# Using Bilskirnir
+
+[Back to the README](../README.md)
+
+An environment is an Ubuntu desktop running in a Docker container. An image is the starting point for that desktop. A volume holds files separately from the container, so you can keep using them after the environment is gone.
+
+## Create and connect
+
+Select **New environment** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone and volume mounts.
+
+After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, inspect or delete it.
+
+There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
+
+## Choose XFCE or GNOME
+
+Both profiles are Ubuntu 24.04. XFCE uses fewer resources and is a good starting point for application work. GNOME provides the Ubuntu shell and Yaru theme when you prefer that desktop.
+
+The GNOME profile runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
+
+The standard installation prepares both images. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
+
+## Running graphics applications
+
+The desktop uses TigerVNC/Xvnc for its display. GPU applications use VirtualGL with Mesa D3D12 to reach the WSL GPU. In a GPU-enabled environment, use the supplied `gpu-run` wrapper:
+
+```bash
+gpu-run glxinfo -B
+gpu-run /path/to/Unity -force-glcore
+gpu-run /path/to/MyLinuxGame -force-glcore
+```
+
+The Unity and game commands are launch examples, not confirmation that a particular application version works. Install your Linux application first and test its graphics requirements. Windows executables and Wine are not included.
+
+Open **Diagnostics** if a GPU desktop fails to start or rendering does not work. GPU-enabled startup checks the renderer and rejects software rendering. Hardware OpenGL has been verified on NVIDIA RTX 4080; Unity itself, Vulkan and AMD/Intel graphics have not been verified.
+
+`WSL_GPU` enables WSL graphics support at installation level. `NVIDIA_COMPUTE` separately requests NVIDIA CUDA access. Turning CUDA off leaves WSL graphics available when `WSL_GPU=true`. `GPU_ADAPTER` selects a Mesa adapter by name, such as `NVIDIA`, `AMD`, `Intel` or part of its model name. Each environment still has its own GPU setting.
+
+## Make an image with a script
+
+Under **Images**, select **Build image**, choose a desktop base and enter a shell script. The script runs as root during the build, which lets you install packages and applications. Enable build internet access if your script needs to download them. The job log shows the script's output and the resulting image.
+
+For example, this installs a couple of tools on either supplied Ubuntu profile:
+
+```bash
+set -eu
+apt-get update
+apt-get install -y --no-install-recommends git curl
+rm -rf /var/lib/apt/lists/*
+```
+
+Keep the desktop startup, VNC and GPU components in place when adding software. The result must still start as a Bilskirnir desktop.
+
+**Import image** registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another environment until it is available again.
+
+## Save a desktop as a snapshot
+
+Use **Snapshot** after installing applications or changing settings in an environment. Bilskirnir briefly pauses the container and uses Docker commit to save its filesystem changes as a new image layer.
+
+For example, take a snapshot after installing an editor, then create a new environment from it to try a plugin. The new environment starts with the editor already installed. Changes made in the new environment do not change the saved image or the original desktop.
+
+The image tree follows Docker ancestry. A snapshot is based on the image that originally created its container. Taking two snapshots of that same container produces siblings. To extend one of those snapshots, create a new environment from it and snapshot the new environment.
+
+| Saved in the snapshot | Kept separately or not saved |
+| --- | --- |
+| Installed packages and application files in the container | Files in mounted volumes |
+| Desktop settings and home files, unless mounted | Temporary files under `/run` and `/tmp` |
+| Changes in the container's writable layer | Running processes, RAM and GPU state |
+
+An image that declares a Docker `VOLUME` needs an explicit named-volume mount for that path when you create an environment. This makes it clear which files will be excluded from snapshots.
+
+## Keep files in volumes
+
+Create a named volume under **Volumes**, then mount it when creating an environment. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths and read-only mounts over the desktop's home or configuration are rejected.
+
+The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
+
+Mounting the same writable volume in two environments gives both access to the same files. Taking a snapshot does not copy that volume. Deleting an environment preserves named volumes and saved images; unsaved changes left only in the container are lost.
+
+## Upload files from the browser
+
+Drop files onto a running environment card, the connected desktop or the upload dialog. You can also select **Upload files** to use the file picker.
+
+Choose **Downloads** or a writable mounted volume as the destination. You can enter a subfolder and upload multiple files. Each file shows progress and a final status. Failed or cancelled files can be retried. Cancelling the queue keeps files that have already finished.
+
+Existing files are preserved by default. Select **Replace existing files** when you intend to overwrite them. Uploads run as the desktop user, so a volume must be writable by UID/GID 1001:1001.
+
+Downloads is part of the container filesystem unless you mount it. Use a named volume for files that should survive environment deletion. The default limit is 1 GiB per file, configurable with `UPLOAD_MAX_MB`.
+
+You can also use Docker's file-copy commands from WSL. Replace `ENVIRONMENT_ID` with your environment's ID:
+
+```bash
+docker cp ./project wsld-ENVIRONMENT_ID:/workspace/project
+docker cp wsld-ENVIRONMENT_ID:/home/desktop/Downloads/result ./result
+```
+
+## Internet, sound and microphone
+
+The internet switch attaches or detaches the environment's Docker egress network. Its private connection to the manager stays in place, so you can keep using the desktop while internet access is off. This is a Docker network setting, not a general firewall policy for the host or LAN.
+
+Sound and microphone must be enabled both for the installation and for the environment. Use the browser toolbar controls to start each channel. Microphone input also needs browser permission. Localhost supports this over HTTP; access from another device requires HTTPS. Leaving the desktop closes the media connections and microphone tracks.
+
+## Read job results
+
+Longer operations appear under **Jobs**. Open a job to see its status and output; the dialog updates while work continues. Image builds show script output. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
+
+If environment creation failed partway through, **Retry setup** can complete missing setup without replacing an existing container. See [recovery](INSTALLATION.md#when-setup-is-interrupted) for what can and cannot be restored.
