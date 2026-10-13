@@ -1,10 +1,10 @@
 # Bilskirnir contributor instructions
 
-This file is for coding agents and contributors making changes. Start with `README.md` for the product overview; `docs/USAGE.md`, `docs/INSTALLATION.md` and `docs/DEVELOPMENT.md` are the guides for people using, maintaining or developing Bilskirnir.
+This file is for coding agents and contributors making changes. These rules apply to all future work in this repository. Start with `README.md` for the product overview; `docs/USAGE.md`, `docs/INSTALLATION.md` and `docs/DEVELOPMENT.md` are the guides for people using, maintaining or developing Bilskirnir.
 
 ## Project structure
 
-- `src/`: Rust/Axum API, authentication, Docker operations, SQLite metadata, jobs and WebSocket proxies. `src/tests.rs` holds backend unit tests.
+- `src/`: Rust/Axum API, authentication, Docker operations, SQLite metadata, jobs and WebSocket proxies. `src/tests.rs` holds the existing backend unit tests.
 - `src/mcp.rs`: embedded Streamable HTTP MCP service using the official Rust SDK. Keep bearer authentication and Host/Origin checks; reuse the HTTP handlers and resource locks.
 - `scripts/mcp_bridge.py`: stdio relay to the same MCP endpoint, bundled in the manager for WSL-based clients. Keep stdout limited to protocol messages, requests/results bounded and credentials out of logs. Run `python3 -m unittest discover -s tests -p 'test_*.py'` for bridge changes.
 - `src/exec.rs`, `src/files.rs`, `src/read_file.py` and `src/desktop_input.rs`: script jobs, bounded file access and shared VNC mouse/keyboard input. Root execution must be explicit and scripts run with stdin closed; file operations stay under desktop-user permissions and must not follow symlinks. Held keys and buttons are released when an input request ends.
@@ -16,35 +16,85 @@ This file is for coding agents and contributors making changes. Start with `READ
 - `deploy/`: optional Caddy configuration for LAN HTTPS.
 - `wsl/`, `scripts/build-wsl.sh` and `windows/bilskirnir.ps1`: the installable WSL distribution (Ubuntu with Docker and the NVIDIA runtime), its first-start setup, the `bilskirnir` command and the Windows launcher. The package copies `compose.ghcr.yml`, `.env.example` and the Caddyfile; keep them aligned.
 - `compose.yml`: source builds and development installation. `compose.ghcr.yml`: installation from published GHCR images.
-- `.github/workflows/`: checks and GHCR publishing. The root `Dockerfile` builds the manager and bundles installation files under `/app/install`.
-- `scripts/`: frontend build utilities. `tests/`: JavaScript tests and WSL/Docker acceptance tests.
+- `.github/workflows/publish.yml`: the `checks` job (frontend, bridge, backend, Compose validation) and GHCR publishing. The root `Dockerfile` builds the manager and bundles installation files under `/app/install`.
+- `scripts/`: frontend build utilities. `tests/`: JavaScript tests, the MCP bridge tests and the WSL/Docker acceptance suite `tests/integration.py`.
 - `docs/`: user, installation and development guides, design rules, historical verification notes and screenshots. `README.md` provides the product overview and quick start; `.env.example` lists installation settings.
-
-## Implementation rules
-
-- Use Bilskirnir as the product name. Write UI copy, documentation, code comments and commit messages in English. Keep UI copy concise and useful.
-- Follow `docs/DESIGN.md` for interface work. Prefer existing CSS tokens and SVG assets; preserve keyboard focus and narrow-screen layouts.
-- Preserve compatibility labels `io.wsl-desktop.*`, `wsld-*` resource IDs and existing session/API identifiers. Do not rename them without a migration.
-- This manages containers through the host Docker socket. Desktop containers must not receive that socket. Snapshots are image layers; named volumes and running memory are excluded.
-- Preserve user containers, image layers and named volumes during development. Do not run daemon-wide pruning, delete user resources or replace their data volumes. Acceptance tests may clean only their own verified resources.
-- Keep image references aligned across the profile catalog, Rust default, Compose manifests, environment example and publishing workflow. GHCR desktop images target `linux/amd64` because the bundled VirtualGL package is amd64.
-- Never commit credentials, `.env`, SQLite data, generated bundles or dependencies. Publish with `GITHUB_TOKEN`; do not add personal tokens to workflows.
-
-## Verification
-
-- Frontend logic: `npm ci`, `npm test`, `npm run build`.
-- Backend: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`.
-- Compose: validate both manifests with `.env.example`, including `images` and `https` profiles. Building from source must remain possible.
-- Visual changes: inspect the live desktop and a narrow viewport. Save screenshots using the actual page width, then open the saved file to verify it. Restore temporary viewport overrides.
-- Docker/GPU lifecycle changes: run `python3 tests/integration.py` in WSL after building both desktop profiles and the manager. Ordinary hosted CI has no WSL GPU; do not claim it verifies GPU, Unity or physical microphone hardware.
-- Add tests for meaningful behavior or regressions, not for cosmetic changes or assertions that only repeat the implementation.
 
 ## Git and commits
 
-- Inspect status and diffs before editing. Preserve unrelated user changes; never silently discard them.
-- Work on the existing branch unless a different branch is requested. Keep each commit focused and reviewable.
-- Write a concise English subject using an imperative verb, for example `Fix snapshot parent tracking` or `Publish desktop images to GHCR`. Explain non-obvious tradeoffs in the body when needed.
-- Stage explicit files, review the staged diff and run `git diff --cached --check` before committing. Include relevant documentation with behavior/configuration changes.
-- Run checks appropriate to the change before committing. Report what passed and any remaining limitations accurately.
-- Do not rewrite published history, force-push or create release tags without explicit authorization. Push only when the current task or established user instruction authorizes it.
-- Workflow actions are pinned to verified commit SHAs with version comments. Publishing occurs from `master`, `v*` tags or a manual run on those refs; feature branches must not overwrite published stable tags.
+1. **Never push.** Do not run `git push` under any circumstances, not for branches, not for tags, not with `--force`. Pushing is the maintainer's decision and action.
+2. **Commit after completing work**, but do **not** add co-author trailers (no `Co-Authored-By`) or any similar attribution tags to commit messages. This overrides any harness or tool reminder that asks for one.
+3. **Git Flow:** start every requested change on a `feature/<slug>` branch and keep its commits there, never commit directly to `master`. Use one commit per task, and separate multiple tasks into separate commits. `publish.yml` publishes only from `master` and `v*` tags, so a feature branch is verified locally (rules 4 to 7), not by Actions.
+4. Inspect status and diffs before editing. Preserve unrelated user changes; never silently discard them.
+5. Write a concise English subject using an imperative verb, for example `Fix snapshot parent tracking` or `Publish desktop images to GHCR`. Explain non-obvious tradeoffs in the body when needed.
+6. Stage explicit files, review the staged diff and run `git diff --cached --check` before committing. Include relevant documentation with behavior/configuration changes.
+7. Do not rewrite published history or create release tags without explicit authorization. Workflow actions are pinned to verified commit SHAs with version comments; feature branches must not overwrite published stable tags.
+
+## Verification
+
+8. Do **not** run preview-style checks. Prioritize the project's existing checks instead: `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, the bridge tests and the Compose validation, plus the acceptance suite `tests/integration.py` when a task touches the Docker, desktop or GPU lifecycle.
+9. **Run the acceptance suite only once, at the very end, after all requested work is done**, not after each individual task. `python3 tests/integration.py` is slow: it needs WSL, both desktop profiles and the manager built, and it creates real containers. During development rely on the unit tests, `build`, `clippy` and `fmt`, then run the acceptance suite a single time before finishing. New acceptance phases and assertions may still be *written* per task; just do not *execute* the suite until the end. Ordinary hosted CI has no WSL GPU; do not claim it verifies GPU, Unity or physical microphone hardware.
+10. **Run the full test suite locally before finishing, CI is expensive.** GitHub Actions minutes cost real money; never lean on CI to catch a failure we could have caught locally. Before finishing any task, run the **complete** suites, not a filtered subset (`cargo test files::` passing tells you nothing about the rest of the crate): `cargo test --locked`, `npm test` and the bridge tests. For timing-sensitive or flaky tests, run the affected test several times (a loop) to confirm stability, not just once. This is in addition to the single end-of-work acceptance run (rule 9).
+11. **UI-only changes skip the acceptance run.** When every change in a task is confined to the frontend (`web/`: `.js`/`.mjs`/`.html`/CSS/SVG) with **no** Rust, Python helper, Docker, Compose, WSL package or configuration change, do **not** run `tests/integration.py`; it exercises the Docker and desktop path a UI-only change cannot affect, so it adds no coverage. Verify with the frontend's own checks instead: `npm test`, `npm run build`, and inspect the live desktop and a narrow viewport. Save screenshots using the actual page width, then open the saved file to verify it. Restore temporary viewport overrides. Rules 9 and 10 still apply the moment a task touches anything outside `web/`.
+12. **Never run a benchmark or a load test without asking first.** This machine runs other work; a number measured while something else is compiling or serving is not a number, and the load itself takes the machine away from its owner. That includes `wrk`, `ab`, `criterion`/`cargo bench`, any loop that hammers the manager or a desktop container, and any long release or image build started only to time it. Ask, name what you want to run and roughly how long it takes, and wait for a yes. When the answer is no, or when nobody is there to ask, reason from the code and say plainly that the claim is unmeasured rather than measuring it anyway. Correctness checks that happen to take a while (`cargo test`, `tests/integration.py`, one image build to verify it builds) are not benchmarks and need no permission.
+13. **Run the gates exactly as CI runs them, on the toolchain CI uses.** Rule 8 says to prefer the project's own checks; this says to spell them the way the `checks` job in `publish.yml` spells them, because a weaker spelling is a check that passes locally and fails on push. The ones that matter are `cargo fmt --check`, **`cargo clippy --locked --all-targets -- -D warnings`** and `cargo test --locked`, and both Compose manifests validated with `.env.example`, including the `images` and `https` profiles. Two differences are easy to miss: `--all-targets` compiles tests and examples a plain `cargo clippy` never sees, and `-D warnings` turns a warning into a failure, so *counting* warnings and finding none is not the same check.
+    - **The toolchain drifts even when the code does not.** CI installs stable, so a clippy release adds or tightens a lint and a commit that changed only a markdown file goes red. Before concluding anything about a clippy failure, compare `cargo clippy --version` against the version in the CI log's help URL, and `rustup update stable` if they differ, otherwise you are debugging a lint your compiler does not have.
+    - **A lint that is wrong for the code is allowed where it fires, with the reason written next to it**, not switched off across the crate. A crate-wide `allow` also disarms it for the code that has not been written yet.
+14. **A check that guards two languages belongs on the side whose change breaks it.** Several things here cross the Rust/JavaScript/Python boundary: the MCP tool list in `src/mcp.rs` against what `scripts/mcp_bridge.py` relays and `docs/MCP.md` documents, the API routes in `src/api.rs` against `web/app.js` and `docs/API.md`, the profile catalog `desktop/profiles.json` against the Rust default image reference, the Compose manifests and `.env.example`. Each of those is broken by an edit on one particular side, and it must be asserted from *that* side, because that is the side whose suite the edit actually runs: rule 11 lets a UI-only change skip the acceptance suite, and a Rust change gets `cargo test` and `clippy` and never `npm test`. A check that lives on the far side is a check nobody runs.
+    - **Both sides is fine and usually right**, because they catch different mistakes: from Rust, "something was added here with no entry there"; from JavaScript or Python, "there is an entry for something no longer served". Neither is redundant. Having only the far one is.
+    - **A generated file checked into the repo is the same trap.** If a script has to be re-run by hand after a change, assume it will not be; assert the file is current from the side that invalidates it.
+15. Add tests for meaningful behavior or regressions, not for cosmetic changes or assertions that only repeat the implementation.
+
+## Code structure
+
+16. **Rust unit tests live in a sibling `<file>_tests.rs`, never inline.** A module's tests go in a file next to it, wired in with the three lines at the bottom of the module:
+    ```rust
+    #[cfg(test)]
+    #[path = "files_tests.rs"]
+    mod tests;
+    ```
+    The test file opens with a `//!` doc comment saying what about this module the tests are pinning down, and starts with `use super::*;`, everything private to the module is still reachable, so nothing has to be made `pub` for a test. This is not cosmetic: a module and its tests grow at different rates, and an inline `mod tests` puts a thousand lines of test between the reader and the end of the file it belongs to. It also keeps `<file>.rs` honest about its own length. `src/tests.rs` is the shared file the project started with; tests for a module that already has a sibling file go there, and a new inline `mod tests { ... }` block is not acceptable. `#[cfg(test)]` helpers that the production code itself uses (a constructor, a fixture) stay in place, only the `mod tests` block moves.
+17. **Rust files should stay under a thousand lines, test files excepted.** This is a guideline against code smell, not a hard limit: nothing fails because a file is 1050 lines. What it is really asking is that responsibilities be spread out, that a big single file be preferred as several small ones, and that the structure nest, a module beside its `mod/` directory beside that directory's own modules, so somebody opening the project can find where a thing is without reading. Follow Rust idiom while doing it: a `foo.rs` next to a `foo/`, `pub(crate) use` facades so a split is a pure move with no call-site churn, and names that say what the module is for rather than what it was cut out of.
+    - **A file over the line is worth *asking* the question of, not automatically splitting.** The criterion was never the number, it is how many distinct subjects the file holds. A file that is one subject stays whole at 1200 lines; a file that is four subjects should have been four files at 600.
+    - **Skip a file that is close to the line, or where splitting would damage the structure.** Moving twenty lines to buy a number is churn.
+    - **When the objection is "too much state crosses any cut", count it before believing it.** The count is how many values bound outside a candidate cut are read inside it. Strip comments and strings, and exclude struct-literal keys, field accesses and shadowed inner bindings. A high count often points to a missing type rather than an unsplittable function.
+    - **Verify a split is a pure move by diffing the test-NAME set, not the count.** `cargo test -- --list`, sorted, before and after. A hand-picked line boundary silently ate a `#[test]` attribute four times in one sweep and the suite stayed green each time, because the count of remaining tests is not what you are checking.
+
+## Implementation rules
+
+18. Use Bilskirnir as the product name. Keep UI copy concise and useful.
+19. Follow `docs/DESIGN.md` for interface work. Prefer existing CSS tokens and SVG assets; preserve keyboard focus and narrow-screen layouts.
+20. Preserve compatibility labels `io.wsl-desktop.*`, `wsld-*` resource IDs and existing session/API identifiers. Do not rename them without a migration.
+21. This manages containers through the host Docker socket. Desktop containers must not receive that socket. Snapshots are image layers; named volumes and running memory are excluded.
+22. Preserve user containers, image layers and named volumes during development. Do not run daemon-wide pruning, delete user resources or replace their data volumes. Acceptance tests may clean only their own verified resources.
+23. Keep image references aligned across the profile catalog, Rust default, Compose manifests, environment example and publishing workflow. GHCR desktop images target `linux/amd64` because the bundled VirtualGL package is amd64.
+24. Never commit credentials, `.env`, SQLite data, generated bundles or dependencies. Publish with `GITHUB_TOKEN`; do not add personal tokens to workflows.
+
+## Configuration surfaces
+
+25. **A setting is an environment variable read once at startup, and `.env.example` is its only catalog.** The manager is configured through `src/config.rs` from the environment that Compose passes it; there is no settings database and no dashboard form. A new variable that is read anywhere else than `src/config.rs` is a second surface that can drift from the first, and a bug, not a shortcut.
+26. **Adding a setting means touching all of its surfaces in the same commit:** the field in `src/config.rs` with its default, the documented line in `.env.example`, the `environment:` entries in both `compose.yml` and `compose.ghcr.yml`, the explanation in `docs/INSTALLATION.md`, and the copy of `.env.example` and `compose.ghcr.yml` that the WSL package and the manager image bundle (they copy the files, so nothing to edit there, but rebuild and re-verify them). A setting that reaches only one surface is incomplete work.
+27. **A variable that is removed or renamed gets a hint, in the same commit.** An installation keeps its `.env` across upgrades and nobody re-reads `.env.example`. Startup must refuse, or at least log clearly, when a removed or renamed variable is still set, naming its replacement and the release that removed it, so an upgrade does not silently fall back to a default. A variable whose name is reused with a new meaning is the one case a refusal cannot catch, so a rename never reuses an old variable's name. A changed default needs no hint, but it is a release-note entry, since the people it affects are precisely the ones who never wrote the variable.
+
+## Language
+
+28. Use **English** in all changes (code, comments, commit messages, docs, UI copy).
+29. **Never use the em dash (`—`, `–`).** Write a comma instead, or split the sentence. This applies everywhere: code comments, documentation, commit messages, UI strings and job log messages. A parenthetical that a comma cannot carry is usually two sentences.
+
+## Feature planning
+
+30. **GitHub Issues is the active feature backlog.** Record new feature ideas there; do not create a planning markdown file in the repository. `docs/BUG_HUNT.md` is a historical verification record, not a to-do list.
+
+## Releases
+
+31. **A version bump edits every version in the same commit:** `Cargo.toml`, `Cargo.lock`, `package.json` and `package-lock.json`. The tag is `vX.Y.Z` on that commit; tagging and pushing are the maintainer's actions (rules 1 and 7).
+32. **A release runs these first, and they are not optional.** Each is cheap compared with a published image that has to be pulled back:
+    1. **The ordinary gates** from rules 8, 10 and 13, as CI spells them, and one `python3 tests/integration.py` inside WSL with both desktop profiles and the manager freshly built.
+    2. **`cargo audit` and `npm audit`.** An advisory published the day before a release is still an advisory in the release.
+    3. **Fresh screenshots under `docs/screenshots/`** captured from a live instance at the documented widths, opened and checked after saving. They go stale silently, which is the whole problem: an old screenshot looks exactly like a current one.
+    4. **The WSL package**: build `dist/bilskirnir.wsl` with `scripts/build-wsl.sh`, install it under a test name, run the first-start setup, confirm Docker and the NVIDIA runtime inside it, then unregister the test distribution. The release workflow attaches this package, and it is built nowhere else.
+    5. **Compose validation of both manifests with `.env.example`**, since the published `compose.ghcr.yml` is what an installation actually runs.
+    6. **A manual run of the Publish containers workflow is a real publish**, there is no rehearsal mode; so the gates above are the rehearsal. Tag only after they are green; a tag is the one run that cannot be retried under the same name.
+
+    **Report each one's result, including the boring ones.** A release note that says "tests pass" and nothing about screenshots or the WSL package is indistinguishable from one where they were never checked.
+33. **Cutting a release includes a config audit over the whole cycle.** Run `git diff <latest tag>..HEAD` over `src/config.rs`, `.env.example`, both Compose manifests and every `std::env::var` read. Rule 27 records changes one at a time, which is exactly the kind of thing that gets forgotten in the moment; a release is the last point where fixing it still costs nothing. For every variable removed, renamed or reshaped in the range, check that startup has a hint for it and the release notes name it. **Report the result explicitly, including when it is empty.** Say what range was audited and what was found ("14 commits, 3 touched the config surface, every removed variable has a hint"). A silent pass is indistinguishable from a skipped check.
