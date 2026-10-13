@@ -1,6 +1,7 @@
 /target/
 /node_modules/
 /web/dist/
+/dist/
 /data/
 .env
 *.sqlite*

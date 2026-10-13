@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Manage the Bilskirnir installation inside the WSL distribution.
+set -euo pipefail
+INSTALL=/opt/bilskirnir
+PORT=${PORT:-8080}
+
+usage() {
+    cat <<'EOF'
+Usage: bilskirnir <command>
+
+  start     Start Docker if needed, download missing images and start the manager
+  stop      Stop the manager (desktop containers stop with the distribution)
+  restart   Recreate the manager with the current settings
+  status    Show the manager state and the dashboard address
+  logs      Show the manager's recent log output
+  update    Pull the latest images and recreate the manager
+  doctor    Check Docker, GPU access, settings and registry reachability
+  open      Open the dashboard in the Windows browser
+  settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
+EOF
+}
+compose() {
+    (cd "$INSTALL" && docker compose "$@")
+}
+require_settings() {
+    if [[ ! -f $INSTALL/.env ]]; then
+        echo "Settings are missing. Open a new Bilskirnir terminal to run the first-start setup." >&2
+        exit 1
+    fi
+}
+ensure_docker() {
+    if ! systemctl is-active --quiet docker; then
+        sudo systemctl start docker
+    fi
+    for _ in $(seq 1 30); do
+        if docker info >/dev/null 2>&1; then return 0; fi
+        sleep 1
+    done
+    echo "Docker did not become ready. Run 'bilskirnir doctor'." >&2
+    exit 1
+}
+address() {
+    echo "http://localhost:$PORT"
+}
+case ${1:-help} in
+    start)
+        require_settings
+        ensure_docker
+        compose up -d
+        echo "Bilskirnir is starting at $(address)"
+        ;;
+    stop)
+        compose stop
+        ;;
+    restart)
+        require_settings
+        ensure_docker
+        compose up -d --force-recreate manager
+        ;;
+    status)
+        if docker info >/dev/null 2>&1; then
+            compose ps
+            if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+                echo "Dashboard: $(address)"
+            else
+                echo "The manager is not answering yet."
+            fi
+        else
+            echo "Docker is not running. Use 'bilskirnir start'."
+        fi
+        ;;
+    logs)
+        compose logs --tail=100 manager
+        ;;
+    update)
+        require_settings
+        ensure_docker
+        compose pull
+        compose up -d
+        ;;
+    doctor)
+        echo "systemd:   $(systemctl is-system-running 2>/dev/null || true)"
+        echo "docker:    $(systemctl is-active docker 2>/dev/null || true)"
+        if docker info --format 'engine {{.ServerVersion}}, runtimes: {{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null; then :; else echo "docker info failed"; fi
+        if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
+        if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
+        if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|PORT|BIND_ADDRESS)=' "$INSTALL/.env" | sed 's/^/           /'; else echo "settings:  missing"; fi
+        if curl -fsS -o /dev/null --max-time 10 https://ghcr.io/v2/; then echo "registry:  ghcr.io reachable"; else echo "registry:  ghcr.io not reachable (HTTP 401 is normal; a timeout is not)"; fi
+        ;;
+    open)
+        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi
+        ;;
+    settings)
+        require_settings
+        "${EDITOR:-nano}" "$INSTALL/.env"
+        echo "Run 'bilskirnir restart' to apply the settings."
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

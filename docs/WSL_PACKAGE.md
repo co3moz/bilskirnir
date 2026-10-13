@@ -1,0 +1,75 @@
+# Installing Bilskirnir as a WSL distribution
+
+[Back to the README](../README.md)
+
+The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, so it does not touch Docker in another WSL distribution.
+
+The package contains no application images. The first start downloads the manager and both desktop images from GHCR, which keeps the package small and lets `bilskirnir update` fetch newer images later.
+
+## Requirements
+
+- Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
+- For GPU desktops, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
+- About 2 GB of disk space for the distribution plus the images (about 3 GB) and your desktops.
+
+## Install
+
+Download `bilskirnir.wsl` from a release, then either double-click it or run:
+
+```powershell
+wsl --install --from-file .\bilskirnir.wsl
+```
+
+Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for a Linux username and the Bilskirnir admin password, detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the images and brings up the manager; the dashboard is then at [localhost:8080](http://localhost:8080).
+
+The bundled PowerShell helper does the same from Windows and adds auto-start:
+
+```powershell
+.\windows\bilskirnir.ps1 install -Package .\bilskirnir.wsl
+.\windows\bilskirnir.ps1 autostart enable
+```
+
+## Keep it running
+
+WSL stops a distribution shortly after its last Windows-started process ends, even though Docker runs as a systemd service inside it. Two ways keep Bilskirnir available:
+
+- `.\windows\bilskirnir.ps1 start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
+- `.\windows\bilskirnir.ps1 autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
+
+`.\windows\bilskirnir.ps1 stop` stops the manager and shuts the distribution down.
+
+## Everyday commands
+
+Inside the distribution, `bilskirnir` manages the installation:
+
+| Command | What it does |
+| --- | --- |
+| `bilskirnir start` | Starts Docker if needed, downloads missing images and starts the manager. |
+| `bilskirnir status` | Shows the Compose services and the dashboard address. |
+| `bilskirnir logs` | Shows the manager's recent log. |
+| `bilskirnir update` | Pulls the latest images and recreates the manager. |
+| `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
+| `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
+| `bilskirnir open` | Opens the dashboard in the Windows browser. |
+
+The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env` and `deploy/Caddyfile`. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+
+## What the package decides for you
+
+- The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group. The distribution is a single-purpose appliance for the Windows user who installed it.
+- Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise desktops run without GPU acceleration. Change these in `.env` if the detection is wrong.
+- The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
+
+## Build the package
+
+The package is produced from `wsl/Dockerfile` with Docker:
+
+```bash
+scripts/build-wsl.sh dist/bilskirnir.wsl
+```
+
+The script builds the root filesystem image, exports it with `docker export` and compresses it with gzip (`WSL_COMPRESS=xz` for a smaller file). Release tags publish the package as a GitHub release asset. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command and `keepalive.sh` is the process the Windows launcher keeps open. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, and `kmod-static-nodes`, which has no module tree in WSL; it also installs the systemd user-session packages so launches do not warn about a missing user session.
+
+## Remove
+
+`.\windows\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, desktops and named volumes, so export anything you want to keep first.

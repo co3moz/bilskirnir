@@ -22,7 +22,9 @@ Bilskirnir currently serves one administrator on a local machine or LAN. The des
 
 ## Getting started
 
-Run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
+The shortest route is the ready-made WSL distribution: download `bilskirnir.wsl` from a release and run `wsl --install --from-file .\bilskirnir.wsl`. It brings Ubuntu, Docker and the NVIDIA runtime with it; the first start asks for a password and downloads the images. See the [WSL package guide](docs/WSL_PACKAGE.md).
+
+To use an existing WSL Ubuntu instead, run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
 
 The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; the GPU option is then unavailable when creating a desktop.
 
@@ -121,6 +123,7 @@ Hardware OpenGL has been verified with VirtualGL and Mesa D3D12 on WSL Ubuntu 22
 ## Where to go next
 
 - [Using Bilskirnir](docs/USAGE.md): desktops, custom images, snapshots, files and volumes.
+- [WSL distribution package](docs/WSL_PACKAGE.md): install Bilskirnir with Docker and GPU support as its own WSL distribution.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
 - [Development](docs/DEVELOPMENT.md): source builds, project structure, checks and image publishing.
 - [Agent access with MCP](docs/MCP.md): connection settings, tools and automation workflows.

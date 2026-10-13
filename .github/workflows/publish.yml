@@ -17,6 +17,8 @@ on:
       - 'desktop/**'
       - 'scripts/**'
       - 'deploy/**'
+      - 'wsl/**'
+      - 'windows/**'
       - 'tests/**'
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'
@@ -146,3 +148,21 @@ jobs:
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           printf '### %s\n\n```text\n%s\n```\n' '${{ matrix.title }}' "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+
+  wsl-package:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the WSL distribution package
+        run: scripts/build-wsl.sh dist/bilskirnir.wsl
+      - name: Attach the package to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Bilskirnir $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl --clobber

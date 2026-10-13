@@ -14,6 +14,7 @@ This file is for coding agents and contributors making changes. Start with `READ
 - `web/uploads.mjs`: sequential upload queue, progress, cancellation and session-expiry handling.
 - `desktop/`: Ubuntu 24.04 Docker stages, XFCE/GNOME sessions, GPU wrappers, health checks and the bundled profile catalog.
 - `deploy/`: optional Caddy configuration for LAN HTTPS.
+- `wsl/`, `scripts/build-wsl.sh` and `windows/bilskirnir.ps1`: the installable WSL distribution (Ubuntu with Docker and the NVIDIA runtime), its first-start setup, the `bilskirnir` command and the Windows launcher. The package copies `compose.ghcr.yml`, `.env.example` and the Caddyfile; keep them aligned.
 - `compose.yml`: source builds and development installation. `compose.ghcr.yml`: installation from published GHCR images.
 - `.github/workflows/`: checks and GHCR publishing. The root `Dockerfile` builds the manager and bundles installation files under `/app/install`.
 - `scripts/`: frontend build utilities. `tests/`: JavaScript tests and WSL/Docker acceptance tests.

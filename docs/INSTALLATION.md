@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-The [README's Compose example](../README.md#getting-started) is the shortest route to a working installation. This guide covers changes you may need after that: settings, access from another device, updates and recovery.
+The [WSL distribution package](WSL_PACKAGE.md) installs Ubuntu, Docker and the GPU runtime together; the [README's Compose example](../README.md#getting-started) is the shortest route inside an existing WSL Ubuntu. This guide covers changes you may need after that: settings, access from another device, updates and recovery.
 
 ## Use the full installation files
 
