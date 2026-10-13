@@ -6,6 +6,7 @@ This file is for coding agents and contributors making changes. Start with `READ
 
 - `src/`: Rust/Axum API, authentication, Docker operations, SQLite metadata, jobs and WebSocket proxies. `src/tests.rs` holds backend unit tests.
 - `src/mcp.rs`: embedded Streamable HTTP MCP service using the official Rust SDK. Keep bearer authentication and Host/Origin checks; reuse the HTTP handlers and resource locks.
+- `scripts/mcp_bridge.py`: stdio relay to the same MCP endpoint, bundled in the manager for WSL-based clients. Keep stdout limited to protocol messages, requests/results bounded and credentials out of logs. Run `python3 -m unittest discover -s tests -p 'test_*.py'` for bridge changes.
 - `src/exec.rs`, `src/files.rs`, `src/read_file.py` and `src/desktop_input.rs`: script jobs, bounded file access and shared VNC mouse/keyboard input. Root execution must be explicit; file operations stay under desktop-user permissions and must not follow symlinks.
 - `src/uploads.rs` and `src/upload_file.py`: bounded file staging and atomic delivery as the desktop user. Upload destinations must stay in Downloads or writable named-volume mounts; never follow path symlinks or grant root writes.
 - `web/`: plain JavaScript UI, noVNC integration, audio, CSS, SVG assets and shared helpers. `web/dist/` is generated and ignored.

@@ -77,7 +77,34 @@ async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Respo
         )
             .into_response();
     }
-    next.run(req).await
+    let response = next.run(req).await;
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .is_some_and(|v| v == "application/json")
+        && !response.headers().contains_key(header::CONTENT_LENGTH)
+    {
+        // Keep completed JSON responses bounded and give them a known length.
+        // SSE responses retain their streaming transport.
+        let (mut parts, body) = response.into_parts();
+        let bytes = match to_bytes(body, 8 * 1024 * 1024).await {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                return error::Error(
+                    StatusCode::BAD_GATEWAY,
+                    "MCP JSON response exceeded the 8 MiB limit".into(),
+                )
+                .into_response();
+            }
+        };
+        parts.headers.remove(header::TRANSFER_ENCODING);
+        parts
+            .headers
+            .insert(header::CONTENT_LENGTH, bytes.len().into());
+        Response::from_parts(parts, Body::from(bytes))
+    } else {
+        response
+    }
 }
 
 #[derive(Clone)]

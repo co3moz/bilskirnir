@@ -151,6 +151,18 @@ def tool(name, arguments=None, allow_error=False):
     return result
 
 
+def stdio_tool(name, arguments=None):
+    messages = [{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"stdio-acceptance","version":"1"}}},
+                {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":name,"arguments":arguments or {}}}]
+    result = subprocess.run(["docker","exec","-i",manager,"python3","/app/mcp_bridge.py"], input=("\n".join(json.dumps(m) for m in messages)+"\n").encode(),capture_output=True,timeout=130)
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    replies = {m["id"]:m for line in result.stdout.splitlines() if (m:=json.loads(line))}
+    assert replies[1]["result"]["protocolVersion"] == "2025-11-25"
+    response = replies[2]["result"]
+    assert not response.get("isError"), response
+    return response
+
+
 def mcp_job(response, success=True):
     jid = response["structuredContent"]["job_id"]
     result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
@@ -199,6 +211,7 @@ try:
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
     assert len(mcp("tools/list")["tools"]) == 27
     assert tool("get_system")["structuredContent"]["connected"]
+    assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
     assert api("system")["connected"]
     profiles = api("profiles")
@@ -234,7 +247,7 @@ try:
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
     ready(container)
-    default_exec = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
+    default_exec = mcp_job(stdio_tool("exec_environment", {"environment_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
     assert "1001" in default_exec["log"] and default_exec["result"]["user"] == "1001:1001"
     root_exec = mcp_job(tool("exec_environment", {"environment_id":env_id,"root":True,"script":"id -u\ninstall -m 644 /home/desktop/agent-marker /opt/agent-install"}))
     assert root_exec["result"]["user"] == "root"
@@ -245,7 +258,7 @@ try:
     assert "124" in timeout["log"]
     time.sleep(1)
     assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
-    written = tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
+    written = stdio_tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
     assert written["bytes"] == 15
     read = api(f"environments/{env_id}/files/read", {"path":written["path"]})
     assert read["data"] == "Hello from MCP\n" and read["eof"]
@@ -261,7 +274,7 @@ try:
     assert tool("read_file", {"environment_id":env_id,"path":"/dev/zero"}, allow_error=True)["isError"]
     tool("upload_file", {"environment_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
-    image = tool("screenshot", {"environment_id":env_id})["content"][0]
+    image = stdio_tool("screenshot", {"environment_id":env_id})["content"][0]
     assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")
     assert tool("read_file", {"environment_id":env_id,"path":"/home/desktop/../etc/passwd"}, allow_error=True)["isError"]
     docker("exec", "--user", "desktop", container, "ln", "-s", "/home/desktop/agent-files", "/home/desktop/agent-link")
@@ -282,7 +295,7 @@ try:
     types = viewer.read(viewer.read(1)[0]); assert 1 in types
     viewer.send(b"\x01"); assert viewer.read(4)==b"\0"*4
     viewer.send(b"\x01"); init=viewer.read(24); viewer.read(int.from_bytes(init[20:24],"big"))
-    result = tool("desktop_input", {"environment_id":env_id,"actions":[{"type":"move","x":x,"y":y},{"type":"click","x":x,"y":y},{"type":"type_text","text":"agent"},{"type":"key_press","keys":["Control","a"]},{"type":"scroll","x":x,"y":y,"direction":"up","steps":2}]})["structuredContent"]
+    result = stdio_tool("desktop_input", {"environment_id":env_id,"actions":[{"type":"move","x":x,"y":y},{"type":"click","x":x,"y":y},{"type":"type_text","text":"agent"},{"type":"key_press","keys":["Control","a"]},{"type":"scroll","x":x,"y":y,"direction":"up","steps":2}]})["structuredContent"]
     assert result["applied_actions"] == 5 and result["width"]==1280 and result["height"]==720
     api(f"environments/{env_id}/input", {"actions":[{"type":"drag","from_x":x,"from_y":y,"to_x":x+20,"to_y":y+10},{"type":"key_press","keys":["Escape"]}]})
     events = wait_for(lambda: (data if b"KeyPress" in (data:=docker("exec",container,"cat","/home/desktop/input-events.log")) and b"ButtonPress" in data and b"Control_L" in data else None))

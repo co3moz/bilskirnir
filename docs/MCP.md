@@ -29,6 +29,27 @@ Use the hostname and HTTPS address of your installation for LAN access. The toke
 
 Clients configure HTTP headers in different ways. Add the URL and bearer header using your client's MCP server settings; the server does not implement an OAuth sign-in flow. It uses stateless requests, so there is no session ID to save. The SDK handles protocol negotiation, including clients using the 2025 Streamable HTTP revisions.
 
+## Connect through stdio on Windows
+
+If your agent uses stdio, or your Windows localhost forwarder interferes with HTTP streaming, use the bridge bundled in the manager image. It connects to the same `/mcp` service from inside the container and relays MCP messages over stdin/stdout.
+
+For clients that use an `mcpServers` configuration:
+
+```json
+{
+  "mcpServers": {
+    "bilskirnir": {
+      "command": "wsl.exe",
+      "args": ["-d", "Ubuntu-22.04", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+    }
+  }
+}
+```
+
+Use your WSL distribution and manager container names. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
+
+MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
+
 ## A useful first workflow
 
 1. Call `get_settings` and `list_profiles` to see the available desktops and defaults.

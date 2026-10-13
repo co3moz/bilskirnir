@@ -79,6 +79,13 @@ async fn mcp_request(
         .await
         .unwrap();
     let status = response.status();
+    if status == StatusCode::OK {
+        assert!(
+            response.headers().contains_key("content-length"),
+            "Completed MCP JSON replies should have an explicit length"
+        );
+        assert!(!response.headers().contains_key("transfer-encoding"));
+    }
     let bytes = axum::body::to_bytes(response.into_body(), 8 * 1024 * 1024)
         .await
         .unwrap();
@@ -380,6 +387,7 @@ async fn mcp_transport_bounds_messages_and_accepts_notifications() {
         assert_eq!(response.status(), expected, "{method} {version}");
     }
 }
+
 #[test]
 fn uploads_only_accept_canonical_paths_in_writable_locations() {
     let mut spec = spec();

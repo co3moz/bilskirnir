@@ -17,12 +17,13 @@ RUN cargo build --release --locked
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.title="Bilskirnir" org.opencontainers.image.licenses="MIT"
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 COPY --from=backend /build/target/release/bilskirnir /usr/local/bin/bilskirnir
 COPY --from=ui /build/web/dist /app/web
 COPY desktop /app/desktop
+COPY scripts/mcp_bridge.py /app/mcp_bridge.py
 COPY compose.ghcr.yml /app/install/compose.yml
 COPY .env.example /app/install/.env.example
 COPY deploy/Caddyfile /app/install/deploy/Caddyfile

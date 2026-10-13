@@ -29,6 +29,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
+| Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |
 | Dashboard and desktop interface | `web/app.js`, `web/media.mjs`, `web/style.css`, `web/icons.mjs`, `web/mark.svg` |
@@ -75,6 +76,12 @@ For the backend:
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+```
+
+Check the bundled stdio bridge with Python's standard library test runner:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 Validate both installation manifests:
