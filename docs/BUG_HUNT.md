@@ -1,8 +1,18 @@
-# Bug audit: October 12, 2026
+# Bug audits
 
 [Back to the README](../README.md)
 
-This records an earlier review of Bilskirnir's container lifecycle, browser connections and recovery behavior. It explains the problems found, the changes made and the checks performed at the time. It is not a report of a new test run or a complete list of later changes.
+These notes record reviews of Bilskirnir's behavior: the problems found, the changes made and the checks performed at the time. They are not reports of new test runs or complete lists of later changes.
+
+## Follow-up audit: October 13, 2026
+
+A second review compared the code with the documentation and added agent-facing capabilities. The MCP screenshot was a 640x360 preview while input coordinates used desktop pixels, so an agent that read coordinates from the image clicked in the wrong place; screenshots now default to full resolution, accept `max_width`, `region` and `window_id`, and report their size. Scripts were read from standard input, so a command that read input consumed the rest of the script; scripts now run from an unlinked temporary file with stdin closed and keep their exit codes. GPU desktops that failed the renderer check exited without logging the check, and the GPU option could be selected when the installation had no GPU; both are fixed. A stdin write failure no longer hides a process's own error output, stale image tags in the cleanup script and import dialog were updated, a Turkish log message was translated, and publishing now reacts to license and notice changes.
+
+Agents can now launch applications in the background with bounded logs and explicit stop handling, hold keys and mouse buttons within an input request, move the pointer relatively, list, focus and resize windows, and combine input with a screenshot in one call. Relative movement is emulated with absolute positions and has not been verified against applications that grab the pointer for raw motion. Video recording, gamepad input, audio observation, file management tools and interactive terminals remain proposals.
+
+Rust unit tests (34), frontend tests (15) and bridge tests (4) passed with formatting and Clippy. The WSL/Docker acceptance suite passed on the rebuilt XFCE and GNOME GPU images with an NVIDIA adapter, including the new checks: a script whose command reads stdin sees no input and continues, a background application is launched, listed, focused, moved, resized, captured by window and region, logged and stopped with SIGTERM, held keys and relative pointer movement reach the X server at the expected position, and full-resolution screenshots match the desktop size. Unity, Vulkan, AMD/Intel graphics, a physical microphone and pointer-grabbing games were not tested.
+
+## Initial audit: October 12, 2026
 
 ## Desktops should remain usable while other work runs
 

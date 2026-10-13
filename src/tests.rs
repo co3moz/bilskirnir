@@ -177,7 +177,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 27);
+    assert_eq!(tools.len(), 36);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -185,6 +185,34 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     assert_eq!(delete["annotations"]["destructiveHint"], true);
     let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
     assert_eq!(screenshot["annotations"]["readOnlyHint"], true);
+    assert!(screenshot["inputSchema"]["properties"]["max_width"].is_object());
+    assert_eq!(
+        screenshot["inputSchema"]["required"],
+        serde_json::json!(["environment_id"])
+    );
+    let observe = tools
+        .iter()
+        .find(|t| t["name"] == "act_and_observe")
+        .unwrap();
+    assert!(observe["inputSchema"]["properties"]["actions"].is_object());
+    assert!(
+        observe["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "environment_id")
+    );
+    let stop = tools
+        .iter()
+        .find(|t| t["name"] == "stop_application")
+        .unwrap();
+    assert!(
+        stop["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "application_id")
+    );
     let (_, body) = mcp_request(
         app.clone(),
         "tools/call",
@@ -251,18 +279,20 @@ fn file_paths_and_vnc_actions_reject_invalid_requests() {
         serde_json::json!({"actions":[{"type":"click","x":0,"y":0,"count":0}]}),
         serde_json::json!({"actions":[{"type":"drag","from_x":1,"from_y":1,"to_x":2,"to_y":2,"duration_ms":99999}]}),
         serde_json::json!({"actions":[{"type":"key_press","keys":["Control","Ctrl"]}]}),
-        serde_json::json!({"actions":[{"type":"wait","milliseconds":2000}]}),
+        serde_json::json!({"actions":[{"type":"wait","milliseconds":20000}]}),
         serde_json::json!({"actions":[{"type":"type_text","text":"\0"}]}),
     ] {
-        let input = serde_json::from_value(body).unwrap();
-        assert!(desktop_input::plan(&input, 800, 600).is_err());
+        let input: desktop_input::Input = serde_json::from_value(body).unwrap();
+        assert!(desktop_input::plan(&input.actions, 800, 600, None).is_err());
     }
     assert_eq!(desktop_input::keysym("Control").unwrap(), 0xffe3);
     assert_eq!(desktop_input::keysym("Ω").unwrap(), 0x010003a9);
     assert_eq!(desktop_input::keysym("\n").unwrap(), 0xff0d);
     assert!(desktop_input::keysym("F13").is_err());
-    let input = serde_json::from_value(serde_json::json!({"actions":[{"type":"key_press","keys":["Control","a"]},{"type":"click","x":20,"y":30}]})).unwrap();
-    let plan = desktop_input::plan(&input, 800, 600).unwrap();
+    let input: desktop_input::Input = serde_json::from_value(serde_json::json!({"actions":[{"type":"key_press","keys":["Control","a"]},{"type":"click","x":20,"y":30}]})).unwrap();
+    let plan = desktop_input::plan(&input.actions, 800, 600, None)
+        .unwrap()
+        .steps;
     assert_eq!(
         plan[0].0,
         [
@@ -279,7 +309,17 @@ fn file_paths_and_vnc_actions_reject_invalid_requests() {
 
 #[tokio::test]
 async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
-    for route in ["exec", "files/read", "files/write", "input"] {
+    for route in [
+        "exec",
+        "files/read",
+        "files/write",
+        "input",
+        "act-and-observe",
+        "applications",
+        "applications/x/stop",
+        "windows/0x1/focus",
+        "windows/0x1/geometry",
+    ] {
         for (auth, csrf, status) in [
             (true, true, StatusCode::UNAUTHORIZED),
             (false, false, StatusCode::FORBIDDEN),
@@ -896,4 +936,152 @@ async fn expired_session_is_not_accepted() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[test]
+fn held_inputs_are_tracked_and_released_at_the_end_of_a_request() {
+    let input: desktop_input::Input = serde_json::from_value(serde_json::json!({"actions":[
+        {"type":"key_down","keys":["w","Shift"]},
+        {"type":"button_down","x":10,"y":20,"button":"right"},
+        {"type":"move_relative","dx":15,"dy":-30},
+        {"type":"wait","milliseconds":1500},
+        {"type":"key_up","keys":["Shift"]}
+    ]}))
+    .unwrap();
+    let planned = desktop_input::plan(&input.actions, 800, 600, None).unwrap();
+    assert_eq!(planned.released_keys, vec!["w"]);
+    assert_eq!(planned.released_buttons, vec!["right"]);
+    assert_eq!(planned.pointer, Some((25, 0)));
+    assert_eq!(planned.delay_ms, 1500);
+    // The relative move keeps the right button pressed and clamps to the desktop edge.
+    assert_eq!(planned.steps[1].0, vec![5, 4, 0, 10, 0, 20]);
+    assert_eq!(planned.steps[2].0, vec![5, 4, 0, 25, 0, 0]);
+    assert_eq!(planned.steps.last().unwrap().0, vec![5, 0, 0, 25, 0, 0]);
+    assert!(!desktop_input::needs_start_position(&input.actions));
+    let relative: desktop_input::Input = serde_json::from_value(
+        serde_json::json!({"actions":[{"type":"move_relative","dx":1,"dy":1}]}),
+    )
+    .unwrap();
+    assert!(desktop_input::needs_start_position(&relative.actions));
+    assert!(desktop_input::plan(&relative.actions, 800, 600, None).is_err());
+    assert_eq!(
+        desktop_input::plan(&relative.actions, 800, 600, Some((799, 599)))
+            .unwrap()
+            .pointer,
+        Some((799, 599))
+    );
+    for body in [
+        serde_json::json!({"actions":[{"type":"hold_keys","keys":["w"],"milliseconds":10001}]}),
+        serde_json::json!({"actions":(0..4).map(|_| serde_json::json!({"type":"wait","milliseconds":10000})).collect::<Vec<_>>()}),
+        serde_json::json!({"actions":[{"type":"button_down","x":5}]}),
+        serde_json::json!({"actions":[{"type":"button_up"}]}),
+    ] {
+        let input: desktop_input::Input = serde_json::from_value(body).unwrap();
+        assert!(desktop_input::plan(&input.actions, 800, 600, None).is_err());
+    }
+}
+#[test]
+fn screenshot_options_and_jpeg_dimensions_are_validated() {
+    let ok = capture::Capture {
+        max_width: Some(640),
+        region: Some("10, 20,300,200".into()),
+        window_id: Some("0x3a00007".into()),
+    };
+    assert_eq!(ok.region().unwrap(), Some([10, 20, 300, 200]));
+    assert!(ok.validate().is_ok());
+    for bad in [
+        capture::Capture {
+            max_width: Some(8),
+            ..Default::default()
+        },
+        capture::Capture {
+            region: Some("0,0,0,10".into()),
+            ..Default::default()
+        },
+        capture::Capture {
+            region: Some("1,2,3".into()),
+            ..Default::default()
+        },
+        capture::Capture {
+            window_id: Some("0xzz".into()),
+            ..Default::default()
+        },
+        capture::Capture {
+            window_id: Some("0x123456789".into()),
+            ..Default::default()
+        },
+    ] {
+        assert!(bad.validate().is_err());
+    }
+    let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10];
+    jpeg.extend([0u8; 14]);
+    jpeg.extend([0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0xf0, 0x01, 0x40]);
+    assert_eq!(capture::jpeg_dimensions(&jpeg), Some((320, 240)));
+    assert_eq!(capture::jpeg_dimensions(&[0xff, 0xd8, 0xff, 0xd9]), None);
+    assert!(windows::window_id("42").is_ok());
+    assert!(windows::window_id("abc").is_err());
+}
+#[test]
+fn application_launch_requests_are_validated() {
+    let launch = |value: serde_json::Value| {
+        serde_json::from_value::<apps::Launch>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(
+        launch(serde_json::json!({"command":"glxgears","args":["-info"],"cwd":"/home/desktop/game","env":{"MY_VAR":"1"}}))
+            .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"command":""}),
+        serde_json::json!({"command":"app","cwd":"relative"}),
+        serde_json::json!({"command":"app","cwd":"/home/desktop/../root"}),
+        serde_json::json!({"command":"app","env":{"1BAD":"x"}}),
+        serde_json::json!({"command":"app","env":{"DISPLAY":":1"}}),
+        serde_json::json!({"command":"app","args":(0..101).map(|_| "x").collect::<Vec<_>>()}),
+    ] {
+        assert!(launch(bad).is_err());
+    }
+    assert!(
+        serde_json::from_value::<apps::Launch>(
+            serde_json::json!({"command":"app","unexpected":true})
+        )
+        .is_err()
+    );
+    assert!(
+        windows::Geometry {
+            x: Some(1),
+            ..Default::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        windows::Geometry {
+            width: Some(640),
+            height: Some(480),
+            ..Default::default()
+        }
+        .validate()
+        .is_ok()
+    );
+}
+#[tokio::test]
+async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.wsl_gpu = false;
+        config.cuda = false;
+    }
+    let mut spec = spec();
+    spec.gpu = true;
+    let error = app.create_environment("gpu-test", spec).await.unwrap_err();
+    assert!(error.to_string().contains("GPU"), "{error}");
+    assert!(
+        app.db
+            .list::<model::Environment>("environment")
+            .unwrap()
+            .is_empty()
+    );
 }

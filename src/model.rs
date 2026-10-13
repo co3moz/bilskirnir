@@ -177,6 +177,17 @@ pub struct ImageRecord {
     pub desktop: Option<crate::profiles::DesktopInfo>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Application {
+    pub id: String,
+    pub environment_id: String,
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub cwd: String,
+    pub gpu: bool,
+    pub created_at: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Job {
     pub id: String,
     pub kind: String,

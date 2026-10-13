@@ -17,7 +17,12 @@ use tokio::{
     net::TcpStream,
 };
 
-#[derive(Clone, Copy, Default, Deserialize, JsonSchema)]
+/// Longest single wait or key hold in one request.
+pub const MAX_WAIT_MS: u64 = 10_000;
+/// Combined waits, holds and gesture delays allowed in one request.
+pub const MAX_TOTAL_DELAY_MS: u64 = 30_000;
+
+#[derive(Clone, Copy, Default, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Button {
     #[default]
@@ -26,11 +31,19 @@ pub enum Button {
     Right,
 }
 impl Button {
+    const ALL: [Button; 3] = [Button::Left, Button::Middle, Button::Right];
     fn mask(self) -> u8 {
         match self {
             Self::Left => 1,
             Self::Middle => 2,
             Self::Right => 4,
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Middle => "middle",
+            Self::Right => "right",
         }
     }
 }
@@ -43,10 +56,20 @@ fn drag_duration() -> u64 {
 #[derive(Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
-    Move {
-        x: u16,
-        y: u16,
+    /// Move the pointer to absolute desktop coordinates.
+    Move { x: u16, y: u16 },
+    /// Move the pointer by an offset from its current position, clamped to the desktop. This is
+    /// emulated with absolute positions; applications that grab the pointer for raw motion may
+    /// not respond like they would to a physical mouse.
+    MoveRelative {
+        dx: i32,
+        dy: i32,
+        #[serde(default = "one")]
+        steps: u8,
+        #[serde(default)]
+        duration_ms: u64,
     },
+    /// Click up to three times at a position.
     Click {
         x: u16,
         y: u16,
@@ -55,6 +78,26 @@ pub enum Action {
         #[serde(default = "one")]
         count: u8,
     },
+    /// Press and hold a mouse button, optionally after moving to x,y. It stays held until
+    /// button_up, release_all or the end of the request.
+    ButtonDown {
+        #[serde(default)]
+        x: Option<u16>,
+        #[serde(default)]
+        y: Option<u16>,
+        #[serde(default)]
+        button: Button,
+    },
+    /// Release a held mouse button, optionally after moving to x,y.
+    ButtonUp {
+        #[serde(default)]
+        x: Option<u16>,
+        #[serde(default)]
+        y: Option<u16>,
+        #[serde(default)]
+        button: Button,
+    },
+    /// Press at the start point, move over duration_ms and release at the end point.
     Drag {
         from_x: u16,
         from_y: u16,
@@ -65,6 +108,7 @@ pub enum Action {
         #[serde(default = "drag_duration")]
         duration_ms: u64,
     },
+    /// Turn the mouse wheel at a position.
     Scroll {
         x: u16,
         y: u16,
@@ -72,15 +116,23 @@ pub enum Action {
         #[serde(default = "one")]
         steps: u8,
     },
-    KeyPress {
+    /// Press keys together, then release them in reverse order.
+    KeyPress { keys: Vec<String> },
+    /// Press keys and keep them held until key_up, release_all or the end of the request.
+    KeyDown { keys: Vec<String> },
+    /// Release keys held by key_down.
+    KeyUp { keys: Vec<String> },
+    /// Press keys together, keep them held for milliseconds, then release them.
+    HoldKeys {
         keys: Vec<String>,
-    },
-    TypeText {
-        text: String,
-    },
-    Wait {
         milliseconds: u64,
     },
+    /// Type text; a newline presses Enter and a tab presses Tab.
+    TypeText { text: String },
+    /// Pause before the next action.
+    Wait { milliseconds: u64 },
+    /// Release every key and mouse button still held by this request.
+    ReleaseAll,
 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -130,6 +182,10 @@ pub(crate) fn keysym(key: &str) -> anyhow::Result<u32> {
         "alt" => 0xffe9,
         "super" | "meta" | "win" => 0xffeb,
         "space" => 0x20,
+        "capslock" => 0xffe5,
+        "menu" => 0xff67,
+        "print" | "printscreen" => 0xff61,
+        "pause" => 0xff13,
         name if name.starts_with('f') => {
             let n: u32 = name[1..].parse().context("Unknown key name")?;
             if !(1..=12).contains(&n) {
@@ -152,23 +208,147 @@ fn key(down: bool, keysym: u32) -> Vec<u8> {
     bytes
 }
 type Plan = Vec<(Vec<u8>, u64)>;
-pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Plan> {
-    if input.actions.is_empty() || input.actions.len() > 100 {
-        bail!("Send 1–100 desktop actions");
-    }
-    let mut output = Vec::new();
-    let (mut delay, mut chars) = (0u64, 0usize);
-    let point = |x: u16, y: u16| -> anyhow::Result<()> {
-        if x >= width || y >= height {
-            bail!("Coordinates ({x}, {y}) are outside the {width}x{height} desktop");
+pub struct Planned {
+    pub steps: Plan,
+    pub released_keys: Vec<String>,
+    pub released_buttons: Vec<&'static str>,
+    pub pointer: Option<(u16, u16)>,
+    pub delay_ms: u64,
+}
+struct Planner {
+    width: u16,
+    height: u16,
+    steps: Plan,
+    delay: u64,
+    chars: usize,
+    pos: Option<(u16, u16)>,
+    mask: u8,
+    held: Vec<(String, u32)>,
+}
+impl Planner {
+    fn check(&self, x: u16, y: u16) -> anyhow::Result<()> {
+        if x >= self.width || y >= self.height {
+            bail!(
+                "Coordinates ({x}, {y}) are outside the {}x{} desktop",
+                self.width,
+                self.height
+            );
         }
         Ok(())
+    }
+    fn pointer(&mut self, mask: u8, x: u16, y: u16, delay: u64) {
+        self.steps.push((pointer(mask, x, y), delay));
+        self.pos = Some((x, y));
+        self.delay += delay;
+    }
+    fn position(&self, x: Option<u16>, y: Option<u16>) -> anyhow::Result<(u16, u16)> {
+        match (x, y) {
+            (Some(x), Some(y)) => {
+                self.check(x, y)?;
+                Ok((x, y))
+            }
+            (None, None) => self
+                .pos
+                .context("Provide x and y, or move the pointer earlier in the request"),
+            _ => bail!("Provide both x and y"),
+        }
+    }
+    fn keys(keys: &[String]) -> anyhow::Result<Vec<u32>> {
+        if keys.is_empty() || keys.len() > 8 {
+            bail!("A key action needs 1–8 keys");
+        }
+        let symbols = keys
+            .iter()
+            .map(|k| keysym(k))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let unique: std::collections::HashSet<_> = symbols.iter().collect();
+        if unique.len() != symbols.len() {
+            bail!("Do not repeat the same key in a chord");
+        }
+        Ok(symbols)
+    }
+    fn wait(&mut self, milliseconds: u64) -> anyhow::Result<()> {
+        if milliseconds > MAX_WAIT_MS {
+            bail!("A single wait or hold is limited to {MAX_WAIT_MS} milliseconds");
+        }
+        self.steps.push((Vec::new(), milliseconds));
+        self.delay += milliseconds;
+        Ok(())
+    }
+    fn release_all(&mut self) -> (Vec<String>, Vec<&'static str>) {
+        let mut bytes = Vec::new();
+        let mut keys = Vec::new();
+        for (name, symbol) in self.held.drain(..).rev() {
+            bytes.extend(key(false, symbol));
+            keys.push(name);
+        }
+        if !bytes.is_empty() {
+            self.steps.push((bytes, 0));
+        }
+        let mut buttons = Vec::new();
+        if self.mask != 0 {
+            buttons.extend(
+                Button::ALL
+                    .iter()
+                    .filter(|b| self.mask & b.mask() != 0)
+                    .map(|b| b.name()),
+            );
+            let (x, y) = self.pos.unwrap_or_default();
+            self.mask = 0;
+            self.pointer(0, x, y, 0);
+        }
+        (keys, buttons)
+    }
+}
+pub(crate) fn plan(
+    actions: &[Action],
+    width: u16,
+    height: u16,
+    start: Option<(u16, u16)>,
+) -> anyhow::Result<Planned> {
+    if actions.is_empty() || actions.len() > 100 {
+        bail!("Send 1–100 desktop actions");
+    }
+    let mut p = Planner {
+        width,
+        height,
+        steps: Vec::new(),
+        delay: 0,
+        chars: 0,
+        pos: start.filter(|(x, y)| *x < width && *y < height),
+        mask: 0,
+        held: Vec::new(),
     };
-    for action in &input.actions {
+    let (mut released_keys, mut released_buttons) = (Vec::new(), Vec::new());
+    for action in actions {
         match action {
             Action::Move { x, y } => {
-                point(*x, *y)?;
-                output.push((pointer(0, *x, *y), 0));
+                p.check(*x, *y)?;
+                p.pointer(p.mask, *x, *y, 0);
+            }
+            Action::MoveRelative {
+                dx,
+                dy,
+                steps,
+                duration_ms,
+            } => {
+                let (x0, y0) = p.pos.context(
+                    "Relative movement needs a known pointer position; move or click with coordinates first",
+                )?;
+                if !(1..=50).contains(steps) {
+                    bail!("Relative movement steps must be 1–50");
+                }
+                if *duration_ms > 2000 {
+                    bail!("Relative movement duration must be at most 2000 milliseconds");
+                }
+                let n = i64::from(*steps);
+                for step in 1..=n {
+                    let x = (i64::from(x0) + i64::from(*dx) * step / n)
+                        .clamp(0, i64::from(width) - 1) as u16;
+                    let y = (i64::from(y0) + i64::from(*dy) * step / n)
+                        .clamp(0, i64::from(height) - 1) as u16;
+                    p.pointer(p.mask, x, y, duration_ms / u64::from(*steps));
+                }
             }
             Action::Click {
                 x,
@@ -176,15 +356,24 @@ pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Pla
                 button,
                 count,
             } => {
-                point(*x, *y)?;
+                p.check(*x, *y)?;
                 if !(1..=3).contains(count) {
                     bail!("Click count must be 1–3");
                 }
                 for _ in 0..*count {
-                    output.push((pointer(button.mask(), *x, *y), 40));
-                    output.push((pointer(0, *x, *y), 80));
-                    delay += 120;
+                    p.pointer(p.mask | button.mask(), *x, *y, 40);
+                    p.pointer(p.mask, *x, *y, 80);
                 }
+            }
+            Action::ButtonDown { x, y, button } => {
+                let (x, y) = p.position(*x, *y)?;
+                p.mask |= button.mask();
+                p.pointer(p.mask, x, y, 0);
+            }
+            Action::ButtonUp { x, y, button } => {
+                let (x, y) = p.position(*x, *y)?;
+                p.mask &= !button.mask();
+                p.pointer(p.mask, x, y, 0);
             }
             Action::Drag {
                 from_x,
@@ -194,27 +383,25 @@ pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Pla
                 button,
                 duration_ms,
             } => {
-                point(*from_x, *from_y)?;
-                point(*to_x, *to_y)?;
+                p.check(*from_x, *from_y)?;
+                p.check(*to_x, *to_y)?;
                 if !(100..=2000).contains(duration_ms) {
                     bail!("Drag duration must be 100–2000 milliseconds");
                 }
-                output.push((pointer(button.mask(), *from_x, *from_y), 0));
+                let pressed = p.mask | button.mask();
+                p.pointer(pressed, *from_x, *from_y, 0);
                 for n in 1..=20 {
                     let interpolate = |a: u16, b: u16| {
                         (i32::from(a) + (i32::from(b) - i32::from(a)) * n / 20) as u16
                     };
-                    output.push((
-                        pointer(
-                            button.mask(),
-                            interpolate(*from_x, *to_x),
-                            interpolate(*from_y, *to_y),
-                        ),
+                    p.pointer(
+                        pressed,
+                        interpolate(*from_x, *to_x),
+                        interpolate(*from_y, *to_y),
                         duration_ms / 20,
-                    ));
+                    );
                 }
-                output.push((pointer(0, *to_x, *to_y), 0));
-                delay += duration_ms;
+                p.pointer(p.mask, *to_x, *to_y, 0);
             }
             Action::Scroll {
                 x,
@@ -222,34 +409,23 @@ pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Pla
                 direction,
                 steps,
             } => {
-                point(*x, *y)?;
+                p.check(*x, *y)?;
                 if !(1..=50).contains(steps) {
                     bail!("Scroll steps must be 1–50");
                 }
-                let mask = match direction {
+                let wheel = match direction {
                     Direction::Up => 8,
                     Direction::Down => 16,
                     Direction::Left => 32,
                     Direction::Right => 64,
                 };
                 for _ in 0..*steps {
-                    output.push((pointer(mask, *x, *y), 10));
-                    output.push((pointer(0, *x, *y), 10));
-                    delay += 20;
+                    p.pointer(p.mask | wheel, *x, *y, 10);
+                    p.pointer(p.mask, *x, *y, 10);
                 }
             }
             Action::KeyPress { keys } => {
-                if keys.is_empty() || keys.len() > 8 {
-                    bail!("A key press needs 1–8 keys");
-                }
-                let symbols = keys
-                    .iter()
-                    .map(|k| keysym(k))
-                    .collect::<anyhow::Result<Vec<_>>>()?;
-                let unique: std::collections::HashSet<_> = symbols.iter().collect();
-                if unique.len() != symbols.len() {
-                    bail!("Do not repeat the same key in a chord");
-                }
+                let symbols = Planner::keys(keys)?;
                 let mut bytes = Vec::new();
                 for symbol in &symbols {
                     bytes.extend(key(true, *symbol));
@@ -257,11 +433,49 @@ pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Pla
                 for symbol in symbols.iter().rev() {
                     bytes.extend(key(false, *symbol));
                 }
-                output.push((bytes, 0));
+                p.steps.push((bytes, 0));
+            }
+            Action::KeyDown { keys } => {
+                let symbols = Planner::keys(keys)?;
+                let mut bytes = Vec::new();
+                for (name, symbol) in keys.iter().zip(symbols) {
+                    if p.held.iter().any(|(_, held)| *held == symbol) {
+                        continue;
+                    }
+                    bytes.extend(key(true, symbol));
+                    p.held.push((name.clone(), symbol));
+                }
+                p.steps.push((bytes, 0));
+            }
+            Action::KeyUp { keys } => {
+                let symbols = Planner::keys(keys)?;
+                let mut bytes = Vec::new();
+                for symbol in symbols {
+                    bytes.extend(key(false, symbol));
+                    p.held.retain(|(_, held)| *held != symbol);
+                }
+                p.steps.push((bytes, 0));
+            }
+            Action::HoldKeys { keys, milliseconds } => {
+                if *milliseconds == 0 {
+                    bail!("Hold keys for at least 1 millisecond");
+                }
+                let symbols = Planner::keys(keys)?;
+                let mut down = Vec::new();
+                let mut up = Vec::new();
+                for symbol in &symbols {
+                    down.extend(key(true, *symbol));
+                }
+                for symbol in symbols.iter().rev() {
+                    up.extend(key(false, *symbol));
+                }
+                p.steps.push((down, 0));
+                p.wait(*milliseconds)?;
+                p.steps.push((up, 0));
             }
             Action::TypeText { text } => {
-                chars += text.chars().count();
-                if chars > 10000 {
+                p.chars += text.chars().count();
+                if p.chars > 10000 {
                     bail!("Type at most 10000 characters per request");
                 }
                 let mut bytes = Vec::new();
@@ -270,21 +484,59 @@ pub(crate) fn plan(input: &Input, width: u16, height: u16) -> anyhow::Result<Pla
                     bytes.extend(key(true, symbol));
                     bytes.extend(key(false, symbol));
                 }
-                output.push((bytes, 0));
+                p.steps.push((bytes, 0));
             }
-            Action::Wait { milliseconds } => {
-                if *milliseconds > 1000 {
-                    bail!("A wait action is limited to 1000 milliseconds");
-                }
-                output.push((Vec::new(), *milliseconds));
-                delay += milliseconds;
+            Action::Wait { milliseconds } => p.wait(*milliseconds)?,
+            Action::ReleaseAll => {
+                let (keys, buttons) = p.release_all();
+                released_keys.extend(keys);
+                released_buttons.extend(buttons);
             }
         }
-        if delay > 10000 {
-            bail!("Desktop actions may wait at most 10 seconds in total");
+        if p.delay > MAX_TOTAL_DELAY_MS {
+            bail!(
+                "Desktop actions may wait at most {} seconds in total",
+                MAX_TOTAL_DELAY_MS / 1000
+            );
         }
     }
-    Ok(output)
+    // Nothing stays pressed after the connection closes; report what the request left held.
+    let (keys, buttons) = p.release_all();
+    released_keys.extend(keys);
+    released_buttons.extend(buttons);
+    Ok(Planned {
+        steps: p.steps,
+        released_keys,
+        released_buttons,
+        pointer: p.pos,
+        delay_ms: p.delay,
+    })
+}
+/// True when the first positional action relies on the pointer's current location.
+pub(crate) fn needs_start_position(actions: &[Action]) -> bool {
+    for action in actions {
+        match action {
+            Action::Move { .. }
+            | Action::Click { .. }
+            | Action::Drag { .. }
+            | Action::Scroll { .. }
+            | Action::ButtonDown {
+                x: Some(_),
+                y: Some(_),
+                ..
+            }
+            | Action::ButtonUp {
+                x: Some(_),
+                y: Some(_),
+                ..
+            } => return false,
+            Action::MoveRelative { .. } | Action::ButtonDown { .. } | Action::ButtonUp { .. } => {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 async fn connect(address: &str) -> anyhow::Result<(TcpStream, u16, u16)> {
@@ -368,11 +620,45 @@ async fn fence(stream: &mut TcpStream) -> anyhow::Result<()> {
         }
     }
 }
-pub async fn input(
-    State(app): State<Arc<App>>,
-    Path(id): Path<String>,
-    Json(body): Json<Input>,
-) -> Result<Json<Value>> {
+async fn pointer_position(
+    app: &App,
+    env: &crate::model::Environment,
+) -> anyhow::Result<(u16, u16)> {
+    let info = app.owned(env).await?;
+    let output = app
+        .docker(&[
+            "exec",
+            "--user",
+            "desktop",
+            "--env",
+            "DISPLAY=:0",
+            info["Id"].as_str().context("Missing container ID")?,
+            "xdotool",
+            "getmouselocation",
+            "--shell",
+        ])
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Relative pointer actions need the current pointer position, which requires xdotool in the desktop image; move or click with coordinates first: {e:#}"
+            )
+        })?;
+    let text = String::from_utf8_lossy(&output);
+    let value = |prefix: &str| {
+        text.lines()
+            .find_map(|line| line.strip_prefix(prefix))
+            .and_then(|v| v.trim().parse::<i64>().ok())
+    };
+    match (value("X="), value("Y=")) {
+        (Some(x), Some(y)) => Ok((
+            x.clamp(0, i64::from(u16::MAX)) as u16,
+            y.clamp(0, i64::from(u16::MAX)) as u16,
+        )),
+        _ => bail!("Could not read the pointer position"),
+    }
+}
+/// Send actions through a shared VNC connection; used by the HTTP route, MCP and act-and-observe.
+pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Value> {
     let _permit = app.desktop_inputs.try_acquire().map_err(|_| {
         Error(
             StatusCode::TOO_MANY_REQUESTS,
@@ -381,18 +667,44 @@ pub async fn input(
     })?;
     let lock = app.resource_lock(&format!("environment:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(&id)?;
+    let env = app.environment(id)?;
     let address = app.address(&env).await?;
-    let result=tokio::time::timeout(Duration::from_secs(20),async {
-        let (mut stream,width,height)=connect(&address).await?;
-        let steps=plan(&body,width,height)?;
-        for (bytes,delay) in steps {
-            stream.write_all(&bytes).await?;
-            if delay>0 { tokio::time::sleep(Duration::from_millis(delay)).await; }
+    let start = if needs_start_position(actions) {
+        Some(pointer_position(app, &env).await?)
+    } else {
+        None
+    };
+    let result = tokio::time::timeout(Duration::from_millis(MAX_TOTAL_DELAY_MS + 15_000), async {
+        let (mut stream, width, height) = connect(&address).await?;
+        let planned = plan(actions, width, height, start)?;
+        for (bytes, delay) in &planned.steps {
+            if !bytes.is_empty() {
+                stream.write_all(bytes).await?;
+            }
+            if *delay > 0 {
+                tokio::time::sleep(Duration::from_millis(*delay)).await;
+            }
         }
         fence(&mut stream).await?;
         stream.shutdown().await?;
-        anyhow::Ok(json!({"environment_id":id,"applied_actions":body.actions.len(),"width":width,"height":height}))
-    }).await.context("VNC input timed out; inspect the desktop before retrying")??;
-    Ok(Json(result))
+        anyhow::Ok(json!({
+            "environment_id": id,
+            "applied_actions": actions.len(),
+            "width": width,
+            "height": height,
+            "pointer": planned.pointer.map(|(x, y)| json!({"x": x, "y": y})),
+            "released": {"keys": planned.released_keys, "buttons": planned.released_buttons},
+            "delay_ms": planned.delay_ms,
+        }))
+    })
+    .await
+    .context("VNC input timed out; inspect the desktop before retrying")??;
+    Ok(result)
+}
+pub async fn input(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<Input>,
+) -> Result<Json<Value>> {
+    Ok(Json(perform(&app, &id, &body.actions).await?))
 }

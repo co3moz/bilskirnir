@@ -44,8 +44,17 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/snapshot` | Save filesystem changes as an image; returns a job. |
 | GET | `/api/environments/{id}/logs` | Bounded container log output. |
 | GET | `/api/environments/{id}/diagnostics` | Desktop and graphics diagnostics. |
-| GET | `/api/environments/{id}/screenshot` | JPEG image bytes. |
+| GET | `/api/environments/{id}/screenshot` | JPEG at desktop resolution; accepts `max_width`, `region` and `window_id`. |
 | POST | `/api/environments/{id}/input` | Mouse/keyboard actions through VNC. |
+| POST | `/api/environments/{id}/act-and-observe` | Input actions followed by a screenshot, as JSON. |
+| GET | `/api/environments/{id}/applications` | Launched applications and their state. |
+| POST | `/api/environments/{id}/applications` | Launch an application in the background. |
+| GET | `/api/environments/{id}/applications/{application_id}` | One application's state, pid and exit status. |
+| GET | `/api/environments/{id}/applications/{application_id}/logs` | Tail of the application's log. |
+| POST | `/api/environments/{id}/applications/{application_id}/stop` | Stop the application. |
+| GET | `/api/environments/{id}/windows` | Visible X11 windows and the active window. |
+| POST | `/api/environments/{id}/windows/{window_id}/focus` | Raise and focus a window. |
+| POST | `/api/environments/{id}/windows/{window_id}/geometry` | Move or resize a window. |
 | POST | `/api/environments/{id}/files/read` | Read a bounded file slice as text or base64. |
 | POST | `/api/environments/{id}/files/write` | Write text or base64 file data atomically. |
 | POST | `/api/environments/{id}/files` | Stream a binary upload. |
@@ -105,7 +114,7 @@ POST to `/api/environments/{id}/exec`:
 }
 ```
 
-The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error. The response is a job, with output and exit failures in its log. Timeouts range from 1–3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the environment's network and resource limits apply. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
+The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1–3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the environment's network and resource limits apply. The script holds the environment's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
 
 ## Files
 
@@ -139,6 +148,12 @@ curl --cookie bilskirnir.cookies \
 
 Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB` and restricted to Downloads or a writable mounted volume. They return the saved path and byte count.
 
+## Screenshots
+
+`GET /api/environments/{id}/screenshot` returns a JPEG at the desktop's resolution, so its pixels match `/input` coordinates. `max_width` (16–7680) scales the image down, `region=x,y,width,height` crops in desktop pixels and `window_id` captures one window from the windows route. The response carries `X-Image-Width`, `X-Image-Height` and `X-Captured-At` (Unix milliseconds) headers. The dashboard requests `max_width=640` for previews.
+
+`POST /api/environments/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0–10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","jpeg_base64"}}`.
+
 ## Mouse and keyboard
 
 POST to `/api/environments/{id}/input` with an `actions` array:
@@ -154,22 +169,37 @@ POST to `/api/environments/{id}/input` with an `actions` array:
 }
 ```
 
-The response includes `applied_actions`, `width` and `height`. Coordinates use the remote desktop's pixels. Other actions are:
+The response includes `applied_actions`, `width`, `height`, the final `pointer` position, `delay_ms` and `released`, which lists keys and buttons the request left held and the manager released. Coordinates use the remote desktop's pixels. Other actions are:
 
 ```json
 [
   {"type":"move","x":100,"y":100},
   {"type":"drag","from_x":100,"from_y":100,"to_x":300,"to_y":200,"button":"left","duration_ms":300},
   {"type":"scroll","x":300,"y":200,"direction":"down","steps":3},
-  {"type":"wait","milliseconds":500}
+  {"type":"wait","milliseconds":500},
+  {"type":"move_relative","dx":40,"dy":-10,"steps":4,"duration_ms":200},
+  {"type":"button_down","x":100,"y":100,"button":"left"},
+  {"type":"button_up","button":"left"},
+  {"type":"key_down","keys":["w","Shift"]},
+  {"type":"key_up","keys":["Shift"]},
+  {"type":"hold_keys","keys":["space"],"milliseconds":250},
+  {"type":"release_all"}
 ]
 ```
 
-Put the actions you need in your request's `actions` array. Batches allow 1–100 actions and at most 10 seconds of combined delays. Input travels through a shared RFB connection with Fence acknowledgement; it does not disconnect the browser viewer. See the [MCP input guide](MCP.md#use-the-mouse-and-keyboard) for key names and limits.
+Put the actions you need in your request's `actions` array. Batches allow 1–100 actions, single waits or holds of at most 10 seconds and at most 30 seconds of combined delays. Keys and buttons held by `key_down` and `button_down` stay pressed for later actions in the same request and are released when the request ends. `move_relative` is emulated with absolute positions from the pointer location reported by the desktop. Input travels through a shared RFB connection with Fence acknowledgement; it does not disconnect the browser viewer. See the [MCP input guide](MCP.md#use-the-mouse-and-keyboard) for key names and limits.
+
+## Applications and windows
+
+POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"env":{"MY_SETTING":"1"},"name":"gears"}` to `/api/environments/{id}/applications`. The program runs in the background as the desktop user; `gpu` runs it through `gpu-run` and needs a GPU-enabled environment. The response includes `application_id`, `state`, `pid` and, once the program ends, `exit_code` or the terminating `signal`. States are `starting`, `running`, `exited`, `failed` and `unknown`.
+
+`GET .../applications/{application_id}/logs?tail_bytes=65536` returns the end of the combined stdout/stderr log, which keeps about the latest 1 MiB. `POST .../applications/{application_id}/stop` with an optional `{"grace_seconds":5}` body sends SIGTERM to the process group, then SIGKILL. Supervisor files live under `/tmp` in the desktop and disappear when it restarts, after which the state is `unknown`.
+
+`GET .../windows` lists visible windows with `window_id`, `title`, `pid`, `x`, `y`, `width`, `height` and `active`. `POST .../windows/{window_id}/focus` activates a window, and `POST .../windows/{window_id}/geometry` with `x`,`y` and/or `width`,`height` moves or resizes it and returns the resulting geometry. Window IDs are hexadecimal X11 IDs such as `0x3a00007`. The window routes, window screenshots and relative pointer movement need `xdotool` and `wmctrl` in the desktop image.
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers and desktop input allows four; operations on one environment still use its resource lock.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers and desktop input allows four; operations on one environment still use its resource lock, and a launched application does not hold it while it runs.
 
 MCP JSON responses have an explicit content length and are limited to 8 MiB. This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

@@ -29,10 +29,11 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
+| Background applications, windows and screenshots | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs` |
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |
-| Dashboard and desktop interface | `web/app.js`, `web/media.mjs`, `web/style.css`, `web/icons.mjs`, `web/mark.svg` |
+| Dashboard and desktop interface | `web/index.html`, `web/app.js`, `web/helpers.mjs`, `web/media.mjs`, `web/audio-worklet.js`, `web/style.css`, `web/icons.mjs`, `web/mark.svg` |
 | Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh` |
 | Builds, tests and publishing | `scripts/`, `tests/`, `.github/workflows/publish.yml` |
 
@@ -42,7 +43,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
 
-The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement.
+The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement; keys and buttons held within a request are released when it ends, and relative movement is emulated from the position reported by `xdotool`. Scripts run from an unlinked temporary file with stdin closed. Background applications are supervised by `app_runner.py` inside the desktop, which keeps a bounded log under `/tmp`; `app_control.py` reports, reads and stops them. Window tools use `xdotool` and `wmctrl`, and `desktop-screenshot` accepts a maximum width, a region and a window ID.
 
 Each environment has a private internal bridge to the manager. Browser desktop and media connections pass through the manager; VNC ports are not published on the host. A second bridge provides internet egress and is attached or detached by the environment's internet setting.
 
@@ -56,7 +57,7 @@ Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Des
 
 ## Add a desktop profile
 
-Add an entry to `desktop/profiles.json` with an ID, display name, image reference, session, `build_target` and `build_service`. Then add the matching Dockerfile stage, startup session and desktop metadata labels.
+Add an entry to `desktop/profiles.json` with an ID, display name, image reference, session, description, `build_target` and `build_service`; every field is required. Then add the matching Dockerfile stage, startup session and desktop metadata labels.
 
 Update Compose and the publishing workflow if the new profile needs its own build service or published image. Rebuild the manager so its catalog includes the profile. Keep image references aligned across the catalog, configuration defaults and installation files.
 

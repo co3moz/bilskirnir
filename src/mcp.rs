@@ -1,4 +1,4 @@
-use crate::{App, api, auth, desktop_input, error, exec, files, uploads};
+use crate::{App, api, apps, auth, capture, desktop_input, error, exec, files, uploads, windows};
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
@@ -15,6 +15,7 @@ use rmcp::{
         ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
         ToolAnnotations,
     },
+    schemars::JsonSchema,
     service::RequestContext,
     transport::{
         StreamableHttpServerConfig,
@@ -192,6 +193,18 @@ fn string(args: &Value, key: &str) -> error::Result<String> {
         .map(str::to_owned)
         .ok_or_else(|| error::Error(StatusCode::BAD_REQUEST, format!("{key} must be a string")))
 }
+fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
+    let mut summary = shot.summary();
+    if let Some(input) = input {
+        summary["input"] = input;
+    }
+    let mut result = CallToolResult::success(vec![ContentBlock::image(
+        STANDARD.encode(&shot.jpeg),
+        "image/jpeg",
+    )]);
+    result.structured_content = Some(summary);
+    result
+}
 fn structured(value: Value) -> CallToolResult {
     // Keep an object result for clients using the 2025 protocol versions.
     CallToolResult::structured(if value.is_object() {
@@ -259,14 +272,47 @@ impl BilskirnirMcp {
                     .0
             }
             "screenshot" => {
-                let response = api::screenshot(state, Path(id.unwrap())).await?;
-                let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024)
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                return Ok(CallToolResult::success(vec![ContentBlock::image(
-                    STANDARD.encode(bytes),
-                    "image/jpeg",
-                )]));
+                let options: capture::Capture = parse(args)?;
+                let shot = capture::capture(&self.app, &id.unwrap(), &options).await?;
+                return Ok(image(shot, None));
+            }
+            "act_and_observe" => {
+                let body: capture::Observe = parse(args)?;
+                let (input, shot) =
+                    capture::act_and_observe(&self.app, &id.unwrap(), &body).await?;
+                return Ok(image(shot, Some(input)));
+            }
+            "launch_application" => {
+                apps::launch_application(&self.app, &id.unwrap(), &parse(args)?).await?
+            }
+            "list_applications" => apps::list_applications(&self.app, &id.unwrap()).await?,
+            "get_application" => {
+                apps::get_application(&self.app, &id.unwrap(), &string(&args, "application_id")?)
+                    .await?
+            }
+            "application_logs" => {
+                let application = string(&args, "application_id")?;
+                args.as_object_mut().unwrap().remove("application_id");
+                let options: apps::Logs = parse(args)?;
+                apps::application_logs(&self.app, &id.unwrap(), &application, options.tail_bytes)
+                    .await?
+            }
+            "stop_application" => {
+                let application = string(&args, "application_id")?;
+                args.as_object_mut().unwrap().remove("application_id");
+                let options: apps::Stop = parse(args)?;
+                apps::stop_application(&self.app, &id.unwrap(), &application, options.grace_seconds)
+                    .await?
+            }
+            "list_windows" => windows::list_windows(&self.app, &id.unwrap()).await?,
+            "focus_window" => {
+                windows::focus_window(&self.app, &id.unwrap(), &string(&args, "window_id")?).await?
+            }
+            "set_window_geometry" => {
+                let window = string(&args, "window_id")?;
+                args.as_object_mut().unwrap().remove("window_id");
+                let geometry: windows::Geometry = parse(args)?;
+                windows::set_window_geometry(&self.app, &id.unwrap(), &window, &geometry).await?
             }
             "list_images" => api::images(state).await?.0,
             "import_image" => api::register_image(state, Json(parse(args)?)).await?.0,
@@ -331,6 +377,34 @@ fn tool(
         description,
         schema(properties, required).as_object().unwrap().clone(),
     );
+    tool.annotations = Some(
+        ToolAnnotations::new()
+            .read_only(read_only)
+            .destructive(destructive)
+            .idempotent(read_only)
+            .open_world(open_world),
+    );
+    tool
+}
+fn derived<T: JsonSchema>(
+    name: &'static str,
+    description: &'static str,
+    extra: &[(&str, Value, bool)],
+    read_only: bool,
+    destructive: bool,
+    open_world: bool,
+) -> Tool {
+    let mut schema = serde_json::to_value(rmcp::schemars::schema_for!(T)).unwrap();
+    if !schema["required"].is_array() {
+        schema["required"] = json!([]);
+    }
+    for (key, value, required) in extra {
+        schema["properties"][*key] = value.clone();
+        if *required {
+            schema["required"].as_array_mut().unwrap().push(json!(key));
+        }
+    }
+    let mut tool = Tool::new(name, description, schema.as_object().unwrap().clone());
     tool.annotations = Some(
         ToolAnnotations::new()
             .read_only(read_only)
@@ -472,21 +546,12 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "exec_environment",
-            "Run a bash script in a running desktop, with fail-on-error and a time limit. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; output and failure details are in get_job. Existing internet and resource limits apply.",
+            "Run a bash script in a running desktop with fail-on-error, a time limit and stdin closed. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; output and failure details are in get_job. The script holds the environment lock until it finishes, so start long-running graphical programs with launch_application instead.",
             json!({"environment_id":id,"script":{"type":"string","minLength":1,"maxLength":1000000},"root":{"type":"boolean","default":false},"timeout_seconds":{"type":"integer","minimum":1,"maximum":3500,"default":300}}),
             &["environment_id", "script"],
             false,
             true,
             true,
-        ),
-        tool(
-            "screenshot",
-            "Capture a running desktop and return a JPEG image content block.",
-            env(),
-            &["environment_id"],
-            true,
-            false,
-            false,
         ),
         tool(
             "list_images",
@@ -564,6 +629,45 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(tool("upload_file", "Upload at most 512 KiB of standard-base64 file data to Downloads or a writable mounted volume, as the desktop user. Existing files are preserved unless replace=true. Rejects symlink traversal.", json!({"environment_id":id,"destination":text,"name":text,"data_base64":{"type":"string","maxLength":699052},"replace":{"type":"boolean","default":false}}), &["environment_id","destination","name","data_base64"], false, true, false));
     tools.push(tool("read_file", "Read a regular file inside a running environment as the desktop user. Returns utf8 text or base64 data with byte offsets, size and eof for paging. Symlinks and special files are rejected; at most 512 KiB per call.", json!({"environment_id":id,"path":text,"encoding":{"type":"string","enum":["utf8","base64"],"default":"utf8"},"offset":{"type":"integer","minimum":0,"default":0},"limit":{"type":"integer","minimum":1,"maximum":524288,"default":65536}}), &["environment_id","path"], true, false, false));
     tools.push(tool("write_file", "Atomically write utf8 text or base64 binary data inside a running environment as UID/GID 1001:1001. Creates missing parent directories. Does not follow symlinks or grant root access. Existing files require replace=true; at most 512 KiB per call. New files have mode 0600.", json!({"environment_id":id,"path":text,"data":text,"encoding":{"type":"string","enum":["utf8","base64"],"default":"utf8"},"replace":{"type":"boolean","default":false}}), &["environment_id","path","data"], false, true, false));
+    let environment = ("environment_id", id.clone(), true);
+    tools.push(derived::<capture::Capture>("screenshot", "Capture a running desktop as a JPEG image block at full desktop resolution by default, so pixel coordinates match desktop_input. max_width scales the image down, region crops x,y,width,height and window_id captures one window. structuredContent reports width, height and captured_at.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(derived::<capture::Observe>("act_and_observe", "Send desktop_input actions, wait settle_ms, then capture a screenshot in one call. Returns the image; structuredContent holds the input result, width, height and captured_at.", std::slice::from_ref(&environment), false, true, true));
+    tools.push(derived::<apps::Launch>("launch_application", "Start a desktop application in the background and return an application_id; the environment stays available for input, screenshots and scripts. Output goes to a bounded log read with application_logs. Set gpu=true to run through gpu-run for hardware OpenGL.", std::slice::from_ref(&environment), false, true, true));
+    tools.push(tool("list_applications", "List applications launched in an environment with their current state, pid and exit status.", env(), &["environment_id"], true, false, false));
+    let application = json!({"type":"string","minLength":1,"description":"Application ID returned by launch_application."});
+    tools.push(tool(
+        "get_application",
+        "Read one launched application's state, pid, exit status and log size.",
+        json!({"environment_id": id, "application_id": application}),
+        &["environment_id", "application_id"],
+        true,
+        false,
+        false,
+    ));
+    tools.push(derived::<apps::Logs>(
+        "application_logs",
+        "Read the last tail_bytes of a launched application's combined stdout/stderr log.",
+        &[
+            environment.clone(),
+            ("application_id", application.clone(), true),
+        ],
+        true,
+        false,
+        false,
+    ));
+    tools.push(derived::<apps::Stop>("stop_application", "Stop a launched application: SIGTERM to its process group, then SIGKILL after grace_seconds. Returns the final state.", &[environment.clone(), ("application_id", application.clone(), true)], false, true, false));
+    tools.push(tool("list_windows", "List visible X11 windows with IDs, titles, PIDs, geometry and which one is active. Needs xdotool and wmctrl in the desktop image.", env(), &["environment_id"], true, false, false));
+    let window = json!({"type":"string","minLength":1,"description":"X11 window ID from list_windows, such as 0x3a00007."});
+    tools.push(tool(
+        "focus_window",
+        "Raise and focus a window so keyboard input reaches it.",
+        json!({"environment_id": id, "window_id": window}),
+        &["environment_id", "window_id"],
+        false,
+        true,
+        false,
+    ));
+    tools.push(derived::<windows::Geometry>("set_window_geometry", "Move and/or resize a window so screenshots and coordinates stay predictable. Returns the resulting geometry.", &[environment.clone(), ("window_id", window.clone(), true)], false, true, false));
     let mut input_schema =
         serde_json::to_value(rmcp::schemars::schema_for!(desktop_input::Input)).unwrap();
     input_schema["properties"]["environment_id"] = id;
@@ -573,7 +677,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         .push(json!("environment_id"));
     let mut input_tool = Tool::new(
         "desktop_input",
-        "Control a running desktop through its shared VNC session. Send move, click, drag, scroll, key_press, type_text or wait actions. Coordinates use desktop screenshot pixels. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
+        "Control a running desktop through its shared VNC session. Actions: move, move_relative, click, button_down, button_up, drag, scroll, key_press, key_down, key_up, hold_keys, type_text, wait and release_all. Coordinates are desktop pixels, matching a full-resolution screenshot. Keys and buttons held by key_down/button_down stay pressed for later actions in the same request and are released when the request ends. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
         input_schema.as_object().unwrap().clone(),
     );
     input_tool.annotations = Some(

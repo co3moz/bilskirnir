@@ -209,7 +209,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 27
+    assert len(mcp("tools/list")["tools"]) == 36
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -306,6 +306,45 @@ try:
     rejected = tool("desktop_input", {"environment_id":env_id,"actions":[{"type":"click","x":2000,"y":y}]}, allow_error=True)
     assert rejected["isError"]
     print("PASS MCP/HTTP shared VNC mouse, keyboard, drag, scroll, Fence acknowledgement and bounds", flush=True)
+    # Script stdin is closed: a command reading input cannot consume the rest of the script.
+    isolated = mcp_job(tool("exec_environment", {"environment_id":env_id,"script":"consumed=$(cat); echo \"stdin-bytes=${#consumed}\"\necho AFTER_STDIN\n"}))
+    assert "stdin-bytes=0" in isolated["log"] and "AFTER_STDIN" in isolated["log"], isolated["log"]
+    launched = tool("launch_application", {"environment_id":env_id,"command":"bash","args":["-c","echo APP_LOG_LINE; exec xlogo -title 'Bilskirnir app test' -geometry 200x150+600+300"],"name":"xlogo test"})["structuredContent"]
+    app_id = launched["application_id"]
+    assert launched["state"] in ("running","starting"), launched
+    running_app = wait_for(lambda: (s if (s := tool("get_application", {"environment_id":env_id,"application_id":app_id})["structuredContent"])["state"] == "running" else None))
+    assert running_app["pid"], running_app
+    window = wait_for(lambda: next((w for w in tool("list_windows", {"environment_id":env_id})["structuredContent"]["items"] if w["title"] == "Bilskirnir app test"), None))
+    tool("focus_window", {"environment_id":env_id,"window_id":window["window_id"]})
+    geometry = tool("set_window_geometry", {"environment_id":env_id,"window_id":window["window_id"],"x":100,"y":120,"width":320,"height":240})["structuredContent"]
+    assert geometry["width"] == 320 and geometry["height"] == 240, geometry
+    moved = wait_for(lambda: next((w for w in tool("list_windows", {"environment_id":env_id})["structuredContent"]["items"] if w["window_id"] == window["window_id"] and w["width"] == 320), None))
+    assert moved["active"], moved
+    full = tool("screenshot", {"environment_id":env_id})["structuredContent"]
+    assert full["width"] == 1280 and full["height"] == 720, full
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/environments/{env_id}/screenshot?max_width=640", headers={"X-Wsld-Request":"1"})
+    with client.open(request, timeout=60) as response:
+        assert response.headers["X-Image-Width"] == "640" and response.read().startswith(b"\xff\xd8")
+    region = tool("screenshot", {"environment_id":env_id,"region":"100,120,320,240","max_width":160})["structuredContent"]
+    assert region["width"] == 160 and region["height"] == 120, region
+    captured = tool("screenshot", {"environment_id":env_id,"window_id":window["window_id"]})["structuredContent"]
+    assert captured["width"] == 320 and captured["height"] == 240, captured
+    observed = tool("act_and_observe", {"environment_id":env_id,"actions":[{"type":"move","x":x,"y":y},{"type":"move_relative","dx":10,"dy":5},{"type":"hold_keys","keys":["w"],"milliseconds":300},{"type":"key_down","keys":["Shift"]}],"settle_ms":200,"capture":{"max_width":320}})
+    assert observed["content"][0]["type"] == "image" and observed["structuredContent"]["width"] == 320, observed["structuredContent"]
+    assert observed["structuredContent"]["input"]["released"]["keys"] == ["Shift"], observed["structuredContent"]
+    assert observed["structuredContent"]["input"]["pointer"] == {"x":x+10,"y":y+5}, observed["structuredContent"]
+    location = docker("exec","--user","desktop","--env","DISPLAY=:0",container,"xdotool","getmouselocation","--shell").decode()
+    assert f"X={x+10}\n" in location and f"Y={y+5}\n" in location, location
+    relative_only = api(f"environments/{env_id}/input", {"actions":[{"type":"move_relative","dx":-10,"dy":-5}]})
+    assert relative_only["pointer"] == {"x":x,"y":y}, relative_only
+    logs = tool("application_logs", {"environment_id":env_id,"application_id":app_id,"tail_bytes":4096})["structuredContent"]
+    assert "APP_LOG_LINE" in logs["log"], logs
+    stopped = tool("stop_application", {"environment_id":env_id,"application_id":app_id,"grace_seconds":3})["structuredContent"]
+    assert stopped["state"] == "exited" and stopped["signal"] == 15, stopped
+    assert any(a["application_id"] == app_id and a["state"] == "exited" for a in api(f"environments/{env_id}/applications")["items"])
+    missing_program = tool("launch_application", {"environment_id":env_id,"command":"/nonexistent/program"})["structuredContent"]
+    assert missing_program["state"] == "failed", missing_program
+    print("PASS application lifecycle, window management, sized screenshots, held keys and relative pointer", flush=True)
     payload = bytes(range(256)) * 5000
     uploaded = upload(env_id,"binary & notes.bin",payload)
     assert docker("exec",container,"cat",uploaded["path"]) == payload

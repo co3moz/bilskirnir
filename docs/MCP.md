@@ -56,7 +56,7 @@ MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, s
 2. Call `create_environment` with a name and an available image reference.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `environment_id`.
 4. Call `exec_environment` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
-5. Call `screenshot`, then `desktop_input` to use a graphical application. Take another screenshot to inspect the outcome.
+5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
 6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another environment.
 7. Delete an environment only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
 
@@ -64,20 +64,21 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 27 tools:
+The server currently exposes 36 tools:
 
 | Work | Tools |
 | --- | --- |
 | Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `build_profile` |
 | Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `environment_action`, `set_internet`, `retry_environment`, `delete_environment` |
-| Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `screenshot`, `desktop_input`, `environment_logs`, `environment_diagnostics` |
+| Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `screenshot`, `desktop_input`, `act_and_observe`, `environment_logs`, `environment_diagnostics` |
+| Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Reusable images | `list_images`, `import_image`, `build_image`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
 | Operation results | `list_jobs`, `get_job` |
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
 
-Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. `screenshot` returns a JPEG image content block. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
+Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. `screenshot` and `act_and_observe` return a JPEG image content block with the image size in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
 
 ## Run commands and install software
 
@@ -96,9 +97,9 @@ For example:
 
 The environment needs internet access for package downloads. Its CPU, memory and networking settings still apply. `root=true` is an administrator operation and does not depend on whether desktop-user sudo was enabled.
 
-Output goes to the job log. A nonzero exit or timeout fails the job and records the exit status. The default time limit is 300 seconds; the allowed range is 1–3500. The script may contain at most 1,000,000 bytes. Scripts are sent over stdin, so large scripts do not rely on Docker command-line argument limits.
+Output goes to the job log. A nonzero exit or timeout fails the job and records the exit status. The default time limit is 300 seconds; the allowed range is 1–3500. The script may contain at most 1,000,000 bytes. Scripts are copied into the desktop before they run, so large scripts do not rely on Docker command-line argument limits. The script's standard input is closed: a command that reads input receives end-of-file instead of consuming the rest of the script.
 
-Keep a graphical application's launch command from waiting on the application forever. Launch it in the background with redirected input/output if you want to interact through VNC after the script returns. Use `gpu-run` for applications that need hardware OpenGL.
+A script holds the environment's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
 
 ## Read and write files
 
@@ -110,9 +111,19 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 `upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination within Downloads or a writable mounted volume. Its MCP limit is 512 KiB; use the streaming HTTP upload endpoint for larger files. See [files in the HTTP API](API.md#files).
 
+## Launch and observe applications
+
+`launch_application` starts a program in the background as the desktop user and returns an `application_id`. It takes `command`, optional `args`, `cwd` (default `/home/desktop`), `env` and `name`. Set `gpu=true` to run the program through `gpu-run` for hardware OpenGL; this needs a GPU-enabled environment. The call returns after a short check, so a missing program or working directory is reported as `failed` immediately.
+
+`get_application` and `list_applications` report `state` (`starting`, `running`, `exited`, `failed` or `unknown`), the process ID, `exit_code` or the terminating `signal`, and the log size. `application_logs` returns the last `tail_bytes` of the combined stdout/stderr log, which keeps about the latest 1 MiB. `stop_application` sends SIGTERM to the application's process group and SIGKILL after `grace_seconds`.
+
+Supervisor files live under `/tmp` in the desktop, so they are not part of snapshots and do not survive a desktop restart; afterwards the state is `unknown`. Application records are removed with their environment. A launched application does not hold the environment lock, so scripts, file access and desktop input keep working while it runs.
+
+`list_windows` returns visible X11 windows with their IDs, titles, PIDs, geometry and the active window. `focus_window` raises a window so keyboard input reaches it, and `set_window_geometry` moves or resizes it so that screenshots and coordinates stay predictable. These tools, window screenshots and relative pointer movement use `xdotool` and `wmctrl` in the desktop image; desktops built from images that predate them need an updated image.
+
 ## Use the mouse and keyboard
 
-`desktop_input` sends actions through RFB, the VNC protocol, to the same desktop used by the browser. It opens a shared connection, so another viewer can stay connected. Coordinates are pixels in the desktop screenshot, not CSS pixels in a browser window.
+`desktop_input` sends actions through RFB, the VNC protocol, to the same desktop used by the browser. It opens a shared connection, so another viewer can stay connected. Coordinates are desktop pixels; they match a screenshot taken at full resolution, not a scaled or cropped image.
 
 ```json
 {
@@ -126,17 +137,23 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 }
 ```
 
-Supported actions are `move`, `click`, `drag`, `scroll`, `key_press`, `type_text` and `wait`. Clicks support left/middle/right buttons and up to three clicks. Drags have start/end coordinates and a duration of 100–2000 ms. Scroll accepts up/down/left/right and 1–50 steps.
+Supported actions are `move`, `move_relative`, `click`, `button_down`, `button_up`, `drag`, `scroll`, `key_press`, `key_down`, `key_up`, `hold_keys`, `type_text`, `wait` and `release_all`. Clicks support left/middle/right buttons and up to three clicks. Drags have start/end coordinates and a duration of 100–2000 ms. Scroll accepts up/down/left/right and 1–50 steps.
 
-Key chords press the supplied keys together, then release them in reverse order. Special names include Control, Alt, Shift, Super, Enter, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp, PageDown, arrows and F1–F12. Text supports Unicode; a newline presses Enter and a tab presses Tab.
+Key chords press the supplied keys together, then release them in reverse order; a chord has 1–8 distinct keys. Special names include Control, Alt, Shift, Super, Enter, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Space, arrows and F1–F12. Text supports Unicode; a newline presses Enter and a tab presses Tab.
 
-Requests allow 1–100 actions, up to 10,000 typed characters and at most 10 seconds of combined waits and gesture delays. A single wait is limited to 1000 ms. The whole action batch is validated against the connected desktop's dimensions before input is sent.
+`key_down` and `button_down` keep keys or buttons pressed for the following actions in the same request, so an agent can walk with W held while turning with the mouse, or drag with a held button. `hold_keys` presses keys for a given time. Everything still held is released when the request ends, and the response lists it under `released`; use `key_up`, `button_up` or `release_all` to release earlier. Held input does not carry over to the next request.
+
+`move_relative` moves the pointer by `dx`,`dy` from its current position, optionally over several `steps` and a `duration_ms`. The manager emulates it with absolute positions, starting from the pointer location reported by the desktop. Applications that grab the pointer and read raw motion, such as first-person cameras, may not respond like they would to a physical mouse; verify the application before relying on it.
+
+Requests allow 1–100 actions, up to 10,000 typed characters, single waits or holds of at most 10 seconds and at most 30 seconds of combined waits, holds and gesture delays. The whole action batch is validated against the connected desktop's dimensions before input is sent.
+
+`screenshot` captures the desktop at full resolution by default. `max_width` scales the image down, `region` crops `x,y,width,height` and `window_id` captures one window from `list_windows`. The result's `structuredContent` holds `width`, `height` and `captured_at`. `act_and_observe` sends actions, waits `settle_ms` (default 500) and returns the screenshot together with the input result, which is the shortest loop for driving an application.
 
 The bundled TigerVNC server acknowledges input with RFB Fence. This confirms that the server processed the events; an application may still need time to update. Inspect the next screenshot before making a decision. If a connection fails after input starts, check the screen before repeating an action that could submit, purchase or delete something. A custom desktop VNC server must support RFB 3.8, shared connections and Fence.
 
 ## Keep agent work recoverable
 
-MCP uses the same ownership checks, environment locks, jobs and snapshot behavior as the dashboard. An operation on another desktop can proceed independently. A script running in one environment holds that environment's operation lock until it finishes.
+MCP uses the same ownership checks, environment locks, jobs and snapshot behavior as the dashboard. An operation on another desktop can proceed independently. A script running in one environment holds that environment's operation lock until it finishes; a launched application does not.
 
 Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the environment, especially when the desktop is browsing external sites.
 

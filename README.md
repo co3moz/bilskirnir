@@ -16,7 +16,7 @@ The name is a nod to Thor.
 - Start new desktops from saved images and see how snapshots relate to their parents.
 - Turn an environment's internet connection on or off without closing its desktop.
 - Drag files onto a desktop or environment card to upload them to Downloads or a mounted volume.
-- Let an agent manage desktops through the built-in MCP server, including files, command execution and mouse/keyboard control.
+- Let an agent manage desktops through the built-in MCP server, including files, command execution, background applications, window control and mouse/keyboard input with screenshots.
 
 Bilskirnir currently serves one administrator on a local machine or LAN. The desktops are containers sharing the WSL kernel. The manager controls them through the host Docker socket; it does not run a nested Docker daemon.
 
@@ -24,7 +24,7 @@ Bilskirnir currently serves one administrator on a local machine or LAN. The des
 
 Run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
 
-The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"` and leave GPU disabled when creating a desktop.
+The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; the GPU option is then unavailable when creating a desktop.
 
 **The images are currently private.** Your GitHub account needs access to the packages. Sign in to GHCR with a classic personal access token that has `read:packages`:
 

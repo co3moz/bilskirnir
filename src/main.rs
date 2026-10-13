@@ -1,5 +1,7 @@
 mod api;
+mod apps;
 mod auth;
+mod capture;
 mod config;
 mod db;
 mod desktop_input;
@@ -14,6 +16,7 @@ mod model;
 mod process;
 mod profiles;
 mod uploads;
+mod windows;
 
 use axum::{
     Router,
@@ -63,6 +66,32 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/files/read", post(files::read))
         .route("/api/environments/{id}/files/write", post(files::write))
         .route("/api/environments/{id}/input", post(desktop_input::input))
+        .route("/api/environments/{id}/act-and-observe", post(capture::act))
+        .route(
+            "/api/environments/{id}/applications",
+            get(apps::list).post(apps::launch),
+        )
+        .route(
+            "/api/environments/{id}/applications/{application}",
+            get(apps::get),
+        )
+        .route(
+            "/api/environments/{id}/applications/{application}/logs",
+            get(apps::logs),
+        )
+        .route(
+            "/api/environments/{id}/applications/{application}/stop",
+            post(apps::stop),
+        )
+        .route("/api/environments/{id}/windows", get(windows::list))
+        .route(
+            "/api/environments/{id}/windows/{window}/focus",
+            post(windows::focus),
+        )
+        .route(
+            "/api/environments/{id}/windows/{window}/geometry",
+            post(windows::geometry),
+        )
         .route("/api/environments/{id}/logs", get(api::logs))
         .route("/api/environments/{id}/diagnostics", get(api::diagnostics))
         .route("/api/environments/{id}/screenshot", get(api::screenshot))

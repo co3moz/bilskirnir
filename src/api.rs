@@ -247,34 +247,30 @@ pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resul
         move |app, _| async move { app.retry_environment(&id).await },
     )
 }
-pub async fn screenshot(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Response> {
-    let _permit = app
-        .screenshots
-        .acquire()
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
-    let env = app.environment(&id)?;
-    let info = app.owned(&env).await?;
-    let bytes = app
-        .docker(&[
-            "exec",
-            "--user",
-            "desktop",
-            "--env",
-            "DISPLAY=:0",
-            info["Id"].as_str().context("Missing container ID")?,
-            "/usr/local/bin/desktop-screenshot",
-        ])
-        .await?;
-    if !bytes.starts_with(&[0xff, 0xd8]) {
-        return Err(anyhow::anyhow!("Screenshot not ready").into());
-    }
+pub async fn screenshot(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    axum::extract::Query(options): axum::extract::Query<crate::capture::Capture>,
+) -> Result<Response> {
+    let shot = crate::capture::capture(&app, &id, &options).await?;
     Ok((
         [
-            (header::CONTENT_TYPE, "image/jpeg"),
-            (header::CACHE_CONTROL, "no-store"),
+            (header::CONTENT_TYPE, "image/jpeg".to_string()),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+            (
+                header::HeaderName::from_static("x-image-width"),
+                shot.width.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-image-height"),
+                shot.height.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-captured-at"),
+                shot.captured_at.to_string(),
+            ),
         ],
-        bytes,
+        shot.jpeg,
     )
         .into_response())
 }

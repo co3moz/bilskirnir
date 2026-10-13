@@ -404,6 +404,11 @@ impl App {
                 &format!("Removed the environment's {role} network."),
             )?;
         }
+        for application in self.db.list::<Application>("application")? {
+            if application.environment_id == env.id {
+                self.db.remove("application", &application.id)?;
+            }
+        }
         self.db.remove("environment", &env.id)?;
         self.append_log(
             job_id,
