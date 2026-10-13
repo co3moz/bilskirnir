@@ -32,6 +32,16 @@ gpu-run /path/to/MyLinuxGame -force-glcore
 
 The Unity and game commands are launch examples, not confirmation that a particular application version works. Install your Linux application first and test its graphics requirements. Windows executables and Wine are not included.
 
+Chromium-based browsers need `gpu-run` plus flags of their own, because their GPU process picks its X visual and its OpenGL path without VirtualGL's help and runs in a sandbox that cannot reach the WSL GPU device:
+
+```bash
+gpu-run google-chrome --use-gl=angle --use-angle=gl --ignore-gpu-blocklist --disable-gpu-sandbox --no-sandbox
+```
+
+For command names of the Chromium family (`google-chrome`, `chromium`, `brave`, `microsoft-edge`, `vivaldi`, `opera`, `electron`), `gpu-run` sets `VGL_CHROMEHACK=1`, VirtualGL's documented workaround for the browser's visual selection; `about:gpu` then reports hardware acceleration for WebGL, WebGPU, canvas, compositing and video decode through `ANGLE (D3D12 (NVIDIA ...))`. Video encode stays in software, and Vulkan stays disabled because the image has no Vulkan driver for the WSL GPU. The flags are Chrome's own and are reported as unsupported in its warning bar; use a dedicated profile with `--user-data-dir` for testing.
+
+The workaround is not applied to other programs because it attaches the browser's 32-bit visual to every OpenGL configuration with an alpha channel, which would change the window visual of a game or Unity player that requests one. An Electron application with another name, or any program that needs it, gets it with `VGL_CHROMEHACK=1 gpu-run <command>`; `VGL_CHROMEHACK=0` turns it off for a browser.
+
 GPU-enabled startup checks the renderer and rejects software rendering. If a GPU desktop fails to start, open **Logs**: the renderer check is written to the container log before the desktop exits, and **Diagnostics** needs a running desktop. Use **Diagnostics** when the desktop runs but rendering does not work. Hardware OpenGL has been verified on NVIDIA RTX 4080; Unity itself, Vulkan and AMD/Intel graphics have not been verified.
 
 `WSL_GPU` enables WSL graphics support at installation level. `NVIDIA_COMPUTE` separately requests NVIDIA CUDA access. Turning CUDA off leaves WSL graphics available when `WSL_GPU=true`. `GPU_ADAPTER` selects a Mesa adapter by name, such as `NVIDIA`, `AMD`, `Intel` or part of its model name. Each environment still has its own GPU setting.
