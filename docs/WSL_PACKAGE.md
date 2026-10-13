@@ -20,7 +20,7 @@ Download `bilskirnir.wsl` from a release, then either double-click it or run:
 wsl --install --from-file .\bilskirnir.wsl
 ```
 
-Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for a Linux username and the Bilskirnir admin password, detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the images and brings up the manager; the dashboard is then at [localhost:8080](http://localhost:8080).
+Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for a Linux username and the Bilskirnir admin password, detects the WSL GPU device and CUDA libraries, generates a random agent token, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the images and brings up the manager; the dashboard is then at [localhost:8080](http://localhost:8080).
 
 The bundled PowerShell helper does the same from Windows and adds auto-start:
 
@@ -51,6 +51,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
+| `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
 The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env` and `deploy/Caddyfile`. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
@@ -58,6 +59,7 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group. The distribution is a single-purpose appliance for the Windows user who installed it.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise desktops run without GPU acceleration. Change these in `.env` if the detection is wrong.
+- Agent access is enabled: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` generated at first start. `bilskirnir mcp` prints the token and the [client settings](MCP.md); the token grants administrator access to every desktop, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation.
 - The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
 
 ## Build the package
