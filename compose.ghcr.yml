@@ -31,28 +31,9 @@ services:
       - manager-data:/data
     networks:
       - management
-    depends_on:
-      desktop:
-        condition: service_completed_successfully
-      desktop-gnome:
-        condition: service_completed_successfully
 
-  # One-shot services ensure both desktop images exist in the host Engine.
-  desktop:
-    image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-    entrypoint: ["/bin/true"]
-    restart: "no"
-    network_mode: none
-    healthcheck:
-      disable: true
-
-  desktop-gnome:
-    image: ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
-    entrypoint: ["/bin/true"]
-    restart: "no"
-    network_mode: none
-    healthcheck:
-      disable: true
+  # Desktop profile images are not services: the manager downloads each one
+  # the first time a desktop is created from it, and shows the progress.
 
   https:
     profiles: [https]

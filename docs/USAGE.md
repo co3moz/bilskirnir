@@ -18,7 +18,7 @@ Both profiles are Ubuntu 24.04. XFCE uses fewer resources and is a good starting
 
 The GNOME profile runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
 
-The standard installation prepares both images. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
+A profile's image is downloaded the first time you create a desktop or build an image from it. The job dialog shows the download's size and progress, and later desktops from that profile start without it. Under **Images**, **Download** on a profile card fetches it ahead of time and **Update** fetches its latest published release. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
 
 ## Running graphics applications
 
@@ -112,6 +112,6 @@ Sound and microphone must be enabled both for the installation and for the envir
 
 ## Read job results
 
-Longer operations appear under **Jobs**. Open a job to see its status and output; the dialog updates while work continues. Image builds show script output. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
+Longer operations appear under **Jobs**. Open a job to see its status and output; the dialog updates while work continues. Image builds show script output. Image downloads show a progress bar with the downloaded size, and the job list shows their percentage. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
 
 If environment creation failed partway through, **Retry setup** can complete missing setup without replacing an existing container. Agents can also reset an environment through the API, which recreates the container from its saved image while keeping named volumes. See [recovery](INSTALLATION.md#when-setup-is-interrupted) for what can and cannot be restored.

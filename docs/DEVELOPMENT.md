@@ -18,7 +18,7 @@ docker compose up -d --no-build manager
 
 This builds both desktop profiles and the manager. The manager is tagged `bilskirnir/manager:local`. Desktop builds use the GHCR references in the profile catalog, so local builds and registry installations agree on image names.
 
-When a supplied profile image is missing, its card under **Images** offers **Build image**. This builds the profile using the manager's bundled Docker context. Script builds and imported images are separate entries in the image library.
+When a supplied profile image is missing, its card under **Images** offers **Download**, which pulls the published image, and **Build**, which builds the profile using the manager's bundled Docker context. Creating a desktop or an image from a missing profile downloads it in that job. Pulls use the Engine API socket so the job can report byte progress; the socket follows `DOCKER_HOST`, and a daemon that is not on a Unix socket is pulled through `docker pull` without byte counts. Script builds and imported images are separate entries in the image library.
 
 ## Find the code
 
@@ -26,6 +26,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | --- | --- |
 | HTTP API, settings and authentication | `src/main.rs`, `src/api.rs`, `src/config.rs`, `src/auth.rs` |
 | Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
+| Profile downloads and their progress | `src/pulls.rs` |
 | Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |

@@ -80,6 +80,22 @@ pub async fn build_profile(
         },
     )
 }
+pub async fn pull_profile(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>> {
+    let profile = crate::profiles::catalog()
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(missing)?;
+    let resource = format!("profile:{}", profile.id);
+    launch(
+        app,
+        "profile-pull",
+        resource,
+        move |app, job_id| async move { app.pull_profile(&profile, &job_id).await },
+    )
+}
 pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
     match app.docker(&["info", "--format", "{{json .}}"]).await {
         Ok(data) => {
@@ -146,7 +162,7 @@ pub async fn create(
         app,
         "create",
         format!("environment:{id}"),
-        move |app, _| async move { app.create_environment(&id, spec).await },
+        move |app, job_id| async move { app.create_environment(&id, spec, &job_id).await },
     )
 }
 #[derive(Deserialize)]
@@ -388,6 +404,7 @@ pub async fn build(
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         move |app, id| async move {
+            app.ensure_profile_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
             if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");

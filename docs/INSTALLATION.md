@@ -106,6 +106,10 @@ docker compose up -d
 
 For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
+This updates the manager. Desktop profile images are not Compose services: the manager downloads a profile the first time a desktop is created from it. To get a newer release of a profile you already have, select **Update** on its card under **Images**, or run `docker pull` with the profile's image reference. In the [WSL package](WSL_PACKAGE.md), `bilskirnir update` does both.
+
+Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both profiles at every start. They keep working. To download profiles only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
+
 New environments use the updated profile images. Existing desktops and snapshots keep their saved image IDs; updating the manager does not reinstall their applications or replace their files. Keep the manager data volume when updating. To stay on a particular build, pin image references to a published version, `sha-<full-commit>` tag or digest.
 
 ## Know where your data lives

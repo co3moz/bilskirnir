@@ -17,6 +17,7 @@ mod media;
 mod model;
 mod process;
 mod profiles;
+mod pulls;
 mod recordings;
 mod terminal;
 mod uploads;
@@ -54,6 +55,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/settings", get(api::settings))
         .route("/api/profiles", get(api::profiles))
         .route("/api/profiles/{id}/build", post(api::build_profile))
+        .route("/api/profiles/{id}/pull", post(api::pull_profile))
         .route("/api/system", get(api::system))
         .route(
             "/api/environments",
@@ -201,6 +203,7 @@ async fn main() -> anyhow::Result<()> {
         if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
             job.finished_at = Some(model::now());
+            job.progress = None;
             job.log.push_str("\nService restarted. The Docker operation may have continued; check resources before retrying.\n");
             job.trim_log();
             db.put("job", &job.id, &job)?;

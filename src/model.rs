@@ -217,6 +217,9 @@ pub struct Job {
     pub finished_at: Option<u64>,
     pub log: String,
     pub result: Option<serde_json::Value>,
+    /// Measured progress of the running step, such as an image download.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<serde_json::Value>,
 }
 impl Job {
     pub fn trim_log(&mut self) {

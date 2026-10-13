@@ -72,14 +72,15 @@ echo
 echo "Agent access (MCP) is enabled with a random token; 'bilskirnir mcp' shows it with client settings."
 echo
 echo "Next steps:"
-echo "  bilskirnir start    download the images and start the manager"
+echo "  bilskirnir start    download and start the manager"
 echo "  bilskirnir doctor   check Docker, GPU and network"
 echo "  bilskirnir mcp      show the agent endpoint, token and client configuration"
 echo
-# Only an interactive first start offers to download the images right away.
+# Only an interactive first start offers to download the manager right away.
 start=n
 if [[ -t 0 ]]; then
-    read -rp "Start Bilskirnir now? This downloads about 3 GB of images. [Y/n] " start || true
+    echo "Desktop images download when you first create a desktop from them."
+    read -rp "Start Bilskirnir now? This downloads the manager image. [Y/n] " start || true
     start=${start:-y}
 fi
 if [[ $start =~ ^[Yy]$ ]]; then

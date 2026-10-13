@@ -99,7 +99,12 @@ impl App {
             .get("environment", id)
             .map_err(crate::error::Error::from)
     }
-    pub async fn create_environment(&self, id: &str, spec: EnvironmentSpec) -> Result<Value> {
+    pub async fn create_environment(
+        &self,
+        id: &str,
+        spec: EnvironmentSpec,
+        job_id: &str,
+    ) -> Result<Value> {
         spec.validate()?;
         if spec.audio && !self.config.audio {
             bail!("Audio is disabled for this installation");
@@ -121,6 +126,13 @@ impl App {
         if manager_info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
+        // Cheap checks come before a profile download that can take minutes.
+        for m in &spec.mounts {
+            self.inspect("volume", &m.volume)
+                .await
+                .context("Volume not found")?;
+        }
+        self.ensure_profile_image(&spec.image, job_id).await?;
         let image = self
             .inspect("image", &spec.image)
             .await
@@ -136,11 +148,6 @@ impl App {
                     );
                 }
             }
-        }
-        for m in &spec.mounts {
-            self.inspect("volume", &m.volume)
-                .await
-                .context("Volume not found")?;
         }
         let env = Environment {
             id: id.into(),
@@ -504,6 +511,12 @@ impl App {
         job.log.push_str(line);
         job.log.push('\n');
         job.trim_log();
+        self.db.put("job", id, &job)
+    }
+    /// Replace the job's measured progress; `None` once the measured step is over.
+    pub fn set_progress(&self, id: &str, progress: Option<Value>) -> Result<()> {
+        let mut job: Job = self.db.get("job", id)?;
+        job.progress = progress;
         self.db.put("job", id, &job)
     }
     pub async fn docker_logged(&self, id: &str, args: &[String]) -> Result<()> {

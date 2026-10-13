@@ -41,6 +41,7 @@ where
         finished_at: None,
         log: String::new(),
         result: None,
+        progress: None,
     };
     app.db.put("job", &id, &job)?;
     let lock = app.resource_lock(&resource);
@@ -72,6 +73,7 @@ where
         }
         job = app.db.get("job", &task_id).unwrap_or(job);
         job.finished_at = Some(now());
+        job.progress = None;
         match result {
             Ok(value) => {
                 job.status = "completed".into();

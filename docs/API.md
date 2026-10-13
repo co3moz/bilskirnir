@@ -31,7 +31,8 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials. |
 | GET | `/api/system` | Docker connection and host summary. |
-| GET | `/api/profiles` | Desktop profile catalog and image availability. |
+| GET | `/api/profiles` | Desktop profile catalog and whether each image is downloaded. |
+| POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; returns a job. |
 | POST | `/api/profiles/{profile_id}/build` | Build a supplied profile; returns a job. |
 | GET | `/api/environments` | Managed environments, state and health. |
 | POST | `/api/environments` | Create an environment; returns a job. |
@@ -108,6 +109,8 @@ curl --cookie bilskirnir.cookies http://localhost:8080/api/jobs/JOB_ID
 ```
 
 A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `environment_id` in `result`. Read the log for a failed job; after interruption, inspect the resources before retrying.
+
+Creating a desktop or building an image from a supplied profile that is not downloaded yet pulls it first, in the same job. While the download runs, the job carries `progress`: `current` and `total` compressed bytes, where `total` is `null` until the size of every remaining layer is known, and `layers_done` of `layers`. Layers already on the host count as done and are not part of the byte total. The field is removed when the download ends. A download that fails is tried up to three times in the same job, unless Docker refused it, such as for an unknown image.
 
 Creation accepts `name`, `image` and these optional fields:
 

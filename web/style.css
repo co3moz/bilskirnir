@@ -204,6 +204,8 @@ input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(-
 .code-input, .log-output { font-family: var(--font-mono); font-size: 12px; }
 .log-output { padding: 18px; border: 1px solid #354a65; border-radius: 4px; background: #070e18; color: #c9def2; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; line-height: 1.7; }
 #job-status { margin-bottom: 14px; }
+#job-progress:not(:empty) { margin-bottom: 14px; }
+#job-progress .hint { margin-top: 6px; }
 #job-result { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 #toasts { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 2000; max-width: calc(100vw - 40px); }
 .toast { border: 1px solid #5d87a5; border-left: 3px solid var(--accent); border-radius: var(--radius); background: #192c40; color: #e0effc; padding: 14px 20px; box-shadow: 0 8px 30px #0007; max-width: 500px; font-size: 12px; line-height: 1.6; }
@@ -294,8 +296,8 @@ input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(-
 .upload-item strong { font-size: 12px; font-weight: 500; }
 .upload-item small { color: var(--muted); font-size: 11px; margin: 5px 0 10px; }
 .upload-item code { display: block; margin-top: 8px; color: var(--accent); }
-.upload-item progress { display: block; width: 100%; height: 5px; accent-color: var(--accent); border: none; }
-.upload-item progress::-webkit-progress-bar { background: var(--line); border-radius: 3px; }
-.upload-item progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+.upload-item progress, #job-progress progress { display: block; width: 100%; height: 5px; accent-color: var(--accent); border: none; }
+.upload-item progress::-webkit-progress-bar, #job-progress progress::-webkit-progress-bar { background: var(--line); border-radius: 3px; }
+.upload-item progress::-webkit-progress-value, #job-progress progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
 [hidden] { display: none !important; }
 @media (prefers-reduced-transparency: reduce) { dialog::backdrop { backdrop-filter: none; background: #030711f5; } }

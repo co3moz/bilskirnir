@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, imageTree, imageChoices, jobLogText } from '../web/helpers.mjs';
+import { escapeHtml, imageTree, imageChoices, jobLogText, downloadProgress } from '../web/helpers.mjs';
 test('completed legacy deletion explains the result rather than waiting or displaying an ID', () => {
   const log = jobLogText({status:'completed',log:'',result:{deleted:'old-environment-id',volumes_preserved:true}});
   assert.equal(log,'Environment deleted. Named volumes were preserved.');
@@ -31,12 +31,24 @@ test('missing parents, duplicate image IDs and cycles remain visible', () => {
 test('profile choices distinguish GNOME, XFCE and unavailable images', () => {
   const profiles = [
     {profile:{reference:'xfce:24.04',name:'Ubuntu · Lightweight XFCE'},available:true},
-    {profile:{reference:'gnome:24.04',name:'Ubuntu · GNOME'},available:false},
+    {profile:{reference:'gnome:24.04',name:'Ubuntu · GNOME'},available:false,image_id:null},
+    {profile:{reference:'other:24.04',name:'Ubuntu · Other'},available:false,image_id:'sha256:wrong',error:'Image labels do not match the profile'},
   ];
   const choices = imageChoices(profiles, [{image_id:'sha256:custom',name:'My game',desktop:{title:'Ubuntu · GNOME'}}], 'xfce:24.04');
-  assert.equal(choices.length,3);
-  assert.equal(choices[1].disabled,true);
-  assert.equal(choices[2].label,'My game — Ubuntu · GNOME');
+  assert.equal(choices.length,4);
+  // A profile that is not downloaded stays selectable: creating from it downloads the image first.
+  assert.deepEqual([choices[1].disabled, choices[1].label], [false, 'Ubuntu · GNOME · downloads first']);
+  assert.deepEqual([choices[2].disabled, choices[2].label], [true, 'Ubuntu · Other']);
+  assert.equal(choices[3].label,'My game — Ubuntu · GNOME');
   assert.ok(imageChoices([],[],'wsl-desktop/ubuntu:24.04')[0].label.includes('Lightweight XFCE'));
 });
-
+test('download progress reads as bytes once the size is known and never claims a size it lacks', () => {
+  assert.equal(downloadProgress(null), null);
+  assert.deepEqual(downloadProgress({current:0,total:0,layers:0,layers_done:0}), {text:'Preparing download…'});
+  // Until every remaining layer reports its size there is no honest bar, only the count so far.
+  assert.deepEqual(downloadProgress({current:3 * 1024 ** 2,total:null,layers:4,layers_done:1}), {text:'3.0 MiB downloaded · 1 of 4 layers'});
+  assert.deepEqual(downloadProgress({current:0,total:0,layers:2,layers_done:2}), {text:'Checking layers · 2 of 2 layers'});
+  const running = downloadProgress({current:1024 ** 3,total:4 * 1024 ** 3,layers:4,layers_done:1});
+  assert.deepEqual(running, {value:1024 ** 3,max:4 * 1024 ** 3,percent:25,text:'1.0 GiB of 4.0 GiB · 1 of 4 layers'});
+  assert.equal(downloadProgress({current:10,total:10,layers:4,layers_done:3}).text, 'Extracting · 3 of 4 layers');
+});

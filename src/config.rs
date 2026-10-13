@@ -7,6 +7,8 @@ pub struct Config {
     pub data: PathBuf,
     pub web: PathBuf,
     pub docker_bin: String,
+    /// The Engine API socket for pulls with byte progress; without one, pulls use the CLI.
+    pub docker_socket: Option<PathBuf>,
     pub manager: Option<String>,
     pub base_image: String,
     pub desktop_context: PathBuf,
@@ -76,6 +78,7 @@ impl Config {
                 .unwrap_or_else(|_| "web/dist".into())
                 .into(),
             docker_bin: env::var("DOCKER_BIN").unwrap_or_else(|_| "docker".into()),
+            docker_socket: docker_socket(env::var("DOCKER_HOST").ok().as_deref()),
             manager: env::var("MANAGER_CONTAINER").ok().filter(|s| !s.is_empty()),
             base_image: env::var("DESKTOP_IMAGE")
                 .unwrap_or_else(|_| crate::profiles::DEFAULT_IMAGE.into()),
@@ -106,6 +109,14 @@ impl Config {
             bail!("ADMIN_USERNAME must not be empty and must be at most 256 bytes");
         }
         Ok(cfg)
+    }
+}
+
+/// The socket must reach the daemon the CLI talks to, so it follows the CLI's own `DOCKER_HOST`.
+pub(crate) fn docker_socket(host: Option<&str>) -> Option<PathBuf> {
+    match host.filter(|host| !host.is_empty()) {
+        None => Some("/var/run/docker.sock".into()),
+        Some(host) => host.strip_prefix("unix://").map(PathBuf::from),
     }
 }
 

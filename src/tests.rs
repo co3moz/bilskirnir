@@ -12,6 +12,7 @@ fn app(auth: bool) -> Arc<App> {
             data: "data".into(),
             web: "web/dist".into(),
             docker_bin: "definitely-not-a-docker-command".into(),
+            docker_socket: None,
             manager: None,
             base_image: "wsl-desktop/ubuntu:24.04".into(),
             desktop_context: "desktop".into(),
@@ -181,7 +182,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 58);
+    assert_eq!(tools.len(), 59);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -228,6 +229,11 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         );
     }
     assert!(guide.contains("`download_url`"));
+    // The count went stale once already; it is stated in the guide, so it is checked from here.
+    assert!(
+        guide.contains(&format!("exposes {} tools", tools.len())),
+        "docs/MCP.md must state the tool count"
+    );
     assert_eq!(
         screenshot["inputSchema"]["required"],
         serde_json::json!(["environment_id"])
@@ -781,6 +787,7 @@ fn job_list_is_bounded_and_strips_logs_before_deserialization() {
             finished_at: Some(2),
             log: "x".repeat(262144),
             result: None,
+            progress: Some(serde_json::json!({"current": 1})),
         };
         app.db.put("job", &id, &j).unwrap();
     }
@@ -788,6 +795,8 @@ fn job_list_is_bounded_and_strips_logs_before_deserialization() {
     assert_eq!(jobs.len(), 100);
     assert_eq!(jobs[0].id, "119");
     assert!(jobs.iter().all(|j| j.log.is_empty()));
+    // Progress is small and is what the job list shows for a running download.
+    assert!(jobs.iter().all(|j| j.progress.is_some()));
 }
 
 #[test]
@@ -831,19 +840,22 @@ fn old_environment_records_remain_readable_without_profile_metadata() {
 #[tokio::test]
 async fn unknown_profile_build_is_rejected_without_queuing_docker_work() {
     let app = app(false);
-    let response = router(app.clone())
-        .oneshot(
-            Request::builder()
-                .header("host", "localhost:8080")
-                .method("POST")
-                .uri("/api/profiles/not-a-profile/build")
-                .header("x-wsld-request", "1")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    // Only catalog profiles are built or pulled; a free-form reference never reaches a registry.
+    for action in ["build", "pull"] {
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .header("host", "localhost:8080")
+                    .method("POST")
+                    .uri(format!("/api/profiles/not-a-profile/{action}"))
+                    .header("x-wsld-request", "1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{action}");
+    }
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
 #[test]
@@ -1132,7 +1144,10 @@ async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
     }
     let mut spec = spec();
     spec.gpu = true;
-    let error = app.create_environment("gpu-test", spec).await.unwrap_err();
+    let error = app
+        .create_environment("gpu-test", spec, "gpu-job")
+        .await
+        .unwrap_err();
     assert!(error.to_string().contains("GPU"), "{error}");
     assert!(
         app.db
