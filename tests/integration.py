@@ -210,7 +210,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 57
+    assert len(mcp("tools/list")["tools"]) == 58
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -277,6 +277,16 @@ try:
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
     image = stdio_tool("screenshot", {"environment_id":env_id})["content"][0]
     assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")
+    saved = tool("save_screenshot", {"environment_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg","capture":{"max_width":320}})["structuredContent"]
+    assert saved["path"] == "/home/desktop/Downloads/agent-shot.jpg" and saved["bytes"] > 0 and saved["width"] == 320
+    assert saved["download_url"] == f"/api/environments/{env_id}/files/download?path=/home/desktop/Downloads/agent-shot.jpg"
+    assert docker("exec",container,"cat",saved["path"]).startswith(b"\xff\xd8")
+    assert tool("save_screenshot", {"environment_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg"}, allow_error=True)["isError"]
+    assert tool("save_screenshot", {"environment_id":env_id,"path":"/home/desktop/agent-shot.jpg"}, allow_error=True)["isError"]
+    assert api(f"environments/{env_id}/screenshots", {"path":"/home/desktop/Downloads/agent-shot.jpg","replace":True,"capture":{"max_width":160}})["width"] == 160
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{saved['download_url']}", headers={"X-Wsld-Request":"1"})
+    with client.open(request, timeout=60) as response:
+        assert response.headers["Content-Type"] == "image/jpeg" and response.read().startswith(b"\xff\xd8")
     assert tool("read_file", {"environment_id":env_id,"path":"/home/desktop/../etc/passwd"}, allow_error=True)["isError"]
     docker("exec", "--user", "desktop", container, "ln", "-s", "/home/desktop/agent-files", "/home/desktop/agent-link")
     assert tool("write_file", {"environment_id":env_id,"path":"/home/desktop/agent-link/blocked.txt","data":"blocked"}, allow_error=True)["isError"]
@@ -380,6 +390,7 @@ try:
     assert finished["video"]["codec"] == "MJPEG" and finished["video"]["bytes"] > 0, finished
     assert f"recordings/{recording['recording_id']}/recording.avi" in listing, listing
     downloaded = tool("download_file", {"environment_id":env_id,"path":exported["path"]})["structuredContent"]
+    assert downloaded["download_url"] == exported["download_url"] == f"/api/environments/{env_id}/files/download?path={exported['path']}"
     assert downloaded["bytes"] == exported["bytes"] and downloaded["mime_type"] == "application/gzip", downloaded["bytes"]
     assert base64.b64decode(downloaded["data_base64"])[:2] == b"\x1f\x8b"
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/environments/{env_id}/files/download?" + urllib.parse.urlencode({"path":exported["path"]}))

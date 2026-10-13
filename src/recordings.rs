@@ -299,7 +299,10 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
             message,
         ));
     }
-    let value: Value = serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e))?;
+    let mut value: Value =
+        serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e))?;
+    let path = value["path"].as_str().unwrap_or_default().to_owned();
+    value["download_url"] = json!(crate::files::download_url(id, &path));
     Ok(value)
 }
 fn apps_root() -> &'static str {

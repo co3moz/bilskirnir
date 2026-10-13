@@ -2,10 +2,12 @@ use crate::{
     App,
     desktop_input::{self, Action},
     error::{Error, Result},
+    files, uploads,
 };
 use anyhow::{Context, bail};
 use axum::{
     Json,
+    body::Body,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -150,6 +152,71 @@ pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screensho
         height,
         captured_at: now_ms(),
     })
+}
+/// A screenshot saved inside the desktop, so the user can collect it through the dashboard.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SaveCapture {
+    /// Absolute file path in Downloads or a writable mounted volume, written as the desktop user.
+    pub path: String,
+    /// Replace an existing file at path.
+    #[serde(default)]
+    pub replace: bool,
+    #[serde(default)]
+    pub capture: Capture,
+}
+impl SaveCapture {
+    /// Split path into the directory and file name that the upload destination rules check.
+    pub fn target(&self) -> anyhow::Result<(String, String)> {
+        let target = self
+            .path
+            .strip_prefix('/')
+            .and_then(|_| self.path.rsplit_once('/'))
+            .filter(|(directory, name)| !directory.is_empty() && !name.is_empty());
+        let Some((directory, name)) = target else {
+            bail!("path must be an absolute file path in Downloads or a writable mounted volume");
+        };
+        Ok((directory.to_owned(), name.to_owned()))
+    }
+}
+/// Capture a screenshot and store it inside the desktop under the upload destination rules.
+/// The result describes the file by its path, size and dashboard download_url, so an agent can
+/// hand the image to a person without relaying it through the conversation or the host.
+pub async fn save_screenshot(app: &Arc<App>, id: &str, body: &SaveCapture) -> Result<Value> {
+    let (destination, name) = body.target()?;
+    let shot = capture(app, id, &body.capture).await?;
+    let request = uploads::Upload {
+        destination,
+        name,
+        size: shot.jpeg.len() as u64,
+        replace: body.replace,
+    };
+    let saved = uploads::save_file(
+        app,
+        id.to_owned(),
+        request,
+        Body::from(shot.jpeg),
+        std::future::pending(),
+    )
+    .await?
+    .0;
+    let path = saved["path"].as_str().unwrap_or_default().to_owned();
+    let download_url = files::download_url(id, &path);
+    Ok(json!({
+        "path": path,
+        "bytes": saved["bytes"],
+        "width": shot.width,
+        "height": shot.height,
+        "captured_at": shot.captured_at,
+        "download_url": download_url,
+    }))
+}
+pub async fn save(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<SaveCapture>,
+) -> Result<Json<Value>> {
+    Ok(Json(save_screenshot(&app, &id, &body).await?))
 }
 /// Desktop input followed by a screenshot of the result.
 #[derive(Deserialize, JsonSchema)]

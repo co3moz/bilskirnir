@@ -337,6 +337,20 @@ pub async fn delete(
 }
 
 const DOWNLOAD: &str = include_str!("download_file.py");
+/// Root-relative dashboard URL that streams a desktop file, for handing a file to the user.
+/// It is served from the same address as the dashboard and the MCP endpoint, so it is valid
+/// wherever the manager is reachable, and it needs a dashboard sign-in in the browser.
+pub fn download_url(id: &str, path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    format!("/api/environments/{id}/files/download?path={encoded}")
+}
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Download {
@@ -440,6 +454,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
         "name": name,
         "bytes": output.stdout.len(),
         "mime_type": mime_type(name),
+        "download_url": download_url(id, &body.path),
         "data_base64": STANDARD.encode(&output.stdout),
     }))
 }
