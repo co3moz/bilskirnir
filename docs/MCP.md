@@ -53,22 +53,22 @@ MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, s
 ## A useful first workflow
 
 1. Call `get_settings` and `list_profiles` to see the available desktops and defaults.
-2. Call `create_environment` with a name and an available image reference.
+2. Call `create_environment` with a name and a profile image reference or saved image ID. A profile that is not downloaded yet is pulled first, which can take several minutes; `pull_profile` fetches it ahead of time.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `environment_id`.
 4. Call `exec_environment` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
 6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another environment.
 7. Delete an environment only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
 
-An accepted job is not a completed operation. `get_job` reports `queued`, `running`, `completed`, `failed` or `interrupted`, with the log and result. Inspect a failed or interrupted job before trying again. A lost connection does not mean a queued operation was cancelled.
+An accepted job is not a completed operation. `get_job` reports `queued`, `running`, `completed`, `failed` or `interrupted`, with the log and result. While an image downloads, it also reports `progress` with `current` and `total` bytes and `layers_done` of `layers`. Inspect a failed or interrupted job before trying again. A lost connection does not mean a queued operation was cancelled.
 
 ## Tools
 
-The server currently exposes 57 tools:
+The server currently exposes 59 tools:
 
 | Work | Tools |
 | --- | --- |
-| Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `build_profile` |
+| Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `pull_profile`, `build_profile` |
 | Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `environment_action`, `set_internet`, `retry_environment`, `reset_environment`, `delete_environment` |
 | Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `environment_logs`, `environment_diagnostics` |
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |

@@ -210,7 +210,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 58
+    assert len(mcp("tools/list")["tools"]) == 59
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -223,6 +223,42 @@ try:
     # A profile build through the manager must work from its bundled Docker context.
     assert mcp_job(tool("build_profile", {"profile_id":"ubuntu-xfce"}))["result"]["profile_id"] == "ubuntu-xfce"
     print("PASS distinct desktop profile catalog and built-in image preparation", flush=True)
+    # A desktop created from a profile the host does not have downloads the published image in
+    # its creation job, which reports byte progress while it runs. Only the profile tag is moved
+    # aside, never the local build; it is restored, and only an image this phase pulled is removed.
+    xfce_ref = xfce["profile"]["reference"]
+    local_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip()
+    known_images = set(docker("image", "ls", "-a", "-q", "--no-trunc").decode().split())
+    xfce_backup = f"wsld-test-xfce-backup:{tag}"
+    docker("image", "tag", xfce_ref, xfce_backup)
+    docker("image", "rm", xfce_ref)
+    try:
+        assert not next(p for p in api("profiles") if p["profile"]["id"] == "ubuntu-xfce")["available"]
+        created = api("environments", {"name": "Lazy profile download", "image": xfce_ref, "gpu": False, "internet": False})
+        samples, deadline = [], time.monotonic() + 1200
+        while (state := api(f"jobs/{created['job_id']}"))["status"] in ("queued", "running"):
+            assert time.monotonic() < deadline, state["log"]
+            if state.get("progress"):
+                samples.append(state["progress"])
+            time.sleep(0.5)
+        assert state["status"] == "completed", state["log"]
+        lazy_env = state["result"]["environment_id"]
+        environment_ids.append(lazy_env)
+        assert "progress" not in state and f"from {xfce_ref}" in state["log"], state
+        assert "Status: Downloaded newer image" in state["log"], state["log"]
+        assert any(p["layers"] and p["total"] is not None for p in samples), samples
+        assert [p["current"] for p in samples] == sorted(p["current"] for p in samples), samples
+        assert all(p["total"] is None or p["current"] <= p["total"] for p in samples), samples
+        assert job(api(f"environments/{lazy_env}", method="DELETE"))["deleted"] == lazy_env
+        environment_ids.remove(lazy_env)
+    finally:
+        pulled_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref, check=False).decode().strip()
+        docker("image", "tag", local_xfce, xfce_ref)
+        docker("image", "rm", xfce_backup)
+        if pulled_xfce and pulled_xfce != local_xfce and pulled_xfce not in known_images:
+            image_refs.append(pulled_xfce)
+    assert docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip() == local_xfce
+    print("PASS missing profile downloads on creation with byte progress", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
     try:

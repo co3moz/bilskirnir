@@ -2,7 +2,7 @@ import RFB from '@novnc/novnc';
 import { DesktopMedia } from './media.mjs';
 import { icon } from './icons.mjs';
 import { FileUploads, fileSize } from './uploads.mjs';
-import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText } from './helpers.mjs';
+import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText, downloadProgress } from './helpers.mjs';
 
 const app = document.querySelector('#app');
 const modal = document.querySelector('#modal');
@@ -21,7 +21,7 @@ const media = new DesktopMedia({
     if (input) input.textContent = status.input ? '🎙 Disable mic' : status.inputPending ? 'Waiting for permission…' : '🎙 Microphone';
   },
 });
-const labels = { running: 'Running', exited: 'Stopped', created: 'Starting', missing: 'Missing', unavailable: 'Docker unavailable', restarting: 'Restarting', paused: 'Paused', queued: 'Queued', completed: 'Completed', failed: 'Failed', interrupted: 'Interrupted', ready: 'Ready', not_ready: 'Not built', unhealthy: 'Desktop error' };
+const labels = { running: 'Running', exited: 'Stopped', created: 'Starting', missing: 'Missing', unavailable: 'Docker unavailable', restarting: 'Restarting', paused: 'Paused', queued: 'Queued', completed: 'Completed', failed: 'Failed', interrupted: 'Interrupted', ready: 'Ready', not_ready: 'Not downloaded', unhealthy: 'Desktop error' };
 const uploads = new FileUploads({ createRequest: () => new XMLHttpRequest(), onChange: updateUploads, onUnauthorized: loginPage });
 
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
@@ -43,7 +43,7 @@ function show(title, html) {
   activeJob = null; if (!modal.open) modal.showModal();
 }
 function badge(value) { return `<span class="badge ${e(value)}">${e(labels[value] || value)}</span>`; }
-const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile',snapshot:'Snapshot',exec:'Run script',reset:'Reset environment'};
+const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile','profile-pull':'Download profile',snapshot:'Snapshot',exec:'Run script',reset:'Reset environment'};
 function shell() {
   app.innerHTML = `<aside><a class="brand" href="/"><img class="brand-mark" src="/mark.svg" alt=""><span>Bilskirnir</span></a>
     <nav>${[['environments','Environments'],['images','Images'],['volumes','Volumes'],['jobs','Jobs']].map(([id,label]) => `<button data-tab="${id}" class="${state.tab === id ? 'active' : ''}"><span>${icon(id)}</span>${label}${id === 'jobs' ? '<small id="job-count"></small>' : ''}</button>`).join('')}</nav>
@@ -66,14 +66,14 @@ function render() {
   } else if (state.tab === 'images') {
     target.innerHTML = `<section class="page-head"><h1>Images</h1><div class="actions"><button data-import>Import image</button><button class="primary" data-build>${icon('plus')}Build image</button></div></section>
       <div class="section-line"><h2>Profiles</h2></div>
-      <section class="profile-grid">${state.profiles.map(item => `<article class="profile-card"><div class="card-title"><h3>${e(item.profile.name)}</h3>${badge(item.available ? 'ready' : 'not_ready')}</div><code>${e(item.profile.reference)}</code><div class="card-footer">${item.available ? `<button class="primary" data-profile-create="${e(item.profile.reference)}">Create environment ↗</button>` : `<button class="primary" data-profile-build="${e(item.profile.id)}">Build image</button>`}</div>${item.error ? `<p class="inline-error">${e(item.error)}</p>` : ''}</article>`).join('')}</section>
+      <section class="profile-grid">${state.profiles.map(item => `<article class="profile-card"><div class="card-title"><h3>${e(item.profile.name)}</h3>${badge(item.available ? 'ready' : 'not_ready')}</div><code>${e(item.profile.reference)}</code><div class="card-footer">${item.available ? `<button class="primary" data-profile-create="${e(item.profile.reference)}">Create environment ↗</button><button data-profile-pull="${e(item.profile.id)}" title="Download the latest published image">Update</button>` : `<button class="primary" data-profile-pull="${e(item.profile.id)}">Download</button><button data-profile-build="${e(item.profile.id)}" title="Build from the bundled Docker context">Build</button>`}</div>${item.error ? `<p class="inline-error">${e(item.error)}</p>` : ''}</article>`).join('')}</section>
       <div class="section-line"><h2>Snapshots & custom images</h2></div>
       <section class="panel image-tree">${state.images.length ? imageTree(state.images).map(r => `<article style="--depth:${Math.min(r.depth,8)}"><span class="tree-mark">${icon('images')}</span><div><h3>${e(r.name)} ${badge(r.kind)}</h3><code>${e(r.reference)}</code>${r.description ? `<p>${e(r.description)}</p>` : ''}<small>${date(r.created_at)}${r.parent_image_id ? ` · Parent ${e(r.parent_image_id.slice(0,19))}…` : ''}</small></div><button data-clone="${e(r.id)}" ${r.available === false ? 'disabled title="Image no longer available"' : ''}>Create environment ↗</button></article>`).join('') : '<div class="empty"><h2>No saved images</h2></div>'}</section>`;
   } else if (state.tab === 'volumes') {
     target.innerHTML = `<section class="page-head"><h1>Volumes</h1><button class="primary" data-volume>${icon('plus')}New volume</button></section>
       <section class="panel table-wrap"><table><thead><tr><th>NAME</th><th>DRIVER</th><th>SCOPE</th></tr></thead><tbody>${state.volumes.map(v => `<tr><td><span class="accent">${icon('volumes')}</span> <code>${e(v.Name)}</code></td><td>${e(v.Driver)}</td><td>${e(v.Scope)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No volumes.</td></tr>'}</tbody></table></section>`;
   } else {
-    target.innerHTML = `<section class="page-head"><h1>Jobs</h1></section><section class="panel table-wrap"><table><thead><tr><th>ACTION</th><th>STATUS</th><th>STARTED</th><th></th></tr></thead><tbody>${state.jobs.map(j => `<tr><td>${e(jobNames[j.kind] || j.kind)}</td><td>${badge(j.status)}</td><td>${date(j.created_at)}</td><td><button data-job="${e(j.id)}">View log</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No jobs.</td></tr>'}</tbody></table></section>`;
+    target.innerHTML = `<section class="page-head"><h1>Jobs</h1></section><section class="panel table-wrap"><table><thead><tr><th>ACTION</th><th>STATUS</th><th>STARTED</th><th></th></tr></thead><tbody>${state.jobs.map(j => `<tr><td>${e(jobNames[j.kind] || j.kind)}</td><td>${badge(j.status)}${j.status === 'running' && downloadProgress(j.progress)?.percent !== undefined ? ` <span class="hint">${downloadProgress(j.progress).percent}%</span>` : ''}</td><td>${date(j.created_at)}</td><td><button data-job="${e(j.id)}">View log</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No jobs.</td></tr>'}</tbody></table></section>`;
   }
   for (const image of document.querySelectorAll('.preview img')) image.addEventListener('error', () => { image.hidden = true; });
 }
@@ -101,7 +101,7 @@ async function refresh() {
 function imageOptions(selected = state.settings.base_image) {
   const choices = imageChoices(state.profiles, state.images, state.settings.base_image, selected);
   const active = choices.some(item => item.value === selected && !item.disabled) ? selected : choices.find(item => !item.disabled)?.value;
-  return (active ? '' : '<option value="" selected disabled>Build an image first</option>') + choices.map(item => `<option value="${e(item.value)}" ${active === item.value ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}>${e(item.label)}${item.disabled ? ' · not built' : ''}</option>`).join('');
+  return (active ? '' : '<option value="" selected disabled>Build an image first</option>') + choices.map(item => `<option value="${e(item.value)}" ${active === item.value ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}>${e(item.label)}${item.disabled ? ' · unavailable' : ''}</option>`).join('');
 }
 function createDialog(selected) {
   show('New environment', `<form id="create-form"><label>Name<input name="name" required maxlength="100" placeholder="Unity workspace"></label><label>Image / snapshot<select name="image" required>${imageOptions(selected)}</select></label>
@@ -164,7 +164,7 @@ async function submitJob(path, body, method) {
 }
 async function openJob(id) {
   const data = await api(`jobs/${id}`);
-  show('Job log', '<div id="job-status"></div><pre id="job-log" class="log-output"></pre><div id="job-result"></div>');
+  show('Job log', '<div id="job-status"></div><div id="job-progress" role="status"></div><pre id="job-log" class="log-output"></pre><div id="job-result"></div>');
   activeJob = id; updateJob(data);
 }
 function updateJob(data) {
@@ -173,6 +173,12 @@ function updateJob(data) {
   const text = jobLogText(data);
   if (log.textContent !== text) { log.textContent = text; if (follow) log.scrollTop = log.scrollHeight; }
   document.querySelector('#job-status').innerHTML = `<p>${badge(data.status)} <span class="hint">${e(jobNames[data.kind] || data.kind)} · ${date(data.created_at)}</span></p>`;
+  const download = data.status === 'running' ? downloadProgress(data.progress) : null, progress = document.querySelector('#job-progress');
+  const shown = download ? JSON.stringify(download) : '';
+  if (progress.dataset.shown !== shown) {
+    progress.dataset.shown = shown;
+    progress.innerHTML = download ? `${download.max ? `<progress value="${download.value}" max="${download.max}" aria-label="Image download progress"></progress>` : ''}<p class="hint">${e(download.text)}</p>` : '';
+  }
   const result = data.result;
   document.querySelector('#job-result').innerHTML = result ? `${result.reference ? `<p class="hint">${e(result.reference)}</p>` : ''}${result.image_id && result.reference ? `<button data-profile-create="${e(result.image_id)}">Create environment ↗</button>` : ''}${result.environment_id ? '<button data-job-environments>View environments ↗</button>' : ''}` : '';
 }
@@ -220,6 +226,7 @@ document.addEventListener('click', async event => {
     else if (button.dataset.tab) { state.tab = button.dataset.tab; render(); }
     else if (button.hasAttribute('data-new')) createDialog();
     else if (button.dataset.profileCreate) createDialog(button.dataset.profileCreate);
+    else if (button.dataset.profilePull) { button.disabled = true; await submitJob(`profiles/${button.dataset.profilePull}/pull`, {}); }
     else if (button.dataset.profileBuild) { button.disabled = true; await submitJob(`profiles/${button.dataset.profileBuild}/build`, {}); }
     else if (button.dataset.clone) { const img = state.images.find(r => r.id === button.dataset.clone); createDialog(img.image_id); }
     else if (button.hasAttribute('data-add-mount')) addMount();

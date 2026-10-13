@@ -22,7 +22,7 @@ Bilskirnir currently serves one administrator on a local machine or LAN. The des
 
 ## Getting started
 
-The shortest route is the ready-made WSL distribution: download `bilskirnir.wsl` from a release and run `wsl --install --from-file .\bilskirnir.wsl`. It brings Ubuntu, Docker and the NVIDIA runtime with it; the first start asks for a password and downloads the images. See the [WSL package guide](docs/WSL_PACKAGE.md).
+The shortest route is the ready-made WSL distribution: download `bilskirnir.wsl` from a release and run `wsl --install --from-file .\bilskirnir.wsl`. It brings Ubuntu, Docker and the NVIDIA runtime with it; the first start asks for a password and downloads the manager. See the [WSL package guide](docs/WSL_PACKAGE.md).
 
 To use an existing WSL Ubuntu instead, run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
 
@@ -59,28 +59,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - manager-data:/data
-    depends_on:
-      desktop:
-        condition: service_completed_successfully
-      desktop-gnome:
-        condition: service_completed_successfully
-
-  # Prepare both desktop images automatically; these services exit normally.
-  desktop:
-    image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-    entrypoint: ["/bin/true"]
-    restart: "no"
-    network_mode: none
-    healthcheck:
-      disable: true
-
-  desktop-gnome:
-    image: ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
-    entrypoint: ["/bin/true"]
-    restart: "no"
-    network_mode: none
-    healthcheck:
-      disable: true
 
 volumes:
   manager-data:
@@ -93,11 +71,9 @@ Start Bilskirnir:
 docker compose up -d
 ```
 
-The first start downloads the manager and both desktop images. You do not need to clone this repository or build anything locally.
+The first start downloads only the manager. You do not need to clone this repository or build anything locally.
 
-Open [localhost:8080](http://localhost:8080) and sign in as `admin` using your chosen password. Select **New environment**, choose XFCE or GNOME, then create it. Once it is running, select **Connect** to open the desktop.
-
-The two short-lived `desktop` services in Compose only prepare the images. They exit successfully; you create your actual desktops in the web interface.
+Open [localhost:8080](http://localhost:8080) and sign in as `admin` using your chosen password. Select **New environment**, choose XFCE or GNOME, then create it. The first desktop from a profile downloads its image, and the job dialog shows the progress; later desktops from that profile start without the download. Once it is running, select **Connect** to open the desktop.
 
 ## Your first reusable desktop
 

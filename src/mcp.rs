@@ -247,6 +247,11 @@ impl BilskirnirMcp {
                     .await?
                     .0
             }
+            "pull_profile" => {
+                api::pull_profile(state, Path(string(&args, "profile_id")?))
+                    .await?
+                    .0
+            }
             "list_environments" => api::environments(state).await?.0,
             "get_environment" => api::environment(state, Path(id.unwrap())).await?.0,
             "create_environment" => api::create(state, Json(parse(args)?)).await?.0,
@@ -518,7 +523,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "list_profiles",
-            "List supplied desktop profiles, image references and availability.",
+            "List supplied desktop profiles, their image references and whether each image is downloaded.",
             json!({}),
             &[],
             true,
@@ -528,6 +533,15 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         tool(
             "build_profile",
             "Build a supplied desktop profile from its bundled Docker context. Requires internet, replaces the profile tag and returns job_id.",
+            json!({"profile_id":text}),
+            &["profile_id"],
+            false,
+            true,
+            true,
+        ),
+        tool(
+            "pull_profile",
+            "Download a supplied desktop profile's published image, or a newer release of it. Creating a desktop or building from a missing profile downloads it on its own; use this to fetch it ahead of time. Replaces the profile tag and returns job_id; get_job reports byte progress while it runs.",
             json!({"profile_id":text}),
             &["profile_id"],
             false,
@@ -554,7 +568,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "create_environment",
-            "Create an Ubuntu desktop from a profile image reference or a saved image ID. Returns job_id; poll get_job for environment_id before using the desktop.",
+            "Create an Ubuntu desktop from a profile image reference or a saved image ID. A profile that is not downloaded yet is pulled first, which can take minutes. Returns job_id; poll get_job for environment_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
@@ -653,7 +667,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. Optional internet access. Returns job_id.",
+            "Build a reusable desktop image by running a root shell script on a selected desktop base. A profile base that is not downloaded yet is pulled first. Optional internet access. Returns job_id.",
             json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true}}),
             &["name", "base_image", "script"],
             false,
@@ -698,7 +712,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result. Wait for completed, failed or interrupted; a queued job is not finished.",
+            "Read a job's status, bounded log and result, plus progress while an image downloads. Wait for completed, failed or interrupted; a queued job is not finished.",
             json!({"job_id":text}),
             &["job_id"],
             true,

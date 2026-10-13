@@ -8,12 +8,12 @@ usage() {
     cat <<'EOF'
 Usage: bilskirnir <command>
 
-  start     Start Docker if needed, download missing images and start the manager
+  start     Start Docker if needed, download the manager if missing and start it
   stop      Stop the manager (desktop containers stop with the distribution)
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Pull the latest images and recreate the manager
+  update    Pull the latest manager and downloaded desktop images, recreate the manager
   doctor    Check Docker, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
@@ -42,6 +42,19 @@ ensure_docker() {
 }
 address() {
     echo "http://localhost:$PORT"
+}
+# Desktop profiles download on first use, so refresh only the ones this host already has.
+update_profiles() {
+    local catalog ref
+    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json); then
+        echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
+        return 1
+    fi
+    for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
+        if docker image inspect "$ref" >/dev/null 2>&1; then
+            docker pull "$ref"
+        fi
+    done
 }
 case ${1:-help} in
     start)
@@ -78,6 +91,7 @@ case ${1:-help} in
         ensure_docker
         compose pull
         compose up -d
+        update_profiles
         ;;
     doctor)
         echo "systemd:   $(systemctl is-system-running 2>/dev/null || true)"

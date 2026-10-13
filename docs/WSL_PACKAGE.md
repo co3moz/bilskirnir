@@ -4,13 +4,13 @@
 
 The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, so it does not touch Docker in another WSL distribution.
 
-The package contains no application images. The first start downloads the manager and both desktop images from GHCR, which keeps the package small and lets `bilskirnir update` fetch newer images later.
+The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a desktop is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
 ## Requirements
 
 - Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
 - For GPU desktops, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
-- About 2 GB of disk space for the distribution plus the images (about 3 GB) and your desktops.
+- About 2 GB of disk space for the distribution, plus the manager image, each desktop profile you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your desktops.
 
 ## Install
 
@@ -20,7 +20,7 @@ Download `bilskirnir.wsl` from a release, then either double-click it or run:
 wsl --install --from-file .\bilskirnir.wsl
 ```
 
-Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for a Linux username and the Bilskirnir admin password, detects the WSL GPU device and CUDA libraries, generates a random agent token, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the images and brings up the manager; the dashboard is then at [localhost:8080](http://localhost:8080).
+Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for a Linux username and the Bilskirnir admin password, detects the WSL GPU device and CUDA libraries, generates a random agent token, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080).
 
 The bundled PowerShell helper does the same from Windows and adds auto-start:
 
@@ -44,10 +44,10 @@ Inside the distribution, `bilskirnir` manages the installation:
 
 | Command | What it does |
 | --- | --- |
-| `bilskirnir start` | Starts Docker if needed, downloads missing images and starts the manager. |
+| `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services and the dashboard address. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Pulls the latest images and recreates the manager. |
+| `bilskirnir update` | Pulls the latest manager and the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
