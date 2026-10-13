@@ -20,6 +20,7 @@ pub struct Config {
     pub cuda: bool,
     pub adapter: String,
     pub allowed_hosts: Vec<String>,
+    pub upload_limit: u64,
 }
 fn flag(key: &str, default: bool) -> Result<bool> {
     match env::var(key).as_deref() {
@@ -55,6 +56,12 @@ impl Config {
             None
         };
         let audio = flag("AUDIO_ENABLED", true)?;
+        let upload_mb = env::var("UPLOAD_MAX_MB")
+            .unwrap_or_else(|_| "1024".into())
+            .parse::<u64>()?;
+        if !(1..=65536).contains(&upload_mb) {
+            bail!("UPLOAD_MAX_MB must be between 1 and 65536");
+        }
         let cfg = Self {
             listen: env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into()),
             data: env::var("DATA_DIR")
@@ -85,6 +92,7 @@ impl Config {
                 .map(|s| s.trim().to_ascii_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect(),
+            upload_limit: upload_mb * 1024 * 1024,
         };
         super::model::image_ref(&cfg.base_image)?;
         if cfg.auth && (cfg.username.trim().is_empty() || cfg.username.len() > 256) {

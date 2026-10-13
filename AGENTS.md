@@ -3,7 +3,9 @@
 ## Project structure
 
 - `src/`: Rust/Axum API, authentication, Docker operations, SQLite metadata, jobs and WebSocket proxies. `src/tests.rs` holds backend unit tests.
+- `src/uploads.rs` and `src/upload_file.py`: bounded file staging and atomic delivery as the desktop user. Upload destinations must stay in Downloads or writable named-volume mounts; never follow path symlinks or grant root writes.
 - `web/`: plain JavaScript UI, noVNC integration, audio, CSS, SVG assets and shared helpers. `web/dist/` is generated and ignored.
+- `web/uploads.mjs`: sequential upload queue, progress, cancellation and session-expiry handling.
 - `desktop/`: Ubuntu 24.04 Docker stages, XFCE/GNOME sessions, GPU wrappers, health checks and the bundled profile catalog.
 - `deploy/`: optional Caddy configuration for LAN HTTPS.
 - `compose.yml`: source builds and development installation. `compose.ghcr.yml`: installation from published GHCR images.

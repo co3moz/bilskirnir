@@ -280,4 +280,22 @@ input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(-
   .image-tree article button { margin-left: 30px; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+.upload-environment { color: var(--accent); margin-bottom: 20px; }
+.upload-drop { display: flex; flex-direction: column; width: 100%; min-height: 150px; gap: 12px; margin: 20px 0; padding: 22px; border: 1px dashed var(--line-bright); background: var(--input); }
+.upload-drop svg { width: 26px; height: 26px; color: var(--accent); }
+.upload-drop span { color: var(--muted); font-size: 12px; }
+.has-files .upload-drop { min-height: 82px; padding: 12px; gap: 6px; margin: 14px 0; }
+.has-files .upload-drop svg { width: 20px; height: 20px; }
+.upload-drop.drag-over, .environment-card.drag-over { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px #92d5f330; }
+.desktop-view.drag-over #screen { outline: 3px solid var(--accent); outline-offset: -3px; }
+.upload-list { display: grid; gap: 12px; max-height: 180px; overflow-y: auto; margin-bottom: 14px; }
+.upload-item { border: 1px solid var(--line); border-radius: 4px; padding: 12px; background: var(--input); }
+.upload-item strong, .upload-item small { display: block; overflow-wrap: anywhere; }
+.upload-item strong { font-size: 12px; font-weight: 500; }
+.upload-item small { color: var(--muted); font-size: 11px; margin: 5px 0 10px; }
+.upload-item code { display: block; margin-top: 8px; color: var(--accent); }
+.upload-item progress { display: block; width: 100%; height: 5px; accent-color: var(--accent); border: none; }
+.upload-item progress::-webkit-progress-bar { background: var(--line); border-radius: 3px; }
+.upload-item progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+[hidden] { display: none !important; }
 @media (prefers-reduced-transparency: reduce) { dialog::backdrop { backdrop-filter: none; background: #030711f5; } }

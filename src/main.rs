@@ -9,6 +9,7 @@ mod media;
 mod model;
 mod process;
 mod profiles;
+mod uploads;
 
 use axum::{
     Router,
@@ -32,6 +33,7 @@ pub struct App {
     resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     session_events: tokio::sync::Notify,
     screenshots: tokio::sync::Semaphore,
+    uploads: tokio::sync::Semaphore,
 }
 fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
@@ -52,6 +54,12 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/logs", get(api::logs))
         .route("/api/environments/{id}/diagnostics", get(api::diagnostics))
         .route("/api/environments/{id}/screenshot", get(api::screenshot))
+        .route(
+            "/api/environments/{id}/files",
+            post(uploads::upload).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                app.config.upload_limit as usize,
+            )),
+        )
         .route("/api/environments/{id}/vnc", get(media::vnc))
         .route(
             "/api/environments/{id}/audio/{direction}",
@@ -93,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let config = config::Config::load()?;
     tokio::fs::create_dir_all(&config.data).await?;
+    uploads::cleanup_temporary_files(&config.data).await?;
     let db = db::Db::open(&config.data.join("state.sqlite"))?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
     for mut job in db.list::<model::Job>("job")? {
@@ -114,6 +123,7 @@ async fn main() -> anyhow::Result<()> {
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),
+        uploads: tokio::sync::Semaphore::new(2),
     });
     let reconcile = app.clone();
     let cleanup = app.clone();

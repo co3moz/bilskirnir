@@ -25,6 +25,7 @@ fn app(auth: bool) -> Arc<App> {
             cuda: true,
             adapter: String::new(),
             allowed_hosts: vec![],
+            upload_limit: 1024 * 1024,
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -33,11 +34,95 @@ fn app(auth: bool) -> Arc<App> {
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),
+        uploads: tokio::sync::Semaphore::new(2),
     })
 }
 fn spec() -> model::EnvironmentSpec {
     serde_json::from_value(serde_json::json!({"name":"Unity","image":"wsl-desktop/ubuntu:24.04"}))
         .unwrap()
+}
+#[test]
+fn uploads_only_accept_canonical_paths_in_writable_locations() {
+    let mut spec = spec();
+    spec.mounts = vec![
+        model::Mount {
+            volume: "projects".into(),
+            target: "/shared".into(),
+            readonly: false,
+        },
+        model::Mount {
+            volume: "reference".into(),
+            target: "/shared/reference".into(),
+            readonly: true,
+        },
+    ];
+    for target in [
+        "/home/desktop/Downloads",
+        "/home/desktop/Downloads/project",
+        "/shared/assets",
+    ] {
+        assert!(
+            uploads::validate_target(&spec, target, "file & notes.txt").is_ok(),
+            "{target}"
+        );
+    }
+    for target in [
+        "/etc",
+        "/sharedish",
+        "/shared/reference/sub",
+        "/home/desktop/Downloads-fake",
+        "/home/desktop/Downloads/../.ssh",
+        "/shared//assets",
+        "/shared/.",
+    ] {
+        assert!(
+            uploads::validate_target(&spec, target, "file.txt").is_err(),
+            "{target}"
+        );
+    }
+    for name in [
+        "",
+        ".",
+        "..",
+        "../file",
+        "file/name",
+        "file\\name",
+        "file\0name",
+    ] {
+        assert!(uploads::validate_target(&spec, "/shared", name).is_err());
+    }
+    spec.mounts.push(model::Mount {
+        volume: "downloads".into(),
+        target: "/home/desktop/Downloads".into(),
+        readonly: true,
+    });
+    assert!(uploads::validate_target(&spec, "/home/desktop/Downloads", "file.txt").is_err());
+}
+
+#[tokio::test]
+async fn uploads_enforce_authentication_origin_and_size_before_docker() {
+    let uri =
+        "/api/environments/unknown/files?destination=/home/desktop/Downloads&name=test.txt&size=1";
+    for (auth, csrf, size, expected) in [
+        (true, true, 1, StatusCode::UNAUTHORIZED),
+        (false, false, 1, StatusCode::FORBIDDEN),
+        (false, true, 1048577, StatusCode::PAYLOAD_TOO_LARGE),
+    ] {
+        let uri = uri.replace("size=1", &format!("size={size}"));
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("host", "localhost:8080")
+            .header("content-type", "application/octet-stream");
+        if csrf {
+            request = request.header("x-wsld-request", "1");
+        }
+        let response = router(app(auth))
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
 }
 #[test]
 fn resource_and_mount_validation() {

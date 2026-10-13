@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"wsl_gpu":app.config.wsl_gpu,"gpu_adapter":app.config.adapter}),
+        json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"wsl_gpu":app.config.wsl_gpu,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit}),
     )
 }
 pub async fn profiles(State(app): State<Arc<App>>) -> Json<Value> {

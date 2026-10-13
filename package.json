@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "build": "node scripts/build-ui.mjs",
-    "test": "node --test --test-isolation=none tests/ui.test.mjs tests/media.test.mjs"
+    "test": "node --test --test-isolation=none tests/ui.test.mjs tests/media.test.mjs tests/uploads.test.mjs"
   },
   "dependencies": { "@novnc/novnc": "1.5.0" },
   "devDependencies": { "esbuild": "0.25.12" }

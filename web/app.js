@@ -1,6 +1,7 @@
 import RFB from '@novnc/novnc';
 import { DesktopMedia } from './media.mjs';
 import { icon } from './icons.mjs';
+import { FileUploads, fileSize } from './uploads.mjs';
 import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText } from './helpers.mjs';
 
 const app = document.querySelector('#app');
@@ -21,6 +22,7 @@ const media = new DesktopMedia({
   },
 });
 const labels = { running: 'Running', exited: 'Stopped', created: 'Starting', missing: 'Missing', unavailable: 'Docker unavailable', restarting: 'Restarting', paused: 'Paused', queued: 'Queued', completed: 'Completed', failed: 'Failed', interrupted: 'Interrupted', ready: 'Ready', not_ready: 'Not built', unhealthy: 'Desktop error' };
+const uploads = new FileUploads({ createRequest: () => new XMLHttpRequest(), onChange: updateUploads, onUnauthorized: loginPage });
 
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   const response = await fetch(`/api/${path}`, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Wsld-Request': '1' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
@@ -36,6 +38,7 @@ function toast(message, error = false) {
   document.querySelector('#toasts').append(node); setTimeout(() => node.remove(), 6500);
 }
 function show(title, html) {
+  if (document.querySelector('#upload-panel')) uploads.cancel();
   content.innerHTML = `<header class="dialog-head"><h2>${e(title)}</h2><button class="icon-button" data-close aria-label="Close">${icon('close')}</button></header>${html}`;
   activeJob = null; if (!modal.open) modal.showModal();
 }
@@ -76,10 +79,10 @@ function render() {
 }
 function card(item) {
   const env = item.environment, spec = env.spec, running = item.state === 'running', retry = !running && (item.state === 'missing' || !!env.last_error);
-  return `<article class="environment-card"><div class="preview"><div class="preview-placeholder"><span>${icon('display')}</span><small>${running ? 'Loading preview' : 'Desktop stopped'}</small></div>${running ? `<img alt="${e(spec.name)} desktop preview" src="/api/environments/${env.id}/screenshot?t=${Math.floor(Date.now()/10000)}" loading="lazy">` : ''}<span class="preview-tag">${e(spec.resolution)}</span></div>
+  return `<article class="environment-card" data-drop-environment="${env.id}"><div class="preview"><div class="preview-placeholder"><span>${icon('display')}</span><small>${running ? 'Loading preview' : 'Desktop stopped'}</small></div>${running ? `<img alt="${e(spec.name)} desktop preview" src="/api/environments/${env.id}/screenshot?t=${Math.floor(Date.now()/10000)}" loading="lazy">` : ''}<span class="preview-tag">${e(spec.resolution)}</span></div>
     <div class="card-body"><div class="card-title"><h3>${e(spec.name)}</h3>${badge(item.health === 'unhealthy' ? 'unhealthy' : item.health === 'starting' && running ? 'created' : item.state)}</div><p class="desktop-profile">${e(env.desktop?.title || state.profiles.find(p => p.profile.reference === spec.image)?.profile.name || (spec.image === 'wsl-desktop/ubuntu:24.04' ? 'Ubuntu 24.04 · Lightweight XFCE (legacy)' : 'Custom desktop'))}</p><div class="chips"><span>${spec.gpu ? `${icon('gpu')}GPU` : 'CPU only'}</span><span>${spec.cpus ? `${spec.cpus} CPU` : 'Unlimited CPU'}</span><span>${spec.memory_mb ? `${spec.memory_mb} MB` : 'Unlimited RAM'}</span>${spec.audio ? '<span>♫ Audio</span>' : ''}</div>
     <div class="internet-row"><span>Internet</span><button class="toggle ${spec.internet ? 'on' : ''}" data-internet="${env.id}" role="switch" aria-checked="${spec.internet}" aria-label="${e(spec.name)} internet access"><i></i></button></div>
-    ${env.last_error ? `<p class="inline-error">${e(env.last_error)}</p>` : ''}<div class="card-footer"><button class="${running ? 'primary' : ''}" ${running ? `data-connect="${env.id}"` : retry ? `data-retry="${env.id}"` : `data-action="start" data-id="${env.id}"`}>${running ? 'Connect ↗' : retry ? '↻ Retry setup' : '▶ Start'}</button><button class="icon-button" data-details="${env.id}" aria-label="Environment actions">${icon('more')}</button></div></div></article>`;
+    ${env.last_error ? `<p class="inline-error">${e(env.last_error)}</p>` : ''}<div class="card-footer"><button class="${running ? 'primary' : ''}" ${running ? `data-connect="${env.id}"` : retry ? `data-retry="${env.id}"` : `data-action="start" data-id="${env.id}"`}>${running ? 'Connect ↗' : retry ? '↻ Retry setup' : '▶ Start'}</button><button class="icon-button" data-upload="${env.id}" aria-label="Upload files to ${e(spec.name)}" title="${running ? 'Upload files' : 'Start the environment to upload files'}" ${running ? '' : 'disabled'}>${icon('upload')}</button><button class="icon-button" data-details="${env.id}" aria-label="Environment actions">${icon('more')}</button></div></div></article>`;
 }
 async function refresh() {
   if (refreshing || !document.querySelector('#main-content')) return;
@@ -115,7 +118,38 @@ function addMount() {
 function details(id) {
   const item = state.environments.find(x => x.environment.id === id), env = item?.environment;
   if (!env) return;
-  show(env.spec.name, `<div class="detail-actions">${item.state === 'missing' || env.last_error ? `<button data-retry="${id}">↻ Retry setup</button>` : ''}${['start','stop','restart'].map((action,i) => `<button data-action="${action}" data-id="${id}">${['▶ Start','■ Stop','↻ Restart'][i]}</button>`).join('')}<button data-snapshot="${id}">◇ Snapshot</button><button data-logs="${id}">Logs</button><button data-diagnostics="${id}">Diagnostics</button><button class="danger" data-delete="${id}">Delete environment</button></div>`);
+  show(env.spec.name, `<div class="detail-actions">${item.state === 'missing' || env.last_error ? `<button data-retry="${id}">↻ Retry setup</button>` : ''}${['start','stop','restart'].map((action,i) => `<button data-action="${action}" data-id="${id}">${['▶ Start','■ Stop','↻ Restart'][i]}</button>`).join('')}<button data-upload="${id}" ${item.state === 'running' ? '' : 'disabled'}>${icon('upload')}Upload files</button><button data-snapshot="${id}">◇ Snapshot</button><button data-logs="${id}">Logs</button><button data-diagnostics="${id}">Diagnostics</button><button class="danger" data-delete="${id}">Delete environment</button></div>`);
+}
+function uploadDialog(id, files = []) {
+  const item = state.environments.find(item => item.environment.id === id);
+  const env = item?.environment || (state.desktop?.id === id ? state.desktop : null);
+  if (!env || (item && item.state !== 'running')) { toast('Start the environment before uploading files.', true); return; }
+  if (uploads.running) { toast('Wait for the current upload or cancel it first.', true); return; }
+  uploads.select([], state.settings.upload_limit_bytes);
+  const home = '/home/desktop/Downloads';
+  const homeReadOnly = env.spec.mounts.some(mount=>mount.readonly && (home===mount.target || home.startsWith(`${mount.target}/`)));
+  const locations = [...(homeReadOnly ? [] : [{target:home,name:'Downloads'}]), ...env.spec.mounts.filter(mount=>!mount.readonly).map(mount=>({target:mount.target,name:`${mount.volume} · ${mount.target}`}))];
+  if (!locations.length) { toast('No writable upload destinations are available.', true); return; }
+  show('Upload files', `<section id="upload-panel" data-id="${id}"><p class="upload-environment">${e(env.spec.name)}</p><div class="form-grid"><label>Destination<select id="upload-destination">${locations.map(location=>`<option value="${e(location.target)}">${e(location.name)}</option>`).join('')}</select></label><label>Subfolder<input id="upload-subfolder" placeholder="Optional" autocomplete="off"></label></div><label class="check"><input type="checkbox" id="upload-replace">Replace existing files</label><button class="upload-drop" data-upload-drop data-choose-files>${icon('upload')}<strong>Drop files here or choose files</strong><span>${fileSize(state.settings.upload_limit_bytes)} per file</span></button><input type="file" id="upload-files" multiple hidden><div id="upload-list" class="upload-list"></div><p id="upload-status" class="hint" role="status" aria-live="polite"></p><p class="hint">Volume files are excluded from snapshots. Completed files are kept when you cancel.</p><div class="form-error" role="alert"></div><footer class="dialog-footer"><button data-cancel-upload hidden>Cancel upload</button><button class="primary" data-start-upload disabled>Upload files</button></footer></section>`);
+  selectUploadFiles(files);
+}
+function selectUploadFiles(files) {
+  try { uploads.select(files, state.settings.upload_limit_bytes); document.querySelector('#upload-panel .form-error').textContent = ''; }
+  catch (error) { document.querySelector('#upload-panel .form-error').textContent = error.message; }
+}
+function updateUploads() {
+  const panel = document.querySelector('#upload-panel'); if (!panel) return;
+  panel.classList.toggle('has-files', uploads.items.length > 0);
+  const statuses = {queued:'Ready',uploading:'Uploading',saving:'Saving',completed:'Uploaded',failed:'Failed',cancelled:'Cancelled'};
+  panel.querySelector('#upload-list').innerHTML = uploads.items.map(item=>`<article class="upload-item"><div><strong>${e(item.name)}</strong><small>${fileSize(item.size)} · ${statuses[item.status]}</small></div><progress value="${item.loaded}" max="${Math.max(item.size,1)}" aria-label="${e(item.name)} upload progress"></progress>${item.error ? `<p class="form-error">${e(item.error)}</p>` : ''}${item.path ? `<code>${e(item.path)}</code>` : ''}</article>`).join('');
+  const completed = uploads.items.filter(item=>item.status==='completed').length;
+  const status = uploads.items.length ? `${completed} of ${uploads.items.length} files uploaded` : '';
+  if (panel.querySelector('#upload-status').textContent !== status) panel.querySelector('#upload-status').textContent = status;
+  for (const control of panel.querySelectorAll('select,input,[data-choose-files]')) control.disabled = uploads.running;
+  const start = panel.querySelector('[data-start-upload]');
+  start.disabled = uploads.running || !uploads.items.some(item=>item.status!=='completed');
+  start.textContent = uploads.running ? 'Uploading…' : uploads.items.some(item=>['failed','cancelled'].includes(item.status)) ? 'Retry remaining files' : 'Upload files';
+  panel.querySelector('[data-cancel-upload]').hidden = !uploads.running;
 }
 function buildDialog() {
   show('Build image', `<form id="build-form"><label>Name<input name="name" required maxlength="100" placeholder="Unity tools"></label><label>Base image<select name="base_image" required>${imageOptions()}</select></label><label>Setup script<textarea name="script" class="code-input" rows="12" required spellcheck="false">#!/usr/bin/env bash
@@ -163,7 +197,7 @@ function closeDesktop() { const old = rfb; rfb = null; old?.disconnect(); media.
 function connect(id) {
   const env = state.environments.find(x => x.environment.id === id)?.environment; if (!env) return;
   closeDesktop(); state.desktop = env; media.select(env.id);
-  app.innerHTML = `<section class="desktop-view"><header class="desktop-toolbar"><button data-back>← Environments</button><h2>${e(env.spec.name)}</h2><span id="vnc-status" class="muted">Connecting…</span><div class="spacer"></div><button data-clipboard>Clipboard</button>${env.spec.audio ? '<button data-audio>♫ Audio</button>' : ''}${env.spec.microphone ? '<button data-mic>🎙 Microphone</button>' : ''}<button data-reconnect>↻</button><button data-fullscreen>Fullscreen</button></header><div id="screen"></div></section>`;
+  app.innerHTML = `<section class="desktop-view" data-drop-environment="${id}"><header class="desktop-toolbar"><button data-back>← Environments</button><h2>${e(env.spec.name)}</h2><span id="vnc-status" class="muted">Connecting…</span><div class="spacer"></div><button data-upload="${id}">${icon('upload')}Upload files</button><button data-clipboard>Clipboard</button>${env.spec.audio ? '<button data-audio>♫ Audio</button>' : ''}${env.spec.microphone ? '<button data-mic>🎙 Microphone</button>' : ''}<button data-reconnect>↻</button><button data-fullscreen>Fullscreen</button></header><div id="screen"></div></section>`;
   connectRfb();
 }
 function connectRfb() {
@@ -192,6 +226,15 @@ document.addEventListener('click', async event => {
     else if (button.hasAttribute('data-remove-mount')) button.closest('.mount-row').remove();
     else if (button.dataset.details) details(button.dataset.details);
     else if (button.dataset.connect) connect(button.dataset.connect);
+    else if (button.dataset.upload) uploadDialog(button.dataset.upload);
+    else if (button.hasAttribute('data-choose-files')) document.querySelector('#upload-files').click();
+    else if (button.hasAttribute('data-cancel-upload')) uploads.cancel();
+    else if (button.hasAttribute('data-start-upload')) {
+      const panel = document.querySelector('#upload-panel'), base = panel.querySelector('#upload-destination').value, folder = panel.querySelector('#upload-subfolder').value.trim();
+      const error = panel.querySelector('.form-error'); error.textContent = '';
+      if (folder && (folder.startsWith('/') || folder.includes('\\') || folder.split('/').some(part=>!part || part==='.' || part==='..'))) { error.textContent = 'Enter a relative subfolder without . or .. segments.'; return; }
+      await uploads.start({environmentId:panel.dataset.id,destination:folder ? `${base}/${folder}` : base,replace:panel.querySelector('#upload-replace').checked});
+    }
     else if (button.hasAttribute('data-back')) { closeDesktop(); shell(); await refresh(); }
     else if (button.hasAttribute('data-reconnect')) connectRfb();
     else if (button.hasAttribute('data-fullscreen')) { if (document.fullscreenElement) await document.exitFullscreen(); else await document.querySelector('.desktop-view').requestFullscreen(); }
@@ -217,7 +260,25 @@ document.addEventListener('click', async event => {
     else if (button.hasAttribute('data-mic')) await media.toggleMic();
   } catch (error) { toast(error.message, true); button.disabled = false; }
 });
-document.addEventListener('change', event => { const form = event.target.closest('#create-form'); if (!form) return; if (event.target.name === 'microphone' && event.target.checked) form.elements.audio.checked = true; if (event.target.name === 'audio' && !event.target.checked) form.elements.microphone.checked = false; });
+document.addEventListener('change', event => { if (event.target.id === 'upload-files') { selectUploadFiles(event.target.files); event.target.value = ''; return; } const form = event.target.closest('#create-form'); if (!form) return; if (event.target.name === 'microphone' && event.target.checked) form.elements.audio.checked = true; if (event.target.name === 'audio' && !event.target.checked) form.elements.microphone.checked = false; });
+document.addEventListener('dragover', event => {
+  if (!event.dataTransfer?.types.includes('Files')) return;
+  event.preventDefault();
+  const target = event.target.closest('[data-upload-drop],[data-drop-environment]');
+  event.dataTransfer.dropEffect = target ? 'copy' : 'none';
+  target?.classList.add('drag-over');
+});
+document.addEventListener('dragleave', event => { const target = event.target.closest('[data-upload-drop],[data-drop-environment]'); if (target && !target.contains(event.relatedTarget)) target.classList.remove('drag-over'); });
+document.addEventListener('drop', event => {
+  if (!event.dataTransfer?.types.includes('Files')) return;
+  event.preventDefault();
+  document.querySelectorAll('.drag-over').forEach(element=>element.classList.remove('drag-over'));
+  if ([...event.dataTransfer.items].some(item=>item.webkitGetAsEntry?.()?.isDirectory)) { toast('Choose files instead of a folder.', true); return; }
+  const files = [...event.dataTransfer.files];
+  if (!files.length) { toast('Choose files instead of a folder.', true); return; }
+  if (event.target.closest('[data-upload-drop]')) selectUploadFiles(files);
+  else { const target = event.target.closest('[data-drop-environment]'); if (target) uploadDialog(target.dataset.dropEnvironment, files); else toast('Drop files on an environment card or its desktop.', true); }
+});
 
 document.addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
@@ -238,7 +299,7 @@ document.addEventListener('submit', async event => {
 });
 setInterval(() => { if (!document.hidden && !state.desktop) refresh(); }, 8000);
 setInterval(() => { if (!document.hidden) pollJob(); }, 2000);
-modal.addEventListener('close', () => { activeJob = null; });
-window.addEventListener('beforeunload', closeDesktop);
+modal.addEventListener('close', () => { activeJob = null; uploads.cancel(); });
+window.addEventListener('beforeunload', () => { uploads.cancel(); closeDesktop(); });
 initialize().catch(error => { app.innerHTML = `<div class="empty"><h1>Connection failed</h1><p>${e(error.message)}</p></div>`; });
 

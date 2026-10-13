@@ -56,6 +56,8 @@ Blue indicates activity and interaction; violet groups image-related information
 
 **Desktop toolbar:** the same metal surfaces and blue action states. The remote desktop remains a functional canvas with its original application colors.
 
+**File uploads:** an ice-blue upload icon, a dashed drop target, destination controls and a compact file queue. Per-file progress and explicit Uploaded/Failed/Cancelled labels communicate outcomes. Read-only destinations are excluded, replacement is opt-in, and smaller screens stack the destination fields.
+
 ## Responsive behavior and accessibility
 
 At 1100 px, the sidebar and workspace spacing narrow. At 700 px, navigation becomes a horizontal row, metrics use two columns and environment cards use one column. At 400 px, forms use one column and primary page actions can span the full width.

@@ -14,6 +14,8 @@ import time
 import tempfile
 import urllib.error
 import urllib.request
+import urllib.parse
+import http.client
 import uuid
 
 
@@ -133,6 +135,13 @@ def login():
     api("login", {"username": "admin", "password": password})
 
 
+def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False):
+    query = urllib.parse.urlencode({"destination":destination,"name":name,"size":len(data),"replace":str(replace).lower()})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/environments/{eid}/files?{query}",data=data,headers={"Content-Type":"application/octet-stream","X-Wsld-Request":"1"})
+    with client.open(request,timeout=120) as response:
+        return json.loads(response.read())
+
+
 def ready(container):
     def check():
         info = json.loads(docker("inspect", container))[0]
@@ -191,6 +200,50 @@ try:
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
     ready(container)
+    payload = bytes(range(256)) * 5000
+    uploaded = upload(env_id,"binary & notes.bin",payload)
+    assert docker("exec",container,"cat",uploaded["path"]) == payload
+    assert docker("exec",container,"stat","-c","%u:%g",uploaded["path"]).strip() == b"1001:1001"
+    empty = upload(env_id,"empty.txt",b"")
+    assert docker("exec",container,"cat",empty["path"]) == b""
+    try:
+        upload(env_id,"binary & notes.bin",b"must-not-replace")
+        raise AssertionError("existing file was overwritten without consent")
+    except urllib.error.HTTPError as error:
+        assert error.code == 409
+    assert docker("exec",container,"cat",uploaded["path"]) == payload
+    upload(env_id,"binary & notes.bin",b"replaced",replace=True)
+    assert docker("exec",container,"cat",uploaded["path"]) == b"replaced"
+    docker("exec",container,"chown","1001:1001","/shared")
+    volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
+    assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"
+    docker("exec",container,"ln","-s","/tmp","/home/desktop/Downloads/escape")
+    for target in ["/etc", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
+        try:
+            upload(env_id,"forbidden.txt",b"blocked",destination=target)
+            raise AssertionError(f"unsafe upload accepted: {target}")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
+    assert docker("exec",container,"test","!","-e","/tmp/forbidden.txt") == b""
+    assert docker("exec",manager,"ls","-A","/data/uploads") == b""
+    # Logout must revoke a transfer that is still receiving a body.
+    query = urllib.parse.urlencode({"destination":"/home/desktop/Downloads","name":"interrupted.bin","size":10*1024*1024})
+    transfer = http.client.HTTPConnection("127.0.0.1",port,timeout=10)
+    transfer.putrequest("POST",f"/api/environments/{env_id}/files?{query}")
+    transfer.putheader("Content-Type","application/octet-stream")
+    transfer.putheader("Content-Length",10*1024*1024)
+    transfer.putheader("X-Wsld-Request","1")
+    transfer.putheader("Cookie","; ".join(f"{c.name}={c.value}" for c in cookies))
+    transfer.endheaders()
+    transfer.send(b"x" * 128000)
+    wait_for(lambda: docker("exec",manager,"ls","-A","/data/uploads"))
+    api("logout",{})
+    assert transfer.getresponse().status == 401
+    transfer.close()
+    wait_for(lambda: docker("exec",manager,"ls","-A","/data/uploads") == b"")
+    assert docker("exec",container,"test","!","-e","/home/desktop/Downloads/interrupted.bin") == b""
+    login()
+    print("PASS binary/empty uploads, desktop ownership, volume persistence, overwrite protection, symlinks and revoked transfer cleanup",flush=True)
     assert docker("exec", container, "cat", "/opt/script-built") == b"script-built"
     diag = api(f"environments/{env_id}/diagnostics")["output"]
     assert "D3D12 (NVIDIA" in diag, diag

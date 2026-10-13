@@ -3,7 +3,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG VIRTUALGL_VERSION=3.1.4
 RUN apt-get update && apt-get install -y --no-install-recommends \
     dbus-x11 tigervnc-standalone-server tigervnc-common \
-    x11-utils x11-xserver-utils x11-apps imagemagick sudo tini curl ca-certificates \
+    x11-utils x11-xserver-utils x11-apps imagemagick sudo tini curl ca-certificates python3 \
     pulseaudio pulseaudio-utils mesa-utils mesa-utils-extra libgl1-mesa-dri libegl1 \
     mesa-vulkan-drivers vulkan-tools fonts-dejavu fonts-noto-color-emoji locales \
     && locale-gen en_US.UTF-8 && rm -rf /var/lib/apt/lists/*

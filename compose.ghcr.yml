@@ -21,6 +21,7 @@ services:
       GPU_ADAPTER: ${GPU_ADAPTER:-}
       AUDIO_ENABLED: ${AUDIO_ENABLED:-true}
       MICROPHONE_ENABLED: ${MICROPHONE_ENABLED:-true}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-1024}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
       RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
     volumes:

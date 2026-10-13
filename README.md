@@ -34,6 +34,7 @@ services:
       GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
       AUDIO_ENABLED: "true"
       MICROPHONE_ENABLED: "true"
+      UPLOAD_MAX_MB: "1024"
       ALLOWED_HOSTS: localhost
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -73,6 +74,8 @@ docker compose up -d
 ```
 
 Open <http://localhost:8080>, sign in with the credentials above, then choose **New environment → XFCE or GNOME → Create → Connect**. The first start downloads all three images. Desktop containers are created and managed from the web interface.
+
+Drop files onto a running environment card or its desktop to upload them. **Upload files** also opens the file picker and destination settings.
 
 For LAN access, change the port binding to `0.0.0.0:8080:8080`. Private IP addresses are accepted; add DNS names to `ALLOWED_HOSTS` if needed. Windows firewall and WSL forwarding remain host configuration.
 
@@ -171,7 +174,11 @@ Create volumes under **Volumes**, then select mounts in the new environment form
 
 The desktop user has UID/GID **1001:1001**. Existing volumes need suitable permissions. Sharing a writable volume between environments shares its data; snapshots do not clone it. Deleting an environment preserves named volumes and saved images.
 
-Transfer host files using Docker's tools:
+For browser uploads, click **Upload files** on an environment card or in the desktop toolbar. You can also drop files onto a card, the connected desktop or the upload dialog. Choose **Downloads** or a writable mounted volume, optionally enter a subfolder and upload multiple files with per-file progress. The environment must be running. Existing files are preserved unless **Replace existing files** is selected; failed or cancelled files can be retried.
+
+Downloads lives in the container layer unless mounted. Files in named volumes persist independently and are excluded from snapshots. Uploads use desktop UID/GID 1001:1001, so volume permissions still apply. `UPLOAD_MAX_MB` defaults to 1024 MiB per file; the manager accepts two simultaneous transfers, stages them on its data volume and removes temporary files after completion, cancellation or restart. A transfer can run for up to one hour. Cancelling keeps files that have already completed.
+
+Alternatively, transfer files with Docker's tools:
 
 ```bash
 docker cp ./project wsld-ENVIRONMENT_ID:/workspace/project

@@ -14,7 +14,7 @@ pub enum Overflow {
     Tail,
 }
 
-async fn read_limited(
+pub(crate) async fn read_limited(
     mut read: impl AsyncRead + Unpin,
     limit: usize,
     overflow: Overflow,
