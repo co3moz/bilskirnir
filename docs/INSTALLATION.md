@@ -118,6 +118,7 @@ New environments use the updated profile images. Existing desktops and snapshots
 | --- | --- | --- |
 | Environment settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
 | Installed software and unmounted home files | The desktop container's writable layer | Lost unless saved in an image or snapshot. |
+| Files carried over by a settings change | An image tagged `bilskirnir/environment:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |
 | Saved image and snapshot layers | The host Docker Engine's image store | Preserved. |
 
@@ -130,6 +131,8 @@ Uploads are temporarily staged in the manager data volume. The manager accepts t
 A manager restart marks unfinished jobs as interrupted. Build scripts are not replayed automatically. Inspect the job result before starting an operation again.
 
 Use **Retry setup** for an environment that failed during creation or startup. If its container still exists, Bilskirnir keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
+
+A settings change that needs a new container renames the old one to `wsld-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name. Rename it back with `docker rename wsld-ID-previous wsld-ID` before using **Retry setup**, or remove it once its files are no longer needed; another settings change refuses to start while it exists.
 
 Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Bilskirnir does not silently replace a missing volume with an empty one.
 

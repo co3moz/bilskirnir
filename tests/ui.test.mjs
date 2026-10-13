@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, imageTree, imageChoices, jobLogText, downloadProgress } from '../web/helpers.mjs';
+import { escapeHtml, imageTree, imageChoices, jobLogText, downloadProgress, restartNotice } from '../web/helpers.mjs';
 test('completed legacy deletion explains the result rather than waiting or displaying an ID', () => {
   const log = jobLogText({status:'completed',log:'',result:{deleted:'old-environment-id',volumes_preserved:true}});
   assert.equal(log,'Environment deleted. Named volumes were preserved.');
@@ -51,4 +51,8 @@ test('download progress reads as bytes once the size is known and never claims a
   const running = downloadProgress({current:1024 ** 3,total:4 * 1024 ** 3,layers:4,layers_done:1});
   assert.deepEqual(running, {value:1024 ** 3,max:4 * 1024 ** 3,percent:25,text:'1.0 GiB of 4.0 GiB · 1 of 4 layers'});
   assert.equal(downloadProgress({current:10,total:10,layers:4,layers_done:3}).text, 'Extracting · 3 of 4 layers');
+});
+test('the restart warning names the settings that need a new container and what happens', () => {
+  assert.equal(restartNotice(['audio'], true), 'Audio needs a new container: the desktop restarts and open applications close. Files in the container are kept.');
+  assert.equal(restartNotice(['gpu', 'mounts', 'cpus'], false), 'GPU, volumes and removing the CPU limit need a new container: the desktop stays stopped until you start it. Files in the container are kept.');
 });

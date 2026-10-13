@@ -40,6 +40,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/action` | Start, stop or restart; returns a job. |
 | POST | `/api/environments/{id}/retry` | Retry partial setup; returns a job. |
 | POST | `/api/environments/{id}/internet` | Set internet egress; returns a job. |
+| POST | `/api/environments/{id}/settings` | Change settings after creation; `dry_run` reports what restarts the desktop. Returns a job. |
 | DELETE | `/api/environments/{id}` | Delete the container and networks; returns a job. |
 | POST | `/api/environments/{id}/exec` | Run a script; returns a job. |
 | POST | `/api/environments/{id}/snapshot` | Save filesystem changes as an image; returns a job. |
@@ -125,6 +126,18 @@ Creation accepts `name`, `image` and these optional fields:
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. |
+
+## Change settings after creation
+
+`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the desktop, commits its container layer to an image tagged `bilskirnir/environment:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the desktop from its original source image, and deleting the environment removes the committed image unless a snapshot builds on it.
+
+With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
+
+```bash
+curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Wsld-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/environments/ENVIRONMENT_ID/settings
+```
+
+A feature the installation has switched off cannot be turned on. The job's result repeats the `live` and `restart` lists.
 
 Start/stop/restart uses `{"action":"start"}`, internet uses `{"enabled":false}` and snapshot uses `{"name":"Editor installed","description":"Optional note"}`. Actions on an environment are serialized. Deleting it preserves named volumes and saved images, but removes unsaved changes in its container layer.
 

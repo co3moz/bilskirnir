@@ -99,13 +99,8 @@ impl App {
             .get("environment", id)
             .map_err(crate::error::Error::from)
     }
-    pub async fn create_environment(
-        &self,
-        id: &str,
-        spec: EnvironmentSpec,
-        job_id: &str,
-    ) -> Result<Value> {
-        spec.validate()?;
+    /// Settings the installation has switched off cannot be chosen for a desktop.
+    pub(crate) fn installation_allows(&self, spec: &EnvironmentSpec) -> Result<()> {
         if spec.audio && !self.config.audio {
             bail!("Audio is disabled for this installation");
         }
@@ -114,9 +109,19 @@ impl App {
         }
         if spec.gpu && !self.config.wsl_gpu && !self.config.cuda {
             bail!(
-                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); create the environment without GPU"
+                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); use the environment without GPU"
             );
         }
+        Ok(())
+    }
+    pub async fn create_environment(
+        &self,
+        id: &str,
+        spec: EnvironmentSpec,
+        job_id: &str,
+    ) -> Result<Value> {
+        spec.validate()?;
+        self.installation_allows(&spec)?;
         let manager = self
             .config
             .manager
@@ -140,15 +145,7 @@ impl App {
         if image["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
             bail!("Image must be derived from a Bilskirnir desktop image");
         }
-        if let Some(volumes) = image["Config"]["Volumes"].as_object() {
-            for target in volumes.keys() {
-                if !spec.mounts.iter().any(|m| m.target == *target) {
-                    bail!(
-                        "Choose a named volume for the image's {target} VOLUME path; otherwise snapshots would exclude its data"
-                    );
-                }
-            }
-        }
+        image_volumes_mounted(&image, &spec)?;
         let env = Environment {
             id: id.into(),
             container: format!("wsld-{id}"),
@@ -159,6 +156,7 @@ impl App {
             created_at: now(),
             last_error: None,
             desktop: crate::profiles::from_image(&image),
+            working_image: None,
         };
         // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
         self.db.put("environment", id, &env)?;
@@ -200,12 +198,12 @@ impl App {
         let existing = self.optional_inspect("container", &env.container).await?;
         if existing.is_some() {
             let owned = self.owned(env).await?;
-            if owned["Image"] != env.source_image_id {
-                bail!("Container source image does not match");
+            if owned["Image"] != env.container_image() {
+                bail!("Container image does not match");
             }
         } else {
-            self.inspect("image", &env.source_image_id).await.context(
-                "Source image is missing; setup stopped without changing the saved image ID",
+            self.inspect("image", env.container_image()).await.context(
+                "Container image is missing; setup stopped without changing the saved image ID",
             )?;
         }
         for (name, internal) in [(&env.private_network, true), (&env.egress_network, false)] {
@@ -250,6 +248,18 @@ impl App {
             }
             return Ok(());
         }
+        let args = self.container_args(env);
+        self.docker_args(&args).await?;
+        if env.spec.internet {
+            self.docker(&["network", "connect", &env.egress_network, &env.container])
+                .await?;
+        }
+        self.docker(&["start", &env.container]).await?;
+        Ok(())
+    }
+    /// The `docker create` arguments for an environment's container: every setting that Docker
+    /// fixes when it creates a container is here.
+    pub(crate) fn container_args(&self, env: &Environment) -> Vec<String> {
         let mut args: Vec<String> = vec![
             "create",
             "--name",
@@ -323,15 +333,9 @@ impl App {
                 "c 13:* rmw".into(),
             ]);
         }
-        // Use immutable ID, not a tag that could change between inspect and create.
-        args.push(env.source_image_id.clone());
-        self.docker_args(&args).await?;
-        if env.spec.internet {
-            self.docker(&["network", "connect", &env.egress_network, &env.container])
-                .await?;
-        }
-        self.docker(&["start", &env.container]).await?;
-        Ok(())
+        // Use an immutable ID, not a tag that could change between inspect and create.
+        args.push(env.container_image().to_owned());
+        args
     }
     pub async fn set_internet(&self, env: &mut Environment, enabled: bool) -> Result<()> {
         let info = self.owned(env).await?;
@@ -421,6 +425,9 @@ impl App {
                 &format!("Removed the environment's {role} network."),
             )?;
         }
+        if let Some(image) = &env.working_image {
+            self.release_working_image(image, job_id).await?;
+        }
         self.remove_environment_records(&env.id)?;
         self.db.remove("environment", &env.id)?;
         self.append_log(
@@ -485,6 +492,10 @@ impl App {
             )?;
         } else {
             self.append_log(job_id, "Desktop container was already absent.")?;
+        }
+        // A reset starts over from the source image, so files carried across settings changes go too.
+        if let Some(image) = env.working_image.take() {
+            self.release_working_image(&image, job_id).await?;
         }
         self.remove_environment_records(id)?;
         let result = self.provision(&env, manager).await;
@@ -612,4 +623,18 @@ impl App {
         }
         Ok(())
     }
+}
+
+/// An image `VOLUME` path needs an explicit named volume, or snapshots would silently exclude it.
+pub(crate) fn image_volumes_mounted(image: &Value, spec: &EnvironmentSpec) -> Result<()> {
+    if let Some(volumes) = image["Config"]["Volumes"].as_object() {
+        for target in volumes.keys() {
+            if !spec.mounts.iter().any(|m| m.target == *target) {
+                bail!(
+                    "Choose a named volume for the image's {target} VOLUME path; otherwise snapshots would exclude its data"
+                );
+            }
+        }
+    }
+    Ok(())
 }

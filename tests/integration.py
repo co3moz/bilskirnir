@@ -210,7 +210,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 59
+    assert len(mcp("tools/list")["tools"]) == 60
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -750,6 +750,38 @@ try:
     mcp_job(tool("delete_environment", {"environment_id":clone}))
     environment_ids.remove(clone)
     print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
+    # Settings change after creation: the name and new limits apply to the running container, while
+    # audio and removing a limit need a new container that keeps the old one's files.
+    edit = job(api("environments", {"name": "Settings edit", "image": xfce["profile"]["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["environment_id"]
+    environment_ids.append(edit)
+    edit_container = f"wsld-{edit}"
+    ready(edit_container)
+    first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
+    preview = api(f"environments/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048, "dry_run": True})
+    assert preview["live"] == ["name", "cpus", "memory_mb"] and preview["restart"] == [], preview
+    job(api(f"environments/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048}))
+    limits = json.loads(docker("inspect", "--format", "{{json .HostConfig}}", edit_container))
+    assert (limits["NanoCpus"], limits["Memory"], limits["MemorySwap"]) == (2 * 10**9, 2048 * 2**20, 4096 * 2**20), limits
+    assert docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip() == first_id
+    assert api(f"environments/{edit}")["environment"]["spec"]["name"] == "Settings edited"
+    docker("exec", "--user", "desktop", edit_container, "sh", "-c", "printf kept > /home/desktop/settings-marker")
+    preview = tool("update_environment", {"environment_id": edit, "audio": True, "cpus": None, "dry_run": True})["structuredContent"]
+    assert preview["live"] == [] and preview["restart"] == ["cpus", "audio"], preview
+    applied = mcp_job(tool("update_environment", {"environment_id": edit, "audio": True, "cpus": None}))
+    assert "Open applications close" in applied["log"] and "Its files were kept" in applied["log"], applied["log"]
+    carried = api(f"environments/{edit}")["environment"]["working_image"]["reference"]
+    image_refs.append(carried)
+    ready(edit_container)
+    second = json.loads(docker("inspect", edit_container))[0]
+    assert second["Id"] != first_id and second["HostConfig"]["NanoCpus"] == 0, second["HostConfig"]
+    assert "DESKTOP_AUDIO=true" in second["Config"]["Env"], second["Config"]["Env"]
+    assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
+    assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
+    assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    deletion = job(api(f"environments/{edit}", method="DELETE"))
+    environment_ids.remove(edit)
+    assert deletion["deleted"] == edit and json.loads(docker("image", "inspect", carried, check=False) or b"[]") == []
+    print("PASS settings change in place, recreation that keeps files, and carried image cleanup", flush=True)
     for eid in list(environment_ids):
         deletion = api(f"environments/{eid}", method="DELETE")
         result = job(deletion)
@@ -782,10 +814,11 @@ finally:
     if image_fixture and image_fixture["Config"]["Labels"].get("io.wsl-desktop.test")==tag:
         docker("rm","--force",f"wsld-test-image-{tag}",check=False)
     for eid in environment_ids:
-        name=f"wsld-{eid}"
-        info=inspect_cleanup("container",name)
-        if info and info["Config"]["Labels"].get("io.wsl-desktop.environment")==eid:
-            docker("rm","--force",info["Id"],check=False)
+        # A settings change interrupted by a failure can leave the replaced container renamed aside.
+        for name in [f"wsld-{eid}",f"wsld-{eid}-previous"]:
+            info=inspect_cleanup("container",name)
+            if info and info["Config"]["Labels"].get("io.wsl-desktop.environment")==eid:
+                docker("rm","--force",info["Id"],check=False)
         for network in [f"wsld-{eid}-private",f"wsld-{eid}-egress"]:
             info=inspect_cleanup("network",network)
             if info and (info["Labels"].get("io.wsl-desktop.environment")==eid or info["Labels"].get("io.wsl-desktop.test")==tag):

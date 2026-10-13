@@ -215,6 +215,43 @@ pub async fn internet(
         },
     )
 }
+/// Change an environment's settings. `dry_run` reports which changes apply in place and which
+/// restart the desktop, without a job.
+pub async fn update_settings(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>> {
+    let env = app.environment(&id)?;
+    let Value::Object(mut request) = body else {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "Settings must be a JSON object".into(),
+        ));
+    };
+    let dry_run = match request.remove("dry_run") {
+        None => false,
+        Some(Value::Bool(dry_run)) => dry_run,
+        Some(_) => {
+            return Err(Error(
+                StatusCode::BAD_REQUEST,
+                "dry_run must be true or false".into(),
+            ));
+        }
+    };
+    let (_, changes) = app.settings_preview(&env, &request)?;
+    if dry_run {
+        return Ok(Json(
+            json!({"environment_id": id, "live": changes.live, "restart": changes.restart}),
+        ));
+    }
+    launch(
+        app,
+        "settings",
+        format!("environment:{id}"),
+        move |app, job_id| async move { app.update_environment(&id, request, &job_id).await },
+    )
+}
 pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
     app.environment(&id)?;
     launch(
