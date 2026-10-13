@@ -50,9 +50,13 @@ if [[ -e /dev/dxg && -d /usr/lib/wsl/lib ]]; then
         adapter=NVIDIA
     fi
 fi
+# Agent access is on by default in the packaged distribution, with its own random token.
+mcp_token=$(openssl rand -hex 32)
 cp "$INSTALL/.env.example" "$ENV_FILE"
 sed -i \
     -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD='$password'|" \
+    -e "s|^MCP_ENABLED=.*|MCP_ENABLED=true|" \
+    -e "s|^MCP_TOKEN=.*|MCP_TOKEN=$mcp_token|" \
     -e "s|^WSL_GPU=.*|WSL_GPU=$gpu|" \
     -e "s|^NVIDIA_COMPUTE=.*|NVIDIA_COMPUTE=$cuda|" \
     -e "s|^GPU_ADAPTER=.*|GPU_ADAPTER=$adapter|" \
@@ -65,9 +69,12 @@ if [[ $gpu == false ]]; then
     echo "No WSL GPU device was found; desktops will run without GPU acceleration."
 fi
 echo
+echo "Agent access (MCP) is enabled with a random token; 'bilskirnir mcp' shows it with client settings."
+echo
 echo "Next steps:"
 echo "  bilskirnir start    download the images and start the manager"
 echo "  bilskirnir doctor   check Docker, GPU and network"
+echo "  bilskirnir mcp      show the agent endpoint, token and client configuration"
 echo
 # Only an interactive first start offers to download the images right away.
 start=n

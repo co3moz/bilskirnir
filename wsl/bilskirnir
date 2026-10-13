@@ -16,6 +16,7 @@ Usage: bilskirnir <command>
   update    Pull the latest images and recreate the manager
   doctor    Check Docker, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
+  mcp       Show the agent (MCP) endpoint, its token and client configuration
   settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
 EOF
 }
@@ -85,11 +86,43 @@ case ${1:-help} in
         if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
         if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
         if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
-        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|PORT|BIND_ADDRESS)=' "$INSTALL/.env" | sed 's/^/           /'; else echo "settings:  missing"; fi
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|PORT|BIND_ADDRESS|MCP_ENABLED)='"$INSTALL/.env" | sed 's/^/           /'; else echo "settings:  missing"; fi
         if curl -fsS -o /dev/null --max-time 10 https://ghcr.io/v2/; then echo "registry:  ghcr.io reachable"; else echo "registry:  ghcr.io not reachable (HTTP 401 is normal; a timeout is not)"; fi
         ;;
     open)
         if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi
+        ;;
+    mcp)
+        require_settings
+        enabled=$(sed -n 's/^MCP_ENABLED=//p' "$INSTALL/.env" | tail -n1)
+        token=$(sed -n 's/^MCP_TOKEN=//p' "$INSTALL/.env" | tail -n1)
+        if [[ $enabled != true || -z $token ]]; then
+            echo "Agent access is disabled. Set MCP_ENABLED=true and MCP_TOKEN in $INSTALL/.env, then run 'bilskirnir restart'." >&2
+            exit 1
+        fi
+        distro=${WSL_DISTRO_NAME:-Bilskirnir}
+        cat <<EOF
+Agent access (MCP) is enabled. The token grants administrator access to every desktop.
+
+Streamable HTTP
+  URL:     $(address)/mcp
+  Header:  Authorization: Bearer $token
+
+Claude Code on Windows:
+  claude mcp add --transport http bilskirnir $(address)/mcp --header "Authorization: Bearer $token"
+
+stdio bridge (no token in the client; it runs inside the manager container):
+  {
+    "mcpServers": {
+      "bilskirnir": {
+        "command": "wsl.exe",
+        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+      }
+    }
+  }
+
+Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'.
+EOF
         ;;
     settings)
         require_settings

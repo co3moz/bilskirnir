@@ -15,7 +15,7 @@ MCP_ENABLED: "true"
 MCP_TOKEN: "your-random-token"
 ```
 
-With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. An enabled server requires a token of 32–256 visible ASCII characters, even if dashboard login is disabled.
+With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) enables MCP at first start with a generated token; run `bilskirnir mcp` inside the distribution to see it together with the client settings below. An enabled server requires a token of 32–256 visible ASCII characters, even if dashboard login is disabled.
 
 Configure your MCP client with:
 
@@ -40,13 +40,13 @@ For clients that use an `mcpServers` configuration:
   "mcpServers": {
     "bilskirnir": {
       "command": "wsl.exe",
-      "args": ["-d", "Ubuntu-22.04", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+      "args": ["-d", "Bilskirnir", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
     }
   }
 }
 ```
 
-Use your WSL distribution and manager container names. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
+Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
 MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
 
