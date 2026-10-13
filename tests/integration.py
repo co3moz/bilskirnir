@@ -209,7 +209,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 36
+    assert len(mcp("tools/list")["tools"]) == 47
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -345,6 +345,37 @@ try:
     missing_program = tool("launch_application", {"environment_id":env_id,"command":"/nonexistent/program"})["structuredContent"]
     assert missing_program["state"] == "failed", missing_program
     print("PASS application lifecycle, window management, sized screenshots, held keys and relative pointer", flush=True)
+    second = tool("launch_application", {"environment_id":env_id,"command":"bash","args":["-c","echo READY_MARKER; exec xlogo -title 'Bilskirnir wait test'"]})["structuredContent"]["application_id"]
+    waited = tool("wait_for_condition", {"environment_id":env_id,"window_title":"Bilskirnir wait test","application_id":second,"application_state":"running","log_contains":"READY_MARKER","timeout_ms":15000})["structuredContent"]
+    assert waited["satisfied"] and waited["window"]["title"] == "Bilskirnir wait test" and waited["log_found"], waited
+    stable = api(f"environments/{env_id}/wait", {"screen_stable_ms":600,"region":"900,500,200,120","timeout_ms":10000,"interval_ms":200})
+    assert stable["satisfied"] and stable["screen_stable_for_ms"] >= 600, stable
+    unmet = tool("wait_for_condition", {"environment_id":env_id,"window_title":"no such window","timeout_ms":600,"interval_ms":200})["structuredContent"]
+    assert not unmet["satisfied"] and unmet["window"] is None, unmet
+    diagnostics = tool("application_diagnostics", {"environment_id":env_id,"application_id":second})["structuredContent"]
+    assert diagnostics["processes"] and "READY_MARKER" in diagnostics["log_tail"] and diagnostics["open_files"], diagnostics
+    sampled = tool("sample_metrics", {"environment_id":env_id,"application_id":second,"duration_ms":300})["structuredContent"]
+    assert sampled["cpu_percent"] is not None and sampled["rss_bytes"] > 0 and sampled["processes"] >= 1, sampled
+    recording = tool("start_recording", {"environment_id":env_id,"fps":4,"max_seconds":20,"max_width":320,"name":"wait test"})["structuredContent"]
+    time.sleep(1.5)
+    finished = tool("stop_recording", {"environment_id":env_id,"recording_id":recording["recording_id"]})["structuredContent"]
+    assert finished["state"] == "finished" and finished["frames"] >= 2 and finished["reason"] == "stopped", finished
+    assert any(r["recording_id"] == recording["recording_id"] and r["frames"] == finished["frames"] for r in tool("list_recordings", {"environment_id":env_id})["structuredContent"]["items"])
+    frames = tool("list_files", {"environment_id":env_id,"path":finished["directory"]})["structuredContent"]
+    assert sum(1 for f in frames["items"] if f["name"].endswith(".jpg")) == finished["frames"], frames
+    exported = tool("export_artifacts", {"environment_id":env_id,"destination":"/home/desktop/Downloads","name":"evidence.tar.gz","recording_ids":[recording["recording_id"]],"application_ids":[second]})["structuredContent"]
+    listing = docker("exec", container, "tar", "-tzf", exported["path"]).decode()
+    assert "manifest.json" in listing and f"recordings/{recording['recording_id']}/frame-00000" in listing and f"applications/{second}/log" in listing, listing
+    assert tool("export_artifacts", {"environment_id":env_id,"destination":"/home/desktop/Downloads","name":"evidence.tar.gz","recording_ids":[recording["recording_id"]]}, allow_error=True)["isError"]
+    tool("move_file", {"environment_id":env_id,"source":"/home/desktop/agent-files/hello.txt","destination":"/home/desktop/agent-files/renamed.txt"})
+    entries = tool("list_files", {"environment_id":env_id,"path":"/home/desktop/agent-files"})["structuredContent"]["items"]
+    assert any(e["name"] == "renamed.txt" and e["type"] == "file" for e in entries) and not any(e["name"] == "hello.txt" for e in entries), entries
+    assert tool("list_files", {"environment_id":env_id,"path":"/home/desktop/agent-link"}, allow_error=True)["isError"]
+    assert tool("delete_file", {"environment_id":env_id,"path":"/home/desktop/agent-files"}, allow_error=True)["isError"]
+    tool("delete_file", {"environment_id":env_id,"path":"/home/desktop/agent-files","recursive":True})
+    assert docker("exec",container,"test","!","-e","/home/desktop/agent-files") == b""
+    tool("stop_application", {"environment_id":env_id,"application_id":second})
+    print("PASS waits, diagnostics, metrics, frame recordings, artifact export and file tools", flush=True)
     payload = bytes(range(256)) * 5000
     uploaded = upload(env_id,"binary & notes.bin",payload)
     assert docker("exec",container,"cat",uploaded["path"]) == payload
@@ -581,6 +612,12 @@ try:
     agent_snapshot = mcp_job(tool("snapshot", {"environment_id":agent_env,"name":"Agent snapshot"}))["result"]
     assert agent_snapshot["parent_image_id"] == agent_image["image_id"]
     assert any(image["id"] == agent_snapshot["id"] for image in tool("list_images")["structuredContent"]["items"])
+    reset_job = mcp_job(tool("reset_environment", {"environment_id":agent_env}))
+    assert reset_job["result"]["volumes_preserved"] and "Recreated the desktop" in reset_job["log"], reset_job
+    ready(f"wsld-{agent_env}")
+    assert tool("read_file", {"environment_id":agent_env,"path":"/home/desktop/from-agent.txt"}, allow_error=True)["isError"]
+    assert tool("read_file", {"environment_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
+    print("PASS environment reset discards the container layer and keeps the pinned image", flush=True)
     mcp_job(tool("set_internet", {"environment_id":agent_env,"enabled":True}))
     mcp_job(tool("set_internet", {"environment_id":agent_env,"enabled":False}))
     mcp_job(tool("environment_action", {"environment_id":agent_env,"action":"stop"}))

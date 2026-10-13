@@ -99,7 +99,7 @@ For Docker or GPU lifecycle changes, build both desktop profiles and the manager
 python3 tests/integration.py
 ```
 
-The suite creates uniquely named resources and cleans only resources it owns. It covers both desktop profiles, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery. It does not launch Unity or test a physical microphone.
+The suite creates uniquely named resources and cleans only resources it owns. It covers both desktop profiles, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings, artifact export, file tools and environment reset. It does not launch Unity or test a physical microphone.
 
 Inspect interface changes in a live browser at desktop and narrow widths. Open saved screenshots to confirm their actual layout before adding them to the documentation. Do not run acceptance tests or rebuild images for a wording-only change.
 
