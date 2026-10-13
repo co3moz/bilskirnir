@@ -387,20 +387,20 @@ try:
         assert response.headers["Content-Length"] == str(exported["bytes"]) and "evidence.tar.gz" in response.headers["Content-Disposition"], dict(response.headers)
         assert len(response.read()) == exported["bytes"]
     assert tool("download_file", {"environment_id":env_id,"path":"/home/desktop/agent-link"}, allow_error=True)["isError"]
-    tone = b"".join(struct.pack("<ff", 0.25 * math.sin(i * 2 * math.pi * 440 / 48000), 0.25 * math.sin(i * 2 * math.pi * 440 / 48000)) for i in range(72000))
+    tone = b"".join(struct.pack("<ff", 0.25 * math.sin(i * 2 * math.pi * 440 / 48000), 0.25 * math.sin(i * 2 * math.pi * 440 / 48000)) for i in range(240000))
     player = subprocess.Popen(["docker", "exec", "-i", "--user", "desktop", container, "pacat", "--playback", "--device=desktop-output", "--format=float32le", "--rate=48000", "--channels=2"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     threading.Thread(target=lambda: (player.stdin.write(tone), player.stdin.close()), daemon=True).start()
-    time.sleep(0.3)
+    time.sleep(2.0)
     heard = tool("capture_audio", {"environment_id":env_id,"seconds":1.0})
     assert heard["content"][0]["type"] == "audio" and heard["content"][0]["mimeType"] == "audio/wav", heard["content"][0].keys()
     assert heard["structuredContent"]["peak"] > 0.01 and not heard["structuredContent"]["silent"], heard["structuredContent"]
     assert base64.b64decode(heard["content"][0]["data"])[:4] == b"RIFF"
-    player.wait(timeout=20)
-    pcm = b"".join(struct.pack("<h", int(8000 * math.sin(i * 2 * math.pi * 440 / 48000))) for i in range(72000))
+    player.wait(timeout=30)
+    pcm = b"".join(struct.pack("<h", int(8000 * math.sin(i * 2 * math.pi * 440 / 48000))) for i in range(240000))
     wav = b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 48000, 96000, 2, 16) + b"data" + struct.pack("<I", len(pcm)) + pcm
     injector = threading.Thread(target=lambda: tool("inject_audio", {"environment_id":env_id,"data_base64":base64.b64encode(wav).decode()}), daemon=True)
     injector.start()
-    time.sleep(0.3)
+    time.sleep(2.0)
     spoken = tool("capture_audio", {"environment_id":env_id,"seconds":1.0,"source":"microphone"})["structuredContent"]
     assert spoken["peak"] > 0.01, spoken
     injector.join(timeout=30)
