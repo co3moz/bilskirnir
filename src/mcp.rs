@@ -266,6 +266,9 @@ impl BilskirnirMcp {
                     .await?
                     .0
             }
+            "list_files" => files::list_files(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "move_file" => files::move_file(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "delete_file" => files::delete_file(&self.app, &id.unwrap(), &parse(args)?).await?,
             "desktop_input" => {
                 desktop_input::input(state, Path(id.unwrap()), Json(parse(args)?))
                     .await?
@@ -668,6 +671,9 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         false,
     ));
     tools.push(derived::<windows::Geometry>("set_window_geometry", "Move and/or resize a window so screenshots and coordinates stay predictable. Returns the resulting geometry.", &[environment.clone(), ("window_id", window.clone(), true)], false, true, false));
+    tools.push(derived::<files::ListFiles>("list_files", "List a directory inside a running environment as the desktop user: name, type (file, directory, symlink, special), size, modified_at and mode. Symlinks in the path are rejected.", std::slice::from_ref(&environment), true, false, false));
+    tools.push(derived::<files::MoveFile>("move_file", "Rename or move a file or directory within the same volume as the desktop user. Existing destinations need replace=true; path symlinks are rejected.", std::slice::from_ref(&environment), false, true, false));
+    tools.push(derived::<files::DeleteFile>("delete_file", "Delete a file, symlink or directory as the desktop user. Directories need recursive=true to remove their contents; top-level directories, the desktop home and mounted volume roots are refused.", std::slice::from_ref(&environment), false, true, false));
     let mut input_schema =
         serde_json::to_value(rmcp::schemars::schema_for!(desktop_input::Input)).unwrap();
     input_schema["properties"]["environment_id"] = id;

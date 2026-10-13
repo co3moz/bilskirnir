@@ -10,6 +10,7 @@ use axum::{
     http::StatusCode,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
+use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
@@ -174,4 +175,160 @@ pub async fn write(
         ));
     }
     Ok(Json(json!({"path":body.path,"bytes":size})))
+}
+
+const FILE_OPS: &str = include_str!("file_ops.py");
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListFiles {
+    /// Canonical absolute directory path.
+    pub path: String,
+    /// Maximum number of entries to return (1–2000).
+    #[serde(default = "list_limit")]
+    pub limit: usize,
+}
+fn list_limit() -> usize {
+    500
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveFile {
+    /// Canonical absolute path of the file or directory to move.
+    pub source: String,
+    /// Canonical absolute destination path on the same volume.
+    pub destination: String,
+    /// Replace an existing destination.
+    #[serde(default)]
+    pub replace: bool,
+}
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DeleteFile {
+    /// Canonical absolute path of the file, symlink or directory to delete.
+    pub path: String,
+    /// Delete a directory together with its contents.
+    #[serde(default)]
+    pub recursive: bool,
+}
+impl ListFiles {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        crate::apps::directory(&self.path)?;
+        if self.limit == 0 || self.limit > 2000 {
+            bail!("limit must be 1–2000");
+        }
+        Ok(())
+    }
+}
+impl MoveFile {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        split_path(&self.source)?;
+        split_path(&self.destination)?;
+        Ok(())
+    }
+}
+impl DeleteFile {
+    pub fn validate(&self, spec: &crate::model::EnvironmentSpec) -> anyhow::Result<()> {
+        split_path(&self.path)?;
+        if self.path[1..].split('/').count() < 2
+            || self.path == "/home/desktop"
+            || spec.mounts.iter().any(|mount| mount.target == self.path)
+        {
+            bail!(
+                "Refusing to delete a top-level directory, the desktop home or a mounted volume's root"
+            );
+        }
+        Ok(())
+    }
+}
+async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
+    let lock = app.resource_lock(&format!("environment:{id}"));
+    let _guard = lock.lock().await;
+    let env = app.environment(id)?;
+    let container = app.owned(&env).await?;
+    if container["State"]["Running"] != true {
+        return Err(anyhow::anyhow!("Start the environment before using its files").into());
+    }
+    let mut args = vec![
+        "exec",
+        "--user",
+        "1001:1001",
+        container["Id"].as_str().context("Missing container ID")?,
+        "python3",
+        "-c",
+        FILE_OPS,
+    ];
+    args.extend(arguments);
+    let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let output = process::capture(
+        app.command(&args),
+        Duration::from_secs(120),
+        1_048_576,
+        process::Overflow::Reject,
+    )
+    .await?;
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error(
+            if message.starts_with("CONFLICT:") {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            message,
+        ));
+    }
+    serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e).into())
+}
+pub async fn list_files(app: &App, id: &str, body: &ListFiles) -> Result<Value> {
+    body.validate()?;
+    operate(app, id, &["list", &body.path, &body.limit.to_string()]).await
+}
+pub async fn move_file(app: &App, id: &str, body: &MoveFile) -> Result<Value> {
+    body.validate()?;
+    operate(
+        app,
+        id,
+        &[
+            "move",
+            &body.source,
+            &body.destination,
+            if body.replace { "true" } else { "false" },
+        ],
+    )
+    .await
+}
+pub async fn delete_file(app: &App, id: &str, body: &DeleteFile) -> Result<Value> {
+    let env = app.environment(id)?;
+    body.validate(&env.spec)?;
+    operate(
+        app,
+        id,
+        &[
+            "delete",
+            &body.path,
+            if body.recursive { "true" } else { "false" },
+        ],
+    )
+    .await
+}
+pub async fn list(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<ListFiles>,
+) -> Result<Json<Value>> {
+    Ok(Json(list_files(&app, &id, &body).await?))
+}
+pub async fn move_(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<MoveFile>,
+) -> Result<Json<Value>> {
+    Ok(Json(move_file(&app, &id, &body).await?))
+}
+pub async fn delete(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<DeleteFile>,
+) -> Result<Json<Value>> {
+    Ok(Json(delete_file(&app, &id, &body).await?))
 }

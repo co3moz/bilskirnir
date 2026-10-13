@@ -65,6 +65,9 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/exec", post(exec::execute))
         .route("/api/environments/{id}/files/read", post(files::read))
         .route("/api/environments/{id}/files/write", post(files::write))
+        .route("/api/environments/{id}/files/list", post(files::list))
+        .route("/api/environments/{id}/files/move", post(files::move_))
+        .route("/api/environments/{id}/files/delete", post(files::delete))
         .route("/api/environments/{id}/input", post(desktop_input::input))
         .route("/api/environments/{id}/act-and-observe", post(capture::act))
         .route(

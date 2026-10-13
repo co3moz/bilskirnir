@@ -57,6 +57,9 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/windows/{window_id}/geometry` | Move or resize a window. |
 | POST | `/api/environments/{id}/files/read` | Read a bounded file slice as text or base64. |
 | POST | `/api/environments/{id}/files/write` | Write text or base64 file data atomically. |
+| POST | `/api/environments/{id}/files/list` | List a directory without following symlinks. |
+| POST | `/api/environments/{id}/files/move` | Rename or move within the same volume. |
+| POST | `/api/environments/{id}/files/delete` | Delete a file, symlink or directory. |
 | POST | `/api/environments/{id}/files` | Stream a binary upload. |
 | GET | `/api/images` | Saved images, snapshots, ancestry and availability. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
@@ -135,6 +138,8 @@ Write request:
 ```
 
 Writes are atomic, create missing parent directories and use mode 0600. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
+
+`POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. Use the read route with base64 encoding to download a file.
 
 For larger uploads, POST the raw file body with `Content-Type: application/octet-stream` to `/api/environments/{id}/files`. Supply `destination`, `name`, `size` and optional `replace` as query parameters:
 

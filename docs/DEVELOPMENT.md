@@ -31,7 +31,7 @@ When a supplied profile image is missing, its card under **Images** offers **Bui
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
 | Background applications, windows and screenshots | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs` |
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
-| File read/write API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py` |
+| File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/uploads.mjs` |
 | Dashboard and desktop interface | `web/index.html`, `web/app.js`, `web/helpers.mjs`, `web/media.mjs`, `web/audio-worklet.js`, `web/style.css`, `web/icons.mjs`, `web/mark.svg` |
 | Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh` |

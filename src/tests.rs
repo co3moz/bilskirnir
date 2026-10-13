@@ -177,7 +177,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 36);
+    assert_eq!(tools.len(), 39);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -313,6 +313,9 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "exec",
         "files/read",
         "files/write",
+        "files/list",
+        "files/move",
+        "files/delete",
         "input",
         "act-and-observe",
         "applications",
@@ -1083,5 +1086,76 @@ async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
             .list::<model::Environment>("environment")
             .unwrap()
             .is_empty()
+    );
+}
+
+#[test]
+fn file_tool_requests_are_validated() {
+    let mut spec = spec();
+    spec.mounts.push(model::Mount {
+        volume: "projects".into(),
+        target: "/shared".into(),
+        readonly: false,
+    });
+    assert!(
+        files::ListFiles {
+            path: "/".into(),
+            limit: 10
+        }
+        .validate()
+        .is_ok()
+    );
+    assert!(
+        files::ListFiles {
+            path: "relative".into(),
+            limit: 10
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        files::ListFiles {
+            path: "/home/desktop".into(),
+            limit: 0
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        files::MoveFile {
+            source: "/home/desktop/a".into(),
+            destination: "/home/desktop/b".into(),
+            replace: false
+        }
+        .validate()
+        .is_ok()
+    );
+    assert!(
+        files::MoveFile {
+            source: "/home/desktop/../a".into(),
+            destination: "/home/desktop/b".into(),
+            replace: false
+        }
+        .validate()
+        .is_err()
+    );
+    for path in ["/home/desktop", "/shared", "/etc", "/home/desktop/"] {
+        assert!(
+            files::DeleteFile {
+                path: path.into(),
+                recursive: true
+            }
+            .validate(&spec)
+            .is_err(),
+            "{path}"
+        );
+    }
+    assert!(
+        files::DeleteFile {
+            path: "/shared/project".into(),
+            recursive: true
+        }
+        .validate(&spec)
+        .is_ok()
     );
 }

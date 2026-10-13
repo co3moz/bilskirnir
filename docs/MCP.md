@@ -64,13 +64,13 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 36 tools:
+The server currently exposes 39 tools:
 
 | Work | Tools |
 | --- | --- |
 | Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `build_profile` |
 | Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `environment_action`, `set_internet`, `retry_environment`, `delete_environment` |
-| Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `screenshot`, `desktop_input`, `act_and_observe`, `environment_logs`, `environment_diagnostics` |
+| Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `desktop_input`, `act_and_observe`, `environment_logs`, `environment_diagnostics` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Reusable images | `list_images`, `import_image`, `build_image`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
@@ -108,6 +108,8 @@ A script holds the environment's operation lock until it finishes, so do not sta
 `write_file` takes `path` and `data`, with the same encoding choices. It creates missing parent directories and saves the complete file atomically. Existing files require `replace=true`. Writes are limited to 512 KiB and use mode 0600. There is no root file-write option; destination permissions still apply.
 
 Both tools reject path traversal and symlinks. Reads accept regular files only, so devices, sockets and FIFOs cannot turn a bounded read into an endless stream.
+
+`list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. Download a file with `read_file` and `encoding=base64`.
 
 `upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination within Downloads or a writable mounted volume. Its MCP limit is 512 KiB; use the streaming HTTP upload endpoint for larger files. See [files in the HTTP API](API.md#files).
 
