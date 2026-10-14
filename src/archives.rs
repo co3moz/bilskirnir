@@ -1,0 +1,621 @@
+//! Image archives: a saved image leaves as a gzip-compressed `docker save` stream and comes back
+//! through `docker load`, without passing through memory or the data volume.
+//!
+//! `docker load` applies whatever names an archive carries, so an import rewrites the archive on
+//! its way in (see `tar`): the image arrives under its ID only and is tagged with a name the
+//! manager owns. An export saves by image ID, so its archive names no image either.
+mod gzip;
+mod tar;
+
+use crate::{
+    App, auth,
+    error::{Error, Result},
+    jobs,
+    model::{BuildConfig, ImageRecord, image_ref, now},
+    process::{self, Overflow},
+    profiles::DesktopInfo,
+};
+use anyhow::{Context, anyhow, bail};
+use axum::{
+    Json,
+    body::{Body, Bytes},
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
+};
+use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::{
+    process::Stdio,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::{Child, ChildStdin},
+    sync::{OwnedSemaphorePermit, mpsc, oneshot},
+};
+
+/// How often a running transfer's byte count is written to its job.
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
+/// Unpacked archive bytes waiting for Docker at most.
+const UNPACK_BUDGET: usize = 4 << 20;
+const READ_SIZE: usize = 256 * 1024;
+/// `docker load` registers the layers after the archive has arrived; a large image takes minutes.
+const LOAD_LIMIT: Duration = Duration::from_secs(3600);
+/// The metadata layout this release writes and reads.
+const FORMAT: u32 = 1;
+
+/// Bilskirnir's description of the image, the archive's first entry, so an import keeps the
+/// saved image's name and description, and a script build its configuration.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ArchiveInfo {
+    pub format: u32,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub desktop: Option<DesktopInfo>,
+    #[serde(default)]
+    pub image_id: String,
+    #[serde(default)]
+    pub parent_image_id: Option<String>,
+    #[serde(default)]
+    pub created_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildConfig>,
+}
+
+impl ArchiveInfo {
+    fn of(record: &ImageRecord) -> Self {
+        Self {
+            format: FORMAT,
+            name: record.name.clone(),
+            description: record.description.clone(),
+            kind: record.kind.clone(),
+            desktop: record.desktop.clone(),
+            image_id: record.image_id.clone(),
+            parent_image_id: record.parent_image_id.clone(),
+            created_at: record.created_at,
+            build: record.build.clone(),
+        }
+    }
+
+    /// Metadata this release understands; anything else is ignored and the image still loads.
+    fn read(raw: Option<&[u8]>) -> Option<Self> {
+        let mut info = raw
+            .and_then(|raw| serde_json::from_slice::<Self>(raw).ok())
+            .filter(|info| info.format == FORMAT)?;
+        // A configuration the build route would refuse is not one worth keeping.
+        info.build = info.build.filter(|build| {
+            image_ref(&build.base_image).is_ok() && build.script.len() <= 1_000_000
+        });
+        Some(info)
+    }
+}
+
+/// Stream a saved image as a gzip-compressed `docker save` archive. The transfer is a job, so
+/// its progress and any Docker error stay visible after the browser's download has begun.
+pub async fn export(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let record: ImageRecord = app.db.get("image", &id)?;
+    let permit = transfer_permit(&app)?;
+    let token = auth::cookie(&headers);
+    let (ascii, full) = file_names(&record.name);
+    let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
+    let (job_id, _) = jobs::start(
+        app,
+        "image-export",
+        format!("image:{id}"),
+        false,
+        move |app, job_id| async move {
+            let _permit = permit;
+            let result = app.export_archive(&job_id, &record, &body, token).await;
+            if let Err(error) = &result {
+                // The download fails instead of ending in a short file that looks complete.
+                let _ = body
+                    .send(Err(std::io::Error::other(format!("{error:#}"))))
+                    .await;
+            }
+            result
+        },
+    )?;
+    let stream = futures_util::stream::unfold(chunks, |mut chunks| async move {
+        chunks.recv().await.map(|chunk| (chunk, chunks))
+    });
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/gzip".to_owned()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!(
+                    "attachment; filename=\"{ascii}\"; filename*=UTF-8''{}",
+                    crate::files::percent_encode(&full)
+                ),
+            ),
+            (header::HeaderName::from_static("x-job-id"), job_id),
+        ],
+        Body::from_stream(stream),
+    )
+        .into_response())
+}
+
+#[derive(Deserialize)]
+pub struct Import {
+    pub size: u64,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Receive an image archive and load it into Docker. The answer comes once the whole archive has
+/// arrived and passed its checks: a job ID while Docker goes on loading the image, or the reason
+/// the archive was refused.
+pub async fn import(
+    State(app): State<Arc<App>>,
+    Query(request): Query<Import>,
+    headers: HeaderMap,
+    body: Body,
+) -> Result<Json<Value>> {
+    if request.size > app.config.archive_limit {
+        return Err(Error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "The archive is larger than the import limit (IMAGE_ARCHIVE_MAX_MB)".into(),
+        ));
+    }
+    if headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        != Some("application/octet-stream")
+    {
+        return Err(Error(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "Send the archive as a binary body".into(),
+        ));
+    }
+    let name = request.name.as_deref().map(str::trim).unwrap_or_default();
+    if name.chars().count() > 100
+        || request
+            .description
+            .as_ref()
+            .is_some_and(|description| description.len() > 4096)
+    {
+        return Err(anyhow!("Invalid image name or description").into());
+    }
+    let permit = transfer_permit(&app)?;
+    let token = auth::cookie(&headers);
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let (accepted, was_accepted) = oneshot::channel();
+    let waiting = app.clone();
+    let session = token.clone();
+    let (job_id, outcome) = jobs::start(
+        app,
+        "image-import",
+        format!("image:{id}"),
+        true,
+        move |app, job_id| async move {
+            let _permit = permit;
+            app.import_archive(&job_id, &id, request, body, token, accepted)
+                .await
+        },
+    )?;
+    tokio::select! {
+        result = was_accepted => match result {
+            Ok(()) => Ok(Json(json!({"job_id": job_id}))),
+            // The job ended before it accepted the archive; its error says why.
+            Err(_) => match outcome.await {
+                Ok(Err(message)) => Err(Error(StatusCode::BAD_REQUEST, message)),
+                _ => Err(Error(StatusCode::INTERNAL_SERVER_ERROR, "The import ended unexpectedly".into())),
+            },
+        },
+        _ = waiting.session_revoked(session) => {
+            Err(Error(StatusCode::UNAUTHORIZED, "Session expired. Sign in again.".into()))
+        }
+    }
+}
+
+/// `docker load` reading the filtered archive. Until the archive has passed its checks the
+/// process is killed before its input closes: a closed input would let Docker load what it got.
+struct Load {
+    child: Option<Child>,
+    stdin: Option<ChildStdin>,
+}
+
+/// `docker load` stopped reading; its own error output says why.
+#[derive(Debug)]
+struct Stopped;
+impl std::fmt::Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("docker load stopped reading the archive")
+    }
+}
+impl std::error::Error for Stopped {}
+
+impl Load {
+    async fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+        let stdin = self.stdin.as_mut().context("docker load input is closed")?;
+        stdin
+            .write_all(data)
+            .await
+            .map_err(|_| anyhow::Error::new(Stopped))
+    }
+
+    /// End the input after the closing blocks, which commits the load.
+    async fn close(&mut self) -> anyhow::Result<Child> {
+        let mut stdin = self.stdin.take().context("docker load input is closed")?;
+        stdin
+            .shutdown()
+            .await
+            .map_err(|_| anyhow::Error::new(Stopped))?;
+        drop(stdin);
+        self.child.take().context("docker load has ended")
+    }
+}
+
+impl Drop for Load {
+    fn drop(&mut self) {
+        if self.stdin.is_some()
+            && let Some(child) = &mut self.child
+        {
+            let _ = child.start_kill();
+        }
+    }
+}
+
+impl App {
+    async fn export_archive(
+        &self,
+        job_id: &str,
+        record: &ImageRecord,
+        body: &mpsc::Sender<std::io::Result<Bytes>>,
+        token: Option<String>,
+    ) -> anyhow::Result<Value> {
+        let info = self
+            .inspect("image", &record.image_id)
+            .await
+            .context("The image is no longer available in Docker")?;
+        if info["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+            bail!("A desktop-compatible image is required");
+        }
+        self.append_log(
+            job_id,
+            &format!(
+                "Exporting {} with docker save. Docker prepares the image before its layers arrive.",
+                record.name
+            ),
+        )?;
+        let metadata = serde_json::to_vec_pretty(&ArchiveInfo::of(record))?;
+        let (mut compressor, first) =
+            gzip::Compressor::new(&tar::entry(tar::METADATA, &metadata, now()))?;
+        let mut sent = 0;
+        send(body, first, &mut sent).await?;
+        // Nothing counts until Docker has prepared the image and its first layer arrives.
+        self.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
+        let mut child = self
+            .command(&["save".into(), record.image_id.clone()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Could not start Docker CLI")?;
+        let mut stdout = child.stdout.take().context("Missing docker save output")?;
+        let errors = tokio::spawn(process::read_limited(
+            child.stderr.take().context("Missing docker save errors")?,
+            8192,
+            Overflow::Tail,
+        ));
+        let revoked = self.session_revoked(token);
+        tokio::pin!(revoked);
+        let mut buffer = vec![0; READ_SIZE];
+        let mut reported = Instant::now();
+        loop {
+            let read = tokio::select! {
+                read = stdout.read(&mut buffer) => read.context("Could not read docker save output")?,
+                _ = &mut revoked => bail!("Session expired. Sign in again."),
+                _ = body.closed() => bail!("The download was cancelled before it finished"),
+            };
+            if read == 0 {
+                break;
+            }
+            let input = buffer[..read].to_vec();
+            let (back, output) = tokio::task::spawn_blocking(move || {
+                let output = compressor.push(&input);
+                (compressor, output)
+            })
+            .await?;
+            compressor = back;
+            send(body, output?, &mut sent).await?;
+            if reported.elapsed() >= PROGRESS_INTERVAL {
+                self.set_progress(job_id, Some(json!({"transfer": "export", "current": sent})))?;
+                reported = Instant::now();
+            }
+        }
+        let status = child.wait().await?;
+        let errors = errors.await??;
+        if !status.success() {
+            bail!("Docker: {}", String::from_utf8_lossy(&errors).trim());
+        }
+        let last = tokio::task::spawn_blocking(move || compressor.finish()).await??;
+        send(body, last, &mut sent).await?;
+        self.append_log(job_id, &format!("Exported {sent} bytes."))?;
+        Ok(json!({"image_id": record.image_id, "name": record.name, "bytes": sent}))
+    }
+
+    async fn import_archive(
+        &self,
+        job_id: &str,
+        id: &str,
+        request: Import,
+        body: Body,
+        token: Option<String>,
+        accepted: oneshot::Sender<()>,
+    ) -> anyhow::Result<Value> {
+        self.append_log(
+            job_id,
+            &format!("Receiving an image archive of {} bytes.", request.size),
+        )?;
+        let progress =
+            |current: u64| json!({"transfer": "import", "current": current, "total": request.size});
+        self.set_progress(job_id, Some(progress(0)))?;
+        let mut child = self
+            .command(&["load".into(), "--quiet".into()])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Could not start Docker CLI")?;
+        let output = tokio::spawn(process::read_limited(
+            child.stdout.take().context("Missing docker load output")?,
+            65_536,
+            Overflow::Tail,
+        ));
+        let errors = tokio::spawn(process::read_limited(
+            child.stderr.take().context("Missing docker load errors")?,
+            8192,
+            Overflow::Tail,
+        ));
+        let mut load = Load {
+            stdin: child.stdin.take(),
+            child: Some(child),
+        };
+        let delivered = async {
+            let mut unpacker = gzip::Unpacker::new(self.config.archive_limit);
+            let revoked = self.session_revoked(token);
+            tokio::pin!(revoked);
+            let mut stream = body.into_data_stream();
+            let (mut received, mut reported) = (0u64, Instant::now());
+            loop {
+                let chunk = tokio::select! {
+                    chunk = stream.next() => chunk,
+                    _ = &mut revoked => bail!("Session expired. Sign in again."),
+                };
+                let Some(chunk) = chunk else { break };
+                let mut pending =
+                    chunk.map_err(|error| anyhow!("The upload was interrupted: {error}"))?;
+                received += pending.len() as u64;
+                if received > request.size {
+                    bail!("The upload is larger than its declared size");
+                }
+                while !pending.is_empty() {
+                    let (back, step) = tokio::task::spawn_blocking(move || {
+                        let step = unpacker
+                            .push(&pending, UNPACK_BUDGET)
+                            .map(|(used, output)| (pending.slice(used..), output));
+                        (unpacker, step)
+                    })
+                    .await?;
+                    unpacker = back;
+                    let (rest, output) = step?;
+                    pending = rest;
+                    load.write(&output).await?;
+                }
+                if reported.elapsed() >= PROGRESS_INTERVAL {
+                    self.set_progress(job_id, Some(progress(received)))?;
+                    reported = Instant::now();
+                }
+            }
+            if received != request.size {
+                bail!(
+                    "The upload ended after {received} of {} bytes",
+                    request.size
+                );
+            }
+            let (last, contents) = tokio::task::spawn_blocking(move || unpacker.finish()).await??;
+            load.write(&last).await?;
+            anyhow::Ok(contents)
+        }
+        .await;
+        let contents = match delivered {
+            Ok(contents) => contents,
+            Err(error) if error.is::<Stopped>() => {
+                drop(load);
+                return Err(docker_error(errors).await);
+            }
+            Err(error) => return Err(error),
+        };
+        let mut child = match load.close().await {
+            Ok(child) => child,
+            Err(_) => return Err(docker_error(errors).await),
+        };
+        // Docker has the whole archive; the upload request can end here.
+        let _ = accepted.send(());
+        self.set_progress(job_id, None)?;
+        self.append_log(
+            job_id,
+            "The archive passed its checks. Docker is loading the image.",
+        )?;
+        let status = tokio::time::timeout(LOAD_LIMIT, child.wait())
+            .await
+            .context("docker load exceeded the one-hour limit")??;
+        let output = output.await??;
+        let errors = errors.await??;
+        if !status.success() {
+            bail!("Docker: {}", String::from_utf8_lossy(&errors).trim());
+        }
+        let loaded = loaded_image(&String::from_utf8_lossy(&output))?;
+        let info = self.inspect("image", &loaded).await?;
+        let image_id = info["Id"].as_str().context("Missing image ID")?.to_owned();
+        if info["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+            // Only a configuration written to read differently in Docker gets this far. An
+            // untagged image is this import's own; a tagged one was already on the host.
+            if info["RepoTags"].as_array().is_none_or(Vec::is_empty) {
+                let _ = self.docker(&["image", "rm", &image_id]).await;
+            }
+            bail!("The archive does not contain a Bilskirnir desktop image");
+        }
+        let reference = format!("bilskirnir/imported:{id}");
+        self.docker(&["image", "tag", &image_id, &reference])
+            .await?;
+        let metadata = ArchiveInfo::read(contents.metadata.as_deref());
+        let record = ImageRecord {
+            id: id.into(),
+            name: record_name(request.name.as_deref(), metadata.as_ref(), &image_id),
+            image_id,
+            reference,
+            parent_image_id: metadata
+                .as_ref()
+                .and_then(|info| info.parent_image_id.clone())
+                .filter(|parent| image_digest(parent)),
+            source_environment: None,
+            kind: "archive".into(),
+            created_at: now(),
+            description: request
+                .description
+                .or_else(|| metadata.as_ref().map(|info| info.description.clone()))
+                .map(|description| clip(&description, 4096))
+                .unwrap_or_default(),
+            desktop: crate::profiles::from_image(&info),
+            build: metadata.and_then(|info| info.build),
+        };
+        self.db.put("image", id, &record)?;
+        if record.build.is_some() {
+            self.append_log(job_id, "The archive carried its build configuration.")?;
+        }
+        self.append_log(
+            job_id,
+            &format!("Registered {} as {}.", record.name, record.reference),
+        )?;
+        // Like a build's result, without the script that only the configuration route returns.
+        Ok(crate::api::image_summary(&record))
+    }
+}
+
+/// What `docker load` printed before it stopped reading.
+async fn docker_error(errors: tokio::task::JoinHandle<anyhow::Result<Vec<u8>>>) -> anyhow::Error {
+    let errors = match errors.await {
+        Ok(Ok(errors)) => errors,
+        _ => Vec::new(),
+    };
+    anyhow!("Docker: {}", String::from_utf8_lossy(&errors).trim())
+}
+
+fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
+    app.archives.clone().try_acquire_owned().map_err(|_| {
+        Error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Two image archive transfers are already running. Try again when one finishes.".into(),
+        )
+    })
+}
+
+async fn send(
+    body: &mpsc::Sender<std::io::Result<Bytes>>,
+    chunk: Vec<u8>,
+    sent: &mut u64,
+) -> anyhow::Result<()> {
+    if chunk.is_empty() {
+        return Ok(());
+    }
+    *sent += chunk.len() as u64;
+    body.send(Ok(Bytes::from(chunk)))
+        .await
+        .map_err(|_| anyhow!("The download was cancelled before it finished"))
+}
+
+/// The download's ASCII file name, and the image's own name for clients that read `filename*`.
+fn file_names(name: &str) -> (String, String) {
+    let mut slug = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    let slug: String = slug.chars().take(80).collect();
+    let slug = match slug.trim_end_matches('-') {
+        "" => "image",
+        slug => slug,
+    };
+    let full: String = name
+        .trim()
+        .chars()
+        .map(|c| {
+            if c.is_control() || "/\\\"*:<>?|".contains(c) {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let full = if full.is_empty() { slug } else { full.as_str() };
+    (format!("{slug}.tar.gz"), format!("{full}.tar.gz"))
+}
+
+/// The image `docker load --quiet` reports, by ID or, should it apply a name after all, by name.
+fn loaded_image(output: &str) -> anyhow::Result<String> {
+    let mut images: Vec<&str> = output
+        .lines()
+        .filter_map(|line| {
+            line.strip_prefix("Loaded image ID: ")
+                .or_else(|| line.strip_prefix("Loaded image: "))
+        })
+        .map(str::trim)
+        .collect();
+    images.sort_unstable();
+    images.dedup();
+    match images.as_slice() {
+        [image] => Ok((*image).to_owned()),
+        [] => bail!("Docker did not report the loaded image"),
+        _ => bail!("Docker loaded more than one image: {}", images.join(", ")),
+    }
+}
+
+fn record_name(requested: Option<&str>, metadata: Option<&ArchiveInfo>, image_id: &str) -> String {
+    let requested = requested.map(str::trim).filter(|name| !name.is_empty());
+    let stored = metadata
+        .map(|info| info.name.trim())
+        .filter(|name| !name.is_empty());
+    match requested.or(stored) {
+        Some(name) => name.chars().take(100).collect(),
+        None => {
+            let short = image_id.trim_start_matches("sha256:");
+            format!("Imported image {}", &short[..short.len().min(12)])
+        }
+    }
+}
+
+fn clip(text: &str, bytes: usize) -> String {
+    let mut end = text.len().min(bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_owned()
+}
+
+fn image_digest(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+#[cfg(test)]
+#[path = "archives_tests.rs"]
+mod tests;

@@ -62,6 +62,8 @@ export const jobNames: Record<string, string> = {
   exec: "Run script",
   reset: "Reset environment",
   settings: "Change settings",
+  "image-export": "Export archive",
+  "image-import": "Import archive",
 }
 
 export type Tone = "success" | "warning" | "danger" | "muted" | "info"
@@ -97,23 +99,22 @@ export const jobActive = (job: Pick<Job, "status">) =>
   job.status === "queued" || job.status === "running"
 
 /**
- * What a job worked on, by name. The manager records `environment:<id>` or `profile:<id>`; a
- * deleted environment keeps the name its deletion job reported, or a short ID.
+ * What a job worked on, by name. The manager records `environment:<id>`, `profile:<id>` or
+ * `image:<id>`; a deleted environment keeps the name its deletion job reported, or a short ID.
  */
 export function jobTarget(
   job: Pick<Job, "resource" | "result">,
   environments: Map<string, string>,
-  profiles: Map<string, string>
+  profiles: Map<string, string>,
+  images = new Map<string, string>()
 ) {
   if (!job.resource) return ""
   const [kind, id] = job.resource.split(/:(.*)/s)
+  const reported = job.result?.name as string | undefined
   if (kind === "environment" && id)
-    return (
-      environments.get(id) ??
-      (job.result?.name as string | undefined) ??
-      `Environment ${id.slice(0, 8)}`
-    )
+    return environments.get(id) ?? reported ?? `Environment ${id.slice(0, 8)}`
   if (kind === "profile" && id) return profiles.get(id) ?? id
+  if (kind === "image" && id) return images.get(id) ?? reported ?? `Image ${id.slice(0, 8)}`
   return job.resource
 }
 
@@ -164,6 +165,21 @@ export function downloadProgress(progress?: DownloadProgress | null): DownloadSu
     max: total,
     percent: Math.floor((current * 100) / total),
     text: `${fileSize(current)} of ${fileSize(total)} · ${counted}`,
+  }
+}
+
+/** A running job's measured progress: layers for an image download, bytes for an archive. */
+export function jobProgress(progress?: DownloadProgress | null): DownloadSummary | null {
+  if (!progress?.transfer) return downloadProgress(progress)
+  const { current = 0, total = null } = progress
+  if (progress.transfer === "export")
+    return { text: current ? `${fileSize(current)} exported` : "Docker is preparing the image…" }
+  if (!total) return { text: `${fileSize(current)} received` }
+  return {
+    value: current,
+    max: total,
+    percent: Math.floor((current * 100) / total),
+    text: `${fileSize(current)} of ${fileSize(total)} received`,
   }
 }
 

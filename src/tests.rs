@@ -27,6 +27,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             adapter: String::new(),
             allowed_hosts: vec![],
             upload_limit: 1024 * 1024,
+            archive_limit: 4 * 1024 * 1024,
             mcp_enabled: false,
             mcp_token: Some(String::new()),
         },
@@ -39,6 +40,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         screenshots: tokio::sync::Semaphore::new(2),
         uploads: tokio::sync::Semaphore::new(2),
         desktop_inputs: tokio::sync::Semaphore::new(4),
+        archives: Arc::new(tokio::sync::Semaphore::new(2)),
     })
 }
 fn spec() -> model::EnvironmentSpec {

@@ -5,13 +5,8 @@ import { EnvironmentDrawer } from "./environment-drawer"
 import { CreateEnvironmentDialog, SettingsDialog } from "./environment-dialogs"
 import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
-import {
-  BuildImageDialog,
-  DeleteDialog,
-  ImportImageDialog,
-  SnapshotDialog,
-  VolumeDialog,
-} from "./simple-dialogs"
+import { ImportImageDialog } from "./import-dialog"
+import { BuildImageDialog, DeleteDialog, SnapshotDialog, VolumeDialog } from "./simple-dialogs"
 import { UploadDialog } from "./upload-dialog"
 
 /** Renders the one open dialog; see lib/dialogs.ts. */

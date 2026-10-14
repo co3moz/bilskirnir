@@ -96,6 +96,8 @@ export type DownloadProgress = {
   total?: number | null
   layers?: number
   layers_done?: number
+  /** Set for an image archive, whose progress counts bytes instead of layers. */
+  transfer?: "export" | "import"
 }
 
 export type Job = {
@@ -119,6 +121,8 @@ export type Settings = {
   nvidia_compute: boolean
   gpu_adapter?: string | null
   upload_limit_bytes: number
+  /** The largest unpacked image archive an import accepts. */
+  archive_limit_bytes: number
 }
 
 export type SystemInfo = {

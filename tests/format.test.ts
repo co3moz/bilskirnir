@@ -7,6 +7,7 @@ import {
   imageTree,
   jobActivity,
   jobLogText,
+  jobProgress,
   jobTarget,
   restartNotice,
   subfolderError,
@@ -225,4 +226,37 @@ test("a job names what it worked on, even after that environment was deleted", (
   assert.equal(target("profile:ubuntu-gnome"), "Ubuntu 24.04 · GNOME")
   assert.equal(target("profile:retired"), "retired")
   assert.equal(target(null), "")
+  const images = new Map([["i1", "Unity snapshot"]])
+  assert.equal(
+    jobTarget({ resource: "image:i1" }, environments, profiles, images),
+    "Unity snapshot"
+  )
+  assert.equal(
+    jobTarget({ resource: "image:new", result: { name: "Imported" } }, environments, profiles),
+    "Imported"
+  )
+  assert.equal(
+    jobTarget({ resource: "image:0123456789ab" }, environments, profiles),
+    "Image 01234567"
+  )
+})
+
+test("archive jobs count bytes; image downloads keep counting layers", () => {
+  assert.deepEqual(jobProgress({ transfer: "export", current: 0 }), {
+    text: "Docker is preparing the image…",
+  })
+  assert.deepEqual(jobProgress({ transfer: "export", current: 3 * 1024 ** 3 }), {
+    text: "3.0 GiB exported",
+  })
+  assert.deepEqual(jobProgress({ transfer: "import", current: 1024 ** 3, total: 4 * 1024 ** 3 }), {
+    value: 1024 ** 3,
+    max: 4 * 1024 ** 3,
+    percent: 25,
+    text: "1.0 GiB of 4.0 GiB received",
+  })
+  assert.deepEqual(
+    jobProgress({ current: 0, total: 0, layers: 0, layers_done: 0 }),
+    downloadProgress({ current: 0, total: 0, layers: 0, layers_done: 0 })
+  )
+  assert.equal(jobProgress(null), null)
 })

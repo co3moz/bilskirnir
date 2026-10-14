@@ -15,15 +15,15 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { openDialog } from "@/lib/dialogs"
 import {
-  downloadProgress,
   duration,
   jobActive,
   jobNames,
+  jobProgress,
   jobTarget,
   jobTone,
   shortDate,
 } from "@/lib/format"
-import { useEnvironments, useJobs, useProfiles } from "@/lib/queries"
+import { useEnvironments, useImages, useJobs, useProfiles } from "@/lib/queries"
 import type { Job } from "@/lib/types"
 
 type Row = Job & { target: string }
@@ -55,7 +55,7 @@ const columns: DataColumn<Row>[] = [
     header: "Status",
     cell: ({ row }) => {
       const job = row.original
-      const percent = job.status === "running" ? downloadProgress(job.progress)?.percent : undefined
+      const percent = job.status === "running" ? jobProgress(job.progress)?.percent : undefined
       return (
         <div className="flex items-center gap-2">
           <StatusBadge state={job.status} tone={jobTone(job.status)} />
@@ -114,14 +114,19 @@ export function JobsPage() {
   const jobs = useJobs()
   const environments = useEnvironments().data
   const profiles = useProfiles().data
+  const images = useImages().data
   const [view, setView] = React.useState<View>("all")
   const all = React.useMemo<Row[]>(() => {
     const names = new Map(
       environments?.map(({ environment }) => [environment.id, environment.spec.name])
     )
     const profileNames = new Map(profiles?.map(({ profile }) => [profile.id, profile.name]))
-    return (jobs.data ?? []).map((job) => ({ ...job, target: jobTarget(job, names, profileNames) }))
-  }, [jobs.data, environments, profiles])
+    const imageNames = new Map(images?.map((image) => [image.id, image.name]))
+    return (jobs.data ?? []).map((job) => ({
+      ...job,
+      target: jobTarget(job, names, profileNames, imageNames),
+    }))
+  }, [jobs.data, environments, profiles, images])
   const data = React.useMemo(() => all.filter(views[view]), [all, view])
   const table = useDataTable({
     data,

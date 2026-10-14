@@ -13,7 +13,7 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { closeDialog, openDialog } from "@/lib/dialogs"
-import { date, downloadProgress, jobLogText, jobNames, jobTone } from "@/lib/format"
+import { date, jobLogText, jobNames, jobProgress, jobTone } from "@/lib/format"
 import { useJob } from "@/lib/queries"
 import { navigate } from "@/lib/route"
 import { SideDrawer, type DialogProps } from "./side-drawer"
@@ -57,7 +57,7 @@ function JobLog({ text }: { text: string }) {
 export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
   const job = useJob(id)
   const data = job.data
-  const download = data?.status === "running" ? downloadProgress(data.progress) : null
+  const progress = data?.status === "running" ? jobProgress(data.progress) : null
   const result = data?.result as
     { reference?: string; image_id?: string; environment_id?: string } | null | undefined
 
@@ -79,15 +79,17 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
         </DrawerDescription>
       </DrawerHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 text-sm">
-        {download && (
+        {progress && (
           <div role="status" className="flex flex-col gap-2">
-            {download.max !== undefined && (
+            {progress.max !== undefined && (
               <Progress
-                value={(download.value! * 100) / download.max}
-                aria-label="Image download progress"
+                value={(progress.value! * 100) / progress.max}
+                aria-label={
+                  data?.progress?.transfer ? "Archive progress" : "Image download progress"
+                }
               />
             )}
-            <p className="text-xs text-muted-foreground">{download.text}</p>
+            <p className="text-xs text-muted-foreground">{progress.text}</p>
           </div>
         )}
         {job.error ? (

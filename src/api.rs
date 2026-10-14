@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit}),
+        json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit}),
     )
 }
 pub async fn profiles(State(app): State<Arc<App>>) -> Json<Value> {
@@ -383,7 +383,7 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
 }
 /// An image record as lists and job results show it. A build script can be up to a megabyte, so
 /// only the configuration route returns it.
-fn image_summary(record: &ImageRecord) -> Value {
+pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
     if let Some(build) = value.get_mut("build").and_then(Value::as_object_mut) {
         build.remove("script");

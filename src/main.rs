@@ -1,5 +1,6 @@
 mod api;
 mod apps;
+mod archives;
 mod audio;
 mod auth;
 mod capture;
@@ -49,6 +50,8 @@ pub struct App {
     screenshots: tokio::sync::Semaphore,
     uploads: tokio::sync::Semaphore,
     desktop_inputs: tokio::sync::Semaphore,
+    /// Image archive exports and imports, which each hold a Docker save or load.
+    archives: Arc<tokio::sync::Semaphore>,
 }
 fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
@@ -167,6 +170,13 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/images", get(api::images).post(api::register_image))
         .route("/api/images/build", post(api::build))
+        .route(
+            "/api/images/import",
+            post(archives::import).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
+            )),
+        )
+        .route("/api/images/{id}/archive", get(archives::export))
         .route("/api/images/{id}/config", get(api::image_config))
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
         .route("/api/jobs", get(api::jobs))
@@ -239,6 +249,7 @@ async fn main() -> anyhow::Result<()> {
         screenshots: tokio::sync::Semaphore::new(2),
         uploads: tokio::sync::Semaphore::new(2),
         desktop_inputs: tokio::sync::Semaphore::new(4),
+        archives: Arc::new(tokio::sync::Semaphore::new(2)),
     });
     let reconcile = app.clone();
     let cleanup = app.clone();

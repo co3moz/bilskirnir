@@ -42,6 +42,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `AUDIO_ENABLED` | `true` | Allows environments to use browser sound. |
 | `MICROPHONE_ENABLED` | `true` | Allows microphone input when audio is also enabled. |
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
+| `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image archive an import accepts, in MiB after decompression, from 1 to 1048576. An archive holds every layer of the image, so it is several gigabytes. |
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating an environment. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
