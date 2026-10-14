@@ -49,11 +49,58 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir logs` | Shows the manager's recent log. |
 | `bilskirnir update` | Pulls the latest manager and the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
-| `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
+| `bilskirnir doctor` | Checks systemd, Docker, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
 The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env` and `deploy/Caddyfile`. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+
+## Memory, processors and disk
+
+Every WSL distribution runs in one shared virtual machine. Its memory and processor count are Windows settings for all distributions together, so the package cannot set them. The disk is different: each distribution has its own virtual disk, sized separately.
+
+### Memory and processors
+
+Unless configured otherwise, WSL gives the virtual machine half of the Windows memory and all of its processors, and Bilskirnir shares them with every other running distribution. Change them in `%UserProfile%\.wslconfig` or in the **WSL Settings** app:
+
+```ini
+[wsl2]
+memory=24GB
+processors=12
+swap=8GB
+```
+
+WSL reads these settings only when the virtual machine starts, and `bilskirnir.ps1 stop` stops only this distribution. Apply them with `wsl --shutdown`, which stops every WSL distribution, then start Bilskirnir again:
+
+```powershell
+wsl --shutdown
+.\windows\bilskirnir.ps1 start
+```
+
+The manager comes back on its own; desktops do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `bilskirnir doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `bilskirnir doctor` warns when it is below 8 GB.
+
+A desktop without a memory limit can use all of the virtual machine's memory. When that runs out, Linux ends processes inside the virtual machine, which can include the manager or another desktop; Windows itself stays protected by the limit above. Give desktops that run heavy applications a memory limit when you [create them](USAGE.md#create-and-connect) or change their settings. A limit is a ceiling, not a reservation: memory a desktop does not use stays available to the rest.
+
+### Disk
+
+The distribution's virtual disk grows as it fills, up to a maximum of 1 TB unless chosen otherwise. Images, snapshots, desktops and volumes all live in it, so the Windows drive that holds the disk needs the space too. Choose the location and the maximum when installing:
+
+```powershell
+wsl --install --from-file .\bilskirnir.wsl --location D:\WSL\Bilskirnir --vhd-size 200GB
+```
+
+To change them later, stop the distribution first; other distributions can keep running:
+
+```powershell
+.\windows\bilskirnir.ps1 stop
+wsl --manage Bilskirnir --resize 200GB
+wsl --manage Bilskirnir --move D:\WSL\Bilskirnir
+.\windows\bilskirnir.ps1 start
+```
+
+A smaller maximum works only while the data still fits. `bilskirnir doctor` shows the space left before the maximum and warns below 10 GB.
+
+The disk file does not shrink when images or desktops are deleted. Two ways return freed space to Windows, and they exclude each other: run `wsl --manage Bilskirnir --set-sparse true` once, which WSL still labels experimental, or run `wsl --manage Bilskirnir --compact` on the stopped distribution from time to time. A sparse disk cannot be compacted.
 
 ## What the package decides for you
 

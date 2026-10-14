@@ -10,7 +10,7 @@ Select **New environment** and choose a desktop profile, custom image or snapsho
 
 After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, change settings, inspect or delete it.
 
-The GPU option is available only when the installation enables `WSL_GPU` or `NVIDIA_COMPUTE`. There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
+The GPU option is available only when the installation enables `WSL_GPU` or `NVIDIA_COMPUTE`. There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. In the WSL package, all desktops share the memory WSL gives its virtual machine; [Memory, processors and disk](WSL_PACKAGE.md#memory-processors-and-disk) explains how to raise it. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
 
 ## Choose XFCE or GNOME
 
