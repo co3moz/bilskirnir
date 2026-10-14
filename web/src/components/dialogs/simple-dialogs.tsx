@@ -44,7 +44,7 @@ import { refreshAll, useEnvironments, useImages, useProfiles, useSettings } from
 import { useSubmit } from "./environment-dialogs"
 import type { DialogProps } from "./side-drawer"
 
-function Footer({
+export function Footer({
   busy,
   label,
   disabled,
@@ -359,60 +359,6 @@ function ImportConfiguration({
         <Button type="submit">Load</Button>
       </DialogFooter>
     </form>
-  )
-}
-
-export function ImportImageDialog(props: DialogProps) {
-  const [name, setName] = React.useState("")
-  const [reference, setReference] = React.useState("")
-  const { busy, error, submit } = useSubmit()
-  const field = React.useId()
-  return (
-    <Dialog {...props}>
-      <DialogContent className="sm:max-w-md">
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={submit(async () => {
-            await api("images", { name, reference })
-            closeDialog()
-            toast.success(`Imported ${name}.`)
-            void refreshAll()
-          })}
-        >
-          <DialogHeader>
-            <DialogTitle>Import image</DialogTitle>
-            <DialogDescription>
-              Registers a desktop-compatible image that is already on this Docker host.
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
-              <Input
-                id={`${field}-name`}
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                autoFocus
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={`${field}-reference`}>Image reference</FieldLabel>
-              <Input
-                id={`${field}-reference`}
-                required
-                placeholder="registry.example/team/desktop:1.0"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                className="font-mono"
-              />
-            </Field>
-            <FieldError>{error}</FieldError>
-          </FieldGroup>
-          <Footer busy={busy} label="Import" />
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 

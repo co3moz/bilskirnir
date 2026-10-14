@@ -23,6 +23,8 @@ pub struct Config {
     pub adapter: String,
     pub allowed_hosts: Vec<String>,
     pub upload_limit: u64,
+    /// The largest unpacked image archive an import accepts, in bytes.
+    pub archive_limit: u64,
     pub mcp_enabled: bool,
     /// The bearer token `/mcp` requires, or `None` when `MCP_AUTH_MODE=none` turns the check off.
     pub mcp_token: Option<String>,
@@ -73,6 +75,12 @@ impl Config {
         if !(1..=65536).contains(&upload_mb) {
             bail!("UPLOAD_MAX_MB must be between 1 and 65536");
         }
+        let archive_mb = env::var("IMAGE_ARCHIVE_MAX_MB")
+            .unwrap_or_else(|_| "65536".into())
+            .parse::<u64>()?;
+        if !(1..=1_048_576).contains(&archive_mb) {
+            bail!("IMAGE_ARCHIVE_MAX_MB must be between 1 and 1048576");
+        }
         let cfg = Self {
             listen: env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into()),
             data: env::var("DATA_DIR")
@@ -105,6 +113,7 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .collect(),
             upload_limit: upload_mb * 1024 * 1024,
+            archive_limit: archive_mb * 1024 * 1024,
             mcp_enabled,
             mcp_token,
         };

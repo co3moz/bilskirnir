@@ -1,9 +1,11 @@
 import { toast } from "sonner"
 
 import { api } from "./api"
+import { archiveUrl } from "./archives"
 import { formatBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
 import { refreshAll } from "./queries"
+import { navigate } from "./route"
 import type { BuildConfig, ImageRecord, JobStarted } from "./types"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
@@ -77,4 +79,22 @@ export async function attempt(action: () => Promise<unknown>) {
   } catch (error) {
     toast.error((error as Error).message)
   }
+}
+
+/**
+ * Downloads an image as a .tar.gz archive. The browser saves the stream itself; the manager
+ * records the export as a job, where its progress and any Docker error appear.
+ */
+export function exportArchive(image: Pick<ImageRecord, "id" | "name">) {
+  const link = document.createElement("a")
+  link.href = archiveUrl(image.id)
+  link.download = ""
+  document.body.append(link)
+  link.click()
+  link.remove()
+  toast.success(`Exporting ${image.name}.`, {
+    description: "Docker prepares the image before the download grows. Jobs shows its progress.",
+    action: { label: "Jobs", onClick: () => navigate({ page: "jobs" }) },
+  })
+  setTimeout(() => void refreshAll(), 1000)
 }

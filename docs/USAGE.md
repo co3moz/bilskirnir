@@ -67,9 +67,9 @@ rm -rf /var/lib/apt/lists/*
 
 Keep the desktop startup, VNC and GPU components in place when adding software. The result must still start as a Bilskirnir desktop.
 
-To reuse a build, select **Export configuration**, the copy button on its row under **Images**. It copies the image's name, base image, internet setting and script to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have nothing to export, and builds from an earlier release did not record theirs.
+To reuse a build, select **Export configuration**, the copy button on its row under **Images**. It copies the image's name, base image, internet setting and script to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have no configuration to export, and builds from an earlier release did not record theirs. [An archive](#move-an-image-to-another-installation) moves any of them.
 
-**Import image** registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another environment until it is available again.
+**Import image** with its **Docker image** tab registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another environment until it is available again.
 
 ## Save a desktop as a snapshot
 
@@ -86,6 +86,14 @@ The image tree follows Docker ancestry. A snapshot is based on the image that or
 | Changes in the container's writable layer | Running processes, RAM and GPU state |
 
 An image that declares a Docker `VOLUME` needs an explicit named-volume mount for that path when you create an environment. This makes it clear which files will be excluded from snapshots.
+
+## Move an image to another installation
+
+Under **Images**, the archive button on an image's row (**Export archive**) downloads it as a `.tar.gz` file, with its name, description and desktop profile inside. A script build's configuration travels along, so **Export configuration** still works after the move. Snapshots, script builds and imported images can all be exported. The archive holds every layer of the image, the base desktop included, so expect several gigabytes. Docker prepares the whole image before the download starts to grow; **Jobs** shows the export and any error.
+
+On the other installation, select **Import image** and drop the file on the **Archive file** tab. The name and description from the archive fill in, and you can change them. The import is checked while it uploads: it must hold one Bilskirnir desktop image and stay within `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) once unpacked. Tags and image names inside the archive are ignored, so an archive cannot replace a profile or another image. The image appears with the kind **archive** once Docker has loaded it.
+
+A `.tar` saved with `docker save` imports the same way, as long as it holds a desktop image. Volumes are never part of an archive; copy their files separately.
 
 ## Keep files in volumes
 

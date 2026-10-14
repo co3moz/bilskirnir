@@ -1,5 +1,6 @@
 import * as React from "react"
 import {
+  RiArchive2Line,
   RiCornerDownRightLine,
   RiDownloadLine,
   RiFileCopyLine,
@@ -33,7 +34,7 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { attempt, exportBuildConfig, runJob } from "@/lib/actions"
+import { attempt, exportArchive, exportBuildConfig, runJob } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { imageTree, shortDate } from "@/lib/format"
 import { useImages, useProfiles } from "@/lib/queries"
@@ -158,8 +159,9 @@ const columns: DataColumn<Row>[] = [
   column.display({
     id: "desktop",
     header: "Desktop",
+    // A profile title wraps when the row actions need the room.
     cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground">
+      <span className="block min-w-28 text-xs whitespace-normal text-muted-foreground">
         {row.original.desktop?.title ?? "Unknown"}
       </span>
     ),
@@ -195,6 +197,21 @@ const columns: DataColumn<Row>[] = [
               <TooltipContent>Export configuration as JSON</TooltipContent>
             </Tooltip>
           )}
+          {/* Any saved image moves as an archive, the base desktop included. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                disabled={unavailable}
+                onClick={() => exportArchive(image)}
+                aria-label={`Export ${image.name} as an archive`}
+              >
+                <RiArchive2Line />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Export archive (.tar.gz)</TooltipContent>
+          </Tooltip>
           <Button
             variant="outline"
             size="sm"
@@ -249,7 +266,7 @@ export function ImagesPage() {
           empty={
             images.isPending
               ? "Loading images…"
-              : "No saved images. Snapshot an environment or build an image."
+              : "No saved images. Snapshot an environment, build an image or import an archive."
           }
         />
         <DataTablePagination table={table} />

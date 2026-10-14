@@ -3,13 +3,18 @@
 Uses unique resources, checks ownership on cleanup, never prunes the daemon.
 """
 import base64
+import gzip
+import hashlib
 import http.cookiejar
+import io
 import json
 import math
 import os
 import socket
+import shutil
 import struct
 import subprocess
+import tarfile
 import time
 import tempfile
 import threading
@@ -178,6 +183,45 @@ def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/environments/{eid}/files?{query}",data=data,headers={"Content-Type":"application/octet-stream","X-Wsld-Request":"1"})
     with client.open(request,timeout=120) as response:
         return json.loads(response.read())
+
+
+def import_archive(path, **query):
+    size = os.path.getsize(path)
+    query = urllib.parse.urlencode({"size": size, **query})
+    with open(path, "rb") as body:
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/images/import?{query}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Wsld-Request": "1"})
+        with client.open(request, timeout=1800) as response:
+            return json.loads(response.read())
+
+
+def synthetic_archive(path, labels, names):
+    """A one-layer image saved as Docker 25 does, naming `names` in every place Docker reads names."""
+    layer_buffer = io.BytesIO()
+    with tarfile.open(fileobj=layer_buffer, mode="w") as layer_tar:
+        content = f"archive acceptance {tag} {sorted(labels.items())}".encode()
+        member = tarfile.TarInfo("wsld-archive-test")
+        member.size = len(content)
+        layer_tar.addfile(member, io.BytesIO(content))
+    layer = layer_buffer.getvalue()
+    digest = lambda data: hashlib.sha256(data).hexdigest()
+    config = json.dumps({"architecture": "amd64", "os": "linux", "config": {"Labels": labels}, "rootfs": {"type": "layers", "diff_ids": [f"sha256:{digest(layer)}"]}, "history": [{"created_by": "acceptance"}]}).encode()
+    manifest = json.dumps({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json", "config": {"mediaType": "application/vnd.oci.image.config.v1+json", "digest": f"sha256:{digest(config)}", "size": len(config)}, "layers": [{"mediaType": "application/vnd.oci.image.layer.v1.tar", "digest": f"sha256:{digest(layer)}", "size": len(layer)}]}).encode()
+    repository, version = names[0].rsplit(":", 1)
+    index = json.dumps({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": f"sha256:{digest(manifest)}", "size": len(manifest), "annotations": {"io.containerd.image.name": names[0], "org.opencontainers.image.ref.name": version}}]}).encode()
+    files = [
+        (f"blobs/sha256/{digest(layer)}", layer),
+        (f"blobs/sha256/{digest(config)}", config),
+        (f"blobs/sha256/{digest(manifest)}", manifest),
+        ("index.json", index),
+        ("manifest.json", json.dumps([{"Config": f"blobs/sha256/{digest(config)}", "RepoTags": names, "Layers": [f"blobs/sha256/{digest(layer)}"]}]).encode()),
+        ("oci-layout", b'{"imageLayoutVersion":"1.0.0"}'),
+        ("repositories", json.dumps({repository: {version: digest(config)}}).encode()),
+    ]
+    with gzip.open(path, "wb") as out, tarfile.open(fileobj=out, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        for name, data in files:
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
 
 
 def ready(container):
@@ -617,6 +661,62 @@ try:
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
     assert subprocess.run(["docker", "exec", clone, "test", "-e", "/shared/volume-marker"]).returncode != 0
     print("PASS layered snapshot, immutable ancestry and independent volume clone", flush=True)
+    # The snapshot leaves as a gzip-compressed docker save stream and comes back under a new name.
+    archive_dir = tempfile.mkdtemp(prefix=f"wsld-archive-{tag}-")
+    exported = os.path.join(archive_dir, "snapshot.tar.gz")
+    with client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/images/{snap['id']}/archive"), timeout=1800) as response, open(exported, "wb") as out:
+        assert response.headers["Content-Type"] == "application/gzip"
+        assert 'filename="snapshot-test.tar.gz"' in response.headers["Content-Disposition"]
+        export_job = response.headers["X-Job-Id"]
+        shutil.copyfileobj(response, out, 1 << 20)
+    assert job({"job_id": export_job})["bytes"] == os.path.getsize(exported)
+    with tarfile.open(exported, "r|gz") as saved:
+        first = saved.next()
+        assert first.name == "bilskirnir.json", first.name
+        metadata = json.load(saved.extractfile(first))
+        assert (metadata["name"], metadata["kind"], metadata["image_id"]) == ("snapshot-test", "snapshot", snap["image_id"]), metadata
+        manifest = next(json.load(saved.extractfile(member)) for member in saved if member.name == "manifest.json")
+        assert len(manifest) == 1 and not manifest[0].get("RepoTags"), manifest
+    imported = job(import_archive(exported))
+    assert (imported["kind"], imported["name"], imported["image_id"]) == ("archive", "snapshot-test", snap["image_id"]), imported
+    assert imported["reference"] == f"bilskirnir/imported:{imported['id']}" and imported["desktop"] == snap["desktop"], imported
+    assert imported["parent_image_id"] == snap["parent_image_id"], imported
+    assert json.loads(docker("image", "inspect", imported["reference"]))[0]["Id"] == snap["image_id"]
+    renamed = job(import_archive(exported, name="Renamed archive", description="From acceptance"))
+    assert (renamed["name"], renamed["description"]) == ("Renamed archive", "From acceptance"), renamed
+    # A script build keeps its configuration, and its result leaves the script out as a build's does.
+    built_archive = os.path.join(archive_dir, "built.tar.gz")
+    with client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/images/{built['id']}/archive"), timeout=1800) as response, open(built_archive, "wb") as out:
+        built_export = response.headers["X-Job-Id"]
+        shutil.copyfileobj(response, out, 1 << 20)
+    job({"job_id": built_export})
+    moved = job(import_archive(built_archive))
+    assert moved["build"] == built["build"] and moved["image_id"] == built["image_id"], moved
+    assert api(f"images/{moved['id']}/config") == api(f"images/{built['id']}/config")
+    # Names inside an archive never reach Docker: an existing tag keeps pointing at its image. The
+    # target is this run's own copy of the profile tag, so a regression cannot break the profile.
+    guard = f"wsld-archive-guard:{tag}"
+    docker("tag", xfce["profile"]["reference"], guard)
+    image_refs.append(guard)
+    guard_id = json.loads(docker("image", "inspect", guard))[0]["Id"]
+    hostile = os.path.join(archive_dir, "hostile.tar.gz")
+    synthetic_archive(hostile, {"io.wsl-desktop.desktop": "true", "io.wsl-desktop.managed": "true", "io.wsl-desktop.test": tag}, [guard, f"wsld-archive-victim:{tag}"])
+    loaded = job(import_archive(hostile, name="Hostile names"))
+    assert json.loads(docker("image", "inspect", guard))[0]["Id"] == guard_id
+    assert json.loads(docker("image", "inspect", f"wsld-archive-victim:{tag}", check=False) or b"[]") == []
+    tagged = json.loads(docker("image", "inspect", loaded["reference"]))[0]
+    assert tagged["RepoTags"] == [loaded["reference"]] and tagged["Config"]["Labels"]["io.wsl-desktop.test"] == tag, tagged["RepoTags"]
+    # An archive without a desktop image is refused before Docker may register anything.
+    refused = os.path.join(archive_dir, "refused.tar.gz")
+    synthetic_archive(refused, {"io.wsl-desktop.test-refused": tag}, [f"wsld-archive-refused:{tag}"])
+    try:
+        import_archive(refused)
+        raise AssertionError("an archive without a desktop image was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 400 and "desktop image" in json.loads(error.read())["error"]
+    assert not docker("image", "ls", "-q", "--filter", f"label=io.wsl-desktop.test-refused={tag}").strip()
+    shutil.rmtree(archive_dir)
+    print("PASS snapshot archive export/import keeps metadata and never applies names from an archive", flush=True)
     slow = api("images/build", {"name":"concurrent-build","base_image":xfce["profile"]["reference"],"internet":False,"script":"set -eu\nprintf SLOW_STARTED\nsleep 20\nprintf SLOW_FINISHED\n"})
     wait_for(lambda: "SLOW_STARTED" in api(f"jobs/{slow['job_id']}")["log"])
     started = time.monotonic()

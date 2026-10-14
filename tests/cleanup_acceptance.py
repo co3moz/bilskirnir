@@ -44,7 +44,7 @@ for name in (volume, f"wsld-test-share-{tag}", f"wsld-test-clone-{tag}"):
     if inspect("volume", name):
         docker("volume", "rm", name)
 for kind, record in reversed(records):
-    if kind == "image" and record["kind"] in ("build", "snapshot"):
+    if kind == "image" and record["kind"] in ("build", "snapshot", "archive"):
         image = inspect("image", record["reference"])
         if image:
             assert image["Id"] == record["image_id"] and image["Config"]["Labels"].get("io.wsl-desktop.managed") == "true"

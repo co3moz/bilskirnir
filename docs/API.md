@@ -86,6 +86,8 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet`; returns a job. |
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
+| GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
+| POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
@@ -190,6 +192,35 @@ curl --cookie bilskirnir.cookies \
 
 Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB` and restricted to Downloads or a writable mounted volume. They return the saved path and byte count.
 
+## Image archives
+
+`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind and desktop profile, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
+
+```bash
+curl --cookie bilskirnir.cookies --output unity.tar.gz \
+  http://localhost:8080/api/images/IMAGE_RECORD_ID/archive
+```
+
+An archive holds every layer, the base desktop included, and its size is not known in advance. Docker prepares the whole image before its first layer arrives. The transfer is an `image-export` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent. If Docker fails partway, the download ends with an error instead of a short file.
+
+`POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply the exact `size` and optionally `name` and `description` as query parameters; they default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
+
+```bash
+curl --cookie bilskirnir.cookies \
+  --header 'X-Wsld-Request: 1' \
+  --header 'Content-Type: application/octet-stream' \
+  --request POST --upload-file unity.tar.gz \
+  'http://localhost:8080/api/images/import?size=FILE_SIZE_IN_BYTES&name=Unity%20workspace'
+```
+
+The archive streams into `docker load` as it arrives. On the way, the manager removes every tag and image name the archive carries, so an import cannot replace a profile image or any other existing tag. Docker can register the image only after the archive has passed these checks:
+
+- It holds exactly one image, with its `manifest.json` and configuration.
+- The image has the `io.wsl-desktop.desktop=true` label.
+- It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
+
+The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+
 ## Screenshots
 
 `GET /api/environments/{id}/screenshot` returns a JPEG at the desktop's resolution, so its pixels match `/input` coordinates. `max_width` (16–7680) scales the image down, `region=x,y,width,height` crops in desktop pixels and `window_id` captures one window from the windows route. The response carries `X-Image-Width`, `X-Image-Height` and `X-Captured-At` (Unix milliseconds) headers. The dashboard requests `max_width=640` for previews.
@@ -261,7 +292,7 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers and desktop input allows four; operations on one environment still use its resource lock, and a launched application does not hold it while it runs.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, image archive exports and imports two more, and desktop input allows four; operations on one environment still use its resource lock, and a launched application does not hold it while it runs.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

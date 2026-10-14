@@ -391,7 +391,7 @@ pub fn mime_type(name: &str) -> &'static str {
         _ => "application/octet-stream",
     }
 }
-fn percent_encode(name: &str) -> String {
+pub(crate) fn percent_encode(name: &str) -> String {
     name.bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
