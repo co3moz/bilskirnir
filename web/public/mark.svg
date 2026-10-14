@@ -1,22 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <defs>
-    <linearGradient id="metal" x1="12" y1="5" x2="49" y2="60" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#405b76"/><stop offset=".5" stop-color="#20354c"/><stop offset="1" stop-color="#101d30"/>
-    </linearGradient>
-    <linearGradient id="edge" x1="8" y1="8" x2="52" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#e0f4ff"/><stop offset=".55" stop-color="#92c6e4"/><stop offset="1" stop-color="#a7a0ed"/>
-    </linearGradient>
-    <radialGradient id="gem" cx=".3" cy=".25" r=".8">
-      <stop stop-color="#d9f5ff"/><stop offset=".35" stop-color="#77c9f0"/><stop offset="1" stop-color="#245080"/>
-    </radialGradient>
-  </defs>
-  <!-- Peaked head, tapered stem and flared foot echo the reference pendant. -->
-  <path d="M4 15C15 13 24 8 32 3c8 5 17 10 28 12v12H42l-5 25c4 0 7 2 7 5s-3 4-6 4H26c-3 0-6-1-6-4s3-5 7-5l-5-25H4V15Z" fill="url(#metal)" stroke="url(#edge)" stroke-width="1.8" stroke-linejoin="round"/>
-  <path d="M7 17c10-2 18-6 25-10 7 4 15 8 25 10v7H7V17Z" stroke="#b9d9ed" stroke-opacity=".45" stroke-linejoin="round"/>
-  <g stroke="url(#edge)" stroke-width="1.4" stroke-linecap="round">
-    <path d="M13 19c-2-4-6-2-5 1s5 4 7 1M27 18c0-7-10-7-10 0s10 7 10 1c0-4-6-5-7-1"/>
-    <path d="M51 19c2-4 6-2 5 1s-5 4-7 1M37 18c0-7 10-7 10 0s-10 7-10 1c0-4 6-5 7-1"/>
-    <path d="m26 28 4 20m8-20-4 20M28 36c-3-5 4-9 7-5s-1 7-5 6l5 6c2 3-3 5-4 2M25 55c2 0 4-5 7-5s5 5 7 5"/>
-  </g>
-  <ellipse cx="32" cy="11" rx="2.3" ry="2.8" fill="url(#gem)" stroke="#b4ddf1" stroke-width=".8"/>
+  <!-- The hammer pendant in flat colors: peaked head with one band and the gem.
+       A dark body with a light edge reads on both themes. -->
+  <path d="M4 15C15 13 24 8 32 3c8 5 17 10 28 12v12H42l-5 25c4 0 7 2 7 5s-3 4-6 4H26c-3 0-6-1-6-4s3-5 7-5l-5-25H4V15Z" fill="#262626" stroke="#e5e5e5" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M8.5 17.5c9-2 16.5-5.5 23.5-9.5 7 4 14.5 7.5 23.5 9.5v5h-47v-5Z" stroke="#a3a3a3" stroke-width="1.2" stroke-linejoin="round"/>
+  <circle cx="32" cy="14" r="2.6" fill="#e5e5e5"/>
 </svg>

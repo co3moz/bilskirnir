@@ -1,18 +1,18 @@
 import * as React from "react"
 import NoVNC from "@novnc/novnc"
 import {
-  ArrowLeftIcon,
-  CirclePlayIcon,
-  ClipboardIcon,
-  MaximizeIcon,
-  MicIcon,
-  MicOffIcon,
-  MinimizeIcon,
-  RotateCwIcon,
-  UploadIcon,
-  Volume2Icon,
-  VolumeXIcon,
-} from "lucide-react"
+  RiArrowLeftLine,
+  RiPlayCircleLine,
+  RiClipboardLine,
+  RiFullscreenLine,
+  RiMicLine,
+  RiMicOffLine,
+  RiFullscreenExitLine,
+  RiRestartLine,
+  RiUploadLine,
+  RiVolumeUpLine,
+  RiVolumeMuteLine,
+} from "@remixicon/react"
 import { toast } from "sonner"
 import { cn } from "cn"
 
@@ -177,7 +177,7 @@ export function DesktopPage({ id }: { id: string }) {
       <header className="flex h-12 shrink-0 items-center gap-1 border-b bg-sidebar px-2 sm:gap-2 sm:px-3">
         <Button variant="ghost" size="sm" asChild>
           <a href={href({ page: "environments" })}>
-            <ArrowLeftIcon data-icon="inline-start" />
+            <RiArrowLeftLine data-icon="inline-start" />
             <span className="hidden md:inline">Environments</span>
             <span className="sr-only md:hidden">Back to environments</span>
           </a>
@@ -211,18 +211,24 @@ export function DesktopPage({ id }: { id: string }) {
             <>
               <ToolButton
                 label="Upload files"
-                icon={<UploadIcon />}
+                icon={<RiUploadLine />}
                 onClick={() => openDialog({ kind: "upload", id })}
               />
               <ToolButton
                 label="Clipboard"
-                icon={<ClipboardIcon />}
+                icon={<RiClipboardLine />}
                 onClick={() => setClipboard(remoteClipboard)}
               />
               {spec?.audio && (
                 <ToolButton
                   label={audio.output ? "Mute" : audio.outputPending ? "Starting audio…" : "Audio"}
-                  icon={audio.output ? <Volume2Icon className="text-primary" /> : <VolumeXIcon />}
+                  icon={
+                    audio.output ? (
+                      <RiVolumeUpLine className="text-primary" />
+                    ) : (
+                      <RiVolumeMuteLine />
+                    )
+                  }
                   aria-pressed={audio.output}
                   onClick={() => attempt(() => media.toggleOutput())}
                 />
@@ -236,21 +242,21 @@ export function DesktopPage({ id }: { id: string }) {
                         ? "Waiting for permission…"
                         : "Microphone"
                   }
-                  icon={audio.input ? <MicIcon className="text-primary" /> : <MicOffIcon />}
+                  icon={audio.input ? <RiMicLine className="text-primary" /> : <RiMicOffLine />}
                   aria-pressed={audio.input}
                   onClick={() => attempt(() => media.toggleMic())}
                 />
               )}
               <ToolButton
                 label="Reconnect"
-                icon={<RotateCwIcon />}
+                icon={<RiRestartLine />}
                 onClick={() => setGeneration((value) => value + 1)}
               />
             </>
           )}
           <ToolButton
             label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-            icon={fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
+            icon={fullscreen ? <RiFullscreenExitLine /> : <RiFullscreenLine />}
             onClick={() =>
               attempt(() =>
                 document.fullscreenElement
@@ -264,7 +270,7 @@ export function DesktopPage({ id }: { id: string }) {
       <div
         {...drop.props}
         className={cn(
-          "relative min-h-0 flex-1 bg-[#050a11]",
+          "relative min-h-0 flex-1 bg-[#0a0a0a]",
           drop.over && "outline-3 -outline-offset-3 outline-primary"
         )}
       >
@@ -287,7 +293,7 @@ export function DesktopPage({ id }: { id: string }) {
                 <Spinner />
               ) : item ? (
                 <Button onClick={() => attempt(() => environmentAction(id, "start"))}>
-                  <CirclePlayIcon data-icon="inline-start" />
+                  <RiPlayCircleLine data-icon="inline-start" />
                   Start
                 </Button>
               ) : (

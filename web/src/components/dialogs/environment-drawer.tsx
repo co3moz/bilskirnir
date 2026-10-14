@@ -1,13 +1,13 @@
 import {
-  CameraIcon,
-  CircleStopIcon,
-  FileTextIcon,
-  RotateCwIcon,
-  Settings2Icon,
-  StethoscopeIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "lucide-react"
+  RiCameraLine,
+  RiStopCircleLine,
+  RiFileTextLine,
+  RiRestartLine,
+  RiSettings3Line,
+  RiStethoscopeLine,
+  RiDeleteBinLine,
+  RiUploadLine,
+} from "@remixicon/react"
 
 import { PrimaryAction, SpecBadges } from "@/components/environment-card"
 import { EnvironmentPreview } from "@/components/environment-preview"
@@ -79,11 +79,11 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
         )}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={() => openDialog({ kind: "settings", id })}>
-            <Settings2Icon data-icon="inline-start" />
+            <RiSettings3Line data-icon="inline-start" />
             Settings
           </Button>
           <Button variant="outline" onClick={() => openDialog({ kind: "snapshot", id })}>
-            <CameraIcon data-icon="inline-start" />
+            <RiCameraLine data-icon="inline-start" />
             Snapshot
           </Button>
           <Button
@@ -91,18 +91,18 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             disabled={!running}
             onClick={() => openDialog({ kind: "upload", id })}
           >
-            <UploadIcon data-icon="inline-start" />
+            <RiUploadLine data-icon="inline-start" />
             Upload files
           </Button>
           <Button variant="outline" onClick={() => attempt(() => environmentAction(id, "restart"))}>
-            <RotateCwIcon data-icon="inline-start" />
+            <RiRestartLine data-icon="inline-start" />
             Restart
           </Button>
           <Button
             variant="outline"
             onClick={() => attempt(() => showLog(`${spec.name} logs`, `environments/${id}/logs`))}
           >
-            <FileTextIcon data-icon="inline-start" />
+            <RiFileTextLine data-icon="inline-start" />
             Logs
           </Button>
           <Button
@@ -111,17 +111,17 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
               attempt(() => showLog(`${spec.name} diagnostics`, `environments/${id}/diagnostics`))
             }
           >
-            <StethoscopeIcon data-icon="inline-start" />
+            <RiStethoscopeLine data-icon="inline-start" />
             Diagnostics
           </Button>
           {running && (
             <Button variant="outline" onClick={() => attempt(() => environmentAction(id, "stop"))}>
-              <CircleStopIcon data-icon="inline-start" />
+              <RiStopCircleLine data-icon="inline-start" />
               Stop
             </Button>
           )}
           <Button variant="destructive" onClick={() => openDialog({ kind: "delete", id })}>
-            <Trash2Icon data-icon="inline-start" />
+            <RiDeleteBinLine data-icon="inline-start" />
             Delete
           </Button>
         </div>

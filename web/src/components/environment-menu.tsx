@@ -1,17 +1,17 @@
 import {
-  CameraIcon,
-  CirclePlayIcon,
-  CircleStopIcon,
-  EllipsisVerticalIcon,
-  FileTextIcon,
-  InfoIcon,
-  RotateCcwIcon,
-  RotateCwIcon,
-  Settings2Icon,
-  StethoscopeIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "lucide-react"
+  RiCameraLine,
+  RiPlayCircleLine,
+  RiStopCircleLine,
+  RiMore2Line,
+  RiFileTextLine,
+  RiInformationLine,
+  RiResetLeftLine,
+  RiRestartLine,
+  RiSettings3Line,
+  RiStethoscopeLine,
+  RiDeleteBinLine,
+  RiUploadLine,
+} from "@remixicon/react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -38,54 +38,54 @@ export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
           className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
           size="icon"
         >
-          <EllipsisVerticalIcon />
+          <RiMore2Line />
           <span className="sr-only">{spec.name} actions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onSelect={() => openDialog({ kind: "details", id })}>
-          <InfoIcon />
+          <RiInformationLine />
           Details
         </DropdownMenuItem>
         {needsRetry(item) && (
           <DropdownMenuItem onSelect={() => attempt(() => retrySetup(id))}>
-            <RotateCcwIcon />
+            <RiResetLeftLine />
             Retry setup
           </DropdownMenuItem>
         )}
         {!running && (
           <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "start"))}>
-            <CirclePlayIcon />
+            <RiPlayCircleLine />
             Start
           </DropdownMenuItem>
         )}
         {running && (
           <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "stop"))}>
-            <CircleStopIcon />
+            <RiStopCircleLine />
             Stop
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "restart"))}>
-          <RotateCwIcon />
+          <RiRestartLine />
           Restart
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "upload", id })}>
-          <UploadIcon />
+          <RiUploadLine />
           Upload files
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", id })}>
-          <Settings2Icon />
+          <RiSettings3Line />
           Settings
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "snapshot", id })}>
-          <CameraIcon />
+          <RiCameraLine />
           Snapshot
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => attempt(() => showLog(`${spec.name} logs`, `environments/${id}/logs`))}
         >
-          <FileTextIcon />
+          <RiFileTextLine />
           Logs
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -93,12 +93,12 @@ export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
             attempt(() => showLog(`${spec.name} diagnostics`, `environments/${id}/diagnostics`))
           }
         >
-          <StethoscopeIcon />
+          <RiStethoscopeLine />
           Diagnostics
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => openDialog({ kind: "delete", id })}>
-          <Trash2Icon />
+          <RiDeleteBinLine />
           Delete environment
         </DropdownMenuItem>
       </DropdownMenuContent>

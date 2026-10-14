@@ -30,8 +30,8 @@ import { jobActivity } from "@/lib/format"
 import { useJobs } from "@/lib/queries"
 
 const chartConfig = {
-  completed: { label: "Completed", color: "var(--chart-1)" },
-  failed: { label: "Failed or interrupted", color: "var(--chart-5)" },
+  completed: { label: "Completed", color: "var(--primary)" },
+  failed: { label: "Failed or interrupted", color: "var(--destructive)" },
 } satisfies ChartConfig
 
 const ranges = [

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { MonitorIcon, PlusIcon, SearchIcon } from "lucide-react"
+import { RiComputerLine, RiAddLine, RiSearchLine } from "@remixicon/react"
 
 import { ViewTabs } from "@/components/data-table"
 import { EnvironmentCard } from "@/components/environment-card"
@@ -61,7 +61,7 @@ export function EnvironmentsPage() {
         <Empty className="mx-4 border lg:mx-6">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <MonitorIcon />
+              <RiComputerLine />
             </EmptyMedia>
             <EmptyTitle>No environments</EmptyTitle>
             <EmptyDescription>
@@ -70,7 +70,7 @@ export function EnvironmentsPage() {
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={() => openDialog({ kind: "create" })}>
-              <PlusIcon data-icon="inline-start" />
+              <RiAddLine data-icon="inline-start" />
               New environment
             </Button>
           </EmptyContent>
@@ -89,7 +89,7 @@ export function EnvironmentsPage() {
               ]}
             />
             <div className="relative">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <RiSearchLine className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
                 aria-label="Filter environments"

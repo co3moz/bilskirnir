@@ -1,13 +1,13 @@
 import * as React from "react"
 import {
-  BookOpenIcon,
-  DatabaseIcon,
-  LayersIcon,
-  LayoutDashboardIcon,
-  ListChecksIcon,
-  MonitorIcon,
-  PlugIcon,
-} from "lucide-react"
+  RiBookOpenLine,
+  RiDatabase2Line,
+  RiStackLine,
+  RiDashboardLine,
+  RiListCheck3,
+  RiComputerLine,
+  RiPlugLine,
+} from "@remixicon/react"
 
 import { NavDesktops } from "@/components/nav-desktops"
 import { NavMain } from "@/components/nav-main"
@@ -33,17 +33,21 @@ export const pageTitles: Record<Page, string> = {
 }
 
 const navMain = [
-  { page: "dashboard", icon: <LayoutDashboardIcon /> },
-  { page: "environments", icon: <MonitorIcon /> },
-  { page: "images", icon: <LayersIcon /> },
-  { page: "volumes", icon: <DatabaseIcon /> },
-  { page: "jobs", icon: <ListChecksIcon /> },
+  { page: "dashboard", icon: <RiDashboardLine /> },
+  { page: "environments", icon: <RiComputerLine /> },
+  { page: "images", icon: <RiStackLine /> },
+  { page: "volumes", icon: <RiDatabase2Line /> },
+  { page: "jobs", icon: <RiListCheck3 /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
 const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = [
-  { title: "Documentation", url: `${repository}#readme`, icon: <BookOpenIcon /> },
-  { title: "Agent access (MCP)", url: `${repository}/blob/master/docs/MCP.md`, icon: <PlugIcon /> },
+  { title: "Documentation", url: `${repository}#readme`, icon: <RiBookOpenLine /> },
+  {
+    title: "Agent access (MCP)",
+    url: `${repository}/blob/master/docs/MCP.md`,
+    icon: <RiPlugLine />,
+  },
 ]
 
 export function AppSidebar({
