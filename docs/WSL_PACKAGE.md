@@ -49,7 +49,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir logs` | Shows the manager's recent log. |
 | `bilskirnir update` | Pulls the latest manager and the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
-| `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
+| `bilskirnir doctor` | Checks systemd, Docker, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
