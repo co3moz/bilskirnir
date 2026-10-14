@@ -52,7 +52,7 @@ When a supplied profile image is missing, its card under **Images** offers **Dow
 
 ## Work on the interface
 
-The Vite project lives in `web/`: `web/index.html`, the React sources under `web/src` and static files under `web/public`, which are served as they are. `vite.config.ts`, the TypeScript projects and `package.json` sit at the repository root. Pages live in the URL fragment (`#/images`, `#/desktop/<id>`), so the manager serves one `index.html` for all of them.
+The Vite project lives in `web/`: `web/index.html`, the React sources under `web/src` and static files under `web/public`, which are served as they are. `vite.config.ts`, the TypeScript projects and `package.json` sit at the repository root. Pages live in the URL fragment (`#/images`, `#/desktop/<id>`), so the manager serves one `index.html` for all of them. Vite names the files under `web/dist/assets/` after their content, and the manager lets browsers keep those for a year; `index.html` and the other files are revalidated on every load, so an upgraded manager never serves a page that points at assets it no longer has.
 
 The layout follows the shadcn `dashboard-01` block: an inset sidebar, a site header, summary cards, an interactive chart and data tables with a detail drawer. Add a shadcn component with `bunx shadcn@latest add <component>`; it reads `components.json` and writes to `web/src/components/ui/`, which is project code from then on. See [DESIGN.md](DESIGN.md) before changing colors or layout.
 
