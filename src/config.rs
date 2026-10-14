@@ -24,7 +24,8 @@ pub struct Config {
     pub allowed_hosts: Vec<String>,
     pub upload_limit: u64,
     pub mcp_enabled: bool,
-    pub mcp_token: String,
+    /// The bearer token `/mcp` requires, or `None` when `MCP_AUTH_MODE=none` turns the check off.
+    pub mcp_token: Option<String>,
 }
 fn flag(key: &str, default: bool) -> Result<bool> {
     match env::var(key).as_deref() {
@@ -61,8 +62,11 @@ impl Config {
         };
         let audio = flag("AUDIO_ENABLED", true)?;
         let mcp_enabled = flag("MCP_ENABLED", false)?;
-        let mcp_token = env::var("MCP_TOKEN").unwrap_or_default();
-        validate_mcp_token(mcp_enabled, &mcp_token)?;
+        let mcp_token = mcp_token(
+            mcp_enabled,
+            env::var("MCP_AUTH_MODE").ok().as_deref(),
+            env::var("MCP_TOKEN").unwrap_or_default(),
+        )?;
         let upload_mb = env::var("UPLOAD_MAX_MB")
             .unwrap_or_else(|_| "1024".into())
             .parse::<u64>()?;
@@ -120,11 +124,29 @@ pub(crate) fn docker_socket(host: Option<&str>) -> Option<PathBuf> {
     }
 }
 
+/// An unset mode keeps the token requirement, so only an explicit `none` opens the endpoint.
+pub(crate) fn mcp_token(
+    enabled: bool,
+    mode: Option<&str>,
+    token: String,
+) -> Result<Option<String>> {
+    match mode.unwrap_or("token") {
+        "token" => {
+            validate_mcp_token(enabled, &token)?;
+            Ok(Some(token))
+        }
+        "none" => Ok(None),
+        _ => bail!("MCP_AUTH_MODE must be token or none"),
+    }
+}
+
 pub(crate) fn validate_mcp_token(enabled: bool, token: &str) -> Result<()> {
     if enabled
         && (!(32..=256).contains(&token.len()) || !token.bytes().all(|b| b.is_ascii_graphic()))
     {
-        bail!("MCP_TOKEN must contain 32–256 visible ASCII characters when MCP_ENABLED=true");
+        bail!(
+            "MCP_TOKEN must contain 32 to 256 visible ASCII characters when MCP_ENABLED=true (or use MCP_AUTH_MODE=none)"
+        );
     }
     Ok(())
 }

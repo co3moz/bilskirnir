@@ -20,7 +20,17 @@ Download `bilskirnir.wsl` from a release, then either double-click it or run:
 wsl --install --from-file .\bilskirnir.wsl
 ```
 
-Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters. The setup then detects the WSL GPU device and CUDA libraries, generates a random agent token, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). The setup ends by printing the agent endpoint, token and client settings, which `bilskirnir mcp` shows again later.
+Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters.
+
+Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
+
+- **Random token** (the default) generates a 64-character token.
+- **Custom token** takes a token you type: 32 to 256 letters, digits and `- . _ ~ + /` characters, with `=` only at the end, so it works unquoted in `.env`, HTTP headers and shells.
+- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every desktop.
+
+The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.
+
+A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`) or its first letter; an empty line or the end of the input picks the default.
 
 The bundled PowerShell helper does the same from Windows and adds auto-start:
 
@@ -60,7 +70,7 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group, and its name is the dashboard's `ADMIN_USERNAME`. The distribution is a single-purpose appliance for the Windows user who installed it.
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing LAN access.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise desktops run without GPU acceleration. Change these in `.env` if the detection is wrong.
-- Agent access is enabled: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` generated at first start. `bilskirnir mcp` prints the token and the [client settings](MCP.md); the token grants administrator access to every desktop, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation.
+- Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every desktop, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
 - The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
 
 ## Build the package

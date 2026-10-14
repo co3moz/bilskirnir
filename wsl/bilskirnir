@@ -100,7 +100,7 @@ case ${1:-help} in
         if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
         if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
         if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
-        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|MCP_ENABLED)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
         # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
         if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
@@ -111,21 +111,30 @@ case ${1:-help} in
     mcp)
         require_settings
         enabled=$(sed -n 's/^MCP_ENABLED=//p' "$INSTALL/.env" | tail -n1)
+        mode=$(sed -n 's/^MCP_AUTH_MODE=//p' "$INSTALL/.env" | tail -n1)
         token=$(sed -n 's/^MCP_TOKEN=//p' "$INSTALL/.env" | tail -n1)
-        if [[ $enabled != true || -z $token ]]; then
-            echo "Agent access is disabled. Set MCP_ENABLED=true and MCP_TOKEN in $INSTALL/.env, then run 'bilskirnir restart'." >&2
+        if [[ $enabled != true || ($mode != none && -z $token) ]]; then
+            echo "Agent access is disabled. Set MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
             exit 1
         fi
         distro=${WSL_DISTRO_NAME:-Bilskirnir}
+        if [[ $mode == none ]]; then
+            echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
+            header="" claude_header=""
+            footer="Require a token by setting MCP_AUTH_MODE=token and MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+        else
+            echo "Agent access (MCP) is enabled. The token grants administrator access to every desktop."
+            header=$'\n'"  Header:  Authorization: Bearer $token"
+            claude_header=" --header \"Authorization: Bearer $token\""
+            footer="Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+        fi
         cat <<EOF
-Agent access (MCP) is enabled. The token grants administrator access to every desktop.
 
 Streamable HTTP
-  URL:     $(address)/mcp
-  Header:  Authorization: Bearer $token
+  URL:     $(address)/mcp$header
 
 Claude Code on Windows:
-  claude mcp add --transport http bilskirnir $(address)/mcp --header "Authorization: Bearer $token"
+  claude mcp add --transport http bilskirnir $(address)/mcp$claude_header
 
 stdio bridge (no token in the client; it runs inside the manager container):
   {
@@ -137,7 +146,7 @@ stdio bridge (no token in the client; it runs inside the manager container):
     }
   }
 
-Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'.
+$footer
 EOF
         ;;
     settings)

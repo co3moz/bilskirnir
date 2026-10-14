@@ -28,7 +28,7 @@ fn app(auth: bool) -> Arc<App> {
             allowed_hosts: vec![],
             upload_limit: 1024 * 1024,
             mcp_enabled: false,
-            mcp_token: String::new(),
+            mcp_token: Some(String::new()),
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -50,7 +50,7 @@ fn mcp_app() -> Arc<App> {
     let mut app = app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.mcp_enabled = true;
-    config.mcp_token = "test-token-with-at-least-32-characters".into();
+    config.mcp_token = Some("test-token-with-at-least-32-characters".into());
     app
 }
 async fn mcp_request(
@@ -104,6 +104,21 @@ fn mcp_token_and_script_validation() {
     }
     assert!(config::validate_mcp_token(false, "").is_ok());
     assert!(config::validate_mcp_token(true, "01234567890123456789012345678901").is_ok());
+    // Only an explicit MCP_AUTH_MODE=none drops the token; an unset or mistyped mode does not.
+    for mode in [None, Some("token")] {
+        assert!(config::mcp_token(true, mode, String::new()).is_err());
+    }
+    for mode in [Some(""), Some("off"), Some("None")] {
+        assert!(config::mcp_token(true, mode, "0".repeat(32)).is_err());
+    }
+    assert_eq!(
+        config::mcp_token(true, None, "0".repeat(32)).unwrap(),
+        Some("0".repeat(32))
+    );
+    assert_eq!(
+        config::mcp_token(true, Some("none"), String::new()).unwrap(),
+        None
+    );
     for body in [
         serde_json::json!({"script":""}),
         serde_json::json!({"script":"echo ok","timeout_seconds":0}),
@@ -167,6 +182,42 @@ async fn mcp_requires_its_own_token_and_rejects_cross_origin_access() {
             .unwrap();
         assert_eq!(response.status(), expected);
         assert_eq!(response.headers()["cache-control"], "no-store");
+    }
+}
+#[tokio::test]
+async fn mcp_without_a_token_still_rejects_other_hosts_and_origins() {
+    let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
+    for (token, host, origin, expected) in [
+        (None, "localhost:8080", None, StatusCode::OK),
+        (Some("Bearer wrong"), "localhost:8080", None, StatusCode::OK),
+        (None, "evil.example", None, StatusCode::FORBIDDEN),
+        (
+            None,
+            "localhost:8080",
+            Some("https://evil.example"),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let mut app = mcp_app();
+        Arc::get_mut(&mut app).unwrap().config.mcp_token = None;
+        let mut req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("host", host)
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            .header("mcp-protocol-version", "2025-11-25");
+        if let Some(token) = token {
+            req = req.header("authorization", token);
+        }
+        if let Some(origin) = origin {
+            req = req.header("origin", origin);
+        }
+        let response = router(app)
+            .oneshot(req.body(Body::from(initialize.to_string())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
     }
 }
 #[tokio::test]
