@@ -15,6 +15,15 @@ esac
 docker build --pull -t "$image" -f wsl/Dockerfile .
 container=$(docker create "$image")
 trap 'docker rm -f "$container" >/dev/null' EXIT
+# A COPY without --chmod takes its mode from the checkout, which is 0777 on a Windows drive, and one
+# with --chmod=0644 gives that mode to a directory it creates. Nothing in the package may be writable
+# by others except symlinks and sticky directories such as /tmp, and every directory must be enterable.
+bad_modes=$(docker export "$container" | tar -tv | awk '
+    (substr($1, 9, 1) == "w" && $1 !~ /^l/ && $1 !~ /[tT]$/) || ($1 ~ /^d/ && substr($1, 4, 1) !~ /[xs]/)')
+if [[ -n $bad_modes ]]; then
+    printf 'Wrong modes in the package:\n%s\n' "$bad_modes" >&2
+    exit 1
+fi
 mkdir -p "$(dirname "$output")"
 docker export "$container" | "${compress[@]}" > "$output"
 ls -lh "$output"
