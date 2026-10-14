@@ -25,16 +25,16 @@ RUN nvidia-ctk runtime configure --runtime=docker \
     && userdel -r ubuntu \
     && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/bilskirnir \
     && chmod 0440 /etc/sudoers.d/bilskirnir \
-    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /usr/lib/wsl
-COPY compose.ghcr.yml /opt/bilskirnir/compose.yml
-COPY .env.example /opt/bilskirnir/.env.example
-COPY deploy/Caddyfile /opt/bilskirnir/deploy/Caddyfile
-COPY wsl/wsl.conf /etc/wsl.conf
-COPY wsl/wsl-distribution.conf /etc/wsl-distribution.conf
-COPY wsl/oobe.sh /usr/lib/wsl/oobe.sh
-COPY wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
-COPY wsl/bilskirnir /usr/local/bin/bilskirnir
-COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
-RUN chmod 0755 /usr/lib/wsl/oobe.sh /usr/lib/wsl/keepalive.sh /usr/local/bin/bilskirnir \
-    && chmod 0644 /etc/wsl.conf /etc/wsl-distribution.conf \
-    && rm -f /etc/machine-id /var/lib/dbus/machine-id
+    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /usr/lib/wsl /usr/share/doc/bilskirnir
+# Every COPY names its mode, since a checkout on a Windows drive makes each file 0777. --chmod also
+# applies to a directory the COPY creates, so each destination directory exists beforehand.
+COPY --chmod=0644 compose.ghcr.yml /opt/bilskirnir/compose.yml
+COPY --chmod=0644 .env.example /opt/bilskirnir/.env.example
+COPY --chmod=0644 deploy/Caddyfile /opt/bilskirnir/deploy/Caddyfile
+COPY --chmod=0644 wsl/wsl.conf /etc/wsl.conf
+COPY --chmod=0644 wsl/wsl-distribution.conf /etc/wsl-distribution.conf
+COPY --chmod=0755 wsl/oobe.sh /usr/lib/wsl/oobe.sh
+COPY --chmod=0755 wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
+COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
+COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
+RUN rm -f /etc/machine-id /var/lib/dbus/machine-id
