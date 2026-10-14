@@ -70,10 +70,12 @@ async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Respo
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "));
-    if token.is_none_or(|token| {
-        app.config.mcp_token.is_empty()
-            || !bool::from(token.as_bytes().ct_eq(app.config.mcp_token.as_bytes()))
-    }) {
+    // Without a configured token (MCP_AUTH_MODE=none) any bearer header a client sends is ignored.
+    if let Some(expected) = &app.config.mcp_token
+        && token.is_none_or(|token| {
+            expected.is_empty() || !bool::from(token.as_bytes().ct_eq(expected.as_bytes()))
+        })
+    {
         return (
             StatusCode::UNAUTHORIZED,
             [(header::WWW_AUTHENTICATE, "Bearer realm=\"Bilskirnir MCP\"")],

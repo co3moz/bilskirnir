@@ -1,7 +1,10 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import threading
 import unittest
 from email.message import Message
@@ -16,7 +19,9 @@ spec.loader.exec_module(bridge)
 class BridgeTest(unittest.TestCase):
     def setUp(self):
         self.requests = []
+        self.authorization = "Bearer test-secret"
         received = self.requests
+        test = self
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_):
@@ -25,7 +30,7 @@ class BridgeTest(unittest.TestCase):
             def do_POST(self):
                 message = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 received.append((message, dict(self.headers)))
-                if self.headers.get("Authorization") != "Bearer test-secret":
+                if self.headers.get("Authorization") != test.authorization:
                     self.send_response(401)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
@@ -99,6 +104,24 @@ class BridgeTest(unittest.TestCase):
         output, _ = self.invoke(b"{\n" + b"x" * bridge.REQUEST_LIMIT + b"\n")
         self.assertEqual([m["error"]["code"] for m in output], [-32700, -32600])
         self.assertEqual(self.requests, [])
+
+    def test_a_tokenless_manager_gets_no_authorization_header(self):
+        self.authorization = None
+        output, errors = self.invoke(b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n', token="")
+        self.assertEqual(output[0]["result"], {"ok": True})
+        self.assertEqual(errors, "")
+        self.assertNotIn("Authorization", self.requests[0][1])
+
+    def test_only_the_tokenless_mode_starts_without_a_token(self):
+        script = Path(bridge.__file__)
+        for mode, code in ((None, 1), ("token", 1), ("none", 0)):
+            env = {k: v for k, v in os.environ.items() if k not in ("MCP_TOKEN", "MCP_AUTH_MODE")}
+            if mode:
+                env["MCP_AUTH_MODE"] = mode
+            result = subprocess.run([sys.executable, "-I", str(script)], input=b"", env=env,
+                                    capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, code, mode)
+            self.assertEqual(result.stdout, b"")
 
 
 if __name__ == "__main__":
