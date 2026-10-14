@@ -18,10 +18,15 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update && apt-get install -y --no-install-recommends \
        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin nvidia-container-toolkit \
     && rm -rf /var/lib/apt/lists/*
-# Docker starts with systemd; the NVIDIA runtime is registered now so the first boot needs no network.
-RUN nvidia-ctk runtime configure --runtime=docker \
+# Docker starts with systemd; daemon.json registers the NVIDIA runtime now, so the first boot needs
+# no network, and turns on live-restore, so containers keep running when Docker restarts.
+# WSL 2 runs every distribution in one network namespace. nftables.service would load the default
+# /etc/nftables.conf at each boot, and its "flush ruleset" clears the firewall rules of every
+# Docker Engine on the machine, so it is masked.
+COPY wsl/daemon.json /etc/docker/daemon.json
+RUN dockerd --validate --config-file /etc/docker/daemon.json \
     && systemctl enable docker containerd \
-    && systemctl mask systemd-firstboot.service kmod-static-nodes.service \
+    && systemctl mask systemd-firstboot.service kmod-static-nodes.service nftables.service \
     && userdel -r ubuntu \
     && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/bilskirnir \
     && chmod 0440 /etc/sudoers.d/bilskirnir \
@@ -33,8 +38,11 @@ COPY wsl/wsl.conf /etc/wsl.conf
 COPY wsl/wsl-distribution.conf /etc/wsl-distribution.conf
 COPY wsl/oobe.sh /usr/lib/wsl/oobe.sh
 COPY wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
+COPY wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
+COPY wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
 COPY wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
-RUN chmod 0755 /usr/lib/wsl/oobe.sh /usr/lib/wsl/keepalive.sh /usr/local/bin/bilskirnir \
-    && chmod 0644 /etc/wsl.conf /etc/wsl-distribution.conf \
+RUN chmod 0755 /usr/lib/wsl/oobe.sh /usr/lib/wsl/keepalive.sh /usr/lib/wsl/firewall-watch.sh /usr/local/bin/bilskirnir \
+    && chmod 0644 /etc/wsl.conf /etc/wsl-distribution.conf /etc/systemd/system/bilskirnir-firewall.service \
+    && systemctl enable bilskirnir-firewall.service \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id

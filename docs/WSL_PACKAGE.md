@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, so it does not touch Docker in another WSL distribution.
+The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, with images and containers separate from Docker in any other WSL distribution; only the network is shared, see [Docker in other WSL distributions](#docker-in-other-wsl-distributions).
 
 The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a desktop is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
@@ -49,7 +49,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir logs` | Shows the manager's recent log. |
 | `bilskirnir update` | Pulls the latest manager and the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
-| `bilskirnir doctor` | Checks systemd, Docker, the GPU device, CUDA libraries, settings and registry reachability. |
+| `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
@@ -63,6 +63,21 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 - Agent access is enabled: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` generated at first start. `bilskirnir mcp` prints the token and the [client settings](MCP.md); the token grants administrator access to every desktop, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation.
 - The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
 
+## Docker in other WSL distributions
+
+WSL 2 runs every distribution in one network namespace. Docker Engines in different distributions keep their own images and containers, but they write their NAT, port and isolation rules into the same firewall, and none of them notices when another distribution removes its rules:
+
+- An `nftables` service that loads the default `/etc/nftables.conf` at boot runs `flush ruleset` and removes every rule. Desktops stop reaching the internet even with internet access on, and creating a desktop fails with `iptables: No chain/target/match by that name`. Installing Docker Engine on Ubuntu 24.04 brings in that package with the service enabled.
+- A Docker Engine starting in another distribution rebuilds Docker's shared chains with only its own networks. Internet access keeps working, but the isolation between networks does not.
+
+The package masks the `nftables` service, and `bilskirnir doctor` reports it when an installation from an older package still has it enabled. Mask it in the other distributions that run Docker too:
+
+```bash
+sudo systemctl mask nftables
+```
+
+The `bilskirnir-firewall` service repairs the damage when the rules disappear anyway. Every 10 seconds it checks that each Docker network still has its rule in Docker's `DOCKER-FORWARD` chain; when one is missing twice in a row, it restarts Docker. Docker runs with `live-restore`, so desktops and the manager keep running, but an operation talking to Docker at that moment, such as a script whose output is being streamed, can fail. `journalctl -u bilskirnir-firewall` lists the repairs and `bilskirnir doctor` shows the current state.
+
 ## Build the package
 
 The package is produced from `wsl/Dockerfile` with Docker:
@@ -71,7 +86,7 @@ The package is produced from `wsl/Dockerfile` with Docker:
 scripts/build-wsl.sh dist/bilskirnir.wsl
 ```
 
-The script builds the root filesystem image, exports it with `docker export` and compresses it with gzip (`WSL_COMPRESS=xz` for a smaller file). Release tags publish the package as a GitHub release asset. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command and `keepalive.sh` is the process the Windows launcher keeps open. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, and `kmod-static-nodes`, which has no module tree in WSL; it also installs the systemd user-session packages so launches do not warn about a missing user session.
+The script builds the root filesystem image, exports it with `docker export` and compresses it with gzip (`WSL_COMPRESS=xz` for a smaller file). Release tags publish the package as a GitHub release asset. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command, `keepalive.sh` is the process the Windows launcher keeps open, `daemon.json` configures Docker and `firewall-watch.sh` with `bilskirnir-firewall.service` restores Docker's firewall rules. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, `kmod-static-nodes`, which has no module tree in WSL, and `nftables`, whose default configuration flushes the firewall shared by all distributions; it also installs the systemd user-session packages so launches do not warn about a missing user session.
 
 ## Remove
 
