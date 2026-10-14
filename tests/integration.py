@@ -277,8 +277,13 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
-    built = job(api("images/build", {"name": "offline-script-test", "base_image": xfce["profile"]["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}))
-    print("PASS custom script image, offline build and persisted build log", flush=True)
+    build_request = {"name": "offline-script-test", "base_image": xfce["profile"]["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
+    built = job(api("images/build", build_request))
+    # The exported configuration is the request again; lists and job results leave the script out.
+    assert built["build"] == {"base_image": build_request["base_image"], "internet": False}, built
+    assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
+    assert "script" not in next(image for image in api("images") if image["id"] == built["id"])["build"]
+    print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
     spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}]}
     env_id = job(api("environments", spec))["environment_id"]
     environment_ids.append(env_id)
@@ -596,7 +601,11 @@ try:
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap = job(api(f"environments/{env_id}/snapshot", {"name": "snapshot-test"}))
     assert snap["desktop"]["profile"] == "ubuntu-xfce"
-    assert snap["parent_image_id"] == built["image_id"]
+    assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
+    try:
+        api(f"images/{snap['id']}/config"); raise AssertionError("snapshot exported a build configuration")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
     base_layers = json.loads(docker("image", "inspect", built["image_id"]))[0]["RootFS"]["Layers"]
     snap_layers = json.loads(docker("image", "inspect", snap["image_id"]))[0]["RootFS"]["Layers"]
     assert snap_layers[:len(base_layers)] == base_layers and len(snap_layers) > len(base_layers)

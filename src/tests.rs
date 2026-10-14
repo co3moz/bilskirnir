@@ -5,7 +5,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-fn app(auth: bool) -> Arc<App> {
+pub(crate) fn app(auth: bool) -> Arc<App> {
     Arc::new(App {
         config: config::Config {
             listen: "127.0.0.1:0".into(),
@@ -994,6 +994,7 @@ fn database_round_trip_keeps_snapshot_parent() {
         created_at: 1,
         description: String::new(),
         desktop: None,
+        build: None,
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(
@@ -1029,6 +1030,7 @@ async fn protected_routes_require_login_before_touching_docker() {
         "/api/environments/unknown/vnc",
         "/api/jobs",
         "/api/images",
+        "/api/images/unknown/config",
         "/api/volumes",
     ] {
         let response = router

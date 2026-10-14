@@ -1,5 +1,6 @@
 import * as React from "react"
 import {
+  ClipboardCopyIcon,
   CornerDownRightIcon,
   DownloadIcon,
   HammerIcon,
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { attempt, runJob } from "@/lib/actions"
+import { attempt, exportBuildConfig, runJob } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { imageTree, shortDate } from "@/lib/format"
 import { useImages, useProfiles } from "@/lib/queries"
@@ -121,8 +122,9 @@ const columns: DataColumn<Row>[] = [
     cell: ({ row }) => {
       const image = row.original
       return (
+        // Table cells do not wrap; a long reference does here so the row actions stay in view.
         <div
-          className="flex min-w-48 items-start gap-2"
+          className="flex min-w-72 items-start gap-2 whitespace-normal"
           style={{ paddingLeft: `${Math.min(image.depth, 8) * 1.25}rem` }}
         >
           {image.depth > 0 ? (
@@ -173,15 +175,32 @@ const columns: DataColumn<Row>[] = [
   column.display({
     id: "actions",
     cell: ({ row }) => {
-      const unavailable = row.original.available === false
+      const image = row.original
+      const unavailable = image.available === false
       return (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {/* Only a script build has a configuration; a snapshot's changes have no script. */}
+          {image.build && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => attempt(() => exportBuildConfig(image))}
+                >
+                  <ClipboardCopyIcon data-icon="inline-start" />
+                  Export
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy the build configuration as JSON</TooltipContent>
+            </Tooltip>
+          )}
           <Button
             variant="outline"
             size="sm"
             disabled={unavailable}
             title={unavailable ? "Image no longer available" : undefined}
-            onClick={() => openDialog({ kind: "create", image: row.original.image_id })}
+            onClick={() => openDialog({ kind: "create", image: image.image_id })}
           >
             <PlusIcon data-icon="inline-start" />
             Create environment

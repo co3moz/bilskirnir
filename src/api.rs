@@ -11,7 +11,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
@@ -374,12 +374,40 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
             .into_iter()
             .map(|r| {
                 let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
-                let mut value = json!(r);
+                let mut value = image_summary(&r);
                 value["available"] = json!(available);
                 value
             })
             .collect::<Vec<_>>()
     )))
+}
+/// An image record as lists and job results show it. A build script can be up to a megabyte, so
+/// only the configuration route returns it.
+fn image_summary(record: &ImageRecord) -> Value {
+    let mut value = json!(record);
+    if let Some(build) = value.get_mut("build").and_then(Value::as_object_mut) {
+        build.remove("script");
+    }
+    value
+}
+/// The request that built an image, ready to build it again here or on another installation.
+pub async fn image_config(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<Json<BuildImage>> {
+    let record: ImageRecord = app.db.get("image", &id)?;
+    let build = record.build.ok_or_else(|| {
+        Error(
+            StatusCode::NOT_FOUND,
+            "No build configuration was recorded for this image".into(),
+        )
+    })?;
+    Ok(Json(BuildImage {
+        name: record.name,
+        base_image: build.base_image,
+        internet: build.internet,
+        script: build.script,
+    }))
 }
 #[derive(Deserialize)]
 pub struct RegisterImage {
@@ -410,17 +438,20 @@ pub async fn register_image(
         created_at: now(),
         description: String::new(),
         desktop: crate::profiles::from_image(&info),
+        build: None,
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
 }
-#[derive(Deserialize)]
+/// A build request. `GET /api/images/{id}/config` returns the same shape, so an exported
+/// configuration is a request that builds the image again.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildImage {
     pub name: String,
     pub base_image: String,
-    pub script: String,
     #[serde(default = "default_true")]
     pub internet: bool,
+    pub script: String,
 }
 fn default_true() -> bool {
     true
@@ -454,7 +485,8 @@ pub async fn build(
             app.docker(&["image", "tag", &parent, &base_tag]).await?;
             let dir = app.config.data.join("builds").join(&id);
             tokio::fs::create_dir_all(&dir).await?;
-            tokio::fs::write(dir.join("setup.sh"), body.script.replace("\r\n", "\n")).await?;
+            let script = body.script.replace("\r\n", "\n");
+            tokio::fs::write(dir.join("setup.sh"), &script).await?;
             let dockerfile = format!(
                 "FROM {base_tag}\nUSER root\nCOPY setup.sh /tmp/wsld-setup.sh\nRUN bash /tmp/wsld-setup.sh && rm /tmp/wsld-setup.sh\nLABEL io.wsl-desktop.desktop=true\nLABEL {LABEL}=true\n"
             );
@@ -490,9 +522,14 @@ pub async fn build(
                 created_at: now(),
                 description: String::new(),
                 desktop: crate::profiles::from_image(&info),
+                build: Some(BuildConfig {
+                    base_image: body.base_image,
+                    internet: body.internet,
+                    script,
+                }),
             };
             app.db.put("image", &id, &rec)?;
-            Ok(json!(rec))
+            Ok(image_summary(&rec))
         },
     )
 }
@@ -549,6 +586,7 @@ pub async fn snapshot(
                 created_at: now(),
                 description: body.description,
                 desktop: crate::profiles::from_image(&info),
+                build: None,
             };
             app.db.put("image", &id, &rec)?;
             Ok(json!(rec))
@@ -607,3 +645,6 @@ pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<
     let job: Job = app.db.get("job", &id)?;
     Ok(Json(json!(job)))
 }
+#[cfg(test)]
+#[path = "api_tests.rs"]
+mod tests;

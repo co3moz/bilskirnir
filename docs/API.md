@@ -82,9 +82,10 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/environments/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/environments/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Saved images, snapshots, ancestry and availability. |
+| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet`; returns a job. |
+| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET | `/api/volumes` | Docker named volumes. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
 | GET | `/api/jobs` | Latest 100 job summaries. |

@@ -1,9 +1,10 @@
 import { toast } from "sonner"
 
 import { api } from "./api"
+import { formatBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
 import { refreshAll } from "./queries"
-import type { JobStarted } from "./types"
+import type { BuildConfig, ImageRecord, JobStarted } from "./types"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
 export async function runJob(path: string, body?: unknown, method?: string) {
@@ -38,6 +39,35 @@ export const setInternet = (id: string, enabled: boolean) =>
 export async function showLog(title: string, path: string) {
   const data = await api<{ log?: string; output?: string; status?: string }>(path)
   openDialog({ kind: "log", title, text: data.log ?? data.output ?? "", status: data.status })
+}
+
+/** Copies text. Browsers keep the clipboard API from plain HTTP pages, such as a LAN address, so
+ * a hidden field and the older copy command stand in there. */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const field = document.createElement("textarea")
+    field.value = text
+    field.readOnly = true
+    field.style.position = "fixed"
+    field.style.opacity = "0"
+    document.body.append(field)
+    field.select()
+    try {
+      return document.execCommand("copy")
+    } finally {
+      field.remove()
+    }
+  }
+}
+
+/** Copies a built image's configuration as JSON, or shows it when the browser refuses to copy. */
+export async function exportBuildConfig(image: Pick<ImageRecord, "id" | "name">) {
+  const text = formatBuildConfig(await api<BuildConfig>(`images/${image.id}/config`))
+  if (await copyText(text)) toast.success(`Copied the configuration of ${image.name}.`)
+  else openDialog({ kind: "log", title: `${image.name} configuration`, text })
 }
 
 /** Runs an action from a button and reports a failure instead of throwing it away. */
