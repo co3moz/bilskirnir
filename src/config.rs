@@ -142,10 +142,10 @@ pub(crate) fn mcp_token(
 
 pub(crate) fn validate_mcp_token(enabled: bool, token: &str) -> Result<()> {
     if enabled
-        && (!(32..=256).contains(&token.len()) || !token.bytes().all(|b| b.is_ascii_graphic()))
+        && (!(1..=256).contains(&token.len()) || !token.bytes().all(|b| b.is_ascii_graphic()))
     {
         bail!(
-            "MCP_TOKEN must contain 32 to 256 visible ASCII characters when MCP_ENABLED=true (or use MCP_AUTH_MODE=none)"
+            "MCP_TOKEN must contain 1 to 256 visible ASCII characters without spaces when MCP_ENABLED=true (or use MCP_AUTH_MODE=none)"
         );
     }
     Ok(())

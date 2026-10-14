@@ -93,16 +93,20 @@ async fn mcp_request(
 }
 #[test]
 fn mcp_token_and_script_validation() {
+    // Any length up to 256 is accepted; whitespace and non-ASCII cannot travel in a bearer header.
     for token in [
         "",
-        "too-short",
-        "01234567890123456789012345678901 ",
-        "01234567890123456789012345678901\n",
+        "short token",
+        "token\n",
+        "şifre",
+        "x".repeat(257).as_str(),
     ] {
         assert!(config::validate_mcp_token(true, token).is_err());
     }
     assert!(config::validate_mcp_token(false, "").is_ok());
-    assert!(config::validate_mcp_token(true, "01234567890123456789012345678901").is_ok());
+    for token in ["x", "$hort#'\"`%!", "x".repeat(256).as_str()] {
+        assert!(config::validate_mcp_token(true, token).is_ok());
+    }
     // Only an explicit MCP_AUTH_MODE=none drops the token; an unset or mistyped mode does not.
     for mode in [None, Some("token")] {
         assert!(config::mcp_token(true, mode, String::new()).is_err());
