@@ -1,0 +1,7 @@
+# Package scripts run their Node tools (tsc, vite, eslint) on Bun too, so a build is the same
+# on a workstation, in CI and in the Docker image, which has no Node installation.
+[run]
+bun = true
+
+[install]
+exact = true

@@ -1,11 +1,11 @@
-FROM node:24-bookworm-slim AS ui
+FROM oven/bun:1.4.3-slim AS ui
 WORKDIR /build
-COPY package*.json ./
-RUN npm ci
-COPY scripts/build-ui.mjs scripts/
+COPY package.json bun.lock bunfig.toml ./
+RUN bun install --frozen-lockfile
+COPY tsconfig*.json vite.config.ts ./
 COPY THIRD_PARTY_NOTICES.md LICENSE ./
 COPY web web
-RUN npm run build
+RUN bun run build
 
 FROM rust:1-bookworm AS backend
 WORKDIR /build

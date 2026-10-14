@@ -4,11 +4,17 @@
 
 An environment is an Ubuntu desktop running in a Docker container. An image is the starting point for that desktop. A volume holds files separately from the container, so you can keep using them after the environment is gone.
 
+## Find your way around
+
+The sidebar leads to **Dashboard**, **Environments**, **Images**, **Volumes** and **Jobs**, lists the desktops that are running for a quick connect and holds **New environment** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme and signs out.
+
+The **Dashboard** sums up the host: how many environments exist and run, jobs in progress and today's failures, and the processors and memory Docker reports with the limits running desktops use. Below it, a chart shows finished and failed jobs per day, and a table lists every environment with tabs for running, stopped and those that need attention. Select several rows to start or stop them together. Select a name to open its details panel. **Environments** shows the same desktops as cards with a live preview.
+
 ## Create and connect
 
 Select **New environment** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and volume mounts.
 
-After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, change settings, inspect or delete it.
+After creation finishes, select **Connect**. The card preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu or its details panel to stop, restart, change settings, inspect or delete it. A desktop's address, such as `#/desktop/<id>`, can be bookmarked.
 
 The GPU option is available only when the installation enables `WSL_GPU` or `NVIDIA_COMPUTE`. There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. In the WSL package, all desktops share the memory WSL gives its virtual machine; [Memory, processors and disk](WSL_PACKAGE.md#memory-processors-and-disk) explains how to raise it. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
 
@@ -18,7 +24,7 @@ Both profiles are Ubuntu 24.04. XFCE uses fewer resources and is a good starting
 
 The GNOME profile runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
 
-A profile's image is downloaded the first time you create a desktop or build an image from it. The job dialog shows the download's size and progress, and later desktops from that profile start without it. Under **Images**, **Download** on a profile card fetches it ahead of time and **Update** fetches its latest published release. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
+A profile's image is downloaded the first time you create a desktop or build an image from it. The job panel shows the download's size and progress, and later desktops from that profile start without it. Under **Images**, **Download** on a profile card fetches it ahead of time and **Update** fetches its latest published release. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
 
 ## Running graphics applications
 
@@ -118,6 +124,6 @@ Sound and microphone must be enabled both for the installation and for the envir
 
 ## Read job results
 
-Longer operations appear under **Jobs**. Open a job to see its status and output; the dialog updates while work continues. Image builds show script output. Image downloads show a progress bar with the downloaded size, and the job list shows their percentage. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
+Longer operations appear under **Jobs**. Open a job to see its status and output; the panel updates while work continues. Image builds show script output. Image downloads show a progress bar with the downloaded size, and the job list shows their percentage. Deletion jobs explain which container and networks were removed and confirm that named volumes and saved images were preserved.
 
 If environment creation failed partway through, **Retry setup** can complete missing setup without replacing an existing container. Agents can also reset an environment through the API, which recreates the container from its saved image while keeping named volumes. See [recovery](INSTALLATION.md#when-setup-is-interrupted) for what can and cannot be restored.

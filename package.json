@@ -2,11 +2,48 @@
   "name": "bilskirnir-ui",
   "private": true,
   "version": "0.2.0",
+  "type": "module",
   "scripts": {
-    "build": "node scripts/build-ui.mjs",
-    "test": "node --test --test-isolation=none tests/ui.test.mjs tests/media.test.mjs tests/uploads.test.mjs"
+    "dev": "vite",
+    "build": "tsc -b tsconfig.app.json tsconfig.node.json && vite build",
+    "test": "tsc -p tsconfig.test.json && bun test tests/",
+    "lint": "eslint . && prettier --check web/src tests vite.config.ts",
+    "format": "prettier --write web/src tests vite.config.ts"
   },
-  "dependencies": { "@novnc/novnc": "1.5.0" },
-  "devDependencies": { "esbuild": "0.25.12" }
+  "dependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@novnc/novnc": "1.5.0",
+    "@tanstack/react-query": "5.104.2",
+    "@tanstack/react-table": "9.3.1",
+    "class-variance-authority": "0.7.1",
+    "cn": "0.4.0",
+    "lucide-react": "1.57.0",
+    "radix-ui": "1.8.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "3.8.0",
+    "sonner": "2.0.8",
+    "vaul": "1.1.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/bun": "1.4.3",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "tailwindcss": "4.3.3",
+    "tw-animate-css": "1.4.0",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4"
+  }
 }
-
