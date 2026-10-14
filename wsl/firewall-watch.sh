@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # WSL 2 runs every distribution in one network namespace, so other distributions can remove the
-# firewall rules this Docker Engine programmed. A boot that loads the default nftables
-# configuration ("flush ruleset") removes all of them: desktops lose internet access and new
-# internal networks cannot be created. A Docker Engine starting elsewhere rebuilds Docker's shared
-# chains with only its own networks: NAT survives, isolation between networks does not. Docker
-# notices neither. This loop checks that every bridge network of this engine still has its rule
-# in DOCKER-FORWARD and restarts Docker when one is missing twice in a row; live-restore keeps the
-# containers running across that restart.
+# firewall rules this Docker Engine programmed. An enabled nftables service flushes the whole
+# ruleset when it starts and when it stops, which removes all of them: desktops lose internet
+# access and new internal networks cannot be created. A Docker Engine starting elsewhere rebuilds
+# Docker's shared chains with only its own networks: NAT survives, isolation between networks
+# does not. Docker notices neither. This loop checks that every bridge network of this engine
+# still has its rule in DOCKER-FORWARD and restarts Docker when one is missing twice in a row;
+# live-restore keeps the containers running across that restart.
 #
 # Usage: firewall-watch.sh          watch and repair (the bilskirnir-firewall service)
 #        firewall-watch.sh --check  print the bridge networks without rules; exit 1 if there are any

@@ -20,9 +20,9 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 # Docker starts with systemd; daemon.json, copied below, registers the NVIDIA runtime now, so the
 # first boot needs no network, and turns on live-restore, so containers keep running when Docker
-# restarts. WSL 2 runs every distribution in one network namespace. nftables.service would load
-# the default /etc/nftables.conf at each boot, and its "flush ruleset" clears the firewall rules
-# of every Docker Engine on the machine, so it is masked.
+# restarts. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
+# whole ruleset when it starts (the default /etc/nftables.conf) and when it stops, which clears
+# the firewall rules of every Docker Engine on the machine, so it is masked.
 RUN systemctl enable docker containerd \
     && systemctl mask systemd-firstboot.service kmod-static-nodes.service nftables.service \
     && userdel -r ubuntu \
