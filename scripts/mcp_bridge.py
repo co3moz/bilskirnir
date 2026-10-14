@@ -44,12 +44,14 @@ def run(url, token, source, output, errors):
             if len(body) > REQUEST_LIMIT:
                 failure(message, -32600, "MCP request exceeds the 1100000-byte limit")
                 return
-            request = urllib.request.Request(url, data=body, headers={
-                "Authorization": "Bearer " + token,
+            headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json, text/event-stream",
                 "MCP-Protocol-Version": PROTOCOL,
-            })
+            }
+            if token:
+                headers["Authorization"] = "Bearer " + token
+            request = urllib.request.Request(url, data=body, headers=headers)
             with client.open(request, timeout=125) as response:
                 if response.status in (202, 204):
                     return
@@ -111,8 +113,10 @@ def run(url, token, source, output, errors):
 
 
 if __name__ == "__main__":
-    token = os.environ.get("MCP_TOKEN", "")
-    if not token:
+    # A manager with MCP_AUTH_MODE=none takes no token, so the bridge sends none either.
+    tokenless = os.environ.get("MCP_AUTH_MODE") == "none"
+    token = "" if tokenless else os.environ.get("MCP_TOKEN", "")
+    if not token and not tokenless:
         sys.stderr.write("Enable MCP and configure MCP_TOKEN on the manager before connecting.\n")
         raise SystemExit(1)
     run(os.environ.get("MCP_BRIDGE_URL", "http://127.0.0.1:8080/mcp"), token,

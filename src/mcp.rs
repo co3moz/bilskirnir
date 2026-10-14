@@ -80,10 +80,12 @@ fn reject(app: &App, req: &Request) -> Option<Response> {
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "));
-    if token.is_none_or(|token| {
-        app.config.mcp_token.is_empty()
-            || !bool::from(token.as_bytes().ct_eq(app.config.mcp_token.as_bytes()))
-    }) {
+    // Without a configured token (MCP_AUTH_MODE=none) any bearer header a client sends is ignored.
+    if let Some(expected) = &app.config.mcp_token
+        && token.is_none_or(|token| {
+            expected.is_empty() || !bool::from(token.as_bytes().ct_eq(expected.as_bytes()))
+        })
+    {
         return Some(
             (
                 StatusCode::UNAUTHORIZED,

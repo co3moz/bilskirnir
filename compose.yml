@@ -17,6 +17,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       MCP_ENABLED: ${MCP_ENABLED:-false}
       MCP_TOKEN: ${MCP_TOKEN:-}
+      MCP_AUTH_MODE: ${MCP_AUTH_MODE:-token}
       SECURE_COOKIE: ${SECURE_COOKIE:-false}
       DESKTOP_IMAGE: ${DESKTOP_IMAGE:-ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04}
       WSL_GPU: ${WSL_GPU:-true}

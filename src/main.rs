@@ -200,6 +200,11 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let config = config::Config::load()?;
+    if config.mcp_enabled && config.mcp_token.is_none() {
+        tracing::warn!(
+            "MCP_AUTH_MODE=none: /mcp accepts requests without a token from any allowed host"
+        );
+    }
     tokio::fs::create_dir_all(&config.data).await?;
     uploads::cleanup_temporary_files(&config.data).await?;
     let db = db::Db::open(&config.data.join("state.sqlite"))?;

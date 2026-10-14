@@ -15,7 +15,7 @@ MCP_ENABLED: "true"
 MCP_TOKEN: "your-random-token"
 ```
 
-With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) enables MCP at first start with a generated token; run `bilskirnir mcp` inside the distribution to see it together with the client settings below. An enabled server requires a token of 32–256 visible ASCII characters, even if dashboard login is disabled.
+With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable MCP and how agents authenticate; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled server requires a token of 32 to 256 visible ASCII characters, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set.
 
 Configure your MCP client with:
 
@@ -26,6 +26,8 @@ Configure your MCP client with:
 | Authorization header | `Bearer YOUR_MCP_TOKEN` |
 
 Use the hostname and HTTPS address of your installation for LAN access. The token grants administrator access to the managed desktops, including root script execution and deletion. It is separate from the dashboard password and does not expire with a browser session. Rotate it by changing `MCP_TOKEN` and recreating the manager.
+
+`MCP_AUTH_MODE=none` accepts agent requests without a token; leave the authorization header out of the client settings, or keep it, since the manager then ignores it. The Host and Origin checks still apply, so a web page opened in a browser cannot call the endpoint, but any program that can reach the manager's address gets the same administrator access. Use it only while the manager listens on localhost.
 
 Clients configure HTTP headers in different ways. Add the URL and bearer header using your client's MCP server settings; the server does not implement an OAuth sign-in flow. It uses stateless requests, so there is no session ID to save. The SDK handles protocol negotiation, including clients using the 2025 Streamable HTTP revisions.
 
@@ -48,7 +50,7 @@ For clients that use an `mcpServers` configuration:
 
 Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
-MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
+MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
 
 ### Broken responses from localhost on Windows
 
@@ -56,7 +58,7 @@ Some Windows security products scan HTTP traffic on localhost and rewrite respon
 
 The manager therefore sends every `/mcp` response chunked, including the `401` for a missing token. Managers up to 0.2.0 still used `Content-Length` and are affected: update them (`bilskirnir update` in the WSL package), or exclude `localhost` or the manager's port from the product's web or HTTP scanning, or use the stdio bridge above, which reaches the manager without the Windows loopback connection.
 
-To check what reaches Windows, send the same request from Windows and from inside the WSL distribution, where the security product does not see the traffic. Both should print `401` with `transfer-encoding: chunked` and the JSON error body:
+To check what reaches Windows, send the same request from Windows and from inside the WSL distribution, where the security product does not see the traffic. In `token` mode both should print `401` with `transfer-encoding: chunked` and the JSON error body:
 
 ```bash
 curl -si -X POST http://127.0.0.1:8080/mcp

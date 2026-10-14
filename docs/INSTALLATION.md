@@ -34,7 +34,8 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
 | `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
-| `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled; 32–256 visible ASCII characters. |
+| `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled in `token` mode; 32 to 256 visible ASCII characters. |
+| `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token. Anyone who can reach the manager's address can then control every desktop, so keep it on localhost. |
 | `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
@@ -61,7 +62,7 @@ Sessions last 12 hours. Signing out or reaching session expiry closes active des
 
 Environments created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 
-Agent access uses a separate token rather than the dashboard session. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
+Agent access uses a separate token rather than the dashboard session, unless `MCP_AUTH_MODE=none` turns it off. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
 
 ## Access from another device
 
