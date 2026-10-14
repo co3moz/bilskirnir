@@ -77,7 +77,7 @@ Keep keyboard focus visible, give icon buttons accessible names and keep the Rad
 - `web/src/index.css` holds the theme variables, fonts and the few global rules.
 - `web/src/components/` holds the layout pieces adapted from `dashboard-01` (`app-sidebar.tsx`, `site-header.tsx`, `section-cards.tsx`, `chart-area-interactive.tsx`, `data-table.tsx`) and Bilskirnir's own components; `ui/` holds the shadcn components.
 - `web/src/pages/` holds one file per page, `web/src/components/dialogs/` the dialogs and drawers.
-- `web/public/mark.svg` is the product mark and favicon.
+- `web/public/mark.svg` is the product mark and favicon: the hammer pendant in flat neutral colors, with one band across the head and the gem. Its dark body and light edge read on both themes; keep it that simple so it survives 16 px.
 - `components.json` records the shadcn preset (style, base color, icon library), so components added later with the shadcn CLI match the rest.
 
 Verify interface changes in the live browser, in both themes and at a narrow width, before updating screenshots.
