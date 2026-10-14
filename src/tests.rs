@@ -80,13 +80,12 @@ async fn mcp_request(
         .await
         .unwrap();
     let status = response.status();
-    if status == StatusCode::OK {
-        assert!(
-            response.headers().contains_key("content-length"),
-            "Completed MCP JSON replies should have an explicit length"
-        );
-        assert!(!response.headers().contains_key("transfer-encoding"));
-    }
+    assert!(!response.headers().contains_key("content-length"));
+    assert_eq!(
+        axum::body::HttpBody::size_hint(response.body()).exact(),
+        None,
+        "MCP replies must not have a known length; see mcp_replies_are_chunked_on_the_wire"
+    );
     let bytes = axum::body::to_bytes(response.into_body(), 8 * 1024 * 1024)
         .await
         .unwrap();
@@ -493,6 +492,47 @@ async fn mcp_transport_bounds_messages_and_accepts_notifications() {
             .await
             .unwrap();
         assert_eq!(response.status(), expected, "{method} {version}");
+    }
+}
+
+/// Norton's web protection rewrites a Content-Length reply on a loopback `/mcp` path into a
+/// chunked header over an unchunked body. Chunked replies pass through it intact, so the framing
+/// that reaches the socket is what has to stay chunked, rejections included.
+#[tokio::test]
+async fn mcp_replies_are_chunked_on_the_wire() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(mcp_app())).await });
+    let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+        "protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}})
+    .to_string();
+    for (authorization, expected) in [
+        ("", "HTTP/1.1 401 "),
+        (
+            "Authorization: Bearer test-token-with-at-least-32-characters\r\n",
+            "HTTP/1.1 200 ",
+        ),
+    ] {
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        let request = format!(
+            "POST /mcp HTTP/1.1\r\nHost: localhost:8080\r\n{authorization}Content-Type: application/json\r\nAccept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-11-25\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{initialize}",
+            initialize.len()
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut reply = Vec::new();
+        stream.read_to_end(&mut reply).await.unwrap();
+        let reply = String::from_utf8(reply).unwrap();
+        let (head, body) = reply.split_once("\r\n\r\n").unwrap();
+        let head = head.to_ascii_lowercase();
+        assert!(reply.starts_with(expected), "{head}");
+        assert!(head.contains("\r\ntransfer-encoding: chunked"), "{head}");
+        assert!(!head.contains("\r\ncontent-length:"), "{head}");
+        let (size, rest) = body.split_once("\r\n").unwrap();
+        let size = usize::from_str_radix(size, 16).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&rest[..size]).unwrap();
+        assert!(json.is_object(), "{json}");
+        assert!(rest[size..].ends_with("0\r\n\r\n"), "{body}");
     }
 }
 
