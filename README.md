@@ -45,13 +45,13 @@ WSL stops a distribution shortly after its last window closes; [Keep it running]
 
 ## Custom installation
 
-The WSL package is the recommended installation. If you already run Docker Engine in your own WSL2 Ubuntu and want to manage it yourself, you can run the manager there with Compose.
+The WSL package is the recommended installation. Bilskirnir itself needs only an x86_64 Linux host with Docker Engine and Compose v2, so you can also run it with Compose on a host you manage yourself, such as your own WSL2 distribution or another Linux machine.
 
-Run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
+Run the commands below on that host, as a user who can use Docker.
 
-The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; the GPU option is then unavailable when creating a desktop.
+GPU acceleration currently goes through WSL's GPU support: it needs a host where `/dev/dxg` and `/usr/lib/wsl` exist, and CUDA also needs NVIDIA Container Toolkit configured for Docker Engine. The example enables both for an NVIDIA GPU. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. On a host without WSL GPU support, or to run without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; desktops then use software rendering and the GPU option is unavailable when creating one.
 
-Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for the NVIDIA setup:
+Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU under WSL:
 
 ```yaml
 name: bilskirnir
@@ -71,7 +71,7 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: "replace-with-your-password"
       DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-      # These settings apply GPU access to desktops created in the UI.
+      # GPU access for desktops created in the UI. Without WSL GPU support, set both to "false".
       WSL_GPU: "true"
       NVIDIA_COMPUTE: "true" # Set false for AMD/Intel or without CUDA support.
       GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
