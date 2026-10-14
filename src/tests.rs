@@ -234,6 +234,11 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         guide.contains(&format!("exposes {} tools", tools.len())),
         "docs/MCP.md must state the tool count"
     );
+    // The README leads with the same count, so it goes stale the same way.
+    assert!(
+        include_str!("../README.md").contains(&format!("with {} tools", tools.len())),
+        "README.md must state the tool count"
+    );
     assert_eq!(
         screenshot["inputSchema"]["required"],
         serde_json::json!(["environment_id"])
