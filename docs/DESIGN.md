@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-Bilskirnir's appearance draws on the Asgard ships and interiors that inspired the project: dark metal, pale blue lights and a little violet. That influence belongs in the colors and a few details. The interface itself follows the shadcn/ui `dashboard-01` block, so it reads like a familiar admin dashboard: readable previews, tables you can scan and controls you can find quickly.
+Bilskirnir's appearance draws on the Asgard ships and interiors that inspired the project: dark neutral metal, with color kept for what it means. That influence belongs in the colors, the type and a few details. The interface itself follows the shadcn/ui `dashboard-01` block, so it reads like a familiar admin dashboard: readable previews, tables you can scan and controls you can find quickly.
 
 ## What the interface should communicate
 
@@ -30,39 +30,39 @@ Colors are the shadcn theme variables in `web/src/index.css`, with a light and a
 
 | Variable | Dark | Light | Use |
 | --- | --- | --- | --- |
-| `--sidebar` | `#070b12` | `#f2f5f9` | Sidebar and the frame around the inset page |
-| `--background` | `#0b111b` | `#ffffff` | Page surface |
-| `--card` | `#0f1722` | `#ffffff` | Cards and panels |
-| `--popover` | `#111b28` | `#ffffff` | Dialogs, drawers and menus |
-| `--muted` | `#1b293c` | `#edf2f7` | Table headers, selected toggles, quiet backgrounds |
-| `--border` | `#223146` | `#dae2eb` | Borders and separators |
-| `--input` | `#2b3b50` | `#cbd6e2` | Input borders |
-| `--foreground` | `#e4edf7` | `#0d1726` | Main text |
-| `--muted-foreground` | `#a0afc3` | `#556779` | Supporting text |
-| `--primary` | `#92d5f3` | `#1b6f9a` | Primary actions, focus and active states |
+| `--sidebar` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Sidebar and the frame around the inset page |
+| `--background` | `oklch(0.145 0 0)` | `oklch(1 0 0)` | Page surface |
+| `--card` | `oklch(0.205 0 0)` | `oklch(1 0 0)` | Cards and panels |
+| `--popover` | `oklch(0.205 0 0)` | `oklch(1 0 0)` | Dialogs, drawers and menus |
+| `--muted` | `oklch(0.269 0 0)` | `oklch(0.97 0 0)` | Table headers, selected toggles, quiet backgrounds |
+| `--border` | white at 10% | `oklch(0.922 0 0)` | Borders and separators |
+| `--input` | white at 15% | `oklch(0.922 0 0)` | Input borders and field backgrounds |
+| `--foreground` | `oklch(0.985 0 0)` | `oklch(0.145 0 0)` | Main text |
+| `--muted-foreground` | `oklch(0.708 0 0)` | `oklch(0.556 0 0)` | Supporting text |
+| `--primary` | `oklch(0.922 0 0)` | `oklch(0.205 0 0)` | Primary actions, focus and active states |
 | `--violet` | `#aaa0ed` | `#6152c4` | Images and their relationships |
 | `--warning` | `#e3c88f` | `#96660f` | Starting, pending or paused states |
-| `--destructive` | `#f3a0ad` | `#c42b45` | Errors and destructive actions |
+| `--destructive` | `oklch(0.704 0.191 22.216)` | `oklch(0.577 0.245 27.325)` | Errors and destructive actions |
 | `--success` | `#a9dfcd` | `#1d7f60` | Running desktops and successful outcomes |
-| `--chart-1` to `--chart-5` | blue, violet, green, amber, red | the same hues, darker | Chart series |
+| `--chart-1` to `--chart-5` | greys, light to dark | the same greys | Neutral chart series |
 
-Blue draws attention to things the user can act on. Violet identifies images and their relationships. Always pair a status color with text and an icon: `StatusBadge` does this for every state. Keep background lighting subtle (a faint blue glow at the top of the dark page) and leave remote desktop screenshots in their original colors.
+The surfaces are the neutral palette of the shadcn preset, without a blue or warm cast. The primary color is near white on dark and near black on light, and it marks what the user can act on. Hue is kept for meaning: violet identifies images and their relationships, and green, amber and red carry states. Always pair a status color with text and an icon: `StatusBadge` does this for every state. A chart whose series are outcomes uses those colors too: the job activity chart draws completed jobs in `--primary` and failed ones in `--destructive`, because two greys cannot be told apart on a dark card. There is no background lighting; leave remote desktop screenshots in their original colors.
 
 ## Type and spacing
 
-The interface uses Geist and Geist Mono, bundled from Fontsource packages so nothing loads from the network. Logs, image references, volume names and container IDs use the mono face. Sizes follow the shadcn components: 14 px body text, 12 px supporting text, 16 px page titles in the header and larger numbers only on summary cards.
+The interface uses Oxanium for text and Geist Mono for code, both bundled from Fontsource packages so nothing loads from the network. Logs, image references, volume names and container IDs use the mono face. Sizes follow the shadcn components: 14 px body text, 12 px supporting text, 16 px page titles in the header and larger numbers only on summary cards.
 
-The radius is 8 px (`--radius: 0.5rem`); the components derive smaller and larger corners from it. Pages use the block's spacing: 16 px side padding, 24 px from 1024 px, and 16 to 24 px between sections.
+The radius is 10 px (`--radius: 0.625rem`); the components derive smaller and larger corners from it. In the Maia style buttons, inputs and badges are fully rounded and cards use the 2xl corner. Pages use the block's spacing: 16 px side padding, 24 px from 1024 px, and 16 to 24 px between sections.
 
 ## Components
 
-Components come from shadcn/ui (Radix base, Nova style) in `web/src/components/ui/` and are project code once added. Prefer an existing component to new markup, and new variants to one-off classes.
+Components come from shadcn/ui (Radix base, Maia style) in `web/src/components/ui/` and are project code once added. Prefer an existing component to new markup, and new variants to one-off classes. Icons come from Remix Icon (`@remixicon/react`), the preset's icon library: use the `Line` icons, and a `Fill` icon only where the filled shape carries the meaning, as the success state does.
 
 - **Summary cards** show a number, a badge and two lines of context. Use honest numbers from the API; there is no trend data, so do not invent trends.
 - **Tables** use `web/src/components/data-table.tsx`: the block's view tabs (a select on narrow pages), the columns menu, row selection where bulk actions exist, sorting on columns where order matters, and pagination that stays on its page while the list refreshes.
 - **Detail drawers** open from a table row, from the right, or from the bottom on a phone, as the block's row viewer does. The environment drawer holds the preview, the configuration and every action; the job drawer follows the log while the job runs.
 - **Environment cards** show the desktop preview, name, state, profile, resources and actions. Preserve the full screenshot instead of cropping away parts of the desktop. Hover can strengthen the border but should not move the card.
-- **Profile cards** have a blue top border; image rows use violet icons and an indented tree for parent relationships.
+- **Profile cards** have a top border in the primary color; image rows use violet icons and an indented tree for parent relationships.
 - **Dialogs** open one at a time through `web/src/lib/dialogs.ts`. Explain consequences beside the relevant control: whether a file will be replaced, what a snapshot excludes, why a script runs as root, or which setting restarts the desktop. Destructive confirmations use an alert dialog with a destructive button.
 - **File uploads** use a dashed drop target and a compact queue with progress and explicit **Uploaded**, **Failed** or **Cancelled** results. Keep completed outcomes visible and make retry available for unfinished files. Do not offer read-only destinations.
 
@@ -78,5 +78,6 @@ Keep keyboard focus visible, give icon buttons accessible names and keep the Rad
 - `web/src/components/` holds the layout pieces adapted from `dashboard-01` (`app-sidebar.tsx`, `site-header.tsx`, `section-cards.tsx`, `chart-area-interactive.tsx`, `data-table.tsx`) and Bilskirnir's own components; `ui/` holds the shadcn components.
 - `web/src/pages/` holds one file per page, `web/src/components/dialogs/` the dialogs and drawers.
 - `web/public/mark.svg` is the product mark and favicon.
+- `components.json` records the shadcn preset (style, base color, icon library), so components added later with the shadcn CLI match the rest.
 
 Verify interface changes in the live browser, in both themes and at a narrow width, before updating screenshots.

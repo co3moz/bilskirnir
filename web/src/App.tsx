@@ -1,5 +1,5 @@
 import * as React from "react"
-import { PlusIcon, TriangleAlertIcon } from "lucide-react"
+import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { AppSidebar, pageTitles } from "@/components/app-sidebar"
@@ -45,7 +45,7 @@ function ConnectionFailed({ message }: { message: string }) {
     <Empty className="min-h-svh bg-sidebar">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <TriangleAlertIcon />
+          <RiAlertLine />
         </EmptyMedia>
         <EmptyTitle>Connection failed</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
@@ -75,7 +75,7 @@ function Shell({ page }: { page: Page }) {
         <SiteHeader title={pageTitles[page]}>
           {page === "environments" && (
             <Button size="sm" onClick={() => openDialog({ kind: "create" })}>
-              <PlusIcon data-icon="inline-start" />
+              <RiAddLine data-icon="inline-start" />
               <span className="hidden sm:inline">New environment</span>
               <span className="sr-only sm:hidden">New environment</span>
             </Button>

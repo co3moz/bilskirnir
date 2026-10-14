@@ -1,14 +1,14 @@
 import * as React from "react"
 import {
-  CirclePlayIcon,
-  CircleStopIcon,
-  Gamepad2Icon,
-  MicIcon,
-  MonitorPlayIcon,
-  PlusIcon,
-  Volume2Icon,
-  XIcon,
-} from "lucide-react"
+  RiPlayCircleLine,
+  RiStopCircleLine,
+  RiGamepadLine,
+  RiMicLine,
+  RiComputerLine,
+  RiAddLine,
+  RiVolumeUpLine,
+  RiCloseLine,
+} from "@remixicon/react"
 
 import {
   ColumnsMenu,
@@ -115,9 +115,9 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
       cell: ({ row }) => {
         const { spec } = row.original.environment
         const devices = [
-          spec.audio && { icon: <Volume2Icon />, label: "Audio" },
-          spec.microphone && { icon: <MicIcon />, label: "Microphone" },
-          spec.gamepad && { icon: <Gamepad2Icon />, label: "Gamepad" },
+          spec.audio && { icon: <RiVolumeUpLine />, label: "Audio" },
+          spec.microphone && { icon: <RiMicLine />, label: "Microphone" },
+          spec.gamepad && { icon: <RiGamepadLine />, label: "Gamepad" },
         ].filter((device) => !!device)
         if (!devices.length) return <span className="text-xs text-muted-foreground">None</span>
         return (
@@ -159,7 +159,7 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" asChild>
                   <a href={href({ page: "desktop", id: row.original.environment.id })}>
-                    <MonitorPlayIcon />
+                    <RiComputerLine />
                     <span className="sr-only">Connect to {row.original.environment.spec.name}</span>
                   </a>
                 </Button>
@@ -236,7 +236,7 @@ export function EnvironmentsTable() {
                 disabled={!startable.length}
                 onClick={() => bulk(startable, "start")}
               >
-                <CirclePlayIcon data-icon="inline-start" />
+                <RiPlayCircleLine data-icon="inline-start" />
                 Start {startable.length || ""}
               </Button>
               <Button
@@ -245,7 +245,7 @@ export function EnvironmentsTable() {
                 disabled={!stoppable.length}
                 onClick={() => bulk(stoppable, "stop")}
               >
-                <CircleStopIcon data-icon="inline-start" />
+                <RiStopCircleLine data-icon="inline-start" />
                 Stop {stoppable.length || ""}
               </Button>
               <Button
@@ -254,13 +254,13 @@ export function EnvironmentsTable() {
                 onClick={() => table.resetRowSelection()}
                 aria-label="Clear selection"
               >
-                <XIcon />
+                <RiCloseLine />
               </Button>
             </>
           )}
           <ColumnsMenu table={table} labels={labels} />
           <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "create" })}>
-            <PlusIcon data-icon="inline-start" />
+            <RiAddLine data-icon="inline-start" />
             <span className="hidden lg:inline">New environment</span>
           </Button>
         </div>

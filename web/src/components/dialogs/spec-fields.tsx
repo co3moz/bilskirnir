@@ -1,5 +1,5 @@
 import * as React from "react"
-import { PlusIcon, XIcon } from "lucide-react"
+import { RiAddLine, RiCloseLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -225,7 +225,7 @@ export function SpecFields({
               })
             }}
           >
-            <PlusIcon data-icon="inline-start" />
+            <RiAddLine data-icon="inline-start" />
             Mount
           </Button>
         </div>
@@ -278,7 +278,7 @@ export function SpecFields({
                   set({ mounts: draft.mounts.filter((item) => item.key !== mount.key) })
                 }
               >
-                <XIcon />
+                <RiCloseLine />
               </Button>
             </div>
           )

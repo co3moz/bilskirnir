@@ -1,5 +1,5 @@
 import * as React from "react"
-import { MonitorIcon, PlusIcon } from "lucide-react"
+import { RiComputerLine, RiAddLine } from "@remixicon/react"
 
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
@@ -104,7 +104,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
       <DrawerFooter className="flex-row flex-wrap justify-end">
         {result?.image_id && result.reference && (
           <Button onClick={() => openDialog({ kind: "create", image: result.image_id })}>
-            <PlusIcon data-icon="inline-start" />
+            <RiAddLine data-icon="inline-start" />
             Create environment
           </Button>
         )}
@@ -116,7 +116,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
               navigate({ page: "environments" })
             }}
           >
-            <MonitorIcon data-icon="inline-start" />
+            <RiComputerLine data-icon="inline-start" />
             View environments
           </Button>
         )}

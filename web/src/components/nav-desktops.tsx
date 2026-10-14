@@ -1,10 +1,10 @@
 import {
-  CircleStopIcon,
-  InfoIcon,
-  MonitorPlayIcon,
-  MoreHorizontalIcon,
-  UploadIcon,
-} from "lucide-react"
+  RiStopCircleLine,
+  RiInformationLine,
+  RiComputerLine,
+  RiMoreLine,
+  RiUploadLine,
+} from "@remixicon/react"
 
 import {
   DropdownMenu,
@@ -48,14 +48,14 @@ export function NavDesktops() {
           <SidebarMenuItem key={environment.id}>
             <SidebarMenuButton asChild tooltip={`Connect to ${environment.spec.name}`}>
               <a href={href({ page: "desktop", id: environment.id })}>
-                <MonitorPlayIcon />
+                <RiComputerLine />
                 <span>{environment.spec.name}</span>
               </a>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover className="rounded-sm data-[state=open]:bg-accent">
-                  <MoreHorizontalIcon />
+                  <RiMoreLine />
                   <span className="sr-only">{environment.spec.name} actions</span>
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
@@ -66,7 +66,7 @@ export function NavDesktops() {
               >
                 <DropdownMenuItem asChild>
                   <a href={href({ page: "desktop", id: environment.id })}>
-                    <MonitorPlayIcon />
+                    <RiComputerLine />
                     Connect
                   </a>
                 </DropdownMenuItem>
@@ -76,7 +76,7 @@ export function NavDesktops() {
                     openDialog({ kind: "upload", id: environment.id })
                   }}
                 >
-                  <UploadIcon />
+                  <RiUploadLine />
                   Upload files
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -85,7 +85,7 @@ export function NavDesktops() {
                     openDialog({ kind: "details", id: environment.id })
                   }}
                 >
-                  <InfoIcon />
+                  <RiInformationLine />
                   Details
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -93,7 +93,7 @@ export function NavDesktops() {
                   variant="destructive"
                   onSelect={() => attempt(() => environmentAction(environment.id, "stop"))}
                 >
-                  <CircleStopIcon />
+                  <RiStopCircleLine />
                   Stop
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -104,7 +104,7 @@ export function NavDesktops() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="text-sidebar-foreground/70">
               <a href={href({ page: "environments" })} onClick={close}>
-                <MoreHorizontalIcon className="text-sidebar-foreground/70" />
+                <RiMoreLine className="text-sidebar-foreground/70" />
                 <span>{running.length - SHOWN} more</span>
               </a>
             </SidebarMenuButton>

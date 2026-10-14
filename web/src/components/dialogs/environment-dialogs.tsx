@@ -1,5 +1,5 @@
 import * as React from "react"
-import { TriangleAlertIcon } from "lucide-react"
+import { RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -217,7 +217,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
           {/* Outside the scrolling fields, next to the button whose label it changes. */}
           {notice && (
             <Alert>
-              <TriangleAlertIcon className="text-warning" />
+              <RiAlertLine className="text-warning" />
               <AlertDescription>{notice}</AlertDescription>
             </Alert>
           )}

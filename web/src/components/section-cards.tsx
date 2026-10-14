@@ -1,4 +1,4 @@
-import { ActivityIcon, CpuIcon, MemoryStickIcon, MonitorIcon } from "lucide-react"
+import { RiPulseLine, RiCpuLine, RiRam2Line, RiComputerLine } from "@remixicon/react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -70,7 +70,7 @@ export function SectionCards() {
         value={environments?.length}
         badge={
           <Badge variant="outline">
-            <MonitorIcon />
+            <RiComputerLine />
             {running} running
           </Badge>
         }
@@ -86,7 +86,7 @@ export function SectionCards() {
         value={jobs ? active : undefined}
         badge={
           <Badge variant="outline" className={failedToday ? "text-destructive" : undefined}>
-            <ActivityIcon />
+            <RiPulseLine />
             {failedToday ? `${failedToday} failed today` : "No failures today"}
           </Badge>
         }
@@ -102,7 +102,7 @@ export function SectionCards() {
         value={system ? (known ? system.cpus : "Unknown") : undefined}
         badge={
           <Badge variant="outline">
-            <CpuIcon />
+            <RiCpuLine />
             {settings?.gpu_enabled ? "GPU ready" : "CPU only"}
           </Badge>
         }
@@ -114,7 +114,7 @@ export function SectionCards() {
         value={system ? memory(system.memory_bytes) : undefined}
         badge={
           <Badge variant="outline">
-            <MemoryStickIcon />
+            <RiRam2Line />
             {known ? `${system?.containers ?? 0} containers` : "Unavailable"}
           </Badge>
         }
