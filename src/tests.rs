@@ -1062,6 +1062,45 @@ async fn expired_session_is_not_accepted() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+#[tokio::test]
+async fn the_interface_page_is_revalidated_while_its_hashed_assets_are_kept() {
+    let web = std::env::temp_dir().join(format!(
+        "bilskirnir-web-{}-{}",
+        std::process::id(),
+        model::now()
+    ));
+    std::fs::create_dir_all(web.join("assets")).unwrap();
+    std::fs::write(web.join("index.html"), "<!doctype html>").unwrap();
+    std::fs::write(web.join("assets/index-Ab12Cd34.js"), "export {}").unwrap();
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.web = web.clone();
+    for (path, status, cache) in [
+        ("/", StatusCode::OK, "no-cache"),
+        ("/index.html", StatusCode::OK, "no-cache"),
+        (
+            "/assets/index-Ab12Cd34.js",
+            StatusCode::OK,
+            "public, max-age=31536000, immutable",
+        ),
+        // A missing asset must not be remembered as missing for a year.
+        ("/assets/index-gone.js", StatusCode::NOT_FOUND, "no-cache"),
+        ("/api/session", StatusCode::OK, "no-store"),
+    ] {
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .header("host", "localhost:8080")
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status, "{path}");
+        assert_eq!(response.headers()["cache-control"], cache, "{path}");
+    }
+    std::fs::remove_dir_all(web).unwrap();
+}
 
 #[test]
 fn held_inputs_are_tracked_and_released_at_the_end_of_a_request() {

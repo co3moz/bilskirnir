@@ -181,12 +181,19 @@ fn router(app: Arc<App>) -> Router {
         .layer(middleware::from_fn_with_state(app.clone(), auth::check_host))
         .layer(middleware::from_fn(|req:axum::extract::Request,next:middleware::Next|async move {
             let api=req.uri().path().starts_with("/api/") || req.uri().path().starts_with("/mcp");
+            // The interface build names every file under /assets after its content, so a found
+            // one never changes. Everything else, index.html above all, is revalidated on each
+            // load: after an upgrade a cached page would ask for assets that no longer exist.
+            let assets=req.uri().path().starts_with("/assets/");
             let mut res=next.run(req).await;
+            let found=res.status().is_success();
             let h=res.headers_mut();
             h.insert(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff"));
             h.insert(header::REFERRER_POLICY,HeaderValue::from_static("same-origin"));
             h.insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
             if api { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-store")); }
+            else if assets && found { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("public, max-age=31536000, immutable")); }
+            else { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-cache")); }
             res
         }))
         .with_state(app)

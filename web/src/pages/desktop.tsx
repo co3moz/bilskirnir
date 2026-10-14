@@ -1,0 +1,332 @@
+import * as React from "react"
+import NoVNC from "@novnc/novnc"
+import {
+  ArrowLeftIcon,
+  CirclePlayIcon,
+  ClipboardIcon,
+  MaximizeIcon,
+  MicIcon,
+  MicOffIcon,
+  MinimizeIcon,
+  RotateCwIcon,
+  UploadIcon,
+  Volume2Icon,
+  VolumeXIcon,
+} from "lucide-react"
+import { toast } from "sonner"
+import { cn } from "cn"
+
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useFileDrop } from "@/hooks/use-file-drop"
+import { attempt, environmentAction } from "@/lib/actions"
+import { wsUrl } from "@/lib/api"
+import { openDialog } from "@/lib/dialogs"
+import { DesktopMedia, type MediaState } from "@/lib/media"
+import { useEnvironments } from "@/lib/queries"
+import { href } from "@/lib/route"
+
+// noVNC 1.5 is CommonJS that sets `exports.default`. This package is `"type": "module"`, so the
+// bundler applies Node's rules and hands over the exports object as the default import; take the
+// class from it, and still accept the class itself should the interop change.
+type RFB = NoVNC
+const RFB: typeof NoVNC = (NoVNC as unknown as { default?: typeof NoVNC }).default ?? NoVNC
+
+type Connection = "connecting" | "connected" | "disconnected" | "failed"
+const connectionText: Record<Connection, string> = {
+  connecting: "Connecting…",
+  connected: "Connected",
+  disconnected: "Disconnected",
+  failed: "Connection failed",
+}
+
+/** A compact toolbar button: an icon with its label on wide screens and a tooltip on narrow ones. */
+function ToolButton({
+  label,
+  icon,
+  className,
+  ...props
+}: React.ComponentProps<typeof Button> & { label: string; icon: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label={label} className={className} {...props}>
+          {icon}
+          <span className="hidden xl:inline">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent className="xl:hidden">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function useMedia() {
+  const [state, setState] = React.useState<MediaState>({
+    output: false,
+    input: false,
+    outputPending: false,
+    inputPending: false,
+  })
+  const [media] = React.useState(
+    () =>
+      new DesktopMedia({
+        createContext: () => new AudioContext({ sampleRate: 48000 }),
+        createNode: (ctx, name, options) => new AudioWorkletNode(ctx, name, options),
+        createSocket: (url) => new WebSocket(url),
+        url: wsUrl,
+        // Browsers offer the microphone only on HTTPS or localhost.
+        getUserMedia: navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices),
+        onError: (message) => toast.error(message),
+        onState: setState,
+      })
+  )
+  React.useEffect(() => () => media.close(), [media])
+  return { media, state }
+}
+
+/** The remote desktop over VNC, with audio, microphone, clipboard and uploads. */
+export function DesktopPage({ id }: { id: string }) {
+  const environments = useEnvironments(false)
+  const item = environments.data?.find((entry) => entry.environment.id === id)
+  const running = item?.state === "running"
+  // A stopped desktop is watched until it runs, so starting it here connects.
+  useEnvironments(!!item && !running)
+
+  const view = React.useRef<HTMLElement>(null)
+  const screen = React.useRef<HTMLDivElement>(null)
+  const rfb = React.useRef<RFB | null>(null)
+  const [generation, setGeneration] = React.useState(0)
+  // Each connection attempt reports under its own key; a new attempt starts out connecting.
+  const attemptKey = `${id}:${generation}:${running}`
+  const [status, setStatus] = React.useState<{ key: string; value: Connection } | null>(null)
+  const connection = status?.key === attemptKey ? status.value : "connecting"
+  const [remoteClipboard, setRemoteClipboard] = React.useState("")
+  const [clipboard, setClipboard] = React.useState<string | null>(null)
+  const [fullscreen, setFullscreen] = React.useState(false)
+  const { media, state: audio } = useMedia()
+  const drop = useFileDrop((files) => openDialog({ kind: "upload", id, files }))
+
+  React.useEffect(() => {
+    if (!running || !screen.current) return
+    media.select(id)
+    const report = (value: Connection) => setStatus({ key: attemptKey, value })
+    let current: RFB
+    try {
+      current = new RFB(screen.current, wsUrl(`environments/${encodeURIComponent(id)}/vnc`))
+    } catch (error) {
+      toast.error((error as Error).message)
+      // Reported like the connection's own events, after the effect has run.
+      queueMicrotask(() => report("failed"))
+      return
+    }
+    rfb.current = current
+    current.scaleViewport = true
+    current.resizeSession = true
+    current.showDotCursor = true
+    current.focusOnClick = true
+    // Events from a connection that was replaced or closed must not touch the current one.
+    const live = () => rfb.current === current
+    current.addEventListener("connect", () => live() && report("connected"))
+    current.addEventListener("disconnect", (event) => {
+      if (!live()) return
+      media.close()
+      report((event as CustomEvent<{ clean: boolean }>).detail.clean ? "disconnected" : "failed")
+    })
+    current.addEventListener("clipboard", (event) => {
+      if (!live()) return
+      const text = (event as CustomEvent<{ text: string }>).detail.text
+      setRemoteClipboard(text)
+      setClipboard((open) => (open === null ? null : text))
+    })
+    return () => {
+      if (rfb.current === current) rfb.current = null
+      current.disconnect()
+      media.close()
+    }
+  }, [id, running, attemptKey, media])
+
+  React.useEffect(() => {
+    const update = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", update)
+    return () => document.removeEventListener("fullscreenchange", update)
+  }, [])
+
+  const name = item?.environment.spec.name ?? "Desktop"
+  const spec = item?.environment.spec
+
+  return (
+    <section ref={view} className="flex h-dvh flex-col bg-background">
+      <header className="flex h-12 shrink-0 items-center gap-1 border-b bg-sidebar px-2 sm:gap-2 sm:px-3">
+        <Button variant="ghost" size="sm" asChild>
+          <a href={href({ page: "environments" })}>
+            <ArrowLeftIcon data-icon="inline-start" />
+            <span className="hidden md:inline">Environments</span>
+            <span className="sr-only md:hidden">Back to environments</span>
+          </a>
+        </Button>
+        <Separator
+          orientation="vertical"
+          className="mx-1 data-vertical:h-4 data-vertical:self-center"
+        />
+        <h1 className="min-w-0 truncate text-sm font-medium">{name}</h1>
+        {running && (
+          <span
+            className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+            role="status"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "size-2 rounded-full",
+                connection === "connected"
+                  ? "bg-success"
+                  : connection === "connecting"
+                    ? "animate-pulse bg-warning"
+                    : "bg-muted-foreground"
+              )}
+            />
+            <span className="hidden sm:inline">{connectionText[connection]}</span>
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-0.5">
+          {running && (
+            <>
+              <ToolButton
+                label="Upload files"
+                icon={<UploadIcon />}
+                onClick={() => openDialog({ kind: "upload", id })}
+              />
+              <ToolButton
+                label="Clipboard"
+                icon={<ClipboardIcon />}
+                onClick={() => setClipboard(remoteClipboard)}
+              />
+              {spec?.audio && (
+                <ToolButton
+                  label={audio.output ? "Mute" : audio.outputPending ? "Starting audio…" : "Audio"}
+                  icon={audio.output ? <Volume2Icon className="text-primary" /> : <VolumeXIcon />}
+                  aria-pressed={audio.output}
+                  onClick={() => attempt(() => media.toggleOutput())}
+                />
+              )}
+              {spec?.microphone && (
+                <ToolButton
+                  label={
+                    audio.input
+                      ? "Disable mic"
+                      : audio.inputPending
+                        ? "Waiting for permission…"
+                        : "Microphone"
+                  }
+                  icon={audio.input ? <MicIcon className="text-primary" /> : <MicOffIcon />}
+                  aria-pressed={audio.input}
+                  onClick={() => attempt(() => media.toggleMic())}
+                />
+              )}
+              <ToolButton
+                label="Reconnect"
+                icon={<RotateCwIcon />}
+                onClick={() => setGeneration((value) => value + 1)}
+              />
+            </>
+          )}
+          <ToolButton
+            label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            icon={fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
+            onClick={() =>
+              attempt(() =>
+                document.fullscreenElement
+                  ? document.exitFullscreen()
+                  : view.current!.requestFullscreen()
+              )
+            }
+          />
+        </div>
+      </header>
+      <div
+        {...drop.props}
+        className={cn(
+          "relative min-h-0 flex-1 bg-[#050a11]",
+          drop.over && "outline-3 -outline-offset-3 outline-primary"
+        )}
+      >
+        {running ? (
+          <div ref={screen} className="vnc-screen size-full overflow-hidden" />
+        ) : (
+          <Empty className="h-full text-white/80">
+            <EmptyHeader>
+              <EmptyTitle className="text-base">
+                {environments.isPending
+                  ? "Loading environment…"
+                  : item
+                    ? `${name} is not running`
+                    : "This environment no longer exists"}
+              </EmptyTitle>
+              {item && <EmptyDescription>Start it to connect to its desktop.</EmptyDescription>}
+            </EmptyHeader>
+            <EmptyContent>
+              {environments.isPending ? (
+                <Spinner />
+              ) : item ? (
+                <Button onClick={() => attempt(() => environmentAction(id, "start"))}>
+                  <CirclePlayIcon data-icon="inline-start" />
+                  Start
+                </Button>
+              ) : (
+                <Button variant="outline" asChild>
+                  <a href={href({ page: "environments" })}>Back to environments</a>
+                </Button>
+              )}
+            </EmptyContent>
+          </Empty>
+        )}
+      </div>
+      <Dialog open={clipboard !== null} onOpenChange={(open) => !open && setClipboard(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Clipboard</DialogTitle>
+            <DialogDescription>
+              The desktop&apos;s clipboard appears here. Edit or paste text, then send it to the
+              desktop.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={8}
+            aria-label="Clipboard text"
+            placeholder="Paste text or read the desktop clipboard."
+            value={clipboard ?? ""}
+            onChange={(event) => setClipboard(event.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                rfb.current?.clipboardPasteFrom(clipboard ?? "")
+                setClipboard(null)
+              }}
+            >
+              Send to desktop
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  )
+}
