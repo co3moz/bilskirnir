@@ -40,7 +40,7 @@ switch ($Command.ToLower()) {
         if (-not $Package) { throw "Use -Package to point at the bilskirnir.wsl file." }
         if (-not (Test-Path $Package)) { throw "Package not found: $Package" }
         Invoke-Wsl @("--install", "--from-file", (Resolve-Path $Package).Path, "--name", $Distro)
-        Write-Host "The distribution is registered. Its first start creates the Linux user and asks for the Bilskirnir admin password."
+        Write-Host "The distribution is registered. Its first start asks for the username and password used by Linux and the dashboard."
         Invoke-Wsl @("-d", $Distro)
     }
     "start" {
