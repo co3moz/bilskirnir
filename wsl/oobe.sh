@@ -198,13 +198,13 @@ fi
 echo
 
 # Only an interactive first start offers to download the manager right away.
-start=n
+start=no
 if [[ -t 0 ]]; then
-    echo "Desktop images download when you first create a desktop from them."
-    read -erp "Start Bilskirnir now? This downloads the manager image. [Y/n] " start || true
-    start=${start:-y}
+    echo "Starting downloads the manager image; desktop images download when you first create a desktop."
+    choose "Start Bilskirnir now?" "Yes" "No"
+    start=$choice
 fi
-if [[ $start =~ ^[Yy]$ ]]; then
+if [[ $start == yes ]]; then
     runuser -u "$username" -- /usr/local/bin/bilskirnir start ||
         echo "Bilskirnir did not start. Run 'bilskirnir doctor', then 'bilskirnir start'."
 else

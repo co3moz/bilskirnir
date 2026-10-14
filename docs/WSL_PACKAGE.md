@@ -28,9 +28,9 @@ Next it asks whether to enable agent access (MCP); move between the answers with
 - **Custom token** takes a token you type: 32 to 256 letters, digits and `- . _ ~ + /` characters, with `=` only at the end, so it works unquoted in `.env`, HTTP headers and shells.
 - **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every desktop.
 
-The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and offers to start Bilskirnir. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.
+The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and asks whether to start Bilskirnir now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.
 
-A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`) or its first letter; an empty line or the end of the input picks the default.
+A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `bilskirnir start`.
 
 The bundled PowerShell helper does the same from Windows and adds auto-start:
 
