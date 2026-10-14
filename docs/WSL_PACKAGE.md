@@ -25,7 +25,7 @@ Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`
 Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
 
 - **Random token** (the default) generates a 64-character token.
-- **Custom token** takes a token you type: 32 to 256 letters, digits and `- . _ ~ + /` characters, with `=` only at the end, so it works unquoted in `.env`, HTTP headers and shells.
+- **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every desktop.
 - **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every desktop.
 
 The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and asks whether to start Bilskirnir now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.

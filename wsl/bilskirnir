@@ -138,11 +138,14 @@ case ${1:-help} in
         enabled=$(sed -n 's/^MCP_ENABLED=//p' "$INSTALL/.env" | tail -n1)
         mode=$(sed -n 's/^MCP_AUTH_MODE=//p' "$INSTALL/.env" | tail -n1)
         token=$(sed -n 's/^MCP_TOKEN=//p' "$INSTALL/.env" | tail -n1)
+        # The first start single-quotes the token so Compose keeps $ and # literal; older files have none.
+        if [[ $token =~ ^\'(.*)\'$ || $token =~ ^\"(.*)\"$ ]]; then token=${BASH_REMATCH[1]}; fi
         if [[ $enabled != true || ($mode != none && -z $token) ]]; then
             echo "Agent access is disabled. Set MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
             exit 1
         fi
         distro=${WSL_DISTRO_NAME:-Bilskirnir}
+        claude_shell=""
         if [[ $mode == none ]]; then
             echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
             header="" claude_header=""
@@ -150,7 +153,15 @@ case ${1:-help} in
         else
             echo "Agent access (MCP) is enabled. The token grants administrator access to every desktop."
             header=$'\n'"  Header:  Authorization: Bearer $token"
-            claude_header=" --header \"Authorization: Bearer $token\""
+            if [[ $token =~ ^[A-Za-z0-9._~+/=-]+$ ]]; then
+                claude_header=" --header \"Authorization: Bearer $token\""
+            else
+                # cmd or PowerShell would expand $ % ` " inside double quotes; PowerShell single quotes keep
+                # everything literal but a single quote, which is doubled.
+                quote="'"
+                claude_shell=" (PowerShell)"
+                claude_header=" --header 'Authorization: Bearer ${token//$quote/$quote$quote}'"
+            fi
             footer="Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
         fi
         cat <<EOF
@@ -158,7 +169,7 @@ case ${1:-help} in
 Streamable HTTP
   URL:     $(address)/mcp$header
 
-Claude Code on Windows:
+Claude Code on Windows$claude_shell:
   claude mcp add --transport http bilskirnir $(address)/mcp$claude_header
 
 stdio bridge (no token in the client; it runs inside the manager container):

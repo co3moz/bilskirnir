@@ -127,17 +127,20 @@ if [[ $mcp == yes ]]; then
         "None, no token required"
     mcp_auth=$choice
 fi
-# Bearer token characters (RFC 6750) need no quoting in .env, an HTTP header or a pasted command.
-token_pattern='^[A-Za-z0-9._~+/-]+=*$'
+# An HTTP header carries visible ASCII only, and the token is single-quoted in .env like the password.
 if [[ $mcp_auth == custom ]]; then
     while true; do
-        read -erp "Token (32 to 256 characters): " mcp_token || true
-        if [[ ${#mcp_token} -ge 32 && ${#mcp_token} -le 256 && $mcp_token =~ $token_pattern ]]; then
+        read -erp "Token (up to 256 characters): " mcp_token || true
+        if [[ -n $mcp_token && ${#mcp_token} -le 256 && $mcp_token != *"'"* ]] &&
+            LC_ALL=C grep -qx '[!-~]*' <<<"$mcp_token"; then
             break
         fi
-        echo "Use 32 to 256 letters, digits and - . _ ~ + / characters, with = only at the end."
+        echo "Use 1 to 256 visible ASCII characters, without spaces or single quotes."
         fail_unless_interactive
     done
+    if [[ ${#mcp_token} -lt 32 ]]; then
+        echo "A short token is easy to guess, and whoever has it controls every desktop."
+    fi
 fi
 
 useradd --create-home --shell /bin/bash --uid 1000 --groups sudo,docker "$username"
@@ -173,7 +176,7 @@ if [[ $mcp == yes ]]; then
         set_setting MCP_AUTH_MODE none
     else
         set_setting MCP_AUTH_MODE token
-        set_setting MCP_TOKEN "${mcp_token:-$(openssl rand -hex 32)}"
+        set_setting MCP_TOKEN "'${mcp_token:-$(openssl rand -hex 32)}'"
     fi
 else
     set_setting MCP_ENABLED false
