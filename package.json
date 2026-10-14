@@ -11,14 +11,14 @@
     "format": "prettier --write web/src tests vite.config.ts"
   },
   "dependencies": {
-    "@fontsource-variable/geist": "5.3.0",
     "@fontsource-variable/geist-mono": "5.3.0",
+    "@fontsource-variable/oxanium": "5.3.0",
     "@novnc/novnc": "1.5.0",
+    "@remixicon/react": "4.9.0",
     "@tanstack/react-query": "5.104.2",
     "@tanstack/react-table": "9.3.1",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
-    "lucide-react": "1.57.0",
     "radix-ui": "1.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",

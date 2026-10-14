@@ -1,4 +1,4 @@
-import { CirclePlusIcon, HammerIcon } from "lucide-react"
+import { RiAddCircleLine, RiHammerLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -42,7 +42,7 @@ export function NavMain({
               }}
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
             >
-              <CirclePlusIcon />
+              <RiAddCircleLine />
               <span>New environment</span>
             </SidebarMenuButton>
             <Tooltip>
@@ -56,7 +56,7 @@ export function NavMain({
                     openDialog({ kind: "build" })
                   }}
                 >
-                  <HammerIcon />
+                  <RiHammerLine />
                   <span className="sr-only">Build image</span>
                 </Button>
               </TooltipTrigger>

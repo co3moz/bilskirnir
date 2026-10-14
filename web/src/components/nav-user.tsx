@@ -1,12 +1,12 @@
 import {
-  EllipsisVerticalIcon,
-  LogOutIcon,
-  MonitorCogIcon,
-  MoonIcon,
-  ShieldCheckIcon,
-  ShieldOffIcon,
-  SunIcon,
-} from "lucide-react"
+  RiMore2Line,
+  RiLogoutBoxRLine,
+  RiComputerLine,
+  RiMoonLine,
+  RiShieldCheckLine,
+  RiShieldCrossLine,
+  RiSunLine,
+} from "@remixicon/react"
 
 import { useTheme, type Theme } from "@/components/theme-provider"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -36,7 +36,11 @@ function Identity({ auth, detail }: { auth: boolean; detail: string }) {
     <>
       <Avatar className="h-8 w-8 rounded-lg">
         <AvatarFallback className="rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
-          {auth ? <ShieldCheckIcon className="size-4" /> : <ShieldOffIcon className="size-4" />}
+          {auth ? (
+            <RiShieldCheckLine className="size-4" />
+          ) : (
+            <RiShieldCrossLine className="size-4" />
+          )}
         </AvatarFallback>
       </Avatar>
       <div className="grid flex-1 text-left text-sm leading-tight">
@@ -68,7 +72,7 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Identity auth={auth} detail={docker} />
-              <EllipsisVerticalIcon className="ml-auto size-4" />
+              <RiMore2Line className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -89,15 +93,15 @@ export function NavUser() {
               onValueChange={(value) => setTheme(value as Theme)}
             >
               <DropdownMenuRadioItem value="dark">
-                <MoonIcon />
+                <RiMoonLine />
                 Dark
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="light">
-                <SunIcon />
+                <RiSunLine />
                 Light
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">
-                <MonitorCogIcon />
+                <RiComputerLine />
                 System
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
@@ -113,7 +117,7 @@ export function NavUser() {
                       })
                     }
                   >
-                    <LogOutIcon />
+                    <RiLogoutBoxRLine />
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuGroup>

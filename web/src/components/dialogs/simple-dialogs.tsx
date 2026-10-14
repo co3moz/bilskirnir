@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ClipboardPasteIcon, TriangleAlertIcon } from "lucide-react"
+import { RiAlertLine, RiClipboardLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -256,7 +256,7 @@ export function BuildImageDialog(props: DialogProps) {
               </div>
               {missingBase && (
                 <Alert>
-                  <TriangleAlertIcon className="text-warning" />
+                  <RiAlertLine className="text-warning" />
                   <AlertDescription>
                     The configuration builds on{" "}
                     <code className="font-mono break-all">{missingBase}</code>, which is not
@@ -290,7 +290,7 @@ export function BuildImageDialog(props: DialogProps) {
                 className="sm:mr-auto"
                 onClick={() => setImporting(true)}
               >
-                <ClipboardPasteIcon data-icon="inline-start" />
+                <RiClipboardLine data-icon="inline-start" />
                 Import configuration
               </Button>
             </Footer>

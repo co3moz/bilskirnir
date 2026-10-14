@@ -1,21 +1,21 @@
 import {
-  CircleAlertIcon,
-  CircleCheckIcon,
-  CircleDashedIcon,
-  CircleStopIcon,
-  LoaderIcon,
-} from "lucide-react"
+  RiErrorWarningLine,
+  RiCheckboxCircleFill,
+  RiTimeLine,
+  RiStopCircleLine,
+  RiLoader4Line,
+} from "@remixicon/react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
 import { stateLabels, type Tone } from "@/lib/format"
 
 const icons: Record<Tone, React.ReactNode> = {
-  success: <CircleCheckIcon className="fill-success text-background" />,
-  info: <LoaderIcon className="animate-spin text-primary" />,
-  warning: <CircleDashedIcon className="text-warning" />,
-  danger: <CircleAlertIcon className="text-destructive" />,
-  muted: <CircleStopIcon className="text-muted-foreground" />,
+  success: <RiCheckboxCircleFill className="text-success" />,
+  info: <RiLoader4Line className="animate-spin text-primary" />,
+  warning: <RiTimeLine className="text-warning" />,
+  danger: <RiErrorWarningLine className="text-destructive" />,
+  muted: <RiStopCircleLine className="text-muted-foreground" />,
 }
 
 /** A state always pairs its color with an icon and words, never color alone. */

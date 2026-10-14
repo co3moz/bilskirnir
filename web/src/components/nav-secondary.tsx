@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ExternalLinkIcon } from "lucide-react"
+import { RiExternalLinkLine } from "@remixicon/react"
 
 import {
   SidebarGroup,
@@ -25,7 +25,7 @@ export function NavSecondary({
                 <a href={item.url} target="_blank" rel="noreferrer">
                   {item.icon}
                   <span>{item.title}</span>
-                  <ExternalLinkIcon className="ml-auto opacity-50" />
+                  <RiExternalLinkLine className="ml-auto opacity-50" />
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>

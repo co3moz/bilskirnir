@@ -1,4 +1,4 @@
-import { TriangleAlertIcon } from "lucide-react"
+import { RiAlertLine } from "@remixicon/react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useSystem } from "@/lib/queries"
@@ -41,7 +41,7 @@ export function DockerAlert() {
   return (
     <div className="px-4 lg:px-6">
       <Alert variant="destructive">
-        <TriangleAlertIcon />
+        <RiAlertLine />
         <AlertTitle>Cannot connect to Docker</AlertTitle>
         <AlertDescription>
           {system.error || "Check that the Docker daemon is running."}

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { UploadIcon } from "lucide-react"
+import { RiUploadLine } from "@remixicon/react"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
@@ -181,7 +181,7 @@ export function UploadDialog({
                 drop.over && "border-primary bg-primary/5"
               )}
             >
-              <UploadIcon className="mb-1 size-5 text-muted-foreground" />
+              <RiUploadLine className="mb-1 size-5 text-muted-foreground" />
               <strong className="font-medium">Drop files here or choose files</strong>
               <span className="text-xs text-muted-foreground">{fileSize(limit)} per file</span>
             </button>

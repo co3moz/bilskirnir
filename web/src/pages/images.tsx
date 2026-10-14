@@ -1,14 +1,14 @@
 import * as React from "react"
 import {
-  ClipboardCopyIcon,
-  CornerDownRightIcon,
-  DownloadIcon,
-  HammerIcon,
-  ImportIcon,
-  LayersIcon,
-  PlusIcon,
-  RefreshCwIcon,
-} from "lucide-react"
+  RiCornerDownRightLine,
+  RiDownloadLine,
+  RiFileCopyLine,
+  RiHammerLine,
+  RiImportLine,
+  RiStackLine,
+  RiAddLine,
+  RiRefreshLine,
+} from "@remixicon/react"
 
 import {
   columnHelper,
@@ -74,13 +74,13 @@ function ProfileCard({ item }: { item: ProfileItem }) {
         {item.available ? (
           <>
             <Button onClick={() => openDialog({ kind: "create", image: profile.reference })}>
-              <PlusIcon data-icon="inline-start" />
+              <RiAddLine data-icon="inline-start" />
               Create environment
             </Button>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" disabled={busy} onClick={pull}>
-                  <RefreshCwIcon data-icon="inline-start" />
+                  <RiRefreshLine data-icon="inline-start" />
                   Update
                 </Button>
               </TooltipTrigger>
@@ -90,7 +90,7 @@ function ProfileCard({ item }: { item: ProfileItem }) {
         ) : (
           <>
             <Button disabled={busy} onClick={pull}>
-              <DownloadIcon data-icon="inline-start" />
+              <RiDownloadLine data-icon="inline-start" />
               Download
             </Button>
             <Tooltip>
@@ -100,7 +100,7 @@ function ProfileCard({ item }: { item: ProfileItem }) {
                   disabled={busy}
                   onClick={job(`profiles/${profile.id}/build`)}
                 >
-                  <HammerIcon data-icon="inline-start" />
+                  <RiHammerLine data-icon="inline-start" />
                   Build
                 </Button>
               </TooltipTrigger>
@@ -124,13 +124,13 @@ const columns: DataColumn<Row>[] = [
       return (
         // Table cells do not wrap; a long reference does here so the row actions stay in view.
         <div
-          className="flex min-w-72 items-start gap-2 whitespace-normal"
+          className="flex min-w-64 items-start gap-2 whitespace-normal"
           style={{ paddingLeft: `${Math.min(image.depth, 8) * 1.25}rem` }}
         >
           {image.depth > 0 ? (
-            <CornerDownRightIcon className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+            <RiCornerDownRightLine className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
           ) : (
-            <LayersIcon className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+            <RiStackLine className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
           )}
           <div className="flex flex-col gap-0.5">
             <span className="font-medium">{image.name}</span>
@@ -185,14 +185,14 @@ const columns: DataColumn<Row>[] = [
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="icon-sm"
                   onClick={() => attempt(() => exportBuildConfig(image))}
+                  aria-label={`Export the configuration of ${image.name}`}
                 >
-                  <ClipboardCopyIcon data-icon="inline-start" />
-                  Export
+                  <RiFileCopyLine />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Copy the build configuration as JSON</TooltipContent>
+              <TooltipContent>Export configuration as JSON</TooltipContent>
             </Tooltip>
           )}
           <Button
@@ -202,7 +202,7 @@ const columns: DataColumn<Row>[] = [
             title={unavailable ? "Image no longer available" : undefined}
             onClick={() => openDialog({ kind: "create", image: image.image_id })}
           >
-            <PlusIcon data-icon="inline-start" />
+            <RiAddLine data-icon="inline-start" />
             Create environment
           </Button>
         </div>
@@ -235,11 +235,11 @@ export function ImagesPage() {
         description="A child image starts from its parent's files."
       >
         <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "import" })}>
-          <ImportIcon data-icon="inline-start" />
+          <RiImportLine data-icon="inline-start" />
           Import image
         </Button>
         <Button size="sm" onClick={() => openDialog({ kind: "build" })}>
-          <HammerIcon data-icon="inline-start" />
+          <RiHammerLine data-icon="inline-start" />
           Build image
         </Button>
       </SectionHeading>

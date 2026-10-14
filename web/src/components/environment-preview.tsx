@@ -1,5 +1,5 @@
 import * as React from "react"
-import { MonitorIcon } from "lucide-react"
+import { RiComputerLine } from "@remixicon/react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +30,7 @@ export function EnvironmentPreview({
       )}
     >
       <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
-        <MonitorIcon className="size-6 opacity-60" />
+        <RiComputerLine className="size-6 opacity-60" />
         {running ? "Loading preview" : "Desktop stopped"}
       </div>
       {shown && (

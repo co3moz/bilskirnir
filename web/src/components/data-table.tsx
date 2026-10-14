@@ -17,16 +17,16 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import {
-  ArrowDownIcon,
-  ArrowUpDownIcon,
-  ArrowUpIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
-  Columns3Icon,
-} from "lucide-react"
+  RiArrowDownLine,
+  RiArrowUpDownLine,
+  RiArrowUpLine,
+  RiArrowDownSLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
+  RiArrowLeftDoubleLine,
+  RiArrowRightDoubleLine,
+  RiLayoutColumnLine,
+} from "@remixicon/react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -154,11 +154,11 @@ export function SortHeader<T extends RowData>({
     >
       {children}
       {sorted === "asc" ? (
-        <ArrowUpIcon />
+        <RiArrowUpLine />
       ) : sorted === "desc" ? (
-        <ArrowDownIcon />
+        <RiArrowDownLine />
       ) : (
-        <ArrowUpDownIcon className="opacity-40" />
+        <RiArrowUpDownLine className="opacity-40" />
       )}
     </Button>
   )
@@ -175,9 +175,9 @@ export function ColumnsMenu<T extends RowData>({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
-          <Columns3Icon data-icon="inline-start" />
+          <RiLayoutColumnLine data-icon="inline-start" />
           <span className="hidden lg:inline">Columns</span>
-          <ChevronDownIcon data-icon="inline-end" />
+          <RiArrowDownSLine data-icon="inline-end" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
@@ -296,7 +296,7 @@ export function DataTablePagination<T extends RowData>({
             disabled={!table.getCanPreviousPage()}
           >
             <span className="sr-only">Go to first page</span>
-            <ChevronsLeftIcon />
+            <RiArrowLeftDoubleLine />
           </Button>
           <Button
             variant="outline"
@@ -306,7 +306,7 @@ export function DataTablePagination<T extends RowData>({
             disabled={!table.getCanPreviousPage()}
           >
             <span className="sr-only">Go to previous page</span>
-            <ChevronLeftIcon />
+            <RiArrowLeftSLine />
           </Button>
           <Button
             variant="outline"
@@ -316,7 +316,7 @@ export function DataTablePagination<T extends RowData>({
             disabled={!table.getCanNextPage()}
           >
             <span className="sr-only">Go to next page</span>
-            <ChevronRightIcon />
+            <RiArrowRightSLine />
           </Button>
           <Button
             variant="outline"
@@ -326,7 +326,7 @@ export function DataTablePagination<T extends RowData>({
             disabled={!table.getCanNextPage()}
           >
             <span className="sr-only">Go to last page</span>
-            <ChevronsRightIcon />
+            <RiArrowRightDoubleLine />
           </Button>
         </div>
       </div>

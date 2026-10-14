@@ -67,7 +67,7 @@ rm -rf /var/lib/apt/lists/*
 
 Keep the desktop startup, VNC and GPU components in place when adding software. The result must still start as a Bilskirnir desktop.
 
-To reuse a build, select **Export** on its row under **Images**. It copies the image's name, base image, internet setting and script to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have nothing to export, and builds from an earlier release did not record theirs.
+To reuse a build, select **Export configuration**, the copy button on its row under **Images**. It copies the image's name, base image, internet setting and script to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have nothing to export, and builds from an earlier release did not record theirs.
 
 **Import image** registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another environment until it is available again.
 

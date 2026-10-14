@@ -1,14 +1,14 @@
 import * as React from "react"
 import {
-  CirclePlayIcon,
-  CpuIcon,
-  Gamepad2Icon,
-  MicIcon,
-  MonitorPlayIcon,
-  RotateCcwIcon,
-  UploadIcon,
-  Volume2Icon,
-} from "lucide-react"
+  RiPlayCircleLine,
+  RiCpuLine,
+  RiGamepadLine,
+  RiMicLine,
+  RiComputerLine,
+  RiResetLeftLine,
+  RiUploadLine,
+  RiVolumeUpLine,
+} from "@remixicon/react"
 import { cn } from "cn"
 
 import { EnvironmentMenu } from "@/components/environment-menu"
@@ -41,7 +41,7 @@ export function SpecBadges({ spec, className }: { spec: EnvironmentSpec; classNa
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
       <Badge variant="outline" className="text-muted-foreground">
-        <CpuIcon />
+        <RiCpuLine />
         {spec.gpu ? "GPU" : "CPU only"}
       </Badge>
       <Badge variant="outline" className="text-muted-foreground">
@@ -52,19 +52,19 @@ export function SpecBadges({ spec, className }: { spec: EnvironmentSpec; classNa
       </Badge>
       {spec.audio && (
         <Badge variant="outline" className="text-muted-foreground">
-          <Volume2Icon />
+          <RiVolumeUpLine />
           Audio
         </Badge>
       )}
       {spec.microphone && (
         <Badge variant="outline" className="text-muted-foreground">
-          <MicIcon />
+          <RiMicLine />
           Microphone
         </Badge>
       )}
       {spec.gamepad && (
         <Badge variant="outline" className="text-muted-foreground">
-          <Gamepad2Icon />
+          <RiGamepadLine />
           Gamepad
         </Badge>
       )}
@@ -85,7 +85,7 @@ export function PrimaryAction({ item, className }: { item: EnvironmentItem; clas
     return (
       <Button asChild className={className}>
         <a href={href({ page: "desktop", id })}>
-          <MonitorPlayIcon data-icon="inline-start" />
+          <RiComputerLine data-icon="inline-start" />
           Connect
         </a>
       </Button>
@@ -98,7 +98,7 @@ export function PrimaryAction({ item, className }: { item: EnvironmentItem; clas
         disabled={busy}
         onClick={run(() => retrySetup(id))}
       >
-        <RotateCcwIcon data-icon="inline-start" />
+        <RiResetLeftLine data-icon="inline-start" />
         Retry setup
       </Button>
     )
@@ -109,7 +109,7 @@ export function PrimaryAction({ item, className }: { item: EnvironmentItem; clas
       disabled={busy}
       onClick={run(() => environmentAction(id, "start"))}
     >
-      <CirclePlayIcon data-icon="inline-start" />
+      <RiPlayCircleLine data-icon="inline-start" />
       Start
     </Button>
   )
@@ -201,7 +201,7 @@ export function EnvironmentCard({
                 onClick={() => openDialog({ kind: "upload", id })}
                 aria-label={`Upload files to ${spec.name}`}
               >
-                <UploadIcon />
+                <RiUploadLine />
               </Button>
             </span>
           </TooltipTrigger>

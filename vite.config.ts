@@ -45,7 +45,7 @@ async function bundledLicenses(moduleIds: Iterable<string>) {
 function notices(): Plugin {
   const files = {
     "novnc-LICENSE.txt": "node_modules/@novnc/novnc/LICENSE.txt",
-    "geist-LICENSE.txt": "node_modules/@fontsource-variable/geist/LICENSE",
+    "oxanium-LICENSE.txt": "node_modules/@fontsource-variable/oxanium/LICENSE",
     "geist-mono-LICENSE.txt": "node_modules/@fontsource-variable/geist-mono/LICENSE",
     "third-party-notices.txt": "THIRD_PARTY_NOTICES.md",
     "LICENSE.txt": "LICENSE",

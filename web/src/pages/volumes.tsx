@@ -1,5 +1,5 @@
 import * as React from "react"
-import { DatabaseIcon, PlusIcon } from "lucide-react"
+import { RiDatabase2Line, RiAddLine } from "@remixicon/react"
 
 import {
   columnHelper,
@@ -27,7 +27,7 @@ const columns: DataColumn<Row>[] = [
     header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        <DatabaseIcon className="size-4 shrink-0 text-primary" aria-hidden />
+        <RiDatabase2Line className="size-4 shrink-0 text-primary" aria-hidden />
         <code className="font-mono text-xs">{row.original.Name}</code>
         {row.original.Labels?.split(",").includes(MANAGED) && (
           <Badge variant="outline" className="text-muted-foreground">
@@ -102,7 +102,7 @@ export function VolumesPage() {
         description="Files that outlive environments. Volumes are excluded from snapshots."
       >
         <Button size="sm" onClick={() => openDialog({ kind: "volume" })}>
-          <PlusIcon data-icon="inline-start" />
+          <RiAddLine data-icon="inline-start" />
           New volume
         </Button>
       </SectionHeading>

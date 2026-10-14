@@ -1,14 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./shadcn.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/oxanium";
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Geist Variable", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Oxanium Variable", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -53,81 +53,81 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Daylight on the hull: pale steel surfaces, deep blue for what can be acted on. */
+/* Daylight on the hull: neutral surfaces, near black for what can be acted on. */
 :root {
-  --background: #ffffff;
-  --foreground: #0d1726;
-  --card: #ffffff;
-  --card-foreground: #0d1726;
-  --popover: #ffffff;
-  --popover-foreground: #0d1726;
-  --primary: #1b6f9a;
-  --primary-foreground: #f4fbff;
-  --secondary: #edf2f7;
-  --secondary-foreground: #0d1726;
-  --muted: #edf2f7;
-  --muted-foreground: #556779;
-  --accent: #e6eff7;
-  --accent-foreground: #0d1726;
-  --destructive: #c42b45;
-  --border: #dae2eb;
-  --input: #cbd6e2;
-  --ring: #3b95c4;
-  --chart-1: #2a8cbf;
-  --chart-2: #7366d4;
-  --chart-3: #2f9e7a;
-  --chart-4: #b98a2c;
-  --chart-5: #d24a63;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
   --success: #1d7f60;
   --warning: #96660f;
   --violet: #6152c4;
-  --radius: 0.5rem;
-  --sidebar: #f2f5f9;
-  --sidebar-foreground: #1f2d3f;
-  --sidebar-primary: #1b6f9a;
-  --sidebar-primary-foreground: #f4fbff;
-  --sidebar-accent: #e2eaf3;
-  --sidebar-accent-foreground: #0d1726;
-  --sidebar-border: #dae2eb;
-  --sidebar-ring: #3b95c4;
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* The Asgard interior: dark metal, pale blue lights and a little violet. */
+/* The Asgard interior: dark neutral metal; color is kept for states and images. */
 .dark {
-  --background: #0b111b;
-  --foreground: #e4edf7;
-  --card: #0f1722;
-  --card-foreground: #e4edf7;
-  --popover: #111b28;
-  --popover-foreground: #e4edf7;
-  --primary: #92d5f3;
-  --primary-foreground: #04121d;
-  --secondary: #182638;
-  --secondary-foreground: #e4edf7;
-  --muted: #1b293c;
-  --muted-foreground: #a0afc3;
-  --accent: #1c2c42;
-  --accent-foreground: #e9f6ff;
-  --destructive: #f3a0ad;
-  --border: #223146;
-  --input: #2b3b50;
-  --ring: #92d5f3;
-  --chart-1: #92d5f3;
-  --chart-2: #aaa0ed;
-  --chart-3: #a9dfcd;
-  --chart-4: #e3c88f;
-  --chart-5: #f3a0ad;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
   --success: #a9dfcd;
   --warning: #e3c88f;
   --violet: #aaa0ed;
-  --sidebar: #070b12;
-  --sidebar-foreground: #c3d0e0;
-  --sidebar-primary: #92d5f3;
-  --sidebar-primary-foreground: #04121d;
-  --sidebar-accent: #142131;
-  --sidebar-accent-foreground: #e9f6ff;
-  --sidebar-border: #1b293b;
-  --sidebar-ring: #92d5f3;
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -142,11 +142,6 @@
   }
 }
 
-/* A faint pale-blue light at the top of the working surface; screenshots keep their colors. */
-.dark [data-slot="sidebar-inset"] {
-  background-image: radial-gradient(120% 60% at 50% -10%, #92d5f30d, transparent 60%);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -158,5 +153,5 @@
 
 /* noVNC paints its own grey behind the remote screen; match the letterbox around it. */
 .vnc-screen > div {
-  background: #050a11 !important;
+  background: #0a0a0a !important;
 }
