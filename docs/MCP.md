@@ -31,7 +31,7 @@ Clients configure HTTP headers in different ways. Add the URL and bearer header 
 
 ## Connect through stdio on Windows
 
-If your agent uses stdio, or your Windows localhost forwarder interferes with HTTP streaming, use the bridge bundled in the manager image. It connects to the same `/mcp` service from inside the container and relays MCP messages over stdin/stdout.
+If your agent uses stdio, or something on Windows interferes with HTTP on localhost (see [broken responses from localhost](#broken-responses-from-localhost-on-windows)), use the bridge bundled in the manager image. It connects to the same `/mcp` service from inside the container and relays MCP messages over stdin/stdout.
 
 For clients that use an `mcpServers` configuration:
 
@@ -50,6 +50,18 @@ Use your WSL distribution and manager container names; `Bilskirnir` is the distr
 
 MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
 
+### Broken responses from localhost on Windows
+
+Some Windows security products scan HTTP traffic on localhost and rewrite responses on the way, for example the web protection in Norton. They replace the `Content-Length` header with `Transfer-Encoding: chunked` but leave the body unchunked, so clients drop the connection with errors such as `Invalid character in chunk size` (Node.js) or `Malformed encoding found in chunked-encoding` (curl). This happens to any local HTTP server, not only Bilskirnir.
+
+To confirm it, send the same request from inside the WSL distribution, where the security product does not see the traffic. The manager answers without a token with `401` and a `content-length` header:
+
+```bash
+curl -si -X POST http://127.0.0.1:8080/mcp
+```
+
+If that response is correct but the same request from Windows shows `transfer-encoding: chunked`, exclude `localhost` or the manager's port from the product's web or HTTP scanning. Alternatively, use the stdio bridge above: it reaches the manager without the Windows loopback connection.
+
 ## A useful first workflow
 
 1. Call `get_settings` and `list_profiles` to see the available desktops and defaults.
@@ -64,12 +76,12 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 59 tools:
+The server currently exposes 60 tools:
 
 | Work | Tools |
 | --- | --- |
 | Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `pull_profile`, `build_profile` |
-| Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `environment_action`, `set_internet`, `retry_environment`, `reset_environment`, `delete_environment` |
+| Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `update_environment`, `environment_action`, `set_internet`, `retry_environment`, `reset_environment`, `delete_environment` |
 | Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `environment_logs`, `environment_diagnostics` |
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
@@ -188,5 +200,7 @@ MCP uses the same ownership checks, environment locks, jobs and snapshot behavio
 Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the environment, especially when the desktop is browsing external sites.
 
 `reset_environment` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from the environment's saved source image, keeping the environment ID, networks and named volumes. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
+
+`update_environment` changes a desktop's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive environment deletion, and save an image before deleting a desktop whose installation you want to reuse.

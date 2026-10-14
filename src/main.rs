@@ -18,6 +18,7 @@ mod model;
 mod process;
 mod profiles;
 mod pulls;
+mod reconfigure;
 mod recordings;
 mod terminal;
 mod uploads;
@@ -68,6 +69,10 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/environments/{id}/action", post(api::action))
         .route("/api/environments/{id}/retry", post(api::retry))
         .route("/api/environments/{id}/internet", post(api::internet))
+        .route(
+            "/api/environments/{id}/settings",
+            post(api::update_settings),
+        )
         .route("/api/environments/{id}/snapshot", post(api::snapshot))
         .route("/api/environments/{id}/exec", post(exec::execute))
         .route("/api/environments/{id}/files/read", post(files::read))

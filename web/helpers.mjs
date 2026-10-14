@@ -60,3 +60,12 @@ export function imageTree(records) {
   return result;
 }
 
+// The names the settings dialog uses for settings that need a new container.
+const restartNames = { resolution: 'resolution', gpu: 'GPU', audio: 'audio', microphone: 'microphone', sudo: 'sudo', gamepad: 'gamepad', shm_mb: 'shared memory', mounts: 'volumes', cpus: 'removing the CPU limit', memory_mb: 'removing the memory limit' };
+export function restartNotice(fields, running) {
+  const names = fields.map(field => restartNames[field] || field);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  const subject = list.charAt(0).toUpperCase() + list.slice(1);
+  const effect = running ? 'the desktop restarts and open applications close' : 'the desktop stays stopped until you start it';
+  return `${subject} ${names.length > 1 ? 'need' : 'needs'} a new container: ${effect}. Files in the container are kept.`;
+}

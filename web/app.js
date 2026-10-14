@@ -2,7 +2,7 @@ import RFB from '@novnc/novnc';
 import { DesktopMedia } from './media.mjs';
 import { icon } from './icons.mjs';
 import { FileUploads, fileSize } from './uploads.mjs';
-import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText, downloadProgress } from './helpers.mjs';
+import { escapeHtml as e, memory, date, imageTree, imageChoices, jobLogText, downloadProgress, restartNotice } from './helpers.mjs';
 
 const app = document.querySelector('#app');
 const modal = document.querySelector('#modal');
@@ -43,7 +43,7 @@ function show(title, html) {
   activeJob = null; if (!modal.open) modal.showModal();
 }
 function badge(value) { return `<span class="badge ${e(value)}">${e(labels[value] || value)}</span>`; }
-const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile','profile-pull':'Download profile',snapshot:'Snapshot',exec:'Run script',reset:'Reset environment'};
+const jobNames = {create:'Create environment',retry:'Retry setup',start:'Start',stop:'Stop',restart:'Restart',delete:'Delete environment',internet:'Internet',build:'Build image','profile-build':'Build profile','profile-pull':'Download profile',snapshot:'Snapshot',exec:'Run script',reset:'Reset environment',settings:'Change settings'};
 function shell() {
   app.innerHTML = `<aside><a class="brand" href="/"><img class="brand-mark" src="/mark.svg" alt=""><span>Bilskirnir</span></a>
     <nav>${[['environments','Environments'],['images','Images'],['volumes','Volumes'],['jobs','Jobs']].map(([id,label]) => `<button data-tab="${id}" class="${state.tab === id ? 'active' : ''}"><span>${icon(id)}</span>${label}${id === 'jobs' ? '<small id="job-count"></small>' : ''}</button>`).join('')}</nav>
@@ -103,22 +103,53 @@ function imageOptions(selected = state.settings.base_image) {
   const active = choices.some(item => item.value === selected && !item.disabled) ? selected : choices.find(item => !item.disabled)?.value;
   return (active ? '' : '<option value="" selected disabled>Build an image first</option>') + choices.map(item => `<option value="${e(item.value)}" ${active === item.value ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}>${e(item.label)}${item.disabled ? ' · unavailable' : ''}</option>`).join('');
 }
+// The settings shared by the create and settings dialogs; `spec` fills in an existing desktop.
+function specFields(spec = {}) {
+  const resolutions = ['1920x1080', '1600x900', '1280x720', '2560x1440', '3840x2160'], resolution = spec.resolution || resolutions[0];
+  if (!resolutions.includes(resolution)) resolutions.push(resolution);
+  const checked = (key, fallback) => (spec[key] ?? fallback) ? 'checked' : '';
+  // A feature the installation switched off cannot be turned on; a desktop that has it can turn it off.
+  const allowed = (key, enabled) => !enabled && !spec[key] ? 'disabled' : '';
+  return `<div class="form-grid"><label>Resolution<select name="resolution">${resolutions.map(r => `<option ${r === resolution ? 'selected' : ''}>${e(r)}</option>`).join('')}</select></label><label>Shared memory (MB)<input name="shm_mb" type="number" min="64" value="${e(spec.shm_mb ?? 512)}" required></label><label>CPU limit<input name="cpus" type="number" min="0.1" step="0.1" placeholder="Unlimited" value="${e(spec.cpus ?? '')}"></label><label>Memory limit (MB)<input name="memory_mb" type="number" min="256" placeholder="Unlimited" value="${e(spec.memory_mb ?? '')}"></label></div>
+    <div class="checkboxes"><label><input type="checkbox" name="gpu" ${allowed('gpu', state.settings.gpu_enabled)} ${checked('gpu', state.settings.gpu_enabled !== false)}> GPU</label><label><input type="checkbox" name="internet" ${checked('internet', true)}> Internet</label><label><input type="checkbox" name="sudo" ${checked('sudo', true)}> Sudo</label><label><input type="checkbox" name="audio" ${allowed('audio', state.settings.audio_enabled)} ${checked('audio', false)}> Audio</label><label><input type="checkbox" name="microphone" ${allowed('microphone', state.settings.microphone_enabled)} ${checked('microphone', false)}> Microphone</label><label><input type="checkbox" name="gamepad" ${checked('gamepad', false)}> Gamepad</label></div>
+    <div class="section-line"><h3>Volumes</h3><button type="button" data-add-mount>＋ Mount</button></div><div id="mounts">${(spec.mounts || []).map(mountRow).join('')}</div><p class="hint">Mounted volumes are excluded from snapshots.</p>`;
+}
 function createDialog(selected) {
   show('New environment', `<form id="create-form"><label>Name<input name="name" required maxlength="100" placeholder="Unity workspace"></label><label>Image / snapshot<select name="image" required>${imageOptions(selected)}</select></label>
-    <div class="form-grid"><label>Resolution<select name="resolution"><option>1920x1080</option><option>1600x900</option><option>1280x720</option><option>2560x1440</option><option>3840x2160</option></select></label><label>Shared memory (MB)<input name="shm_mb" type="number" min="64" value="512" required></label><label>CPU limit<input name="cpus" type="number" min="0.1" step="0.1" placeholder="Unlimited"></label><label>Memory limit (MB)<input name="memory_mb" type="number" min="256" placeholder="Unlimited"></label></div>
-    <div class="checkboxes"><label><input type="checkbox" name="gpu" ${state.settings.gpu_enabled === false ? 'disabled' : 'checked'}> GPU</label><label><input type="checkbox" name="internet" checked> Internet</label><label><input type="checkbox" name="sudo" checked> Sudo</label><label><input type="checkbox" name="audio" ${state.settings.audio_enabled ? '' : 'disabled'}> Audio</label><label><input type="checkbox" name="microphone" ${state.settings.microphone_enabled ? '' : 'disabled'}> Microphone</label><label><input type="checkbox" name="gamepad"> Gamepad</label></div>
-    <div class="section-line"><h3>Volumes</h3><button type="button" data-add-mount>＋ Mount</button></div><div id="mounts"></div><p class="hint">Mounted volumes are excluded from snapshots.</p><div class="form-error" role="alert"></div><footer class="dialog-footer"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Create</button></footer></form>`);
+    ${specFields()}<div class="form-error" role="alert"></div><footer class="dialog-footer"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Create</button></footer></form>`);
+}
+function settingsDialog(id) {
+  const env = state.environments.find(x => x.environment.id === id)?.environment;
+  if (!env) return;
+  show('Environment settings', `<form id="settings-form" data-id="${e(id)}"><label>Name<input name="name" required maxlength="100" value="${e(env.spec.name)}"></label>
+    ${specFields(env.spec)}<div class="notice" data-restart-notice hidden></div><div class="form-error" role="alert"></div><footer class="dialog-footer"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save</button></footer></form>`);
+}
+// A restart warning is confirmed for one set of values; editing the form asks again.
+function unconfirm(form) {
+  if (form?.id !== 'settings-form' || !form.dataset.confirmed) return;
+  delete form.dataset.confirmed; form.querySelector('[data-restart-notice]').hidden = true;
+  form.querySelector('button[type="submit"]').textContent = 'Save';
+}
+function formSpec(form) {
+  const data = Object.fromEntries(new FormData(form));
+  for (const key of ['gpu','internet','sudo','audio','microphone','gamepad']) data[key] = form.elements[key].checked;
+  for (const key of ['cpus','memory_mb','shm_mb']) data[key] = data[key] ? Number(data[key]) : null;
+  data.mounts = [...form.querySelectorAll('.mount-row')].map(row => ({ volume: row.querySelector('select').value, target: row.querySelector('input:not([type])').value, readonly: row.querySelector('[type=checkbox]').checked }));
+  return data;
+}
+function mountRow(mount = {}) {
+  const names = state.volumes.map(v => v.Name);
+  if (mount.volume && !names.includes(mount.volume)) names.push(mount.volume);
+  return `<div class="mount-row"><select aria-label="Volume">${names.map(name => `<option ${name === mount.volume ? 'selected' : ''}>${e(name)}</option>`).join('')}</select><input placeholder="/workspace/project" aria-label="Mount path" required value="${e(mount.target || '')}"><label><input type="checkbox" ${mount.readonly ? 'checked' : ''}>Read-only</label><button type="button" data-remove-mount aria-label="Remove mount">×</button></div>`;
 }
 function addMount() {
   if (!state.volumes.length) { toast('Create a volume first.', true); return; }
-  const row = document.createElement('div'); row.className = 'mount-row';
-  row.innerHTML = `<select aria-label="Volume">${state.volumes.map(v => `<option>${e(v.Name)}</option>`).join('')}</select><input placeholder="/workspace/project" aria-label="Mount path" required><label><input type="checkbox">Read-only</label><button type="button" data-remove-mount aria-label="Remove mount">×</button>`;
-  document.querySelector('#mounts').append(row);
+  document.querySelector('#mounts').insertAdjacentHTML('beforeend', mountRow());
 }
 function details(id) {
   const item = state.environments.find(x => x.environment.id === id), env = item?.environment;
   if (!env) return;
-  show(env.spec.name, `<div class="detail-actions">${item.state === 'missing' || env.last_error ? `<button data-retry="${id}">↻ Retry setup</button>` : ''}${['start','stop','restart'].map((action,i) => `<button data-action="${action}" data-id="${id}">${['▶ Start','■ Stop','↻ Restart'][i]}</button>`).join('')}<button data-upload="${id}" ${item.state === 'running' ? '' : 'disabled'}>${icon('upload')}Upload files</button><button data-snapshot="${id}">◇ Snapshot</button><button data-logs="${id}">Logs</button><button data-diagnostics="${id}">Diagnostics</button><button class="danger" data-delete="${id}">Delete environment</button></div>`);
+  show(env.spec.name, `<div class="detail-actions">${item.state === 'missing' || env.last_error ? `<button data-retry="${id}">↻ Retry setup</button>` : ''}${['start','stop','restart'].map((action,i) => `<button data-action="${action}" data-id="${id}">${['▶ Start','■ Stop','↻ Restart'][i]}</button>`).join('')}<button data-upload="${id}" ${item.state === 'running' ? '' : 'disabled'}>${icon('upload')}Upload files</button><button data-settings="${id}">⚙ Settings</button><button data-snapshot="${id}">◇ Snapshot</button><button data-logs="${id}">Logs</button><button data-diagnostics="${id}">Diagnostics</button><button class="danger" data-delete="${id}">Delete environment</button></div>`);
 }
 function uploadDialog(id, files = []) {
   const item = state.environments.find(item => item.environment.id === id);
@@ -229,8 +260,9 @@ document.addEventListener('click', async event => {
     else if (button.dataset.profilePull) { button.disabled = true; await submitJob(`profiles/${button.dataset.profilePull}/pull`, {}); }
     else if (button.dataset.profileBuild) { button.disabled = true; await submitJob(`profiles/${button.dataset.profileBuild}/build`, {}); }
     else if (button.dataset.clone) { const img = state.images.find(r => r.id === button.dataset.clone); createDialog(img.image_id); }
-    else if (button.hasAttribute('data-add-mount')) addMount();
-    else if (button.hasAttribute('data-remove-mount')) button.closest('.mount-row').remove();
+    else if (button.hasAttribute('data-add-mount')) { addMount(); unconfirm(button.closest('form')); }
+    else if (button.hasAttribute('data-remove-mount')) { const form = button.closest('form'); button.closest('.mount-row').remove(); unconfirm(form); }
+    else if (button.dataset.settings) settingsDialog(button.dataset.settings);
     else if (button.dataset.details) details(button.dataset.details);
     else if (button.dataset.connect) connect(button.dataset.connect);
     else if (button.dataset.upload) uploadDialog(button.dataset.upload);
@@ -267,7 +299,8 @@ document.addEventListener('click', async event => {
     else if (button.hasAttribute('data-mic')) await media.toggleMic();
   } catch (error) { toast(error.message, true); button.disabled = false; }
 });
-document.addEventListener('change', event => { if (event.target.id === 'upload-files') { selectUploadFiles(event.target.files); event.target.value = ''; return; } const form = event.target.closest('#create-form'); if (!form) return; if (event.target.name === 'microphone' && event.target.checked) form.elements.audio.checked = true; if (event.target.name === 'audio' && !event.target.checked) form.elements.microphone.checked = false; });
+document.addEventListener('change', event => { if (event.target.id === 'upload-files') { selectUploadFiles(event.target.files); event.target.value = ''; return; } const form = event.target.closest('#create-form,#settings-form'); if (!form) return; unconfirm(form); if (event.target.name === 'microphone' && event.target.checked) form.elements.audio.checked = true; if (event.target.name === 'audio' && !event.target.checked) form.elements.microphone.checked = false; });
+document.addEventListener('input', event => unconfirm(event.target.closest('#settings-form')));
 document.addEventListener('dragover', event => {
   if (!event.dataTransfer?.types.includes('Files')) return;
   event.preventDefault();
@@ -293,11 +326,22 @@ document.addEventListener('submit', async event => {
   form.querySelector('.form-error').textContent = '';
   try {
     if (form.id === 'login-form') { await api('login', data); await initialize(); }
-    else if (form.id === 'create-form') {
-      for (const key of ['gpu','internet','sudo','audio','microphone','gamepad']) data[key] = form.elements[key].checked;
-      for (const key of ['cpus','memory_mb','shm_mb']) data[key] = data[key] ? Number(data[key]) : null;
-      data.mounts = [...form.querySelectorAll('.mount-row')].map(row => ({ volume: row.querySelector('select').value, target: row.querySelector('input:not([type])').value, readonly: row.querySelector('[type=checkbox]').checked }));
-      await submitJob('environments', data);
+    else if (form.id === 'create-form') await submitJob('environments', formSpec(form));
+    else if (form.id === 'settings-form') {
+      const id = form.dataset.id, spec = formSpec(form);
+      // The server decides what restarts the desktop; ask it first and warn once before applying.
+      if (!form.dataset.confirmed) {
+        const preview = await api(`environments/${id}/settings`, { ...spec, dry_run: true });
+        if (!preview.live.length && !preview.restart.length) { modal.close(); toast('No settings changed.'); return; }
+        if (preview.restart.length) {
+          const running = state.environments.find(x => x.environment.id === id)?.state === 'running';
+          const notice = form.querySelector('[data-restart-notice]');
+          notice.textContent = restartNotice(preview.restart, running); notice.hidden = false;
+          form.dataset.confirmed = '1'; button.textContent = running ? 'Save and restart' : 'Save';
+          return;
+        }
+      }
+      await submitJob(`environments/${id}/settings`, spec);
     } else if (form.id === 'snapshot-form') await submitJob(`environments/${form.dataset.id}/snapshot`, data);
     else if (form.id === 'build-form') { data.internet = form.elements.internet.checked; await submitJob('images/build', data); }
     else if (form.id === 'volume-form') { await api('volumes', data); modal.close(); await refresh(); }

@@ -8,7 +8,7 @@ An environment is an Ubuntu desktop running in a Docker container. An image is t
 
 Select **New environment** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and volume mounts.
 
-After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, inspect or delete it.
+After creation finishes, select **Connect**. The dashboard preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the environment's actions menu to stop, restart, change settings, inspect or delete it.
 
 The GPU option is available only when the installation enables `WSL_GPU` or `NVIDIA_COMPUTE`. There is no fixed environment quota. Leaving CPU and memory limits empty uses Docker's unlimited defaults, so choose limits according to the machine and applications you are running. Enabling GPU access does not reserve GPU memory or set a VRAM limit.
 
@@ -103,6 +103,12 @@ You can also use Docker's file-copy commands from WSL. Replace `ENVIRONMENT_ID` 
 docker cp ./project wsld-ENVIRONMENT_ID:/workspace/project
 docker cp wsld-ENVIRONMENT_ID:/home/desktop/Downloads/result ./result
 ```
+
+## Change an environment's settings
+
+Open an environment's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad or volumes. The image cannot change; take a snapshot or reset the desktop instead.
+
+The name, internet access and a new CPU or memory limit apply while the desktop keeps running. Docker fixes the other settings, and removing a limit, when it creates a container, so changing them creates a new one: Bilskirnir stops the desktop, saves its files to an image, starts a new container from it with the new settings and removes the old one. The dialog says so before applying. Open applications close, but installed software and files in the container are kept, as are named volumes. If the new container cannot start, the previous one is restored.
 
 ## Internet, sound and microphone
 

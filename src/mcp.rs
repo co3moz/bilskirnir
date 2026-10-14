@@ -265,6 +265,11 @@ impl BilskirnirMcp {
                     .await?
                     .0
             }
+            "update_environment" => {
+                api::update_settings(state, Path(id.unwrap()), Json(args))
+                    .await?
+                    .0
+            }
             "retry_environment" => api::retry(state, Path(id.unwrap())).await?.0,
             "delete_environment" => api::remove(state, Path(id.unwrap())).await?.0,
             "environment_logs" => api::logs(state, Path(id.unwrap())).await?.0,
@@ -601,6 +606,24 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             false,
             true,
             true,
+        ),
+        tool(
+            "update_environment",
+            "Change an existing desktop's settings; pass only the fields to change. name, internet and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise.",
+            json!({
+                "environment_id":id,"dry_run":{"type":"boolean","default":false},
+                "name":{"type":"string","minLength":1,"maxLength":100},
+                "resolution":{"type":"string"},"gpu":{"type":"boolean"},"internet":{"type":"boolean"},
+                "audio":{"type":"boolean"},"microphone":{"type":"boolean"},"sudo":{"type":"boolean"},
+                "gamepad":{"type":"boolean"},
+                "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
+                "shm_mb":{"type":"integer","minimum":64},
+                "mounts":{"type":"array","items":schema(json!({"volume":text,"target":text,"readonly":{"type":"boolean","default":false}}), &["volume","target"])}
+            }),
+            &["environment_id"],
+            false,
+            true,
+            false,
         ),
         tool(
             "retry_environment",

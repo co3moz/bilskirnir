@@ -182,7 +182,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 59);
+    assert_eq!(tools.len(), 60);
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -416,6 +416,7 @@ async fn single_environment_api_returns_the_same_state_as_the_list() {
         spec: spec(),
         last_error: None,
         desktop: None,
+        working_image: None,
     };
     app.db.put("environment", &env.id, &env).unwrap();
     let response = router(app)
@@ -1446,4 +1447,138 @@ fn screenshot_save_targets_and_download_links_are_shaped_for_users() {
         files::download_url("abc123", "/shared/ölçüm.tar.gz"),
         "/api/environments/abc123/files/download?path=/shared/%C3%B6l%C3%A7%C3%BCm.tar.gz"
     );
+}
+#[tokio::test]
+async fn environment_settings_are_checked_before_any_job_or_docker_work() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.audio = false;
+        config.microphone = false;
+    }
+    let mut existing = spec();
+    existing.gpu = true;
+    let env = model::Environment {
+        id: "edit-id".into(),
+        container: "wsld-edit-id".into(),
+        private_network: "wsld-edit-id-private".into(),
+        egress_network: "wsld-edit-id-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: existing,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+    };
+    app.db.put("environment", &env.id, &env).unwrap();
+    let post = |id: &str, body: serde_json::Value| {
+        let app = app.clone();
+        let request = Request::builder()
+            .header("host", "localhost:8080")
+            .header("x-wsld-request", "1")
+            .header("content-type", "application/json")
+            .method("POST")
+            .uri(format!("/api/environments/{id}/settings"))
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        async move {
+            let response = router(app).oneshot(request).await.unwrap();
+            let status = response.status();
+            let bytes = axum::body::to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap();
+            (
+                status,
+                serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+            )
+        }
+    };
+    let (status, body) = post(
+        "edit-id",
+        serde_json::json!({"name": "Renamed", "cpus": 2, "resolution": "1280x720", "dry_run": true}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["live"], serde_json::json!(["name", "cpus"]));
+    assert_eq!(body["restart"], serde_json::json!(["resolution"]));
+    // A feature the installation switched off cannot be turned on, but a desktop that has one
+    // (GPU here, created before the switch) can still change its other settings.
+    for (request, expected) in [
+        (
+            serde_json::json!({"audio": true, "dry_run": true}),
+            "Audio is disabled",
+        ),
+        (
+            serde_json::json!({"image": "bilskirnir/custom:other"}),
+            "cannot change",
+        ),
+        (serde_json::json!({"dry_run": "yes"}), "dry_run"),
+        (
+            serde_json::json!({"volume": "x"}),
+            "Unknown environment setting",
+        ),
+    ] {
+        let (status, body) = post("edit-id", request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert!(body["error"].as_str().unwrap().contains(expected), "{body}");
+    }
+    let (status, _) = post("missing-id", serde_json::json!({"dry_run": true})).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    let saved: model::Environment = app.db.get("environment", "edit-id").unwrap();
+    assert_eq!(saved.spec.name, "Unity");
+}
+#[test]
+fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files() {
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.adapter = "NVIDIA".into();
+    let mut spec = spec();
+    spec.resolution = "1280x720".into();
+    spec.audio = true;
+    spec.gpu = true;
+    spec.gamepad = true;
+    spec.shm_mb = 1024;
+    spec.memory_mb = Some(2048);
+    spec.mounts = vec![model::Mount {
+        volume: "work".into(),
+        target: "/workspace".into(),
+        readonly: true,
+    }];
+    let mut env = model::Environment {
+        id: "args-id".into(),
+        container: "wsld-args-id".into(),
+        private_network: "wsld-args-id-private".into(),
+        egress_network: "wsld-args-id-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+    };
+    let joined = |env: &model::Environment| app.container_args(env).join(" ");
+    let args = joined(&env);
+    for flag in [
+        "--name wsld-args-id",
+        "--shm-size 1024m",
+        "--env DESKTOP_RESOLUTION=1280x720",
+        "--env DESKTOP_AUDIO=true",
+        "--env DESKTOP_GPU=true",
+        "--env GPU_ADAPTER=NVIDIA",
+        "--memory 2048m",
+        "--mount type=volume,src=work,dst=/workspace,readonly",
+        "--gpus all",
+        "--device /dev/dxg",
+        "--device /dev/uinput",
+        "--label io.wsl-desktop.environment=args-id",
+    ] {
+        assert!(args.contains(flag), "{flag} missing from {args}");
+    }
+    assert!(args.ends_with(" sha256:source"), "{args}");
+    env.working_image = Some(model::WorkingImage {
+        image_id: "sha256:working".into(),
+        reference: "bilskirnir/environment:job".into(),
+    });
+    assert!(joined(&env).ends_with(" sha256:working"));
+    assert_eq!(env.source_image_id, "sha256:source");
 }

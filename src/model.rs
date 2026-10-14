@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub const LABEL: &str = "io.wsl-desktop.managed";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mount {
     pub volume: String,
@@ -12,7 +12,7 @@ pub struct Mount {
     pub readonly: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EnvironmentSpec {
     pub name: String,
     pub image: String,
@@ -164,6 +164,24 @@ pub struct Environment {
     pub last_error: Option<String>,
     #[serde(default)]
     pub desktop: Option<crate::profiles::DesktopInfo>,
+    /// Set once a settings change recreated the container: the container runs this commit of
+    /// its earlier files, while `source_image_id` stays the image the desktop started from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working_image: Option<WorkingImage>,
+}
+impl Environment {
+    /// The image the container is created from.
+    pub fn container_image(&self) -> &str {
+        self.working_image
+            .as_ref()
+            .map_or(&self.source_image_id, |image| &image.image_id)
+    }
+}
+/// A commit that carries a container's files over to its replacement.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorkingImage {
+    pub image_id: String,
+    pub reference: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ImageRecord {
