@@ -77,45 +77,6 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             <AlertDescription>{environment.last_error}</AlertDescription>
           </Alert>
         )}
-        <SpecBadges spec={spec} />
-        <Separator />
-        <dl className="grid grid-cols-2 gap-4">
-          <Fact label="Resolution">{spec.resolution}</Fact>
-          <Fact label="Shared memory">{spec.shm_mb} MB</Fact>
-          <Fact label="Internet">{yes(spec.internet)}</Fact>
-          <Fact label="Sudo">{yes(spec.sudo)}</Fact>
-          <Fact label="Created">{date(environment.created_at)}</Fact>
-          <Fact label="Container">
-            <code className="font-mono text-xs">{environment.container}</code>
-          </Fact>
-          <div className="col-span-2">
-            <Fact label="Image">
-              <code className="font-mono text-xs">{spec.image}</code>
-            </Fact>
-          </div>
-        </dl>
-        <Separator />
-        <div className="flex flex-col gap-2">
-          <h3 className="text-xs text-muted-foreground">Volumes</h3>
-          {spec.mounts.length ? (
-            <ul className="flex flex-col gap-1">
-              {spec.mounts.map((mount) => (
-                <li key={mount.target} className="flex flex-wrap items-center gap-x-2 text-xs">
-                  <code className="font-mono">{mount.volume}</code>
-                  <span className="text-muted-foreground">at</span>
-                  <code className="font-mono">{mount.target}</code>
-                  {mount.readonly && <span className="text-muted-foreground">(read-only)</span>}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">No volumes mounted.</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            Mounted volumes are excluded from snapshots.
-          </p>
-        </div>
-        <Separator />
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={() => openDialog({ kind: "settings", id })}>
             <Settings2Icon data-icon="inline-start" />
@@ -163,6 +124,44 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             <Trash2Icon data-icon="inline-start" />
             Delete
           </Button>
+        </div>
+        <SpecBadges spec={spec} />
+        <Separator />
+        <dl className="grid grid-cols-2 gap-4">
+          <Fact label="Resolution">{spec.resolution}</Fact>
+          <Fact label="Shared memory">{spec.shm_mb} MB</Fact>
+          <Fact label="Internet">{yes(spec.internet)}</Fact>
+          <Fact label="Sudo">{yes(spec.sudo)}</Fact>
+          <Fact label="Created">{date(environment.created_at)}</Fact>
+          <Fact label="Container">
+            <code className="font-mono text-xs">{environment.container}</code>
+          </Fact>
+          <div className="col-span-2">
+            <Fact label="Image">
+              <code className="font-mono text-xs">{spec.image}</code>
+            </Fact>
+          </div>
+        </dl>
+        <Separator />
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs text-muted-foreground">Volumes</h3>
+          {spec.mounts.length ? (
+            <ul className="flex flex-col gap-1">
+              {spec.mounts.map((mount) => (
+                <li key={mount.target} className="flex flex-wrap items-center gap-x-2 text-xs">
+                  <code className="font-mono">{mount.volume}</code>
+                  <span className="text-muted-foreground">at</span>
+                  <code className="font-mono">{mount.target}</code>
+                  {mount.readonly && <span className="text-muted-foreground">(read-only)</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">No volumes mounted.</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Mounted volumes are excluded from snapshots.
+          </p>
         </div>
       </div>
       <DrawerFooter>

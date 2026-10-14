@@ -21,11 +21,23 @@ import { SideDrawer, type DialogProps } from "./side-drawer"
 /** A job's live log, followed at the bottom unless the reader scrolled up. */
 function JobLog({ text }: { text: string }) {
   const ref = React.useRef<HTMLPreElement>(null)
+  const content = React.useRef<HTMLElement>(null)
   const follow = React.useRef(true)
   React.useLayoutEffect(() => {
     const log = ref.current
     if (log && follow.current) log.scrollTop = log.scrollHeight
   }, [text])
+  React.useEffect(() => {
+    const log = ref.current
+    if (!log || !content.current) return
+    // The log can grow after a render, once the mono font loads or the panel settles.
+    const observer = new ResizeObserver(() => {
+      if (follow.current) log.scrollTop = log.scrollHeight
+    })
+    observer.observe(content.current)
+    observer.observe(log)
+    return () => observer.disconnect()
+  }, [])
   return (
     <pre
       ref={ref}
@@ -35,7 +47,9 @@ function JobLog({ text }: { text: string }) {
       }}
       className="min-h-48 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap"
     >
-      {text}
+      <code ref={content} className="block">
+        {text}
+      </code>
     </pre>
   )
 }

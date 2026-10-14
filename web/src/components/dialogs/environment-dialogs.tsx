@@ -121,8 +121,9 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
               </Field>
             </FieldGroup>
             <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
-            <FieldError>{error}</FieldError>
           </div>
+          {/* Outside the scrolling fields, so a long form cannot hide the outcome. */}
+          <FieldError>{error}</FieldError>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
@@ -212,14 +213,15 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
               volumes={volumes}
               spec={spec}
             />
-            {notice && (
-              <Alert>
-                <TriangleAlertIcon className="text-warning" />
-                <AlertDescription>{notice}</AlertDescription>
-              </Alert>
-            )}
-            <FieldError>{error}</FieldError>
           </div>
+          {/* Outside the scrolling fields, next to the button whose label it changes. */}
+          {notice && (
+            <Alert>
+              <TriangleAlertIcon className="text-warning" />
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
+          <FieldError>{error}</FieldError>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">

@@ -25,7 +25,7 @@ export function EnvironmentPreview({
   return (
     <div
       className={cn(
-        "relative flex aspect-video items-center justify-center overflow-hidden rounded-md border bg-muted/40",
+        "relative flex aspect-video shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/40",
         className
       )}
     >

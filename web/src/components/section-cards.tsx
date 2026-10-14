@@ -106,9 +106,7 @@ export function SectionCards() {
             {settings?.gpu_enabled ? "GPU ready" : "CPU only"}
           </Badge>
         }
-        line={
-          limits.cpus ? `${limits.cpus} CPUs limited by running desktops` : "No CPU limits in use"
-        }
+        line={limits.cpus ? `${limits.cpus} CPUs under desktop limits` : "No desktop CPU limits"}
         hint={known ? `Docker ${system?.version ?? ""}` : (system?.error ?? "Docker host")}
       />
       <Metric
@@ -122,8 +120,8 @@ export function SectionCards() {
         }
         line={
           limits.memoryMb
-            ? `${memory(limits.memoryMb * 1024 ** 2)} limited by running desktops`
-            : "No memory limits in use"
+            ? `${memory(limits.memoryMb * 1024 ** 2)} under desktop limits`
+            : "No desktop memory limits"
         }
         hint="Host memory reported by Docker"
       />
