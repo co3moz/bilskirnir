@@ -66,8 +66,18 @@ export type ImageRecord = {
   created_at: number
   description: string
   desktop?: DesktopInfo | null
+  /** Recorded by script builds; `GET images/{id}/config` adds the script. */
+  build?: Omit<BuildConfig, "name" | "script"> | null
   /** `null` when Docker could not list images. */
   available?: boolean | null
+}
+
+/** A build request, which is also what an image's exported configuration holds. */
+export type BuildConfig = {
+  name: string
+  base_image: string
+  internet: boolean
+  script: string
 }
 
 /** One line of `docker volume ls --format json`. */

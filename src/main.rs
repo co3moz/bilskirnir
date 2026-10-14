@@ -167,6 +167,7 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/images", get(api::images).post(api::register_image))
         .route("/api/images/build", post(api::build))
+        .route("/api/images/{id}/config", get(api::image_config))
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))

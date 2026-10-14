@@ -196,6 +196,17 @@ pub struct ImageRecord {
     pub description: String,
     #[serde(default)]
     pub desktop: Option<crate::profiles::DesktopInfo>,
+    /// What a script build ran, so the image can be exported and built again. Snapshots,
+    /// imports and builds made before it was recorded have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildConfig>,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BuildConfig {
+    /// The base as the request named it: a profile reference or a local image ID.
+    pub base_image: String,
+    pub internet: bool,
+    pub script: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Application {
