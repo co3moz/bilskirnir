@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-The [WSL distribution package](WSL_PACKAGE.md) installs Ubuntu, Docker and the GPU runtime together; the [README's Compose example](../README.md#getting-started) is the shortest route inside an existing WSL Ubuntu. This guide covers changes you may need after that: settings, access from another device, updates and recovery.
+The [WSL distribution package](WSL_PACKAGE.md) installs Ubuntu, Docker and the GPU runtime together; the [README's Compose example](../README.md#custom-installation) is the shortest route on a Linux host you manage yourself, in WSL or not. This guide covers changes you may need after that: settings, access from another device, updates and recovery.
 
 ## Use the full installation files
 
@@ -35,7 +35,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
 | `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
 | `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled; 32–256 visible ASCII characters. |
-| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
+| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
 | `AUDIO_ENABLED` | `true` | Allows environments to use browser sound. |
@@ -67,7 +67,7 @@ Agent access uses a separate token rather than the dashboard session. See the [M
 
 For the minimal Compose example, change the port binding to `0.0.0.0:8080:8080`. For the full manifests, set `BIND_ADDRESS=0.0.0.0`. Open the manager using the host's LAN address.
 
-The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. Windows firewall rules and forwarding into WSL must also allow the connection; Compose does not configure those host settings.
+The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings.
 
 Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user environment permissions.
 
@@ -75,7 +75,7 @@ Keep login enabled when other people can reach the manager. Its Docker socket co
 
 Use the full manifest for the optional Caddy HTTPS service. It creates a local certificate authority, which each client device needs to trust. This also lets a remote browser request microphone access.
 
-Set these values in `.env`, using a hostname that points to your Windows/WSL host:
+Set these values in `.env`, using a hostname that points to your host (the Windows machine, under WSL):
 
 ```dotenv
 BIND_ADDRESS=0.0.0.0

@@ -100,8 +100,10 @@ case ${1:-help} in
         if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
         if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
         if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
-        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|PORT|BIND_ADDRESS|MCP_ENABLED)='"$INSTALL/.env" | sed 's/^/           /'; else echo "settings:  missing"; fi
-        if curl -fsS -o /dev/null --max-time 10 https://ghcr.io/v2/; then echo "registry:  ghcr.io reachable"; else echo "registry:  ghcr.io not reachable (HTTP 401 is normal; a timeout is not)"; fi
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|MCP_ENABLED)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
+        # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
+        if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
         ;;
     open)
         if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi

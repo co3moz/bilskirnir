@@ -2,33 +2,56 @@
 
 ![Bilskirnir dashboard with Ubuntu desktop previews](docs/screenshots/bilskirnir.png)
 
-Bilskirnir lets you create Ubuntu desktops in Docker and use them from your browser. It runs on WSL2, with GPU access for Linux graphics applications and a choice of XFCE or GNOME.
+Bilskirnir gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker on WSL2 with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
 
-Use it when you want to install an application, try a different setup or keep several work environments on one machine. Prepare a desktop once, save it as an image, then start another environment from that image whenever you need it. Your working files can live in Docker volumes so they stay available even after you delete the desktop.
+The same desktops open in your browser, so you can work in them yourself, save a prepared one as an image and start new desktops from it.
 
 The name is a nod to Thor.
 
 ## What you can do
 
-- Create separate desktops with their own applications, resolution and CPU/memory settings.
-- Open a desktop in the browser, with optional sound and microphone support.
-- Install software with a build script or directly in a desktop, then save the result as an image.
-- Start new desktops from saved images and see how snapshots relate to their parents.
-- Turn an environment's internet connection on or off without closing its desktop.
-- Drag files onto a desktop or environment card to upload them to Downloads or a mounted volume.
-- Let an agent manage desktops through the built-in MCP server, including files, command execution, background applications, window control, mouse/keyboard input with screenshots, waits, recordings, audio, interactive terminals, accessibility trees, a virtual gamepad and environment resets.
+- **Built-in MCP agent integration** with 60 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **GPU acceleration** for Linux graphics applications.
+- **Separate desktops with custom settings**: resolution, CPU, memory, internet, sound and microphone.
+- **Access, control, change and delete** desktops from the browser.
+- **Snapshots and images**: save a desktop once and start new ones from it, or build an image from a script.
+- **Volumes** that keep your files after a desktop is deleted.
+- **Drag and drop uploads** into a desktop.
 
-Bilskirnir currently serves one administrator on a local machine or LAN. The desktops are containers sharing the WSL kernel. The manager controls them through the host Docker socket; it does not run a nested Docker daemon.
+Both supplied desktops use Ubuntu 24.04:
+
+| Desktop | When to choose it |
+| --- | --- |
+| Lightweight XFCE | A smaller desktop for everyday tools and applications. |
+| GNOME | Ubuntu's GNOME Shell session and Yaru theme, with higher resource use. |
+
+Bilskirnir serves one administrator on a local machine or LAN.
 
 ## Getting started
 
-The shortest route is the ready-made WSL distribution: download `bilskirnir.wsl` from a release and run `wsl --install --from-file .\bilskirnir.wsl`. It brings Ubuntu, Docker and the NVIDIA runtime with it; the first start asks for a password and downloads the manager. See the [WSL package guide](docs/WSL_PACKAGE.md).
+You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU desktops also need a Windows GPU driver with WSL support.
 
-To use an existing WSL Ubuntu instead, run the commands below **inside x86_64 WSL2 Ubuntu**, with Docker Engine and Compose v2 already installed.
+1. Download `bilskirnir.wsl` from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest) and install it:
 
-The example enables NVIDIA graphics and CUDA. WSL GPU access must be working first: `/dev/dxg` and `/usr/lib/wsl` must exist, and CUDA requires NVIDIA Container Toolkit configured for your Docker Engine. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. To start without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; the GPU option is then unavailable when creating a desktop.
+   ```powershell
+   wsl --install --from-file .\bilskirnir.wsl
+   ```
 
-Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for the NVIDIA setup:
+2. Open **Bilskirnir** from the Start menu. The first start asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It then detects the GPU and offers to start Bilskirnir.
+3. Connect your agent. The first start ends with the agent endpoint, its token and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `bilskirnir mcp` shows them again.
+4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New environment**. The first desktop from XFCE or GNOME downloads that profile, and the job dialog shows the progress. Select **Connect** once it is running.
+
+WSL stops a distribution shortly after its last window closes; [Keep it running](docs/WSL_PACKAGE.md#keep-it-running) explains how to keep Bilskirnir available. The [WSL package guide](docs/WSL_PACKAGE.md) covers the `bilskirnir` command, updates and removal.
+
+## Custom installation
+
+The WSL package is the recommended installation. Bilskirnir itself needs only an x86_64 Linux host with Docker Engine and Compose v2, so you can also run it with Compose on a host you manage yourself, such as your own WSL2 distribution or another Linux machine.
+
+Run the commands below on that host, as a user who can use Docker.
+
+GPU acceleration currently goes through WSL's GPU support: it needs a host where `/dev/dxg` and `/usr/lib/wsl` exist, and CUDA also needs NVIDIA Container Toolkit configured for Docker Engine. The example enables both for an NVIDIA GPU. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. On a host without WSL GPU support, or to run without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; desktops then use software rendering and the GPU option is unavailable when creating one.
+
+Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU under WSL:
 
 ```yaml
 name: bilskirnir
@@ -48,7 +71,7 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: "replace-with-your-password"
       DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-      # These settings apply GPU access to desktops created in the UI.
+      # GPU access for desktops created in the UI. Without WSL GPU support, set both to "false".
       WSL_GPU: "true"
       NVIDIA_COMPUTE: "true" # Set false for AMD/Intel or without CUDA support.
       GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
@@ -71,40 +94,19 @@ Start Bilskirnir:
 docker compose up -d
 ```
 
-The first start downloads only the manager. You do not need to clone this repository or build anything locally.
+The first start downloads only the manager. You do not need to clone this repository or build anything locally. Open [localhost:8080](http://localhost:8080) and sign in as `admin` using your chosen password.
 
-Open [localhost:8080](http://localhost:8080) and sign in as `admin` using your chosen password. Select **New environment**, choose XFCE or GNOME, then create it. The first desktop from a profile downloads its image, and the job dialog shows the progress; later desktops from that profile start without the download. Once it is running, select **Connect** to open the desktop.
-
-## Your first reusable desktop
-
-Suppose you want a desktop with an editor and a few development tools. Start with XFCE or GNOME, install what you need, and take a **Snapshot**. You can now create another desktop from that snapshot without repeating the installation.
-
-Keep project files in a named volume if you want them to outlive a desktop. Snapshots save changes in the container filesystem, including home files unless home is mounted. They do not include mounted volumes or the state of running applications.
-
-For repeatable installation, use **Build image** with a shell script instead. Both approaches produce images you can use for new environments.
-
-## Desktop and GPU support
-
-Both supplied desktops use Ubuntu 24.04:
-
-| Desktop | When to choose it |
-| --- | --- |
-| Lightweight XFCE | A smaller desktop for everyday tools and applications. |
-| GNOME | Ubuntu's GNOME Shell session and Yaru theme, with higher resource use. |
-
-Each has its own virtual display and VNC server. The manager shows a screenshot on the dashboard and opens an interactive noVNC session when you connect. No monitor is required.
-
-Hardware OpenGL has been verified with VirtualGL and Mesa D3D12 on WSL Ubuntu 22.04, Docker Engine 28.1.1 and an NVIDIA RTX 4080. Unity Editor and Linux games are intended uses, but Unity itself has not yet been tested. Vulkan, other GPU vendors and physical browser microphone hardware also need verification. See the [GPU guide](docs/USAGE.md#running-graphics-applications) for launch commands.
+Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agent-access) shows the two settings that turn it on. [Installation and maintenance](docs/INSTALLATION.md) covers the remaining settings, LAN access and updates.
 
 ## Where to go next
 
-- [Using Bilskirnir](docs/USAGE.md): desktops, custom images, snapshots, files and volumes.
-- [WSL distribution package](docs/WSL_PACKAGE.md): install Bilskirnir with Docker and GPU support as its own WSL distribution.
+- [Agent access with MCP](docs/MCP.md): connecting a client, the tool list and agent workflows.
+- [Using Bilskirnir](docs/USAGE.md): desktops, GPU applications, images, snapshots, volumes, uploads and settings changes.
+- [WSL distribution package](docs/WSL_PACKAGE.md): installing, keeping it running, everyday commands and removal.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
-- [Development](docs/DEVELOPMENT.md): source builds, project structure, checks and image publishing.
-- [Agent access with MCP](docs/MCP.md): connection settings, tools and automation workflows.
-- [HTTP API](docs/API.md): use the same operations from scripts or another application.
+- [HTTP API](docs/API.md): the same operations for scripts and other applications.
+- [Development](docs/DEVELOPMENT.md): source builds, project structure, checks, image publishing and the WSL package build.
 - [Interface design](docs/DESIGN.md): visual choices and guidance for interface changes.
-- [Verification notes](docs/BUG_HUNT.md): the earlier bug audit and what was checked.
+- [Verification notes](docs/BUG_HUNT.md): the October 2026 bug audits, what they checked and what they did not prove.
 
 Bilskirnir is written in Rust with a plain JavaScript frontend and is released under the [MIT license](LICENSE). Its bundled components keep their [own licenses](THIRD_PARTY_NOTICES.md).
