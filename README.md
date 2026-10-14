@@ -102,7 +102,7 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 
 - [Agent access with MCP](docs/MCP.md): connecting a client, the tool list and agent workflows.
 - [Using Bilskirnir](docs/USAGE.md): desktops, GPU applications, images, snapshots, volumes, uploads and settings changes.
-- [WSL distribution package](docs/WSL_PACKAGE.md): installing, keeping it running, everyday commands and removal.
+- [WSL distribution package](docs/WSL_PACKAGE.md): installing, keeping it running, everyday commands, memory and disk size, and removal.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
 - [HTTP API](docs/API.md): the same operations for scripts and other applications.
 - [Development](docs/DEVELOPMENT.md): source builds, project structure, checks, image publishing and the WSL package build.
