@@ -54,15 +54,15 @@ MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, o
 
 ### Broken responses from localhost on Windows
 
-Some Windows security products scan HTTP traffic on localhost and rewrite responses on the way, for example the web protection in Norton. They replace the `Content-Length` header with `Transfer-Encoding: chunked` but leave the body unchunked, so clients drop the connection with errors such as `Invalid character in chunk size` (Node.js) or `Malformed encoding found in chunked-encoding` (curl). This happens to any local HTTP server, not only Bilskirnir.
+Some Windows security products scan HTTP traffic on localhost and rewrite responses on the way. The web protection in Norton does this for requests whose path is `/mcp` (and `GET /sse`), on any local server: it replaces a `Content-Length` header with `Transfer-Encoding: chunked` but leaves the body unchunked, so clients drop the connection with errors such as `Invalid character in chunk size` (Node.js) or `Malformed encoding found in chunked-encoding` (curl). A response that is already chunked passes through unchanged.
 
-To confirm it, send the same request from inside the WSL distribution, where the security product does not see the traffic. In `token` mode the manager answers a request without a token with `401` and a `content-length` header:
+The manager therefore sends every `/mcp` response chunked, including the `401` for a missing token. Managers up to 0.2.0 still used `Content-Length` and are affected: update them (`bilskirnir update` in the WSL package), or exclude `localhost` or the manager's port from the product's web or HTTP scanning, or use the stdio bridge above, which reaches the manager without the Windows loopback connection.
+
+To check what reaches Windows, send the same request from Windows and from inside the WSL distribution, where the security product does not see the traffic. In `token` mode both should print `401` with `transfer-encoding: chunked` and the JSON error body:
 
 ```bash
 curl -si -X POST http://127.0.0.1:8080/mcp
 ```
-
-If that response is correct but the same request from Windows shows `transfer-encoding: chunked`, exclude `localhost` or the manager's port from the product's web or HTTP scanning. Alternatively, use the stdio bridge above: it reaches the manager without the Windows loopback connection.
 
 ## A useful first workflow
 

@@ -14,7 +14,7 @@ Usage: bilskirnir <command>
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
   update    Pull the latest manager and downloaded desktop images, recreate the manager
-  doctor    Check Docker, memory, disk, GPU access, settings and registry reachability
+  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
   settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
@@ -96,7 +96,18 @@ case ${1:-help} in
     doctor)
         echo "systemd:   $(systemctl is-system-running 2>/dev/null || true)"
         echo "docker:    $(systemctl is-active docker 2>/dev/null || true)"
-        if docker info --format 'engine {{.ServerVersion}}, runtimes: {{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null; then :; else echo "docker info failed"; fi
+        if docker info --format 'engine {{.ServerVersion}}, live-restore {{.LiveRestoreEnabled}}, runtimes: {{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null; then :; else echo "docker info failed"; fi
+        # WSL distributions share one network namespace, so another one can clear Docker's rules.
+        if systemctl is-enabled --quiet nftables 2>/dev/null; then
+            echo "nftables:  enabled; it flushes the firewall of every WSL distribution when it starts or stops. Run 'sudo systemctl mask nftables'."
+        fi
+        if missing=$(sudo -n /usr/lib/wsl/firewall-watch.sh --check 2>/dev/null); then
+            echo "firewall:  Docker's rules are in place ($(systemctl is-active bilskirnir-firewall 2>/dev/null || true) watcher)"
+        elif [[ -n $missing ]]; then
+            echo "firewall:  no rules for $(awk '{print $1}' <<<"$missing" | paste -sd, -); another WSL distribution removed them. 'sudo systemctl restart docker' restores them."
+        else
+            echo "firewall:  not checked (needs sudo and a running Docker)"
+        fi
         # Memory and processors are set for every WSL distribution together in .wslconfig on Windows,
         # while the disk limit belongs to this distribution's virtual disk. MemTotal sits a little below
         # the configured size, so the memory check allows for that and memory=8GB passes.

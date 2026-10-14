@@ -18,16 +18,20 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update && apt-get install -y --no-install-recommends \
        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin nvidia-container-toolkit \
     && rm -rf /var/lib/apt/lists/*
-# Docker starts with systemd; the NVIDIA runtime is registered now so the first boot needs no network.
-RUN nvidia-ctk runtime configure --runtime=docker \
-    && systemctl enable docker containerd \
-    && systemctl mask systemd-firstboot.service kmod-static-nodes.service \
+# Docker starts with systemd; daemon.json, copied below, registers the NVIDIA runtime now, so the
+# first boot needs no network, and turns on live-restore, so containers keep running when Docker
+# restarts. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
+# whole ruleset when it starts (the default /etc/nftables.conf) and when it stops, which clears
+# the firewall rules of every Docker Engine on the machine, so it is masked.
+RUN systemctl enable docker containerd \
+    && systemctl mask systemd-firstboot.service kmod-static-nodes.service nftables.service \
     && userdel -r ubuntu \
     && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/bilskirnir \
     && chmod 0440 /etc/sudoers.d/bilskirnir \
-    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /usr/lib/wsl /usr/share/doc/bilskirnir
+    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /usr/lib/wsl /usr/share/doc/bilskirnir /etc/docker
 # Every COPY names its mode, since a checkout on a Windows drive makes each file 0777. --chmod also
 # applies to a directory the COPY creates, so each destination directory exists beforehand.
+COPY --chmod=0644 wsl/daemon.json /etc/docker/daemon.json
 COPY --chmod=0644 compose.ghcr.yml /opt/bilskirnir/compose.yml
 COPY --chmod=0644 .env.example /opt/bilskirnir/.env.example
 COPY --chmod=0644 deploy/Caddyfile /opt/bilskirnir/deploy/Caddyfile
@@ -35,6 +39,10 @@ COPY --chmod=0644 wsl/wsl.conf /etc/wsl.conf
 COPY --chmod=0644 wsl/wsl-distribution.conf /etc/wsl-distribution.conf
 COPY --chmod=0755 wsl/oobe.sh /usr/lib/wsl/oobe.sh
 COPY --chmod=0755 wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
+COPY --chmod=0755 wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
+COPY --chmod=0644 wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
 COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
-RUN rm -f /etc/machine-id /var/lib/dbus/machine-id
+RUN dockerd --validate --config-file /etc/docker/daemon.json \
+    && systemctl enable bilskirnir-firewall.service \
+    && rm -f /etc/machine-id /var/lib/dbus/machine-id

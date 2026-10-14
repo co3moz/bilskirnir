@@ -4,7 +4,7 @@ use crate::{
 };
 use axum::{
     Json, Router,
-    body::{Body, to_bytes},
+    body::{Body, HttpBody, to_bytes},
     extract::{Path, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
@@ -58,12 +58,22 @@ pub fn router(app: Arc<App>) -> Router<Arc<App>> {
 }
 
 async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
+    let response = match reject(&app, &req) {
+        Some(rejection) => rejection,
+        None => bound_json(next.run(req).await).await,
+    };
+    chunked(response)
+}
+
+fn reject(app: &App, req: &Request) -> Option<Response> {
     if !app.config.mcp_enabled {
-        return StatusCode::NOT_FOUND.into_response();
+        return Some(StatusCode::NOT_FOUND.into_response());
     }
     if req.headers().contains_key(header::ORIGIN) && !auth::origin_matches(req.headers()) {
-        return error::Error(StatusCode::FORBIDDEN, "MCP request origin rejected".into())
-            .into_response();
+        return Some(
+            error::Error(StatusCode::FORBIDDEN, "MCP request origin rejected".into())
+                .into_response(),
+        );
     }
     let token = req
         .headers()
@@ -76,41 +86,50 @@ async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Respo
             expected.is_empty() || !bool::from(token.as_bytes().ct_eq(expected.as_bytes()))
         })
     {
-        return (
-            StatusCode::UNAUTHORIZED,
-            [(header::WWW_AUTHENTICATE, "Bearer realm=\"Bilskirnir MCP\"")],
-            Json(json!({"error":"A valid MCP bearer token is required"})),
-        )
-            .into_response();
+        return Some(
+            (
+                StatusCode::UNAUTHORIZED,
+                [(header::WWW_AUTHENTICATE, "Bearer realm=\"Bilskirnir MCP\"")],
+                Json(json!({"error":"A valid MCP bearer token is required"})),
+            )
+                .into_response(),
+        );
     }
-    let response = next.run(req).await;
-    if response
+    None
+}
+
+/// Keeps completed JSON responses bounded. SSE responses retain their streaming transport.
+async fn bound_json(response: Response) -> Response {
+    if !response
         .headers()
         .get(header::CONTENT_TYPE)
         .is_some_and(|v| v == "application/json")
-        && !response.headers().contains_key(header::CONTENT_LENGTH)
     {
-        // Keep completed JSON responses bounded and give them a known length.
-        // SSE responses retain their streaming transport.
-        let (mut parts, body) = response.into_parts();
-        let bytes = match to_bytes(body, 8 * 1024 * 1024).await {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                return error::Error(
-                    StatusCode::BAD_GATEWAY,
-                    "MCP JSON response exceeded the 8 MiB limit".into(),
-                )
-                .into_response();
-            }
-        };
-        parts.headers.remove(header::TRANSFER_ENCODING);
-        parts
-            .headers
-            .insert(header::CONTENT_LENGTH, bytes.len().into());
-        Response::from_parts(parts, Body::from(bytes))
-    } else {
-        response
+        return response;
     }
+    let (parts, body) = response.into_parts();
+    match to_bytes(body, 8 * 1024 * 1024).await {
+        Ok(bytes) => Response::from_parts(parts, Body::from(bytes)),
+        Err(_) => error::Error(
+            StatusCode::BAD_GATEWAY,
+            "MCP JSON response exceeded the 8 MiB limit".into(),
+        )
+        .into_response(),
+    }
+}
+
+/// Sends every reply on this route without a known length, so hyper frames it chunked.
+///
+/// Norton's web protection inspects loopback HTTP whose path is `/mcp` and rewrites a reply framed
+/// by Content-Length into `Transfer-Encoding: chunked` without chunking the body, which no client
+/// can parse. A reply that is already chunked passes through its filter intact.
+fn chunked(response: Response) -> Response {
+    if response.body().size_hint().exact().is_none() {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    parts.headers.remove(header::CONTENT_LENGTH);
+    Response::from_parts(parts, Body::from_stream(body.into_data_stream()))
 }
 
 #[derive(Clone)]
