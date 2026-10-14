@@ -31,7 +31,7 @@ Clients configure HTTP headers in different ways. Add the URL and bearer header 
 
 ## Connect through stdio on Windows
 
-If your agent uses stdio, or your Windows localhost forwarder interferes with HTTP streaming, use the bridge bundled in the manager image. It connects to the same `/mcp` service from inside the container and relays MCP messages over stdin/stdout.
+If your agent uses stdio, or something on Windows interferes with HTTP on localhost (see [broken responses from localhost](#broken-responses-from-localhost-on-windows)), use the bridge bundled in the manager image. It connects to the same `/mcp` service from inside the container and relays MCP messages over stdin/stdout.
 
 For clients that use an `mcpServers` configuration:
 
@@ -49,6 +49,18 @@ For clients that use an `mcpServers` configuration:
 Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
 MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
+
+### Broken responses from localhost on Windows
+
+Some Windows security products scan HTTP traffic on localhost and rewrite responses on the way, for example the web protection in Norton. They replace the `Content-Length` header with `Transfer-Encoding: chunked` but leave the body unchunked, so clients drop the connection with errors such as `Invalid character in chunk size` (Node.js) or `Malformed encoding found in chunked-encoding` (curl). This happens to any local HTTP server, not only Bilskirnir.
+
+To confirm it, send the same request from inside the WSL distribution, where the security product does not see the traffic. The manager answers without a token with `401` and a `content-length` header:
+
+```bash
+curl -si -X POST http://127.0.0.1:8080/mcp
+```
+
+If that response is correct but the same request from Windows shows `transfer-encoding: chunked`, exclude `localhost` or the manager's port from the product's web or HTTP scanning. Alternatively, use the stdio bridge above: it reaches the manager without the Windows loopback connection.
 
 ## A useful first workflow
 
