@@ -21,6 +21,9 @@ pub struct Config {
     pub wsl_gpu: bool,
     pub cuda: bool,
     pub adapter: String,
+    /// Whether desktops may create user namespaces, which is how Chromium-based browsers and
+    /// Electron applications sandbox their processes. See [`Config::seccomp_profile`].
+    pub user_namespaces: bool,
     pub allowed_hosts: Vec<String>,
     pub upload_limit: u64,
     /// The largest unpacked image archive an import accepts, in bytes.
@@ -106,6 +109,7 @@ impl Config {
             wsl_gpu: flag("WSL_GPU", true)?,
             cuda: flag("NVIDIA_COMPUTE", true)?,
             adapter: env::var("GPU_ADAPTER").unwrap_or_default(),
+            user_namespaces: flag("DESKTOP_USER_NAMESPACES", true)?,
             allowed_hosts: env::var("ALLOWED_HOSTS")
                 .unwrap_or_default()
                 .split(',')
@@ -118,10 +122,31 @@ impl Config {
             mcp_token,
         };
         super::model::image_ref(&cfg.base_image)?;
+        if let Some(profile) = cfg.seccomp_profile()
+            && !profile.is_file()
+        {
+            bail!(
+                "{} is missing; restore it or set DESKTOP_USER_NAMESPACES=false to give desktops Docker's default seccomp profile",
+                profile.display()
+            );
+        }
         if cfg.auth && (cfg.username.trim().is_empty() || cfg.username.len() > 256) {
             bail!("ADMIN_USERNAME must not be empty and must be at most 256 bytes");
         }
         Ok(cfg)
+    }
+
+    /// The seccomp profile desktops are created with, or `None` for Docker's default.
+    ///
+    /// Docker's default profile refuses `clone` and `unshare` with namespace flags to a container
+    /// without `CAP_SYS_ADMIN`. Chrome and Electron applications then cannot start their sandbox
+    /// and abort unless they get `--no-sandbox`, which the desktop's menu entries and default web
+    /// browser never pass. `desktop/seccomp.json` is Docker's default with one rule added
+    /// that allows both calls; everything that needs `CAP_SYS_ADMIN`, such as `mount` and
+    /// `setns`, stays refused. The manager image bundles it with the desktop build context.
+    pub(crate) fn seccomp_profile(&self) -> Option<PathBuf> {
+        self.user_namespaces
+            .then(|| self.desktop_context.join("seccomp.json"))
     }
 }
 

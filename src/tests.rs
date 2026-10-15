@@ -25,6 +25,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             wsl_gpu: true,
             cuda: true,
             adapter: String::new(),
+            user_namespaces: true,
             allowed_hosts: vec![],
             upload_limit: 1024 * 1024,
             archive_limit: 4 * 1024 * 1024,
@@ -1701,7 +1702,10 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     };
     let joined = |env: &model::Environment| app.container_args(env).join(" ");
     let args = joined(&env);
+    let profile = std::path::Path::new("desktop").join("seccomp.json");
+    let seccomp = format!("--security-opt seccomp={}", profile.display());
     for flag in [
+        seccomp.as_str(),
         "--name wsld-args-id",
         "--shm-size 1024m",
         "--env DESKTOP_RESOLUTION=1280x720",
@@ -1724,4 +1728,57 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     });
     assert!(joined(&env).ends_with(" sha256:working"));
     assert_eq!(env.source_image_id, "sha256:source");
+}
+#[test]
+fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_place() {
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.user_namespaces = false;
+    let env = model::Environment {
+        id: "plain-id".into(),
+        container: "wsld-plain-id".into(),
+        private_network: "wsld-plain-id-private".into(),
+        egress_network: "wsld-plain-id-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+    };
+    assert_eq!(app.config.seccomp_profile(), None);
+    let args = app.container_args(&env);
+    assert!(!args.iter().any(|arg| arg == "--security-opt"), "{args:?}");
+}
+#[test]
+fn the_desktop_seccomp_profile_adds_only_user_namespaces_to_dockers_default() {
+    let profile: serde_json::Value =
+        serde_json::from_str(include_str!("../desktop/seccomp.json")).unwrap();
+    assert_eq!(profile["defaultAction"], "SCMP_ACT_ERRNO");
+    let rules = profile["syscalls"].as_array().unwrap();
+    let unconditional = |name: &str| {
+        rules.iter().any(|rule| {
+            rule["action"] == "SCMP_ACT_ALLOW"
+                && rule["names"].as_array().unwrap().iter().any(|n| n == name)
+                && rule.get("args").is_none()
+                && rule.get("includes").is_none()
+        })
+    };
+    // A sandbox starts by cloning or unsharing into a new user namespace.
+    assert!(unconditional("clone") && unconditional("unshare"));
+    // Calls Docker reserves for CAP_SYS_ADMIN stay refused, so a process in its own namespace
+    // still cannot mount file systems or join another process's namespaces.
+    for name in ["mount", "umount2", "fsopen", "open_tree", "setns", "bpf"] {
+        assert!(
+            !unconditional(name),
+            "{name} is allowed without CAP_SYS_ADMIN"
+        );
+    }
+    // glibc falls back from clone3 to clone only when clone3 reports ENOSYS.
+    assert!(
+        rules
+            .iter()
+            .any(|rule| rule["names"] == serde_json::json!(["clone3"])
+                && rule["errnoRet"] == 38
+                && rule["excludes"]["caps"] == serde_json::json!(["CAP_SYS_ADMIN"]))
+    );
 }
