@@ -239,7 +239,23 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 60);
+    assert_eq!(tools.len(), 62);
+    // Template values reach a new desktop through create_environment; the schema forbids
+    // properties it does not list, so a missing one is a value no agent can send.
+    let create = tools
+        .iter()
+        .find(|t| t["name"] == "create_environment")
+        .unwrap();
+    assert!(create["inputSchema"]["properties"]["parameters"].is_object());
+    let template = tools
+        .iter()
+        .find(|t| t["name"] == "set_image_template")
+        .unwrap();
+    assert_eq!(template["annotations"]["destructiveHint"], true);
+    assert_eq!(
+        template["inputSchema"]["properties"]["template"]["anyOf"][0]["required"],
+        serde_json::json!(["script"])
+    );
     let delete = tools
         .iter()
         .find(|t| t["name"] == "delete_environment")
@@ -479,6 +495,7 @@ async fn single_environment_api_returns_the_same_state_as_the_list() {
         last_error: None,
         desktop: None,
         working_image: None,
+        setup: None,
     };
     app.db.put("environment", &env.id, &env).unwrap();
     let response = router(app)
@@ -998,6 +1015,7 @@ fn database_round_trip_keeps_snapshot_parent() {
         description: String::new(),
         desktop: None,
         build: None,
+        template: None,
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(
@@ -1290,7 +1308,7 @@ async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
     let mut spec = spec();
     spec.gpu = true;
     let error = app
-        .create_environment("gpu-test", spec, "gpu-job")
+        .create_environment("gpu-test", spec, Default::default(), "gpu-job")
         .await
         .unwrap_err();
     assert!(error.to_string().contains("GPU"), "{error}");
@@ -1613,6 +1631,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
         last_error: None,
         desktop: None,
         working_image: None,
+        setup: None,
     };
     app.db.put("environment", &env.id, &env).unwrap();
     let post = |id: &str, body: serde_json::Value| {
@@ -1699,6 +1718,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         last_error: None,
         desktop: None,
         working_image: None,
+        setup: None,
     };
     let joined = |env: &model::Environment| app.container_args(env).join(" ");
     let args = joined(&env);
@@ -1744,6 +1764,7 @@ fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_pla
         last_error: None,
         desktop: None,
         working_image: None,
+        setup: None,
     };
     assert_eq!(app.config.seccomp_profile(), None);
     let args = app.container_args(&env);

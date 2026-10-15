@@ -3,17 +3,24 @@ import assert from "node:assert/strict"
 
 import {
   downloadProgress,
+  environmentStatus,
   imageChoices,
   imageTree,
   jobActivity,
   jobLogText,
   jobProgress,
   jobTarget,
+  needsAttention,
   restartNotice,
   subfolderError,
   uploadLocations,
 } from "../web/src/lib/format"
-import type { JobStatus, ProfileItem } from "../web/src/lib/types"
+import type {
+  EnvironmentItem,
+  EnvironmentSetup,
+  JobStatus,
+  ProfileItem,
+} from "../web/src/lib/types"
 
 test("completed legacy deletion explains the result rather than waiting or displaying an ID", () => {
   const log = jobLogText({
@@ -259,4 +266,32 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
     downloadProgress({ current: 0, total: 0, layers: 0, layers_done: 0 })
   )
   assert.equal(jobProgress(null), null)
+})
+
+test("a running desktop shows its template setup until the setup completes", () => {
+  const item = (status?: EnvironmentSetup["status"], last_error?: string): EnvironmentItem => ({
+    environment: {
+      id: "e",
+      container: "wsld-e",
+      source_image_id: "sha256:a",
+      created_at: 0,
+      spec: {} as EnvironmentItem["environment"]["spec"],
+      last_error,
+      setup: status ? { status, image: "i", parameters: {}, secrets: [] } : null,
+    },
+    state: "running",
+    health: "healthy",
+    status: "Up",
+  })
+  assert.equal(environmentStatus(item()).key, "running")
+  assert.equal(environmentStatus(item("pending")).key, "setting_up")
+  assert.equal(environmentStatus(item("running")).key, "setting_up")
+  assert.equal(environmentStatus(item("completed")).key, "running")
+  assert.equal(environmentStatus(item("failed", "The template setup failed")).key, "setup_failed")
+  // A setup that never started because recreating the container failed is not in progress.
+  assert.equal(environmentStatus(item("pending", "Docker: no such image")).key, "setup_failed")
+  assert.equal(needsAttention(item("failed")), true)
+  assert.equal(needsAttention(item("completed")), false)
+  // Until the desktop answers its health check, it is starting, whatever the setup says.
+  assert.equal(environmentStatus({ ...item("pending"), health: "starting" }).key, "created")
 })

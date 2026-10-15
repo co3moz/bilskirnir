@@ -12,6 +12,33 @@ use std::sync::Arc;
 // end-of-file instead of consuming the rest of the script, and large scripts avoid argument limits.
 const WRAPPER: &str = "script=$(mktemp /tmp/bilskirnir-exec.XXXXXX) && cat >\"$script\" && exec 3<\"$script\" && rm -f -- \"$script\" && exec bash -e /dev/fd/3 </dev/null";
 
+/// `docker exec` arguments up to the container, for a script that reads its input from the
+/// manager and runs in the desktop session's environment.
+pub(crate) fn desktop_exec(user: &str, root: bool) -> Vec<String> {
+    [
+        "exec",
+        "--interactive",
+        "--user",
+        user,
+        "--workdir",
+        "/home/desktop",
+        "--env",
+        if root {
+            "HOME=/root"
+        } else {
+            "HOME=/home/desktop"
+        },
+        "--env",
+        "DISPLAY=:0",
+        "--env",
+        "PULSE_SERVER=unix:/run/desktop/pulse/native",
+        "--env",
+        "XDG_RUNTIME_DIR=/run/desktop",
+    ]
+    .map(str::to_owned)
+    .to_vec()
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Execute {
@@ -63,21 +90,8 @@ pub async fn execute(
                     env.spec.name, user, body.timeout_seconds
                 ),
             )?;
-            let args = vec![
-                "exec".into(),
-                "--interactive".into(),
-                "--user".into(),
-                user.into(),
-                "--workdir".into(),
-                "/home/desktop".into(),
-                "--env".into(),
-                format!("HOME={}", if body.root { "/root" } else { "/home/desktop" }),
-                "--env".into(),
-                "DISPLAY=:0".into(),
-                "--env".into(),
-                "PULSE_SERVER=unix:/run/desktop/pulse/native".into(),
-                "--env".into(),
-                "XDG_RUNTIME_DIR=/run/desktop".into(),
+            let mut args = desktop_exec(user, body.root);
+            args.extend([
                 info["Id"].as_str().context("Missing container ID")?.into(),
                 "timeout".into(),
                 "--signal=TERM".into(),
@@ -86,7 +100,7 @@ pub async fn execute(
                 "bash".into(),
                 "-c".into(),
                 WRAPPER.into(),
-            ];
+            ]);
             app.docker_logged_input(&job_id, &args, Some(body.script.into_bytes()))
                 .await?;
             app.append_log(&job_id, "Script completed successfully.")?;

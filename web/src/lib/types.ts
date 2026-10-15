@@ -28,6 +28,36 @@ export type Environment = {
   spec: EnvironmentSpec
   last_error?: string | null
   desktop?: DesktopInfo | null
+  /** Set when the image had a template: its setup's progress and the values it was given. */
+  setup?: EnvironmentSetup | null
+}
+
+/** A template parameter: an environment variable of the setup script. */
+export type TemplateParameter = {
+  name: string
+  label: string
+  required: boolean
+  secret: boolean
+  default: string
+}
+
+/** What a new environment from an image asks for, and the script that receives it. */
+export type Template = {
+  parameters: TemplateParameter[]
+  script: string
+  root: boolean
+  timeout_seconds: number
+}
+
+export type EnvironmentSetup = {
+  status: "pending" | "running" | "completed" | "failed"
+  /** The image record the template came from. */
+  image: string
+  /** Values of the parameters that are not secret. */
+  parameters: Record<string, string>
+  /** Names of the secret parameters, whose values are never returned. */
+  secrets: string[]
+  finished_at?: number | null
 }
 
 export type Health = "healthy" | "unhealthy" | "starting" | "unknown"
@@ -68,6 +98,8 @@ export type ImageRecord = {
   desktop?: DesktopInfo | null
   /** Recorded by script builds; `GET images/{id}/config` adds the script. */
   build?: Omit<BuildConfig, "name" | "script"> | null
+  /** Lists leave out the setup script; `GET images/{id}/template` returns it. */
+  template?: Omit<Template, "script"> | null
   /** `null` when Docker could not list images. */
   available?: boolean | null
 }
@@ -78,6 +110,7 @@ export type BuildConfig = {
   base_image: string
   internet: boolean
   script: string
+  template?: Template
 }
 
 /** One line of `docker volume ls --format json`. */

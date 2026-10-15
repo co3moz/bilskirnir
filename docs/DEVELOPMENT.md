@@ -28,6 +28,7 @@ When a supplied profile image is missing, its card under **Images** offers **Dow
 | Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
 | Profile downloads and their progress | `src/pulls.rs` |
 | Settings changes after creation | `src/reconfigure.rs` |
+| Image templates and their setup runs | `src/templates.rs`, `src/setup_runner.py`, `tests/test_setup_runner.py`, `web/src/lib/templates.ts`, `web/src/components/dialogs/template-dialog.tsx` |
 | Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |

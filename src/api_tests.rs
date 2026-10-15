@@ -16,6 +16,7 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
         description: String::new(),
         desktop: None,
         build,
+        template: None,
     }
 }
 
@@ -39,6 +40,7 @@ async fn configuration_is_the_request_that_built_the_image() {
         base_image: unity_tools().base_image,
         internet: false,
         script: unity_tools().script,
+        template: None,
     };
     assert_eq!(config, expected);
     // What the interface copies is a body the build route accepts as it is.
@@ -82,4 +84,46 @@ async fn image_list_leaves_out_build_scripts() {
     );
     let older = listed.iter().find(|image| image["id"] == "b").unwrap();
     assert!(older.get("build").is_none());
+}
+
+#[test]
+fn a_create_request_carries_template_values_beside_the_settings() {
+    let body = serde_json::from_value::<CreateEnvironment>(json!({
+        "name": "Unity", "image": "sha256:a", "gpu": true,
+        "parameters": {"UNITY_EMAIL": "dev@example.com"}
+    }))
+    .unwrap();
+    assert!(body.spec.gpu && body.spec.internet && body.spec.shm_mb == 512);
+    assert_eq!(body.parameters["UNITY_EMAIL"], "dev@example.com");
+    // Requests from before templates, the MCP tool's included, still parse.
+    let plain = serde_json::from_value::<CreateEnvironment>(
+        json!({"name": "Plain", "image": "sha256:a", "cpus": 1.5}),
+    )
+    .unwrap();
+    assert!(plain.parameters.is_empty() && plain.spec.cpus == Some(1.5));
+    assert!(
+        serde_json::from_value::<CreateEnvironment>(
+            json!({"name": "Bad", "image": "sha256:a", "parameters": {"A": 1}})
+        )
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn a_create_request_missing_a_required_value_is_refused_before_a_job() {
+    let app = crate::tests::app(false);
+    let mut image = record("unity", "snapshot", None);
+    image.template = Some(
+        serde_json::from_value(json!({
+            "parameters": [{"name": "UNITY_EMAIL", "required": true}],
+            "script": "true"
+        }))
+        .unwrap(),
+    );
+    app.db.put("image", "unity", &image).unwrap();
+    let request =
+        serde_json::from_value(json!({"name": "Unity", "image": "sha256:unity"})).unwrap();
+    let refused = create(State(app.clone()), Json(request)).await.unwrap_err();
+    assert!(refused.1.contains("UNITY_EMAIL"), "{}", refused.1);
+    assert!(app.db.list::<Job>("job").unwrap().is_empty());
 }

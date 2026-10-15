@@ -126,6 +126,7 @@ async fn a_failed_export_breaks_the_download_and_fails_its_job() {
         description: String::new(),
         desktop: None,
         build: None,
+        template: None,
     };
     app.db.put("image", &record.id, &record).unwrap();
     let response = crate::router(app.clone())
@@ -247,6 +248,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         description: String::new(),
         desktop: None,
         build: Some(build.clone()),
+        template: None,
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -258,4 +260,44 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
     let refused = serde_json::to_vec(&refused).unwrap();
     let info = ArchiveInfo::read(Some(&refused)).unwrap();
     assert!(info.build.is_none() && info.name == "Tools");
+}
+
+#[test]
+fn a_template_travels_with_the_archive_and_an_invalid_one_is_dropped() {
+    let template = Template {
+        parameters: vec![crate::templates::Parameter {
+            name: "UNITY_EMAIL".into(),
+            label: "Unity email".into(),
+            required: true,
+            secret: false,
+            default: String::new(),
+        }],
+        script: "printf '%s' \"$UNITY_EMAIL\" > ~/unity-email\n".into(),
+        root: false,
+        timeout_seconds: 600,
+    };
+    let record = ImageRecord {
+        id: "snap".into(),
+        name: "Unity project".into(),
+        image_id: format!("sha256:{}", "e".repeat(64)),
+        reference: "bilskirnir/snapshot:snap".into(),
+        parent_image_id: None,
+        source_environment: None,
+        kind: "snapshot".into(),
+        created_at: 1,
+        description: String::new(),
+        desktop: None,
+        build: None,
+        template: Some(template.clone()),
+    };
+    let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
+    assert_eq!(
+        ArchiveInfo::read(Some(&written)).unwrap().template,
+        Some(template)
+    );
+    // A template the template route would refuse is not kept, but the rest of the metadata is.
+    let mut refused: Value = serde_json::from_slice(&written).unwrap();
+    refused["template"]["parameters"][0]["name"] = json!("PATH");
+    let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
+    assert!(info.template.is_none() && info.name == "Unity project");
 }

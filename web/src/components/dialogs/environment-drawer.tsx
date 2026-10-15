@@ -2,6 +2,7 @@ import {
   RiCameraLine,
   RiStopCircleLine,
   RiFileTextLine,
+  RiResetLeftLine,
   RiRestartLine,
   RiSettings3Line,
   RiStethoscopeLine,
@@ -22,10 +23,12 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Separator } from "@/components/ui/separator"
-import { attempt, environmentAction, showLog } from "@/lib/actions"
+import { attempt, environmentAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { date, environmentStatus, profileTitle } from "@/lib/format"
 import { useEnvironments, useProfiles } from "@/lib/queries"
+import { setupLabel } from "@/lib/templates"
+import type { EnvironmentSetup } from "@/lib/types"
 import { SideDrawer, type DialogProps } from "./side-drawer"
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -38,6 +41,13 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 const yes = (value: boolean) => (value ? "On" : "Off")
+
+const setupTone = {
+  pending: "warning",
+  running: "info",
+  completed: "success",
+  failed: "danger",
+} as const satisfies Record<EnvironmentSetup["status"], string>
 
 /** dashboard-01's row viewer for one environment: preview, configuration and every action. */
 export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }) {
@@ -56,6 +66,10 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
   const { spec } = environment
   const running = item.state === "running"
   const status = environmentStatus(item)
+  const { setup } = environment
+  // A setup still waiting after an error did not get to run, which reads as a failure.
+  const setupStatus =
+    setup?.status === "pending" && environment.last_error ? "failed" : setup?.status
 
   return (
     <SideDrawer {...props}>
@@ -163,6 +177,45 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             Mounted volumes are excluded from snapshots.
           </p>
         </div>
+        {setup && setupStatus && (
+          <>
+            <Separator />
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-xs text-muted-foreground">Template setup</h3>
+                <StatusBadge
+                  state={setupStatus}
+                  tone={setupTone[setupStatus]}
+                  label={setupLabel({ status: setupStatus })}
+                />
+              </div>
+              {Object.keys(setup.parameters).length + setup.secrets.length > 0 && (
+                <dl className="grid grid-cols-2 gap-4">
+                  {Object.entries(setup.parameters).map(([name, value]) => (
+                    <Fact key={name} label={name}>
+                      {value || <span className="text-muted-foreground">Empty</span>}
+                    </Fact>
+                  ))}
+                  {setup.secrets.map((name) => (
+                    <Fact key={name} label={name}>
+                      <span className="text-muted-foreground">Secret</span>
+                    </Fact>
+                  ))}
+                </dl>
+              )}
+              {running && setupStatus === "failed" && (
+                <Button
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => attempt(() => retrySetup(id))}
+                >
+                  <RiResetLeftLine data-icon="inline-start" />
+                  Retry setup
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <DrawerFooter>
         <PrimaryAction item={item} />

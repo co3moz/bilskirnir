@@ -254,7 +254,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 60
+    assert len(mcp("tools/list")["tools"]) == 62
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -328,11 +328,37 @@ try:
     assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
     assert "script" not in next(image for image in api("images") if image["id"] == built["id"])["build"]
     print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
-    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}]}
-    env_id = job(api("environments", spec))["environment_id"]
+    # A template asks for values when a desktop is created and hands them to its setup script.
+    template = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True}, {"name": "TOKEN", "required": True, "secret": True}, {"name": "FLAVOR", "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/template-setup\necho \"token is $TOKEN\"\n"}
+    for invalid in [{**template, "parameters": [{"name": "PATH"}]}, {**template, "parameters": [{"name": "TOKEN", "secret": True, "default": "kept"}]}]:
+        try:
+            api(f"images/{built['id']}/template", invalid, method="PUT"); raise AssertionError(f"invalid template accepted: {invalid['parameters']}")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
+    templated = api(f"images/{built['id']}/template", template, method="PUT")
+    assert "script" not in templated["template"] and [p["name"] for p in templated["template"]["parameters"]] == ["GREETING", "TOKEN", "FLAVOR"]
+    assert api(f"images/{built['id']}/template")["script"] == template["script"]
+    assert api(f"images/{built['id']}/config")["template"]["script"] == template["script"]
+    for values in [{}, {"GREETING": "hello", "TOKEN": "x", "UNKNOWN": "y"}]:
+        try:
+            api("environments", {"name": "missing-values", "image": built["image_id"], "parameters": values}); raise AssertionError(f"template values accepted: {values}")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
+    secret = f"s3cret-{tag}"
+    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}], "parameters": {"GREETING": "hello", "TOKEN": secret}}
+    created = api("environments", spec)
+    env_id = job(created)["environment_id"]
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
     ready(container)
+    # The job ended after the script ran as the desktop user; the secret reached only the script.
+    assert docker("exec", container, "cat", "/home/desktop/template-setup") == f"hello|{secret}|vanilla|1001".encode()
+    created_log = api(f"jobs/{created['job_id']}")["log"]
+    assert "token is ***" in created_log and secret not in created_log, created_log
+    described = api(f"environments/{env_id}")
+    assert secret not in json.dumps(described) and secret not in json.dumps(api("environments"))
+    assert described["environment"]["setup"] | {"finished_at": None} == {"status": "completed", "image": built["id"], "parameters": {"FLAVOR": "vanilla", "GREETING": "hello"}, "secrets": ["TOKEN"], "finished_at": None}, described
+    print("PASS image template asks for values, runs its setup as the desktop user and never returns a secret", flush=True)
     # Browser and Electron sandboxes start in a new user namespace. The desktop's seccomp profile
     # allows that and nothing else Docker reserves for CAP_SYS_ADMIN, such as mount(2).
     assert docker("exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "true") == b""
@@ -659,12 +685,15 @@ try:
     base_layers = json.loads(docker("image", "inspect", built["image_id"]))[0]["RootFS"]["Layers"]
     snap_layers = json.loads(docker("image", "inspect", snap["image_id"]))[0]["RootFS"]["Layers"]
     assert snap_layers[:len(base_layers)] == base_layers and len(snap_layers) > len(base_layers)
-    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}]})
+    # The snapshot keeps the template its environment ran, so a desktop from it asks again.
+    assert [p["name"] for p in snap["template"]["parameters"]] == ["GREETING", "TOKEN", "FLAVOR"] and "script" not in snap["template"]
+    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}], "parameters": {"GREETING": "again", "TOKEN": "other", "FLAVOR": ""}})
     clone_id = job(api("environments", spec))["environment_id"]
     environment_ids.append(clone_id)
     clone = f"wsld-{clone_id}"
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
+    assert docker("exec", clone, "cat", "/home/desktop/template-setup") == b"again|other||1001"
     assert subprocess.run(["docker", "exec", clone, "test", "-e", "/shared/volume-marker"]).returncode != 0
     print("PASS layered snapshot, immutable ancestry and independent volume clone", flush=True)
     # The snapshot leaves as a gzip-compressed docker save stream and comes back under a new name.
@@ -698,6 +727,7 @@ try:
     job({"job_id": built_export})
     moved = job(import_archive(built_archive))
     assert moved["build"] == built["build"] and moved["image_id"] == built["image_id"], moved
+    assert moved["template"] == templated["template"], moved
     assert api(f"images/{moved['id']}/config") == api(f"images/{built['id']}/config")
     # Names inside an archive never reach Docker: an existing tag keeps pointing at its image. The
     # target is this run's own copy of the profile tag, so a regression cannot break the profile.
@@ -752,6 +782,9 @@ try:
     api("volumes",{"name":clone_share})
     job(api(f"environments/{clone_id}/retry",{}));ready(clone)
     assert docker("exec",clone,"cat","/home/desktop/snapshot-marker") == b"snapshot-home"
+    # The recreated container starts from the source image, so the template setup ran again.
+    assert docker("exec",clone,"cat","/home/desktop/template-setup") == b"again|other||1001"
+    assert api(f"environments/{clone_id}")["environment"]["setup"]["status"] == "completed"
     print("PASS missing container retry reuses environment identity and immutable image",flush=True)
     # One malformed environment must not prevent other desktops from reconnecting after restart.
     corrupt_network=f"wsld-{clone_id}-egress"
@@ -865,6 +898,14 @@ try:
     mcp_job(tool("delete_environment", {"environment_id":clone}))
     environment_ids.remove(clone)
     print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
+    # Agents read and change templates; the list shows the parameters without the script.
+    assert tool("get_image_template", {"image_id": built["id"]})["structuredContent"]["script"] == template["script"]
+    listed = next(image for image in tool("list_images")["structuredContent"]["items"] if image["id"] == built["id"])
+    assert listed["template"]["parameters"] == templated["template"]["parameters"] and "script" not in listed["template"]
+    tool("set_image_template", {"image_id": moved["id"], "template": {"script": "true"}})
+    assert api(f"images/{moved['id']}/template") == {"parameters": [], "script": "true", "root": False, "timeout_seconds": 600}
+    assert "template" not in tool("set_image_template", {"image_id": moved["id"], "template": None})["structuredContent"]
+    print("PASS MCP template read, replace and removal", flush=True)
     # Settings change after creation: the name and new limits apply to the running container, while
     # audio and removing a limit need a new container that keeps the old one's files.
     edit = job(api("environments", {"name": "Settings edit", "image": xfce["profile"]["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["environment_id"]

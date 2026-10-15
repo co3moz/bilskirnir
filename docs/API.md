@@ -35,10 +35,10 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; returns a job. |
 | POST | `/api/profiles/{profile_id}/build` | Build a supplied profile; returns a job. |
 | GET | `/api/environments` | Managed environments, state and health. |
-| POST | `/api/environments` | Create an environment; returns a job. |
+| POST | `/api/environments` | Create an environment, with values for its image's [template](#image-templates) in `parameters`; returns a job. |
 | GET | `/api/environments/{id}` | One environment's configuration, state and health. |
 | POST | `/api/environments/{id}/action` | Start, stop or restart; returns a job. |
-| POST | `/api/environments/{id}/retry` | Retry partial setup; returns a job. |
+| POST | `/api/environments/{id}/retry` | Retry partial setup or a template setup that did not finish; returns a job. |
 | POST | `/api/environments/{id}/internet` | Set internet egress; returns a job. |
 | POST | `/api/environments/{id}/settings` | Change settings after creation; `dry_run` reports what restarts the desktop. Returns a job. |
 | DELETE | `/api/environments/{id}` | Delete the container and networks; returns a job. |
@@ -82,10 +82,11 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/environments/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/environments/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/environments/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`. |
+| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a template its parameters without the script. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
-| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet`; returns a job. |
-| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
+| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet` and `template`; returns a job. |
+| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `template` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
+| GET, PUT, DELETE | `/api/images/{id}/template` | Read, set or remove an image's [template](#image-templates). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes. |
@@ -129,6 +130,7 @@ Creation accepts `name`, `image` and these optional fields:
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. |
+| `parameters` | `{}` | Values for the [template](#image-templates) parameters of the image, by name. |
 
 ## Change settings after creation
 
@@ -157,6 +159,40 @@ POST to `/api/environments/{id}/exec`:
 ```
 
 The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1–3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the environment's network and resource limits apply. The script holds the environment's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
+
+## Image templates
+
+A saved image can carry a template: parameters that a new environment from it asks for, and a setup script that receives them. `PUT /api/images/{id}/template` sets or replaces it, `GET` returns it with its script and `DELETE` removes it; `id` is the record's `id`. Image lists and job results show the template without its script.
+
+```json
+{
+  "parameters": [
+    {"name": "UNITY_EMAIL", "label": "Unity email", "required": true},
+    {"name": "UNITY_PASSWORD", "label": "Unity password", "required": true, "secret": true},
+    {"name": "PROJECT_BRANCH", "label": "Branch", "default": "main"}
+  ],
+  "script": "set -eu\ngit -C ~/project checkout \"$PROJECT_BRANCH\"\n",
+  "root": false,
+  "timeout_seconds": 600
+}
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `required`, `secret` and `default`. |
+| `script` | Required | Bash script of at most 1,000,000 bytes, run with fail-on-error and standard input closed. |
+| `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
+| `timeout_seconds` | `600` | From 1 to 3500 seconds. |
+
+A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the template.
+
+`POST /api/environments` takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. A value that is left out uses the default. Every parameter reaches the script, an optional one without a value as an empty string, so `set -u` does not trip on it. An unknown name or a missing required value fails the request. The creation job waits until the desktop reports ready, for at most five minutes, then runs the script in the desktop session's environment (`HOME`, `DISPLAY`, `XDG_RUNTIME_DIR`) and completes only when the script succeeds.
+
+The environment pins the template and the values, so editing the image later does not change what it runs. Its `setup` field reports `status` (`pending`, `running`, `completed` or `failed`), the `image` record the template came from, the values of ordinary `parameters` and the names of the `secrets`. Secret values are never returned, and the setup job's log shows `***` in their place. The manager keeps them in its database until the environment is deleted, so that the setup can run again: after a reset, and when retry recreates a missing container from the source image. A settings change keeps the container's files and does not run it. A script that fails leaves the desktop running with `last_error` set; retry runs it again.
+
+A snapshot keeps the template its environment was created with, so a desktop created from the snapshot asks for the values again. Write the script so it also works on a desktop where it already ran. The build configuration and an image archive carry the template too.
+
+The job stops reading the script's output a second after the script exits. A program the script leaves running fails if it writes to that output later, so start long-running programs with the [applications API](#applications-and-windows), or redirect their output.
 
 ## Files
 

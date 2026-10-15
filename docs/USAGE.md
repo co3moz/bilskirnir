@@ -89,6 +89,32 @@ The image tree follows Docker ancestry. A snapshot is based on the image that or
 
 An image that declares a Docker `VOLUME` needs an explicit named-volume mount for that path when you create an environment. This makes it clear which files will be excluded from snapshots.
 
+## Ask for values when a desktop is created
+
+A template makes an image ask for a few values each time a desktop is created from it, such as the account to sign in with, and runs a short setup script with them before the desktop is yours. Under **Images**, select **Edit template**, the template button on the row of a snapshot, script build or imported image. Add a parameter for each value:
+
+- **Name** is the environment variable the script reads, such as `UNITY_EMAIL`.
+- **Label** is what **New environment** asks for.
+- **Secret** makes it a password field. Its value is masked in job logs, never shown again and cannot have a default.
+- **Required** values must be filled in, and a **Default** fills in the field.
+
+For example, an image with Unity Hub and an editor installed could ask for a Unity account and a serial number, and activate the license with them:
+
+```bash
+set -eu
+editor=$(ls -d ~/Unity/Hub/Editor/*/Editor/Unity | head -n 1)
+"$editor" -batchmode -quit -nographics -logFile - \
+    -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -serial "$UNITY_SERIAL"
+```
+
+with the parameters `UNITY_EMAIL` (required), `UNITY_PASSWORD` (required, secret) and `UNITY_SERIAL` (secret). The script runs as the desktop user unless **Run as root** is on.
+
+When you choose such an image in **New environment**, its fields appear below the image. The creation job waits until the desktop is ready, runs the script and finishes when the script does; its log shows the script's output. If the script fails, the desktop keeps running so you can look at it, and **Retry setup** in its details runs the script again. A reset runs it again too, since the reset desktop starts from the image's files.
+
+The desktop keeps the template it was created with, so editing the image's template later affects only new desktops. A snapshot of the desktop keeps that template: a desktop created from the snapshot asks for the values again, so write the script so it can run where it already ran. Whatever the script writes, such as a license file, is part of the desktop's files and therefore of its snapshots.
+
+**Build image** has a **Template** tab that gives the new image a template, and **Export configuration** and image archives carry it along.
+
 ## Move an image to another installation
 
 Under **Images**, the archive button on an image's row (**Export archive**) downloads it as a `.tar.gz` file, with its name, description and desktop profile inside. A script build's configuration travels along, so **Export configuration** still works after the move. Snapshots, script builds and imported images can all be exported. The archive holds every layer of the image, the base desktop included, so expect several gigabytes. Docker prepares the whole image before the download starts to grow; **Jobs** shows the export and any error.

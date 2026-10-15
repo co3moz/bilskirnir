@@ -152,17 +152,34 @@ pub async fn environment(
     Ok(Json(item))
 }
 
+/// A new environment's settings, and values for the template parameters of its image.
+#[derive(Deserialize)]
+pub struct CreateEnvironment {
+    #[serde(flatten)]
+    pub spec: EnvironmentSpec,
+    #[serde(default)]
+    pub parameters: std::collections::BTreeMap<String, String>,
+}
 pub async fn create(
     State(app): State<Arc<App>>,
-    Json(spec): Json<EnvironmentSpec>,
+    Json(body): Json<CreateEnvironment>,
 ) -> Result<Json<Value>> {
+    let CreateEnvironment { spec, parameters } = body;
     spec.validate()?;
+    // A template found by the name the request uses is checked now; the job checks again once
+    // Docker has resolved the image.
+    let records: Vec<ImageRecord> = app.db.list("image")?;
+    if let Some(record) = crate::templates::template_image(&records, &spec.image, &spec.image)
+        && let Some(template) = &record.template
+    {
+        template.resolve(&parameters)?;
+    }
     let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
         app,
         "create",
         format!("environment:{id}"),
-        move |app, job_id| async move { app.create_environment(&id, spec, &job_id).await },
+        move |app, job_id| async move { app.create_environment(&id, spec, parameters, &job_id).await },
     )
 }
 #[derive(Deserialize)]
@@ -297,7 +314,7 @@ pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resul
         app,
         "retry",
         format!("environment:{id}"),
-        move |app, _| async move { app.retry_environment(&id).await },
+        move |app, job_id| async move { app.retry_environment(&id, &job_id).await },
     )
 }
 pub async fn reset(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
@@ -381,12 +398,14 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
             .collect::<Vec<_>>()
     )))
 }
-/// An image record as lists and job results show it. A build script can be up to a megabyte, so
-/// only the configuration route returns it.
+/// An image record as lists and job results show it. A build or setup script can be up to a
+/// megabyte, so only the configuration and template routes return them.
 pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
-    if let Some(build) = value.get_mut("build").and_then(Value::as_object_mut) {
-        build.remove("script");
+    for key in ["build", "template"] {
+        if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
+            part.remove("script");
+        }
     }
     value
 }
@@ -407,6 +426,7 @@ pub async fn image_config(
         base_image: build.base_image,
         internet: build.internet,
         script: build.script,
+        template: record.template,
     }))
 }
 #[derive(Deserialize)]
@@ -439,6 +459,7 @@ pub async fn register_image(
         description: String::new(),
         desktop: crate::profiles::from_image(&info),
         build: None,
+        template: None,
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
@@ -452,6 +473,9 @@ pub struct BuildImage {
     #[serde(default = "default_true")]
     pub internet: bool,
     pub script: String,
+    /// The template the built image gets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<crate::templates::Template>,
 }
 fn default_true() -> bool {
     true
@@ -466,6 +490,9 @@ pub async fn build(
         || body.name.chars().count() > 100
     {
         return Err(anyhow::anyhow!("Invalid image name or script").into());
+    }
+    if let Some(template) = &body.template {
+        template.validate()?;
     }
     launch(
         app,
@@ -527,6 +554,7 @@ pub async fn build(
                     internet: body.internet,
                     script,
                 }),
+                template: body.template,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))
@@ -575,6 +603,8 @@ pub async fn snapshot(
             )
             .await?;
             let info = app.inspect("image", &reference).await?;
+            // An environment from the snapshot asks for the same parameters again.
+            let template = app.pinned_template(&env_id);
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
@@ -587,9 +617,10 @@ pub async fn snapshot(
                 description: body.description,
                 desktop: crate::profiles::from_image(&info),
                 build: None,
+                template,
             };
             app.db.put("image", &id, &rec)?;
-            Ok(json!(rec))
+            Ok(image_summary(&rec))
         },
     )
 }

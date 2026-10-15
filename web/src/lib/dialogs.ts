@@ -8,6 +8,7 @@ export type Dialog =
   | { kind: "delete"; id: string }
   | { kind: "upload"; id: string; files?: File[] }
   | { kind: "build" }
+  | { kind: "template"; id: string }
   | { kind: "import" }
   | { kind: "volume" }
   | { kind: "job"; id: string }
