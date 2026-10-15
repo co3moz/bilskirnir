@@ -38,13 +38,15 @@ gpu-run /path/to/MyLinuxGame -force-glcore
 
 The Unity and game commands are launch examples, not confirmation that a particular application version works. Install your Linux application first and test its graphics requirements. Windows executables and Wine are not included.
 
-Chromium-based browsers need `gpu-run` plus flags of their own, because their GPU process picks its X visual and its OpenGL path without VirtualGL's help and runs in a sandbox that cannot reach the WSL GPU device:
+Chrome, Edge and other Chromium-based browsers, and Electron applications, keep their own sandbox. Desktops can create the user namespaces those sandboxes are built on, so these applications start from the menu, a terminal or a link another application opens in the default web browser, and `about:sandbox` reports the namespace sandbox. An installation with `DESKTOP_USER_NAMESPACES=false` keeps Docker's default seccomp profile instead: these applications then exit at startup unless they get `--no-sandbox`, and a link opened in such a default browser fails with "Failed to execute default Web Browser". A desktop created before an upgrade keeps the profile it was created with until a reset or a settings change recreates it.
+
+Chromium-based browsers need `gpu-run` plus flags of their own, because their GPU process picks its X visual and its OpenGL path without VirtualGL's help:
 
 ```bash
-gpu-run google-chrome --use-gl=angle --use-angle=gl --ignore-gpu-blocklist --disable-gpu-sandbox --no-sandbox
+gpu-run google-chrome --use-gl=angle --use-angle=gl --ignore-gpu-blocklist
 ```
 
-For command names of the Chromium family (`google-chrome`, `chromium`, `brave`, `microsoft-edge`, `vivaldi`, `opera`, `electron`), `gpu-run` sets `VGL_CHROMEHACK=1`, VirtualGL's documented workaround for the browser's visual selection; `about:gpu` then reports hardware acceleration for WebGL, WebGPU, canvas, compositing and video decode through `ANGLE (D3D12 (NVIDIA ...))`. Video encode stays in software, and Vulkan stays disabled because the image has no Vulkan driver for the WSL GPU. The flags are Chrome's own and are reported as unsupported in its warning bar; use a dedicated profile with `--user-data-dir` for testing.
+For command names of the Chromium family (`google-chrome`, `chromium`, `brave`, `microsoft-edge`, `vivaldi`, `opera`, `electron`), `gpu-run` sets `VGL_CHROMEHACK=1`, VirtualGL's documented workaround for the browser's visual selection; `about:gpu` then reports hardware acceleration for WebGL, WebGPU, canvas, compositing and video decode through `ANGLE (D3D12 (NVIDIA ...))`. Video encode stays in software, and Vulkan stays disabled because the image has no Vulkan driver for the WSL GPU. Chrome runs its GPU process outside the sandbox by itself, so the WSL GPU device stays reachable while pages stay sandboxed. Use a dedicated profile with `--user-data-dir` for testing.
 
 The workaround is not applied to other programs because it attaches the browser's 32-bit visual to every OpenGL configuration with an alpha channel, which would change the window visual of a game or Unity player that requests one. An Electron application with another name, or any program that needs it, gets it with `VGL_CHROMEHACK=1 gpu-run <command>`; `VGL_CHROMEHACK=0` turns it off for a browser.
 

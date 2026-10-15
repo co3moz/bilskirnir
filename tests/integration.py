@@ -333,6 +333,12 @@ try:
     environment_ids.append(env_id)
     container = f"wsld-{env_id}"
     ready(container)
+    # Browser and Electron sandboxes start in a new user namespace. The desktop's seccomp profile
+    # allows that and nothing else Docker reserves for CAP_SYS_ADMIN, such as mount(2).
+    assert docker("exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "true") == b""
+    mounted = subprocess.run(["docker", "exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "--mount", "--propagation", "unchanged", "mount", "-t", "tmpfs", "tmpfs", "/mnt"], capture_output=True)
+    assert mounted.returncode != 0, mounted
+    print("PASS user namespaces for browser sandboxes, mount still refused", flush=True)
     default_exec = mcp_job(stdio_tool("exec_environment", {"environment_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
     assert "1001" in default_exec["log"] and default_exec["result"]["user"] == "1001:1001"
     root_exec = mcp_job(tool("exec_environment", {"environment_id":env_id,"root":True,"script":"id -u\ninstall -m 644 /home/desktop/agent-marker /opt/agent-install"}))

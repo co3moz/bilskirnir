@@ -293,6 +293,13 @@ impl App {
         for (key, val) in envs {
             args.extend(["--env".into(), format!("{key}={val}")]);
         }
+        if let Some(profile) = self.config.seccomp_profile() {
+            // The CLI reads the file and sends its contents with the request.
+            args.extend([
+                "--security-opt".into(),
+                format!("seccomp={}", profile.display()),
+            ]);
+        }
         if let Some(c) = env.spec.cpus {
             args.extend(["--cpus".into(), c.to_string()]);
         }
