@@ -736,7 +736,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Returns job_id.",
+            "Build a reusable desktop image by running a root shell script on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Returns job_id; get_job lists the build's stages with their times.",
             json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"compose":compose_schema()}),
             &["name", "base_image", "script"],
             false,
@@ -781,7 +781,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result, plus progress while an image downloads. Wait for completed, failed or interrupted; a queued job is not finished.",
+            "Read a job's status, bounded log and result, plus progress while an image downloads and the stages of an image build. Wait for completed, failed or interrupted; a queued job is not finished.",
             json!({"job_id":text}),
             &["job_id"],
             true,

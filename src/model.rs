@@ -265,6 +265,9 @@ pub struct Job {
     /// Measured progress of the running step, such as an image download.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<serde_json::Value>,
+    /// The named stages of a job that reports them, such as a script build, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<crate::stages::Stage>,
 }
 impl Job {
     pub fn trim_log(&mut self) {

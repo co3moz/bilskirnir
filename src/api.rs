@@ -507,6 +507,8 @@ pub async fn build(
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         move |app, id| async move {
+            app.plan_stages(&id, &crate::stages::BUILD_STAGES)?;
+            app.begin_stage(&id, "base")?;
             app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
             if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
@@ -540,11 +542,14 @@ pub async fn build(
                 reference.clone(),
                 dir.to_string_lossy().into_owned(),
             ];
+            app.begin_stage(&id, "script")?;
             app.append_log(
                 &id,
                 "Running setup script as root. Mounted volumes are excluded from the image.",
             )?;
-            app.docker_logged(&id, &args).await?;
+            app.docker_build_logged(&id, &args).await?;
+            // Without BuildKit's markers, the layer stage is skipped rather than guessed.
+            app.begin_stage(&id, "image")?;
             let info = app.inspect("image", &reference).await?;
             let rec = ImageRecord {
                 id: id.clone(),
