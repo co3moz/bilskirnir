@@ -3,7 +3,7 @@ import { RiAddLine, RiCloseLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -162,6 +162,26 @@ export function ParameterEditor({
             </Field>
           ))}
         </div>
+      )}
+      {parameter.type === "volume" && (
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor={`${id}-path`} className={small}>
+            {t("parameter.path")}
+          </FieldLabel>
+          <Input
+            id={`${id}-path`}
+            required
+            pattern="/[^,]+"
+            title={t("parameter.pathPattern")}
+            placeholder="/opt/unity"
+            value={parameter.path}
+            onChange={(event) => set({ path: event.target.value })}
+            className="font-mono"
+          />
+          <FieldDescription className="text-xs">
+            {t("parameter.pathHint", { name: parameter.name || "UNITY_HOME" })}
+          </FieldDescription>
+        </Field>
       )}
       {options && (
         <OptionsEditor

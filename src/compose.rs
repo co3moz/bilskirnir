@@ -29,6 +29,8 @@ use std::{
 };
 
 const RUNNER: &str = include_str!("setup_runner.py");
+/// Gives the desktop user the folders of the volume parameters; runs as root.
+const PATHS: &str = include_str!("setup_paths.py");
 /// The database kind of each container's pinned compose and parameter values.
 const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
@@ -69,13 +71,37 @@ impl Compose {
             bail!("A compose has at most {PARAMETER_LIMIT} parameters");
         }
         let mut names = HashSet::new();
+        let mut paths = HashSet::new();
         for parameter in &self.parameters {
             parameter.validate()?;
             if !names.insert(parameter.name.as_str()) {
                 bail!("Parameter names must be unique: {}", parameter.name);
             }
+            if let Some(variable) = parameter.volume_variable() {
+                if !paths.insert(parameter.path.as_str()) {
+                    bail!(
+                        "Volume parameters need paths of their own: {} is used twice",
+                        parameter.path
+                    );
+                }
+                if self.parameters.iter().any(|p| p.name == variable) {
+                    bail!(
+                        "{variable} carries the volume of {}, so no parameter can have that name",
+                        parameter.name
+                    );
+                }
+            }
         }
         Ok(())
+    }
+
+    /// The volumes a container with these values mounts: each volume parameter's volume at its
+    /// path, for those given one.
+    pub fn mounts(&self, values: &BTreeMap<String, String>) -> Vec<Mount> {
+        self.parameters
+            .iter()
+            .filter_map(|p| p.mount(values.get(&p.name)?))
+            .collect()
     }
 
     /// Every parameter's value for a new container: the one given, otherwise the default.
@@ -98,6 +124,34 @@ impl Compose {
     }
 }
 
+/// Check a compose's volumes against the container's own volume settings: a path the compose
+/// mounts a volume at gets no second one, and a volume it mounts is mounted nowhere else, so
+/// one folder of the desktop does not show up under two paths.
+pub(crate) fn check_mounts(own: &[Mount], compose: &[Mount]) -> anyhow::Result<()> {
+    for (index, mount) in compose.iter().enumerate() {
+        if own.iter().any(|other| other.target == mount.target) {
+            bail!(
+                "The image's compose mounts the volume {} at {}; remove the volume setting with that path",
+                mount.volume,
+                mount.target
+            );
+        }
+        if let Some(other) = own
+            .iter()
+            .chain(&compose[..index])
+            .find(|other| other.volume == mount.volume)
+        {
+            bail!(
+                "The volume {} would be mounted at both {} and {}; choose another volume for one of them",
+                mount.volume,
+                other.target,
+                mount.target
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Where a container's compose setup stands, as its record shows it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Setup {
@@ -111,6 +165,10 @@ pub struct Setup {
     pub secrets: Vec<String>,
     #[serde(default)]
     pub finished_at: Option<u64>,
+    /// The volumes the compose's volume parameters were given, mounted beside the container's
+    /// own every time it is created.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mounts: Vec<Mount>,
 }
 
 /// The compose a container was created with and every value it was given, secret ones too.
@@ -146,7 +204,31 @@ impl Pinned {
                 .cloned()
                 .collect(),
             finished_at: None,
+            mounts: self.mounts(),
         }
+    }
+    pub fn mounts(&self) -> Vec<Mount> {
+        self.compose.mounts(&self.values)
+    }
+    /// The paths of the volume parameters, which the desktop user is given before the script
+    /// runs, whether a volume was mounted there or not.
+    pub fn paths(&self) -> Vec<&str> {
+        self.compose
+            .parameters
+            .iter()
+            .filter(|p| p.volume_variable().is_some())
+            .map(|p| p.path.as_str())
+            .collect()
+    }
+    /// The script's variables: every parameter's value, a volume parameter's as its path and
+    /// volume.
+    pub fn environment(&self) -> BTreeMap<String, String> {
+        self.compose
+            .parameters
+            .iter()
+            .filter_map(|p| Some(p.environment(self.values.get(&p.name)?)))
+            .flatten()
+            .collect()
     }
     /// The setup runner's request on stdin, which keeps values out of command lines.
     pub fn request(&self) -> Value {
@@ -159,7 +241,7 @@ impl Pinned {
             .collect::<Vec<_>>();
         json!({
             "script": self.compose.script.replace("\r\n", "\n"),
-            "parameters": self.values,
+            "parameters": self.environment(),
             "secrets": secrets,
             "timeout_seconds": self.compose.timeout_seconds,
         })
@@ -259,9 +341,24 @@ impl App {
             "Waiting for the desktop before running the compose setup.",
         )?;
         let container = self.wait_ready(env).await?;
+        let paths = pinned.paths();
+        if !paths.is_empty() {
+            self.append_log(
+                job_id,
+                &format!("Preparing {} for the desktop user.", paths.join(", ")),
+            )?;
+            let mut args: Vec<String> = ["exec", "--user", "0:0", &container, "python3", "-c"]
+                .map(str::to_owned)
+                .to_vec();
+            args.push(PATHS.into());
+            args.extend(paths.iter().map(|path| path.to_string()));
+            self.docker_logged(job_id, &args)
+                .await
+                .context("The folders of the compose's volume parameters could not be prepared")?;
+        }
         let root = pinned.compose.root;
         let user = if root { "root" } else { "1001:1001" };
-        let names = pinned.values.keys().cloned().collect::<Vec<_>>();
+        let names = pinned.environment().into_keys().collect::<Vec<_>>();
         self.append_log(
             job_id,
             &format!(

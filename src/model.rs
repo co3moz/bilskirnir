@@ -84,41 +84,9 @@ impl ContainerSpec {
         let mut targets = std::collections::HashSet::new();
         for mount in &self.mounts {
             volume_name(&mount.volume)?;
-            if !mount.target.starts_with('/')
-                || mount.target == "/"
-                || mount.target.contains([',', '\n', '\r', '\0'])
-                || mount.target[1..]
-                    .split('/')
-                    .any(|s| s.is_empty() || s == "." || s == "..")
-            {
-                bail!("Invalid volume target");
-            }
+            mount_target(&mount.target)?;
             if !targets.insert(&mount.target) {
                 bail!("Volume targets must be unique");
-            }
-            if [
-                "/proc",
-                "/sys",
-                "/dev",
-                "/run",
-                "/tmp",
-                "/usr",
-                "/etc",
-                "/bin",
-                "/sbin",
-                "/lib",
-                "/lib64",
-                "/var/run",
-                "/var/lock",
-                "/opt/VirtualGL",
-            ]
-            .iter()
-            .any(|p| mount.target == *p || mount.target.starts_with(&format!("{p}/")))
-            {
-                bail!("Volume target conflicts with desktop infrastructure");
-            }
-            if mount.target == "/opt" || mount.target == "/var" || mount.target == "/home" {
-                bail!("Volume target conflicts with desktop infrastructure");
             }
             if mount.readonly
                 && (mount.target == "/home/desktop" || mount.target.starts_with("/home/desktop/."))
@@ -138,6 +106,44 @@ pub fn image_ref(value: &str) -> Result<()> {
             .all(|b| b.is_ascii_alphanumeric() || b"/._:@-".contains(&b))
     {
         bail!("Invalid Docker image reference");
+    }
+    Ok(())
+}
+/// A path a volume can be mounted at in a desktop: absolute and normalized, and none of the
+/// system folders or the paths the manager mounts itself.
+pub fn mount_target(target: &str) -> Result<()> {
+    if !target.starts_with('/')
+        || target == "/"
+        || target.contains([',', '\n', '\r', '\0'])
+        || target[1..]
+            .split('/')
+            .any(|s| s.is_empty() || s == "." || s == "..")
+    {
+        bail!("Invalid volume target");
+    }
+    if [
+        "/proc",
+        "/sys",
+        "/dev",
+        "/run",
+        "/tmp",
+        "/usr",
+        "/etc",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+        "/var/run",
+        "/var/lock",
+        "/opt/VirtualGL",
+    ]
+    .iter()
+    .any(|p| target == *p || target.starts_with(&format!("{p}/")))
+    {
+        bail!("Volume target conflicts with desktop infrastructure");
+    }
+    if target == "/opt" || target == "/var" || target == "/home" {
+        bail!("Volume target conflicts with desktop infrastructure");
     }
     Ok(())
 }
@@ -181,6 +187,17 @@ impl Container {
         self.working_image
             .as_ref()
             .map_or(&self.source_image_id, |image| &image.image_id)
+    }
+    /// The volumes its compose's volume parameters were given, which its settings neither show
+    /// nor change.
+    pub fn compose_mounts(&self) -> &[Mount] {
+        self.setup.as_ref().map_or(&[], |setup| &setup.mounts)
+    }
+    /// Every volume the container mounts: those of its settings, then its compose's.
+    pub fn mounts(&self) -> Vec<Mount> {
+        let mut mounts = self.spec.mounts.clone();
+        mounts.extend_from_slice(self.compose_mounts());
+        mounts
     }
 }
 /// A commit that carries a container's files over to its replacement.

@@ -219,6 +219,7 @@ export const es: Messages = {
   "volumes.mountedIn": "Montado en",
   "volumes.mountedAt": "en {target}",
   "volumes.mountedAtReadOnly": "en {target} (solo lectura)",
+  "volumes.mountedByCompose": "en {target}, elegido para el compose",
   "volumes.notMounted": "Sin montar",
   "volumes.driver": "Controlador",
   "volumes.scope": "Ámbito",
@@ -247,6 +248,7 @@ export const es: Messages = {
   "compose.type.boolean": "Activado o desactivado",
   "compose.type.choice": "Una opción",
   "compose.type.choices": "Varias opciones",
+  "compose.type.volume": "Volumen",
   "compose.display.input": "Campo",
   "compose.display.multiline": "Área de texto",
   "compose.display.slider": "Control deslizante",
@@ -568,6 +570,15 @@ export const es: Messages = {
   "parameter.otherChoice": "Otro",
   "parameter.choose": "Elegir…",
   "parameter.otherEllipsis": "Otro…",
+  "parameter.path": "Ruta en el escritorio",
+  "parameter.pathPattern": "Una carpeta absoluta como /opt/unity",
+  "parameter.pathHint":
+    "El volumen elegido al crear un contenedor se monta aquí; sin volumen, la carpeta queda dentro del contenedor. El script lee esta ruta, y el nombre del volumen en {name}_VOLUME.",
+  "parameter.volume.none": "Sin volumen",
+  "parameter.volume.create": "Crear un volumen…",
+  "parameter.volume.newName": "Nombre del nuevo volumen",
+  "parameter.volume.mountedAt": "Montado en {path}.",
+  "parameter.volume.stays": "Sin volumen, {path} queda dentro del contenedor.",
   "import.archive.description":
     "Carga en Docker un archivo comprimido exportado desde Bilskirnir o guardado con docker save.",
   "import.docker.description":

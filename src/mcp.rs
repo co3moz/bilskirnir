@@ -621,7 +621,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A volume parameter takes the name of an existing named volume (list_volumes, create_volume), or an empty string for none."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -927,8 +927,8 @@ fn compose_schema() -> Value {
                 "name":{"type":"string","pattern":"^[A-Z][A-Z0-9_]{0,63}$","description":"The environment variable that carries the value to the setup script."},
                 "label":{"type":"string","maxLength":100,"default":"","description":"What the create form asks for."},
                 "description":{"type":"string","maxLength":500,"default":"","description":"Help the create form shows with the field, such as where to find the value."},
-                "type":{"type":"string","enum":["text","number","boolean","choice","choices"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line."},
-                "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes."},
+                "type":{"type":"string","enum":["text","number","boolean","choice","choices","volume"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line. A volume's value names a named volume, or is empty for none; the volume is mounted at path, the variable holds the path and NAME_VOLUME the volume."},
+                "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes; volume: select."},
                 "required":{"type":"boolean","default":false,"description":"A required boolean must be true."},
                 "secret":{"type":"boolean","default":false,"description":"Text only. Masked in job logs and never returned; cannot have a default."},
                 "default":{"type":"string","maxLength":16384,"default":"","description":"In the form the script receives it."},
@@ -936,7 +936,8 @@ fn compose_schema() -> Value {
                 "allow_custom":{"type":"boolean","default":false,"description":"choice only: also accept text that is not an option."},
                 "min":{"type":"number","description":"number only."},
                 "max":{"type":"number","description":"number only."},
-                "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."}
+                "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."},
+                "path":{"type":"string","pattern":"^/","description":"volume only, and required there: the absolute folder in the desktop where the chosen volume is mounted, such as /opt/unity. Without a volume the folder stays inside the container. Either way it is created if missing and given to the desktop user while empty, before the script runs."}
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},

@@ -35,7 +35,7 @@ export type Container = {
 }
 
 /** A compose parameter: an environment variable of the setup script. */
-export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices"
+export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices" | "volume"
 
 export type ParameterDisplay =
   "input" | "multiline" | "slider" | "toggle" | "checkbox" | "select" | "radio" | "checkboxes"
@@ -44,7 +44,8 @@ export type ParameterOption = { value: string; label: string }
 
 /**
  * A compose parameter: an environment variable of the setup script. Whatever its type, its value
- * and default are text in the form the script reads: `42`, `true`, or a choice per line.
+ * and default are text in the form the script reads: `42`, `true`, or a choice per line. A volume
+ * parameter's value names a volume, or is empty for none; the script reads its `path`.
  */
 export type ComposeParameter = {
   name: string
@@ -63,6 +64,8 @@ export type ComposeParameter = {
   min?: number | null
   max?: number | null
   step?: number | null
+  /** Volume parameters: where the volume is mounted in the desktop. */
+  path?: string
 }
 
 /** What a new container from an image asks for, and the script that receives it. */
@@ -82,6 +85,8 @@ export type ContainerSetup = {
   /** Names of the secret parameters, whose values are never returned. */
   secrets: string[]
   finished_at?: number | null
+  /** The volumes its volume parameters were given, mounted beside the settings' own. */
+  mounts?: Mount[]
 }
 
 export type Health = "healthy" | "unhealthy" | "starting" | "unknown"

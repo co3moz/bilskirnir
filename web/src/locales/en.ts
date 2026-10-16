@@ -231,6 +231,7 @@ export const en = {
   "volumes.mountedIn": "Mounted in",
   "volumes.mountedAt": "at {target}",
   "volumes.mountedAtReadOnly": "at {target} (read-only)",
+  "volumes.mountedByCompose": "at {target}, chosen for the compose",
   "volumes.notMounted": "Not mounted",
   "volumes.driver": "Driver",
   "volumes.scope": "Scope",
@@ -258,6 +259,7 @@ export const en = {
   "compose.type.boolean": "On or off",
   "compose.type.choice": "One choice",
   "compose.type.choices": "Several choices",
+  "compose.type.volume": "Volume",
   "compose.display.input": "Field",
   "compose.display.multiline": "Text area",
   "compose.display.slider": "Slider",
@@ -597,6 +599,15 @@ export const en = {
   "parameter.otherChoice": "Other",
   "parameter.choose": "Choose…",
   "parameter.otherEllipsis": "Other…",
+  "parameter.path": "Path in the desktop",
+  "parameter.pathPattern": "An absolute folder such as /opt/unity",
+  "parameter.pathHint":
+    "The volume chosen when a container is created is mounted here; without one, the folder stays inside the container. The script reads this path, and the volume's name in {name}_VOLUME.",
+  "parameter.volume.none": "No volume",
+  "parameter.volume.create": "Create new volume…",
+  "parameter.volume.newName": "New volume name",
+  "parameter.volume.mountedAt": "Mounted at {path}.",
+  "parameter.volume.stays": "Without a volume, {path} stays inside the container.",
 
   "import.archive.description":
     "Loads an archive exported from Bilskirnir, or saved with docker save, into Docker.",

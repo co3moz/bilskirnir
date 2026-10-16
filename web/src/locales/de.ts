@@ -222,6 +222,7 @@ export const de: Messages = {
   "volumes.mountedIn": "Eingehängt in",
   "volumes.mountedAt": "unter {target}",
   "volumes.mountedAtReadOnly": "unter {target} (schreibgeschützt)",
+  "volumes.mountedByCompose": "unter {target}, für die Compose-Einrichtung gewählt",
   "volumes.notMounted": "Nicht eingehängt",
   "volumes.driver": "Treiber",
   "volumes.scope": "Geltungsbereich",
@@ -249,6 +250,7 @@ export const de: Messages = {
   "compose.type.boolean": "Ein oder aus",
   "compose.type.choice": "Einfachauswahl",
   "compose.type.choices": "Mehrfachauswahl",
+  "compose.type.volume": "Volume",
   "compose.display.input": "Eingabefeld",
   "compose.display.multiline": "Textbereich",
   "compose.display.slider": "Schieberegler",
@@ -574,6 +576,15 @@ export const de: Messages = {
   "parameter.otherChoice": "Andere",
   "parameter.choose": "Auswählen…",
   "parameter.otherEllipsis": "Andere…",
+  "parameter.path": "Pfad im Desktop",
+  "parameter.pathPattern": "Ein absoluter Ordner wie /opt/unity",
+  "parameter.pathHint":
+    "Das beim Erstellen eines Containers gewählte Volume wird hier eingehängt; ohne Volume bleibt der Ordner im Container. Das Skript liest diesen Pfad und den Namen des Volumes in {name}_VOLUME.",
+  "parameter.volume.none": "Kein Volume",
+  "parameter.volume.create": "Neues Volume erstellen…",
+  "parameter.volume.newName": "Name des neuen Volumes",
+  "parameter.volume.mountedAt": "Eingehängt unter {path}.",
+  "parameter.volume.stays": "Ohne Volume bleibt {path} im Container.",
   "import.archive.description":
     "Lädt ein aus Bilskirnir exportiertes oder mit docker save gespeichertes Archiv in Docker.",
   "import.docker.description":

@@ -1,6 +1,9 @@
 //! Compose parameters: what a value of each type accepts, how the create form may show it, and
 //! the text the setup script receives for it. Every value reaches the script as a container
-//! variable, so whatever its type, a value is text here, in the form the script reads it.
+//! variable, so whatever its type, a value is text here, in the form the script reads it. A
+//! volume parameter is the one whose value is not what its variable holds: the value names a
+//! volume, and the script reads where it is mounted.
+use crate::model::{mount_target, volume_name};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -42,6 +45,9 @@ pub enum Kind {
     Choice,
     /// Any of the options, one per line.
     Choices,
+    /// A named volume mounted at the parameter's `path`, or empty for none. The script receives
+    /// the path, and the volume's name in a second variable.
+    Volume,
 }
 
 /// How the create form shows a parameter.
@@ -67,6 +73,7 @@ impl Kind {
             Kind::Boolean => &[Display::Toggle, Display::Checkbox],
             Kind::Choice => &[Display::Select, Display::Radio],
             Kind::Choices => &[Display::Checkboxes],
+            Kind::Volume => &[Display::Select],
         }
     }
 }
@@ -118,6 +125,9 @@ pub struct Parameter {
     pub max: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub step: Option<f64>,
+    /// Where a volume parameter's volume is mounted in the desktop, fixed by the compose.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -178,6 +188,15 @@ impl Parameter {
             self.check_range()?;
         } else if self.min.is_some() || self.max.is_some() || self.step.is_some() {
             bail!("Only number parameters have min, max and step: {name}");
+        }
+        if self.kind == Kind::Volume {
+            mount_target(&self.path).with_context(|| {
+                format!(
+                    "The path of {name} must be an absolute folder outside the desktop's system folders, such as /opt/unity"
+                )
+            })?;
+        } else if !self.path.is_empty() {
+            bail!("Only volume parameters have a path: {name}");
         }
         self.check(&self.default)
             .with_context(|| format!("The default of {name} is not a value it accepts"))
@@ -283,12 +302,42 @@ impl Parameter {
                     bail!("{title} takes its options one per line, each at most once");
                 }
             }
+            Kind::Volume if volume_name(value).is_err() => bail!(
+                "{title} must name a volume: 2 to 128 letters, digits, dots, dashes and underscores, starting with a letter or digit"
+            ),
+            Kind::Volume => {}
         }
         Ok(())
     }
 
     fn has_option(&self, value: &str) -> bool {
         self.options.iter().any(|option| option.value == value)
+    }
+
+    /// The second variable of a volume parameter, which holds the volume's name.
+    pub(super) fn volume_variable(&self) -> Option<String> {
+        (self.kind == Kind::Volume).then(|| format!("{}_VOLUME", self.name))
+    }
+
+    /// The variables the setup script receives for `value`: the value itself, except for a
+    /// volume parameter, whose variable holds the path and a second one the volume, if any.
+    pub(super) fn environment(&self, value: &str) -> Vec<(String, String)> {
+        match self.volume_variable() {
+            Some(volume) => vec![
+                (self.name.clone(), self.path.clone()),
+                (volume, value.into()),
+            ],
+            None => vec![(self.name.clone(), value.into())],
+        }
+    }
+
+    /// Where this parameter mounts `value`, a volume parameter given a volume.
+    pub(super) fn mount(&self, value: &str) -> Option<crate::model::Mount> {
+        (self.kind == Kind::Volume && !value.is_empty()).then(|| crate::model::Mount {
+            volume: value.into(),
+            target: self.path.clone(),
+            readonly: false,
+        })
     }
 
     /// The value a new container gives the script: the one given, otherwise the default. A
@@ -305,6 +354,7 @@ impl Parameter {
                 Kind::Choice | Kind::Choices if value.is_empty() => {
                     bail!("Choose a value for {title}")
                 }
+                Kind::Volume if value.is_empty() => bail!("Choose a volume for {title}"),
                 Kind::Text | Kind::Number if value.is_empty() => {
                     bail!("Enter a value for {title}")
                 }

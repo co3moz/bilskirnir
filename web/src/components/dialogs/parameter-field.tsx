@@ -1,8 +1,10 @@
 import * as React from "react"
 import { cn } from "cn"
+import { toast } from "sonner"
 
+import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -15,15 +17,27 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { displayOf, pickedChoices, sliderValue, toggleChoice } from "@/lib/compose"
-import { t } from "@/lib/i18n"
+import { api } from "@/lib/api"
+import {
+  displayOf,
+  newVolumeName,
+  pickedChoices,
+  sliderValue,
+  toggleChoice,
+  volumeChoices,
+  volumeNameValid,
+} from "@/lib/compose"
+import { rich, t } from "@/lib/i18n"
+import { queryClient, useVolumes } from "@/lib/queries"
 import type { ComposeParameter } from "@/lib/types"
 
-// Values never contain NUL, so these cannot collide with an option.
+// Values never contain NUL, so these cannot collide with an option or a volume.
 const NONE = "\u0000none"
 const OTHER = "\u0000other"
+const CREATE = "\u0000create"
 
 /** Displays that need the form's full width. */
 const WIDE = new Set(["multiline", "slider", "radio", "checkboxes"])
@@ -40,6 +54,7 @@ export function ParameterField({
   label,
   optional,
   hints,
+  createVolumes,
 }: {
   parameter: ComposeParameter
   value: string
@@ -49,6 +64,8 @@ export function ParameterField({
   optional?: boolean
   /** Show the description and, under a parameter that has a label, the variable name. */
   hints?: boolean
+  /** Let a volume parameter create the volume it is given. */
+  createVolumes?: boolean
 }) {
   const id = React.useId()
   const title = label ?? (parameter.label || parameter.name)
@@ -85,17 +102,134 @@ export function ParameterField({
       <FieldLabel id={`${id}-label`} htmlFor={id}>
         {title}
       </FieldLabel>
-      <Control
-        parameter={parameter}
-        value={value}
-        onChange={onChange}
-        id={id}
-        title={title}
-        required={required}
-      />
+      {parameter.type === "volume" ? (
+        <VolumeControl
+          parameter={parameter}
+          value={value}
+          onChange={onChange}
+          id={id}
+          required={required}
+          creates={createVolumes ?? false}
+        />
+      ) : (
+        <Control
+          parameter={parameter}
+          value={value}
+          onChange={onChange}
+          id={id}
+          title={title}
+          required={required}
+        />
+      )}
       {help}
       {name}
     </Field>
+  )
+}
+
+/**
+ * A named volume for the parameter's path: an existing one, one created here, or none, which
+ * leaves the path inside the container.
+ */
+function VolumeControl({
+  parameter,
+  value,
+  onChange,
+  id,
+  required,
+  creates,
+}: {
+  parameter: ComposeParameter
+  value: string
+  onChange: (value: string) => void
+  id: string
+  required: boolean
+  creates: boolean
+}) {
+  const volumes = useVolumes().data ?? []
+  const [creating, setCreating] = React.useState(false)
+  const [name, setName] = React.useState("")
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState("")
+  const path = parameter.path ?? ""
+
+  const pick = (next: string) => {
+    setError("")
+    setCreating(next === CREATE)
+    if (next === CREATE) setName(newVolumeName(parameter, volumes))
+    else onChange(next === NONE ? "" : next)
+  }
+  const create = async () => {
+    const volume = name.trim()
+    if (!volumeNameValid(volume)) {
+      setError(t("volumes.namePattern"))
+      return
+    }
+    setBusy(true)
+    setError("")
+    try {
+      await api("volumes", { name: volume })
+      await queryClient.invalidateQueries({ queryKey: ["volumes"] })
+      toast.success(t("volumes.created", { name: volume }))
+      setCreating(false)
+      onChange(volume)
+    } catch (failure) {
+      setError((failure as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const selected = creating ? CREATE : value === "" ? (required ? "" : NONE) : value
+
+  return (
+    <>
+      <Select required={required} value={selected} onValueChange={pick}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue placeholder={t("parameter.choose")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {!required && <SelectItem value={NONE}>{t("parameter.volume.none")}</SelectItem>}
+            {volumeChoices(volumes, value).map((volume) => (
+              <SelectItem key={volume} value={volume} className="font-mono">
+                {volume}
+              </SelectItem>
+            ))}
+            {creates && <SelectItem value={CREATE}>{t("parameter.volume.create")}</SelectItem>}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {creating && (
+        // Its own button, not the dialog's: Enter here creates the volume, not the container.
+        <div className="flex gap-2">
+          <Input
+            aria-label={t("parameter.volume.newName")}
+            aria-invalid={!!error}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return
+              event.preventDefault()
+              void create()
+            }}
+            className="font-mono"
+            autoFocus
+          />
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void create()}>
+            {busy && <Spinner data-icon="inline-start" />}
+            {t("common.create")}
+          </Button>
+        </div>
+      )}
+      {creating && error && <FieldError>{error}</FieldError>}
+      {path && (
+        <FieldDescription className="text-xs">
+          {rich(value && !creating ? "parameter.volume.mountedAt" : "parameter.volume.stays", {
+            path: <code className="font-mono">{path}</code>,
+          })}
+        </FieldDescription>
+      )}
+    </>
   )
 }
 

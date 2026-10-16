@@ -129,6 +129,7 @@ impl App {
         request: &Map<String, Value>,
     ) -> Result<(ContainerSpec, Changes)> {
         let spec = merged_spec(&env.spec, request)?;
+        crate::compose::check_mounts(&spec.mounts, env.compose_mounts())?;
         // Only a feature being switched on needs the installation's permission; a desktop that
         // already has one keeps it after the installation turns it off, as it did before.
         let mut enabled = spec.clone();
@@ -154,7 +155,8 @@ impl App {
             self.append_log(job_id, "The settings are unchanged.")?;
             return Ok(result);
         }
-        for mount in &spec.mounts {
+        // A new container would get an empty volume in place of a missing one.
+        for mount in spec.mounts.iter().chain(env.compose_mounts()) {
             self.inspect("volume", &mount.volume)
                 .await
                 .with_context(|| format!("Volume not found: {}", mount.volume))?;
@@ -249,7 +251,8 @@ impl App {
             )
             .await?;
             let image = self.inspect("image", &reference).await?;
-            crate::docker::image_volumes_mounted(&image, &spec)?;
+            let mounts = spec.mounts.iter().chain(env.compose_mounts()).cloned();
+            crate::docker::image_volumes_mounted(&image, &mounts.collect::<Vec<_>>())?;
             self.docker(&["rename", &old_id, &previous]).await?;
             anyhow::Ok(image["Id"].as_str().context("Missing image ID")?.to_owned())
         }
