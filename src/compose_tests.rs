@@ -1,5 +1,5 @@
-//! Pins down what a template accepts, how a new environment's values are resolved from it, and
-//! that a secret value reaches only the setup runner: never the environment record, an image
+//! Pins down what a compose accepts, how a new container's values are resolved from it, and
+//! that a secret value reaches only the setup runner: never the container record, an image
 //! list or a route.
 use super::*;
 
@@ -10,8 +10,8 @@ fn parameter(name: &str) -> Parameter {
     }
 }
 
-fn unity() -> Template {
-    Template {
+fn unity() -> Compose {
+    Compose {
         parameters: vec![
             Parameter {
                 label: "Unity email".into(),
@@ -43,30 +43,30 @@ fn given(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn image(id: &str, template: Option<Template>) -> ImageRecord {
+fn image(id: &str, compose: Option<Compose>) -> ImageRecord {
     ImageRecord {
         id: id.into(),
         name: id.into(),
         image_id: format!("sha256:{id}"),
         reference: format!("bilskirnir/snapshot:{id}"),
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "snapshot".into(),
         created_at: 1,
         description: String::new(),
         desktop: None,
         build: None,
-        template,
+        compose,
     }
 }
 
 #[test]
-fn a_template_needs_a_script_and_safe_parameter_names() {
+fn a_compose_needs_a_script_and_safe_parameter_names() {
     unity().validate().unwrap();
-    let with = |change: &dyn Fn(&mut Template)| {
-        let mut template = unity();
-        change(&mut template);
-        template.validate()
+    let with = |change: &dyn Fn(&mut Compose)| {
+        let mut compose = unity();
+        change(&mut compose);
+        compose.validate()
     };
     assert!(with(&|t| t.script = " \n".into()).is_err());
     assert!(with(&|t| t.script = "echo \0".into()).is_err());
@@ -105,7 +105,7 @@ fn a_template_needs_a_script_and_safe_parameter_names() {
     assert!(with(&|t| t.parameters[0].name = "STEAM_2FA_CODE".into()).is_ok());
     // A misspelled field is an error, not a parameter that is silently optional.
     assert!(
-        serde_json::from_value::<Template>(serde_json::json!({
+        serde_json::from_value::<Compose>(serde_json::json!({
             "script": "true", "parameters": [{"name": "A", "requried": true}]
         }))
         .is_err()
@@ -162,7 +162,7 @@ fn values_come_from_the_request_then_the_default() {
 }
 
 #[test]
-fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
+fn the_container_shows_ordinary_values_and_only_the_names_of_secrets() {
     let values = unity()
         .resolve(&given(&[
             ("UNITY_EMAIL", "dev@example.com"),
@@ -170,7 +170,7 @@ fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
         ]))
         .unwrap();
     let pinned = Pinned {
-        template: unity(),
+        compose: unity(),
         values,
     };
     let setup = pinned.setup("img");
@@ -178,9 +178,9 @@ fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
     assert_eq!(setup.secrets, ["UNITY_PASSWORD"]);
     assert!(!setup.parameters.contains_key("UNITY_PASSWORD"));
     assert_eq!(setup.parameters["UNITY_EMAIL"], "dev@example.com");
-    let env = Environment {
+    let env = Container {
         setup: Some(setup),
-        ..environment()
+        ..container()
     };
     assert!(!serde_json::to_string(&env).unwrap().contains("hunter2"));
     // The runner gets every value and the names to mask, with the script's line endings fixed.
@@ -191,32 +191,58 @@ fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
 }
 
 #[test]
-fn the_template_comes_from_a_record_of_the_requested_image() {
+fn the_compose_comes_from_a_record_of_the_requested_image() {
     let records = [
         image("plain", None),
         image("unity", Some(unity())),
         image("other", Some(unity())),
     ];
-    let by_id = template_image(&records, "sha256:unity", "sha256:unity").unwrap();
+    let by_id = compose_image(&records, "sha256:unity", "sha256:unity").unwrap();
     assert_eq!(by_id.id, "unity");
     // A reference resolves through Docker to the record's image ID.
-    let by_reference = template_image(&records, "bilskirnir/snapshot:unity", "sha256:unity");
+    let by_reference = compose_image(&records, "bilskirnir/snapshot:unity", "sha256:unity");
     assert_eq!(by_reference.unwrap().id, "unity");
-    let resolved = template_image(&records, "some-tag:latest", "sha256:other");
+    let resolved = compose_image(&records, "some-tag:latest", "sha256:other");
     assert_eq!(resolved.unwrap().id, "other");
-    assert!(template_image(&records, "sha256:plain", "sha256:plain").is_none());
-    assert!(template_image(&records, "ghcr.io/x:1", "sha256:profile").is_none());
+    assert!(compose_image(&records, "sha256:plain", "sha256:plain").is_none());
+    assert!(compose_image(&records, "ghcr.io/x:1", "sha256:catalog").is_none());
+}
+
+#[test]
+fn data_saved_while_composes_were_templates_keeps_its_compose() {
+    // Databases, exported configurations and archives outlive the rename; each still names it
+    // `template`.
+    let compose = json!({"parameters": [{"name": "UNITY_EMAIL"}], "script": "true"});
+    let mut record = serde_json::to_value(image("old", None)).unwrap();
+    record["template"] = compose.clone();
+    let record: ImageRecord = serde_json::from_value(record).unwrap();
+    assert_eq!(record.compose.unwrap().parameters[0].name, "UNITY_EMAIL");
+    let pinned: Pinned =
+        serde_json::from_value(json!({"template": compose, "values": {"UNITY_EMAIL": "a"}}))
+            .unwrap();
+    assert_eq!(pinned.compose.script, "true");
+    let build: crate::api::BuildImage = serde_json::from_value(
+        json!({"name": "Unity", "base_image": "sha256:a", "script": "true", "template": compose}),
+    )
+    .unwrap();
+    assert!(build.compose.is_some());
+    let archive: crate::archives::ArchiveInfo =
+        serde_json::from_value(json!({"format": 1, "name": "Unity", "template": compose})).unwrap();
+    assert!(archive.compose.is_some());
+    // What is written from now on uses the new name.
+    let written = serde_json::to_value(&pinned).unwrap();
+    assert!(written.get("compose").is_some() && written.get("template").is_none());
 }
 
 #[tokio::test]
-async fn a_new_environment_pins_the_template_and_its_values() {
+async fn a_new_container_pins_the_compose_and_its_values() {
     let app = crate::tests::app(false);
     app.db
         .put("image", "unity", &image("unity", Some(unity())))
         .unwrap();
     app.db.put("image", "plain", &image("plain", None)).unwrap();
     let (record, pinned) = app
-        .pin_template(
+        .pin_compose(
             "sha256:unity",
             "sha256:unity",
             &given(&[("UNITY_EMAIL", "a@b"), ("UNITY_PASSWORD", "pw")]),
@@ -226,23 +252,23 @@ async fn a_new_environment_pins_the_template_and_its_values() {
     assert_eq!(record, "unity");
     assert_eq!(pinned.values["UNITY_PASSWORD"], "pw");
     assert!(
-        app.pin_template("sha256:plain", "sha256:plain", &BTreeMap::new())
+        app.pin_compose("sha256:plain", "sha256:plain", &BTreeMap::new())
             .unwrap()
             .is_none()
     );
-    // Values for an image without a template are a mistake worth reporting.
+    // Values for an image without a compose are a mistake worth reporting.
     assert!(
-        app.pin_template("sha256:plain", "sha256:plain", &given(&[("A", "b")]))
+        app.pin_compose("sha256:plain", "sha256:plain", &given(&[("A", "b")]))
             .is_err()
     );
     app.save_pinned("env", &pinned).unwrap();
-    assert_eq!(app.pinned_template("env"), Some(unity()));
+    assert_eq!(app.pinned_compose("env"), Some(unity()));
     app.forget_pinned("env").unwrap();
-    assert_eq!(app.pinned_template("env"), None);
+    assert_eq!(app.pinned_compose("env"), None);
 }
 
 #[tokio::test]
-async fn template_routes_keep_the_script_out_of_image_lists() {
+async fn compose_routes_keep_the_script_out_of_image_lists() {
     let app = crate::tests::app(false);
     app.db.put("image", "unity", &image("unity", None)).unwrap();
     let missing = get(State(app.clone()), Path("unity".into()))
@@ -259,19 +285,19 @@ async fn template_routes_keep_the_script_out_of_image_lists() {
     let Json(summary) = set(State(app.clone()), Path("unity".into()), Json(unity()))
         .await
         .unwrap();
-    assert!(summary["template"].get("script").is_none());
+    assert!(summary["compose"].get("script").is_none());
     assert_eq!(
-        summary["template"]["parameters"][1]["name"],
+        summary["compose"]["parameters"][1]["name"],
         "UNITY_PASSWORD"
     );
     let Json(listed) = crate::api::images(State(app.clone())).await.unwrap();
-    assert!(listed[0]["template"].get("script").is_none());
-    let Json(template) = get(State(app.clone()), Path("unity".into())).await.unwrap();
-    assert_eq!(template, unity());
+    assert!(listed[0]["compose"].get("script").is_none());
+    let Json(compose) = get(State(app.clone()), Path("unity".into())).await.unwrap();
+    assert_eq!(compose, unity());
     let Json(summary) = remove(State(app.clone()), Path("unity".into()))
         .await
         .unwrap();
-    assert!(summary.get("template").is_none());
+    assert!(summary.get("compose").is_none());
     assert!(get(State(app), Path("absent".into())).await.is_err());
 }
 
@@ -279,7 +305,7 @@ async fn template_routes_keep_the_script_out_of_image_lists() {
 fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
     let app = crate::tests::app(false);
     let pinned = Pinned {
-        template: unity(),
+        compose: unity(),
         values: given(&[("UNITY_EMAIL", "a"), ("UNITY_PASSWORD", "b")]),
     };
     let cases = [
@@ -291,18 +317,18 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
     for (id, (status, error)) in cases.iter().enumerate() {
         let mut setup = pinned.setup("unity");
         setup.status = status.to_string();
-        let env = Environment {
+        let env = Container {
             id: id.to_string(),
             last_error: error.map(str::to_owned),
             setup: Some(setup),
-            ..environment()
+            ..container()
         };
-        app.db.put("environment", &id.to_string(), &env).unwrap();
+        app.db.put(CONTAINERS, &id.to_string(), &env).unwrap();
     }
     mark_interrupted(&app.db).unwrap();
     let after = |id: usize| {
         app.db
-            .get::<Environment>("environment", &id.to_string())
+            .get::<Container>(CONTAINERS, &id.to_string())
             .unwrap()
     };
     for id in 0..2 {
@@ -318,8 +344,8 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
     assert!(after(3).last_error.is_none());
 }
 
-fn environment() -> Environment {
-    Environment {
+fn container() -> Container {
+    Container {
         id: "e".into(),
         container: "wsld-e".into(),
         private_network: "wsld-e-private".into(),
@@ -339,7 +365,7 @@ fn environment() -> Environment {
 fn the_runner_reads_every_field_the_manager_sends() {
     // The request crosses into Python; a renamed key would silently become an empty default.
     let pinned = Pinned {
-        template: unity(),
+        compose: unity(),
         values: BTreeMap::new(),
     };
     for key in pinned.request().as_object().unwrap().keys() {

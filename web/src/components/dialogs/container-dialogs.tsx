@@ -36,9 +36,9 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
-import { useEnvironments, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
-import { parameterBody, templateFor } from "@/lib/templates"
-import type { ImageRecord, SettingsPreview } from "@/lib/types"
+import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
+import { parameterBody, composeFor } from "@/lib/compose"
+import type { ImageItem, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
 import { ParameterField } from "./parameter-field"
 import { specBody, specDraft, SpecFields, type SpecDraft } from "./spec-fields"
@@ -64,29 +64,29 @@ export function useSubmit() {
 
 const scrollBody = "-mx-4 flex max-h-[min(36rem,70vh)] flex-col gap-5 overflow-y-auto px-4 py-1"
 
-/** The values an image's template asks for, filled in with its defaults. */
-function TemplateValues({
-  template,
+/** The values an image's compose asks for, filled in with its defaults. */
+function ComposeValues({
+  compose,
   values,
   onChange,
 }: {
-  template: NonNullable<ImageRecord["template"]>
+  compose: NonNullable<ImageItem["compose"]>
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
 }) {
-  if (!template.parameters.length)
+  if (!compose.parameters.length)
     return (
       <FieldDescription>The image runs a setup script once the desktop is ready.</FieldDescription>
     )
   return (
     <FieldSet>
-      <FieldLegend variant="label">Template</FieldLegend>
+      <FieldLegend variant="label">Compose</FieldLegend>
       <FieldDescription className="text-xs">
         The image's setup script receives these once the desktop is ready. Secret values are not
         shown again.
       </FieldDescription>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {template.parameters.map((parameter) => (
+        {compose.parameters.map((parameter) => (
           <ParameterField
             key={`${parameter.name}-${parameter.type}`}
             parameter={parameter}
@@ -100,17 +100,16 @@ function TemplateValues({
   )
 }
 
-export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { image?: string }) {
+export function CreateContainerDialog({ image, ...props }: DialogProps & { image?: string }) {
   const settings = useSettings().data
-  const profiles = useProfiles().data ?? []
   const images = useImages().data ?? []
   const volumes = useVolumes().data ?? []
-  const choices = imageChoices(profiles, images, settings?.base_image, image)
+  const choices = imageChoices(images, settings?.base_image, image)
   const [name, setName] = React.useState("")
   const [selected, setSelected] = React.useState<string | undefined>()
   const [draft, setDraft] = React.useState<SpecDraft>(() => specDraft({}, settings))
   const chosen = selected ?? initialImage(choices, image ?? settings?.base_image)
-  const template = templateFor(images, chosen)
+  const compose = composeFor(images, chosen)
   // Values typed for one image are kept while another is chosen, and sent only for its own fields.
   const [values, setValues] = React.useState<Record<string, string>>({})
   const { busy, error, submit } = useSubmit()
@@ -122,19 +121,19 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
         <form
           className="flex flex-col gap-4"
           onSubmit={submit(() =>
-            runJob("environments", {
+            runJob("containers", {
               name,
               image: chosen,
               ...specBody(draft),
-              ...(template ? { parameters: parameterBody(template, values) } : {}),
+              ...(compose ? { parameters: parameterBody(compose, values) } : {}),
             })
           )}
         >
           <DialogHeader>
-            <DialogTitle>New environment</DialogTitle>
+            <DialogTitle>New container</DialogTitle>
             <DialogDescription>
-              A desktop from a profile, snapshot or custom image. A profile that is not downloaded
-              yet downloads first.
+              A container from any image. A catalog image that is not downloaded yet downloads
+              first.
             </DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>
@@ -173,9 +172,7 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
                   </SelectContent>
                 </Select>
               </Field>
-              {template && (
-                <TemplateValues template={template} values={values} onChange={setValues} />
-              )}
+              {compose && <ComposeValues compose={compose} values={values} onChange={setValues} />}
             </FieldGroup>
             <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
           </div>
@@ -199,10 +196,10 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
 }
 
 export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
-  const item = useEnvironments().data?.find((entry) => entry.environment.id === id)
+  const item = useContainers().data?.find((entry) => entry.id === id)
   const settings = useSettings().data
   const volumes = useVolumes().data ?? []
-  const spec = item?.environment.spec
+  const spec = item?.spec
   const [name, setName] = React.useState(spec?.name ?? "")
   const [draft, setDraftState] = React.useState<SpecDraft>(() => specDraft(spec ?? {}, settings))
   // A restart warning is confirmed for one set of values; editing the form asks again.
@@ -218,9 +215,9 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
 
   const save = async () => {
     const body = { name, ...specBody(draft) }
-    // The server decides what restarts the desktop; ask it first and warn once before applying.
+    // The server decides what restarts the container; ask it first and warn once before applying.
     if (!notice) {
-      const preview = await api<SettingsPreview>(`environments/${id}/settings`, {
+      const preview = await api<SettingsPreview>(`containers/${id}/settings`, {
         ...body,
         dry_run: true,
       })
@@ -234,7 +231,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
         return
       }
     }
-    await runJob(`environments/${id}/settings`, body)
+    await runJob(`containers/${id}/settings`, body)
   }
 
   if (!spec) return null
@@ -243,10 +240,10 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
       <DialogContent className="sm:max-w-2xl">
         <form className="flex flex-col gap-4" onSubmit={submit(save)}>
           <DialogHeader>
-            <DialogTitle>Environment settings</DialogTitle>
+            <DialogTitle>Container settings</DialogTitle>
             <DialogDescription>
-              Name, internet and resource limits apply to the running desktop. Other changes need a
-              new container; its files are kept.
+              Name, internet and resource limits apply to the running container. Other changes need
+              a new container; its files are kept.
             </DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>

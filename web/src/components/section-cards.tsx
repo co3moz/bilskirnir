@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { jobActive, jobNames, limitTotals, memory, needsAttention, stateLabels } from "@/lib/format"
-import { useEnvironments, useJobs, useSettings, useSystem } from "@/lib/queries"
+import { useContainers, useJobs, useSettings, useSystem } from "@/lib/queries"
 
 function Metric({
   label,
@@ -44,15 +44,15 @@ function Metric({
 }
 
 export function SectionCards() {
-  const environments = useEnvironments().data
+  const containers = useContainers().data
   const jobsQuery = useJobs()
   const jobs = jobsQuery.data
   const system = useSystem().data
   const settings = useSettings().data
 
-  const running = environments?.filter((item) => item.state === "running").length ?? 0
-  const attention = environments?.filter(needsAttention).length ?? 0
-  const stopped = (environments?.length ?? 0) - running
+  const running = containers?.filter((item) => item.state === "running").length ?? 0
+  const attention = containers?.filter(needsAttention).length ?? 0
+  const stopped = (containers?.length ?? 0) - running
   const active = jobs?.filter(jobActive).length ?? 0
   // Measured from when the list was fetched, so the count only changes with the list.
   const dayAgo = jobsQuery.dataUpdatedAt / 1000 - 86400
@@ -60,14 +60,14 @@ export function SectionCards() {
     jobs?.filter((job) => job.status !== "completed" && !jobActive(job) && job.created_at > dayAgo)
       .length ?? 0
   const latest = jobs?.[0]
-  const limits = limitTotals(environments ?? [])
+  const limits = limitTotals(containers ?? [])
   const known = system?.connected
 
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
       <Metric
-        label="Environments"
-        value={environments?.length}
+        label="Containers"
+        value={containers?.length}
         badge={
           <Badge variant="outline">
             <RiComputerLine />
@@ -79,7 +79,7 @@ export function SectionCards() {
             ? `${attention} ${attention === 1 ? "needs" : "need"} attention`
             : `${stopped} stopped`
         }
-        hint="Desktops managed on this host"
+        hint="Containers managed on this host"
       />
       <Metric
         label="Jobs in progress"
@@ -106,7 +106,9 @@ export function SectionCards() {
             {settings?.gpu_enabled ? "GPU ready" : "CPU only"}
           </Badge>
         }
-        line={limits.cpus ? `${limits.cpus} CPUs under desktop limits` : "No desktop CPU limits"}
+        line={
+          limits.cpus ? `${limits.cpus} CPUs under container limits` : "No container CPU limits"
+        }
         hint={known ? `Docker ${system?.version ?? ""}` : (system?.error ?? "Docker host")}
       />
       <Metric
@@ -120,8 +122,8 @@ export function SectionCards() {
         }
         line={
           limits.memoryMb
-            ? `${memory(limits.memoryMb * 1024 ** 2)} under desktop limits`
-            : "No desktop memory limits"
+            ? `${memory(limits.memoryMb * 1024 ** 2)} under container limits`
+            : "No container memory limits"
         }
         hint="Host memory reported by Docker"
       />

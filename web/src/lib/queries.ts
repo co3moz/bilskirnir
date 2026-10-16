@@ -4,16 +4,7 @@ import { toast } from "sonner"
 import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
-import type {
-  EnvironmentItem,
-  ImageRecord,
-  Job,
-  ProfileItem,
-  Session,
-  Settings,
-  SystemInfo,
-  Volume,
-} from "./types"
+import type { ContainerItem, ImageItem, Job, Session, Settings, SystemInfo, Volume } from "./types"
 
 const LIST_INTERVAL = 8000
 const JOB_INTERVAL = 2000
@@ -66,9 +57,8 @@ function useList<T>(path: string, poll: boolean) {
   })
 }
 
-export const useEnvironments = (poll = true) => useList<EnvironmentItem[]>("environments", poll)
-export const useImages = (poll = true) => useList<ImageRecord[]>("images", poll)
-export const useProfiles = (poll = true) => useList<ProfileItem[]>("profiles", poll)
+export const useContainers = (poll = true) => useList<ContainerItem[]>("containers", poll)
+export const useImages = (poll = true) => useList<ImageItem[]>("images", poll)
 export const useVolumes = (poll = true) => useList<Volume[]>("volumes", poll)
 export const useJobs = (poll = true) => useList<Job[]>("jobs", poll)
 export const useSystem = (poll = true) => useList<SystemInfo>("system", poll)

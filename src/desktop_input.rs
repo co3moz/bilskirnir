@@ -620,10 +620,7 @@ async fn fence(stream: &mut TcpStream) -> anyhow::Result<()> {
         }
     }
 }
-async fn pointer_position(
-    app: &App,
-    env: &crate::model::Environment,
-) -> anyhow::Result<(u16, u16)> {
+async fn pointer_position(app: &App, env: &crate::model::Container) -> anyhow::Result<(u16, u16)> {
     let info = app.owned(env).await?;
     let output = app
         .docker(&[
@@ -665,9 +662,9 @@ pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Val
             "Four desktop input requests are already active".into(),
         )
     })?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let address = app.address(&env).await?;
     let start = if needs_start_position(actions) {
         Some(pointer_position(app, &env).await?)
@@ -688,7 +685,7 @@ pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Val
         fence(&mut stream).await?;
         stream.shutdown().await?;
         anyhow::Ok(json!({
-            "environment_id": id,
+            "container_id": id,
             "applied_actions": actions.len(),
             "width": width,
             "height": height,

@@ -36,15 +36,15 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
 | `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled in `token` mode; 1 to 256 visible ASCII characters without spaces. Wrap it in single quotes when it contains `$` or `#`. |
 | `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token. Anyone who can reach the manager's address can then control every desktop, so keep it on localhost. |
-| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled desktops. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
+| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled containers. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
-| `AUDIO_ENABLED` | `true` | Allows environments to use browser sound. |
+| `AUDIO_ENABLED` | `true` | Allows containers to use browser sound. |
 | `MICROPHONE_ENABLED` | `true` | Allows microphone input when audio is also enabled. |
-| `DESKTOP_USER_NAMESPACES` | `true` | Lets processes in a desktop create user namespaces, which Chrome, Edge, other Chromium-based browsers and Electron applications use for their sandbox. Desktops get Docker's default seccomp profile with this one addition (`desktop/seccomp.json`); calls that need `CAP_SYS_ADMIN`, such as `mount`, stay blocked. Set `false` to keep Docker's default: those applications then start only with `--no-sandbox`, and opening a link in such a default browser fails. It applies when a desktop's container is created, so an existing desktop changes after a reset or a settings change that recreates it. |
+| `DESKTOP_USER_NAMESPACES` | `true` | Lets processes in a container create user namespaces, which Chrome, Edge, other Chromium-based browsers and Electron applications use for their sandbox. Containers get Docker's default seccomp profile with this one addition (`desktop/seccomp.json`); calls that need `CAP_SYS_ADMIN`, such as `mount`, stay blocked. Set `false` to keep Docker's default: those applications then start only with `--no-sandbox`, and opening a link in such a default browser fails. It applies when a container is created, so an existing container changes after a reset or a settings change that recreates it. |
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image archive an import accepts, in MiB after decompression, from 1 to 1048576. An archive holds every layer of the image, so it is several gigabytes. |
-| `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating an environment. |
+| `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 
@@ -62,7 +62,7 @@ The full manifests also accept these Compose settings:
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
 
-Environments created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
+Containers created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 
 Agent access uses a separate token rather than the dashboard session, unless `MCP_AUTH_MODE=none` turns it off. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
 
@@ -72,7 +72,7 @@ For the minimal Compose example, change the port binding to `0.0.0.0:8080:8080`.
 
 The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings.
 
-Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user environment permissions.
+Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user container permissions.
 
 ## HTTPS and microphone access over LAN
 
@@ -109,23 +109,23 @@ docker compose up -d
 
 For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
-This updates the manager. Desktop profile images are not Compose services: the manager downloads a profile the first time a desktop is created from it. To get a newer release of a profile you already have, select **Update** on its card under **Images**. A release manager, such as `ghcr.io/co3moz/bilskirnir:1.2.0`, downloads the profile published with it (`ubuntu-xfce:1.2.0`) and tags it with the profile's reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `bilskirnir update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `bilskirnir` command.
+This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To get a newer release of a catalog image you already have, select the update button on its row under **Images**. A release manager, such as `ghcr.io/co3moz/bilskirnir:1.2.0`, downloads the catalog image published with it (`ubuntu-xfce:1.2.0`) and tags it with the catalog reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `bilskirnir update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `bilskirnir` command.
 
-Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both profiles at every start. They keep working. To download profiles only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
+Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both catalog images at every start. They keep working. To download them only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
 
-New environments use the updated profile images. Existing desktops and snapshots keep their saved image IDs; updating the manager does not reinstall their applications or replace their files. Keep the manager data volume when updating. To stay on a particular build, pin image references to a published version, `sha-<full-commit>` tag or digest.
+New containers use the updated catalog images. Existing containers and snapshots keep their saved image IDs; updating the manager does not reinstall their applications or replace their files. Keep the manager data volume when updating. To stay on a particular build, pin image references to a published version, `sha-<full-commit>` tag or digest.
 
 ## Know where your data lives
 
-| Data | Location | Effect of deleting an environment |
+| Data | Location | Effect of deleting a container |
 | --- | --- | --- |
-| Environment settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
+| Container settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
 | Installed software and unmounted home files | The desktop container's writable layer | Lost unless saved in an image or snapshot. |
-| Files carried over by a settings change | An image tagged `bilskirnir/environment:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
+| Files carried over by a settings change | An image tagged `bilskirnir/container:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |
 | Saved image and snapshot layers | The host Docker Engine's image store | Preserved. |
 
-A snapshot alone is not a backup of the whole installation. It excludes volumes and the manager database. Protect the manager data volume, your project volumes and any images you need to recreate desktops.
+A snapshot alone is not a backup of the whole installation. It excludes volumes and the manager database. Protect the manager data volume, your project volumes and any images you need to recreate containers.
 
 Uploads are temporarily staged in the manager data volume. The manager accepts two transfers at once, each with a one-hour limit. Manager-side temporary upload files are removed after completion or cancellation, and leftover staging files are cleaned on startup. Make room for staging as well as the destination files.
 
@@ -133,13 +133,13 @@ Uploads are temporarily staged in the manager data volume. The manager accepts t
 
 A manager restart marks unfinished jobs as interrupted. Build scripts are not replayed automatically. Inspect the job result before starting an operation again.
 
-Use **Retry setup** for an environment that failed during creation or startup. If its container still exists, Bilskirnir keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
+Use **Retry setup** for a container that failed during creation or startup. If its container still exists, Bilskirnir keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
 
 A settings change that needs a new container renames the old one to `wsld-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name. Rename it back with `docker rename wsld-ID-previous wsld-ID` before using **Retry setup**, or remove it once its files are no longer needed; another settings change refuses to start while it exists.
 
 Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Bilskirnir does not silently replace a missing volume with an empty one.
 
-The manager checks desktop network connections every 20 seconds. A problem with one environment does not prevent checks for the others. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
+The manager checks container network connections every 20 seconds. A problem with one container does not prevent checks for the others. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
 
 ## If something does not start
 
@@ -151,13 +151,13 @@ docker compose logs --tail=100 manager
 
 Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A registry error happens before startup; check that the host can reach GHCR.
 
-If the dashboard opens but an environment fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate environment with GPU disabled to check the basic desktop path without deleting the failed environment's files.
+If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
 
 If file uploads report a permission error, check that the chosen volume is writable by UID/GID 1001:1001. Raising the upload size limit will not fix destination permissions.
 
 ## Move an older installation
 
-Before replacing an older Compose deployment, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The current default is `bilskirnir-data`. Remove the old manager deployment without deleting that volume, then start Bilskirnir using it. Existing desktops can keep running while the manager is replaced.
+Before replacing an older Compose deployment, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The current default is `bilskirnir-data`. Remove the old manager deployment without deleting that volume, then start Bilskirnir using it. Existing containers can keep running while the manager is replaced.
 
 You may see `wsld-*` resource names or `io.wsl-desktop.*` Docker labels. These identifiers are retained so existing containers, snapshots and database records continue to work. They do not indicate a different product.
 
@@ -168,4 +168,4 @@ docker image tag bilskirnir/ubuntu-xfce:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-x
 docker image tag bilskirnir/ubuntu-gnome:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
 ```
 
-For images tagged `wsl-desktop/ubuntu-*`, substitute that existing source tag on the left. Saved environment image IDs do not change when you add a tag.
+For images tagged `wsl-desktop/ubuntu-*`, substitute that existing source tag on the left. Saved container image IDs do not change when you add a tag.

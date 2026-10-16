@@ -1,13 +1,13 @@
-import { readTemplate } from "./templates"
+import { readCompose } from "./compose"
 import type { BuildConfig } from "./types"
 
 /** A pasted configuration: the script is required, the other fields keep the form's value. */
 export type ImportedBuild = Partial<Omit<BuildConfig, "script">> & Pick<BuildConfig, "script">
 
 /** The configuration as it is copied: the build request, keys in the form's order. */
-export function formatBuildConfig({ name, base_image, internet, script, template }: BuildConfig) {
+export function formatBuildConfig({ name, base_image, internet, script, compose }: BuildConfig) {
   return JSON.stringify(
-    { name, base_image, internet, script, ...(template ? { template } : {}) },
+    { name, base_image, internet, script, ...(compose ? { compose } : {}) },
     null,
     2
   )
@@ -23,7 +23,10 @@ export function parseBuildConfig(text: string): ImportedBuild {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error("The configuration must be a JSON object.")
-  const { name, base_image, internet, script, template } = value as Record<string, unknown>
+  const fields = value as Record<string, unknown>
+  const { name, base_image, internet, script } = fields
+  // Configurations exported before templates were called composes name it `template`.
+  const compose = fields.compose ?? fields.template
   if (typeof script !== "string" || !script.trim())
     throw new Error("The configuration has no setup script.")
   const config: ImportedBuild = { script }
@@ -41,6 +44,6 @@ export function parseBuildConfig(text: string): ImportedBuild {
     if (typeof internet !== "boolean") throw new Error("Internet must be true or false.")
     config.internet = internet
   }
-  if (template !== undefined && template !== null) config.template = readTemplate(template)
+  if (compose !== undefined && compose !== null) config.compose = readCompose(compose)
   return config
 }

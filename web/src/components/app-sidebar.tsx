@@ -9,7 +9,7 @@ import {
   RiPlugLine,
 } from "@remixicon/react"
 
-import { NavDesktops } from "@/components/nav-desktops"
+import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -26,7 +26,7 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitles: Record<Page, string> = {
   dashboard: "Dashboard",
-  environments: "Environments",
+  containers: "Containers",
   images: "Images",
   volumes: "Volumes",
   jobs: "Jobs",
@@ -34,7 +34,7 @@ export const pageTitles: Record<Page, string> = {
 
 const navMain = [
   { page: "dashboard", icon: <RiDashboardLine /> },
-  { page: "environments", icon: <RiComputerLine /> },
+  { page: "containers", icon: <RiComputerLine /> },
   { page: "images", icon: <RiStackLine /> },
   { page: "volumes", icon: <RiDatabase2Line /> },
   { page: "jobs", icon: <RiListCheck3 /> },
@@ -73,7 +73,7 @@ export function AppSidebar({
           active={page}
           items={navMain.map((item) => ({ ...item, title: pageTitles[item.page] }))}
         />
-        <NavDesktops />
+        <NavContainers />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

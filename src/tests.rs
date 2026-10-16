@@ -44,7 +44,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
     })
 }
-fn spec() -> model::EnvironmentSpec {
+fn spec() -> model::ContainerSpec {
     serde_json::from_value(serde_json::json!({"name":"Unity","image":"wsl-desktop/ubuntu:24.04"}))
         .unwrap()
 }
@@ -239,26 +239,26 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 62);
-    // Template values reach a new desktop through create_environment; the schema forbids
+    assert_eq!(tools.len(), 61);
+    // Compose values reach a new container through create_container; the schema forbids
     // properties it does not list, so a missing one is a value no agent can send.
     let create = tools
         .iter()
-        .find(|t| t["name"] == "create_environment")
+        .find(|t| t["name"] == "create_container")
         .unwrap();
     assert!(create["inputSchema"]["properties"]["parameters"].is_object());
-    let template = tools
+    let compose = tools
         .iter()
-        .find(|t| t["name"] == "set_image_template")
+        .find(|t| t["name"] == "set_image_compose")
         .unwrap();
-    assert_eq!(template["annotations"]["destructiveHint"], true);
+    assert_eq!(compose["annotations"]["destructiveHint"], true);
     assert_eq!(
-        template["inputSchema"]["properties"]["template"]["anyOf"][0]["required"],
+        compose["inputSchema"]["properties"]["compose"]["anyOf"][0]["required"],
         serde_json::json!(["script"])
     );
     let delete = tools
         .iter()
-        .find(|t| t["name"] == "delete_environment")
+        .find(|t| t["name"] == "delete_container")
         .unwrap();
     assert_eq!(delete["annotations"]["destructiveHint"], true);
     let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
@@ -278,7 +278,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     assert!(save["inputSchema"]["properties"]["capture"].is_object());
     assert_eq!(
         save["inputSchema"]["required"],
-        serde_json::json!(["path", "environment_id"])
+        serde_json::json!(["path", "container_id"])
     );
     for name in ["save_screenshot", "download_file", "export_artifacts"] {
         let tool = tools.iter().find(|t| t["name"] == name).unwrap();
@@ -314,7 +314,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     );
     assert_eq!(
         screenshot["inputSchema"]["required"],
-        serde_json::json!(["environment_id"])
+        serde_json::json!(["container_id"])
     );
     let observe = tools
         .iter()
@@ -326,7 +326,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|v| v == "environment_id")
+            .any(|v| v == "container_id")
     );
     let stop = tools
         .iter()
@@ -351,7 +351,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (_, body) = mcp_request(
         app,
         "tools/call",
-        serde_json::json!({"name":"delete_environment","arguments":{"environment_id":"missing"}}),
+        serde_json::json!({"name":"delete_container","arguments":{"container_id":"missing"}}),
     )
     .await;
     assert_eq!(body["result"]["isError"], true, "{body}");
@@ -367,16 +367,16 @@ async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
     let app = mcp_app();
     for args in [
         serde_json::json!({"name":"not_a_tool","arguments":{}}),
-        serde_json::json!({"name":"delete_environment","arguments":{}}),
-        serde_json::json!({"name":"create_environment","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+        serde_json::json!({"name":"delete_container","arguments":{}}),
+        serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
     ] {
         let (_, body) = mcp_request(app.clone(), "tools/call", args).await;
         assert_eq!(body["error"]["code"], -32602, "{body}");
     }
-    let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_environment","arguments":{"environment_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
+    let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_container","arguments":{"container_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
-    let (_,body)=mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"create_environment","arguments":{"name":"test","image":"ubuntu","mounts":[{"volume":"project","target":"/workspace","read_only":true}]}})).await;
+    let (_,body)=mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","mounts":[{"volume":"project","target":"/workspace","read_only":true}]}})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
@@ -466,7 +466,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         ] {
             let mut request = Request::builder()
                 .method("POST")
-                .uri(format!("/api/environments/missing/{route}"))
+                .uri(format!("/api/containers/missing/{route}"))
                 .header("host", "localhost")
                 .header("content-type", "application/json");
             if csrf {
@@ -482,9 +482,9 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
 }
 
 #[tokio::test]
-async fn single_environment_api_returns_the_same_state_as_the_list() {
+async fn single_container_api_returns_the_same_state_as_the_list() {
     let app = app(false);
-    let env = model::Environment {
+    let env = model::Container {
         id: "test-id".into(),
         container: "test-container".into(),
         private_network: "test-private".into(),
@@ -497,11 +497,11 @@ async fn single_environment_api_returns_the_same_state_as_the_list() {
         working_image: None,
         setup: None,
     };
-    app.db.put("environment", &env.id, &env).unwrap();
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
     let response = router(app)
         .oneshot(
             Request::builder()
-                .uri("/api/environments/test-id")
+                .uri("/api/containers/test-id")
                 .header("host", "localhost")
                 .body(Body::empty())
                 .unwrap(),
@@ -515,7 +515,9 @@ async fn single_environment_api_returns_the_same_state_as_the_list() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(body["environment"]["id"], "test-id");
+    // The record's own fields and Docker's view of it sit side by side.
+    assert_eq!(body["id"], "test-id");
+    assert_eq!(body["spec"]["name"], spec().name);
     assert_eq!(body["state"], "unavailable");
 }
 
@@ -672,7 +674,7 @@ fn uploads_only_accept_canonical_paths_in_writable_locations() {
 #[tokio::test]
 async fn uploads_enforce_authentication_origin_and_size_before_docker() {
     let uri =
-        "/api/environments/unknown/files?destination=/home/desktop/Downloads&name=test.txt&size=1";
+        "/api/containers/unknown/files?destination=/home/desktop/Downloads&name=test.txt&size=1";
     for (auth, csrf, size, expected) in [
         (true, true, 1, StatusCode::UNAUTHORIZED),
         (false, false, 1, StatusCode::FORBIDDEN),
@@ -842,27 +844,21 @@ async fn logout_revokes_waiting_media_lease_and_expiry_ends_it() {
     .unwrap();
 }
 #[tokio::test]
-async fn unrelated_jobs_progress_while_an_environment_queue_is_blocked() {
+async fn unrelated_jobs_progress_while_a_container_queue_is_blocked() {
     let app = app(false);
-    let lock = app.resource_lock("environment:one");
+    let lock = app.resource_lock("container:one");
     let guard = lock.lock().await;
-    let queued = jobs::launch(
-        app.clone(),
-        "stop",
-        "environment:one".into(),
-        |_, _| async { Ok(serde_json::json!({})) },
-    )
+    let queued = jobs::launch(app.clone(), "stop", "container:one".into(), |_, _| async {
+        Ok(serde_json::json!({}))
+    })
     .unwrap()
     .0["job_id"]
         .as_str()
         .unwrap()
         .to_owned();
-    let free = jobs::launch(
-        app.clone(),
-        "start",
-        "environment:two".into(),
-        |_, _| async { Ok(serde_json::json!({})) },
-    )
+    let free = jobs::launch(app.clone(), "start", "container:two".into(), |_, _| async {
+        Ok(serde_json::json!({}))
+    })
     .unwrap()
     .0["job_id"]
         .as_str()
@@ -921,8 +917,8 @@ fn job_list_is_bounded_and_strips_logs_before_deserialization() {
 }
 
 #[test]
-fn profile_catalog_is_unique_and_metadata_is_explicit() {
-    let catalog = profiles::catalog();
+fn image_catalog_is_unique_and_metadata_is_explicit() {
+    let catalog = catalog::catalog();
     assert_eq!(catalog.len(), 2);
     assert_eq!(
         catalog
@@ -935,7 +931,7 @@ fn profile_catalog_is_unique_and_metadata_is_explicit() {
     assert!(
         catalog
             .iter()
-            .any(|p| p.reference == profiles::DEFAULT_IMAGE && p.session == "xfce")
+            .any(|p| p.reference == catalog::DEFAULT_IMAGE && p.session == "xfce")
     );
     assert!(
         catalog
@@ -943,32 +939,77 @@ fn profile_catalog_is_unique_and_metadata_is_explicit() {
             .any(|p| p.id == "ubuntu-gnome" && p.session == "gnome")
     );
     assert!(
-        profiles::from_image(
+        catalog::from_image(
             &serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.desktop":"true"}}})
         )
         .is_none()
     );
-    let info = profiles::from_image(&serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.profile":"ubuntu-gnome","io.wsl-desktop.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
+    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.profile":"ubuntu-gnome","io.wsl-desktop.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
     assert_eq!(info.session, "gnome");
+    assert_eq!(info.catalog_id, "ubuntu-gnome");
+    // Records saved while catalog images were profiles still carry their desktop.
+    let old: catalog::DesktopInfo = serde_json::from_value(
+        serde_json::json!({"profile":"ubuntu-xfce","title":"Ubuntu 24.04 · Lightweight XFCE","session":"xfce"}),
+    )
+    .unwrap();
+    assert_eq!(old.catalog_id, "ubuntu-xfce");
 }
 #[test]
-fn old_environment_records_remain_readable_without_profile_metadata() {
+fn catalog_images_are_listed_with_the_saved_images() {
+    let xfce = catalog::find("ubuntu-xfce").unwrap();
+    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"io.wsl-desktop.profile":id,"io.wsl-desktop.session":session,"org.opencontainers.image.title":"XFCE"}}});
+    // Not downloaded yet: still listed, so a container can start from it and download it.
+    let missing = catalog::listed(&xfce, None, true);
+    assert_eq!(missing["kind"], "catalog");
+    assert_eq!(missing["reference"], xfce.reference);
+    assert!(missing["available"] == false && missing["downloaded"] == false);
+    assert!(missing["image_id"].is_null() && missing["error"].is_null());
+    let ready = catalog::listed(&xfce, Some(&labels("ubuntu-xfce", "xfce")), true);
+    assert!(ready["available"] == true && ready["image_id"] == "sha256:x");
+    assert_eq!(ready["desktop"]["catalog_id"], "ubuntu-xfce");
+    // A tag that points at another desktop is reported instead of being used.
+    let foreign = catalog::listed(&xfce, Some(&labels("ubuntu-gnome", "gnome")), true);
+    assert!(foreign["available"] == false && foreign["downloaded"] == true);
+    assert!(foreign["error"].is_string());
+    // Without Docker nobody knows.
+    assert!(catalog::listed(&xfce, None, false)["available"].is_null());
+}
+#[test]
+fn old_container_records_remain_readable_without_desktop_metadata() {
     let value = serde_json::json!({"id":"old","container":"wsld-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"wsl-desktop/ubuntu:24.04"}});
-    let env: model::Environment = serde_json::from_value(value).unwrap();
+    let env: model::Container = serde_json::from_value(value).unwrap();
     assert!(env.desktop.is_none());
     assert_eq!(env.source_image_id, "sha256:old");
 }
+#[test]
+fn records_saved_before_containers_were_renamed_keep_their_container() {
+    // An installation keeps its database across the upgrade that renamed environments.
+    let image: model::ImageRecord = serde_json::from_value(serde_json::json!({"id":"snap","name":"Snapshot","image_id":"sha256:snap","reference":"bilskirnir/snapshot:snap","parent_image_id":"sha256:base","source_environment":"env","kind":"snapshot","created_at":1,"description":""})).unwrap();
+    assert_eq!(image.source_container.as_deref(), Some("env"));
+    assert!(serde_json::to_value(&image).unwrap()["source_container"] == "env");
+    let application: model::Application = serde_json::from_value(serde_json::json!({"id":"app","environment_id":"env","name":"xlogo","command":"xlogo","args":[],"cwd":"/home/desktop","gpu":false,"created_at":1})).unwrap();
+    assert_eq!(application.container_id, "env");
+    let terminal: model::Terminal = serde_json::from_value(serde_json::json!({"id":"t","environment_id":"env","root":false,"cwd":"/home/desktop","created_at":1})).unwrap();
+    assert_eq!(terminal.container_id, "env");
+    let recording: model::Recording = serde_json::from_value(
+        serde_json::json!({"id":"r","environment_id":"env","name":"run","fps":2,"created_at":1}),
+    )
+    .unwrap();
+    assert_eq!(recording.container_id, "env");
+    // Container records stay under the kind they were saved with.
+    assert_eq!(model::CONTAINERS, "environment");
+}
 #[tokio::test]
-async fn unknown_profile_build_is_rejected_without_queuing_docker_work() {
+async fn only_catalog_images_are_built_or_pulled() {
     let app = app(false);
-    // Only catalog profiles are built or pulled; a free-form reference never reaches a registry.
+    // A free-form reference or a saved image never reaches a registry or the bundled context.
     for action in ["build", "pull"] {
         let response = router(app.clone())
             .oneshot(
                 Request::builder()
                     .header("host", "localhost:8080")
                     .method("POST")
-                    .uri(format!("/api/profiles/not-a-profile/{action}"))
+                    .uri(format!("/api/images/not-in-catalog/{action}"))
                     .header("x-wsld-request", "1")
                     .body(Body::empty())
                     .unwrap(),
@@ -1009,13 +1050,13 @@ fn database_round_trip_keeps_snapshot_parent() {
         image_id: "sha256:new".into(),
         reference: "snapshot:a".into(),
         parent_image_id: Some("sha256:base".into()),
-        source_environment: Some("env".into()),
+        source_container: Some("env".into()),
         kind: "snapshot".into(),
         created_at: 1,
         description: String::new(),
         desktop: None,
         build: None,
-        template: None,
+        compose: None,
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(
@@ -1045,10 +1086,9 @@ fn websocket_origin_requires_exact_host_and_port() {
 async fn protected_routes_require_login_before_touching_docker() {
     let router = router(app(true));
     for path in [
-        "/api/environments",
-        "/api/profiles",
-        "/api/environments/unknown/screenshot",
-        "/api/environments/unknown/vnc",
+        "/api/containers",
+        "/api/containers/unknown/screenshot",
+        "/api/containers/unknown/vnc",
         "/api/jobs",
         "/api/images",
         "/api/images/unknown/config",
@@ -1076,7 +1116,7 @@ async fn login_disabled_does_not_disable_csrf_protection() {
             Request::builder()
                 .header("host", "localhost:8080")
                 .method("POST")
-                .uri("/api/environments")
+                .uri("/api/containers")
                 .header("content-type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),
@@ -1298,7 +1338,7 @@ fn application_launch_requests_are_validated() {
     );
 }
 #[tokio::test]
-async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
+async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
     let mut app = app(false);
     {
         let config = &mut Arc::get_mut(&mut app).unwrap().config;
@@ -1308,13 +1348,13 @@ async fn gpu_environments_are_rejected_when_the_installation_has_no_gpu() {
     let mut spec = spec();
     spec.gpu = true;
     let error = app
-        .create_environment("gpu-test", spec, Default::default(), "gpu-job")
+        .create_container("gpu-test", spec, Default::default(), "gpu-job")
         .await
         .unwrap_err();
     assert!(error.to_string().contains("GPU"), "{error}");
     assert!(
         app.db
-            .list::<model::Environment>("environment")
+            .list::<model::Container>(model::CONTAINERS)
             .unwrap()
             .is_empty()
     );
@@ -1603,15 +1643,15 @@ fn screenshot_save_targets_and_download_links_are_shaped_for_users() {
     assert!(uploads::validate_target(&spec(), "/home/desktop/Downloads", "clock.jpg").is_ok());
     assert_eq!(
         files::download_url("abc123", "/home/desktop/Downloads/saat 17:20.jpg"),
-        "/api/environments/abc123/files/download?path=/home/desktop/Downloads/saat%2017%3A20.jpg"
+        "/api/containers/abc123/files/download?path=/home/desktop/Downloads/saat%2017%3A20.jpg"
     );
     assert_eq!(
         files::download_url("abc123", "/shared/ölçüm.tar.gz"),
-        "/api/environments/abc123/files/download?path=/shared/%C3%B6l%C3%A7%C3%BCm.tar.gz"
+        "/api/containers/abc123/files/download?path=/shared/%C3%B6l%C3%A7%C3%BCm.tar.gz"
     );
 }
 #[tokio::test]
-async fn environment_settings_are_checked_before_any_job_or_docker_work() {
+async fn container_settings_are_checked_before_any_job_or_docker_work() {
     let mut app = app(false);
     {
         let config = &mut Arc::get_mut(&mut app).unwrap().config;
@@ -1620,7 +1660,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
     }
     let mut existing = spec();
     existing.gpu = true;
-    let env = model::Environment {
+    let env = model::Container {
         id: "edit-id".into(),
         container: "wsld-edit-id".into(),
         private_network: "wsld-edit-id-private".into(),
@@ -1633,7 +1673,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
         working_image: None,
         setup: None,
     };
-    app.db.put("environment", &env.id, &env).unwrap();
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
     let post = |id: &str, body: serde_json::Value| {
         let app = app.clone();
         let request = Request::builder()
@@ -1641,7 +1681,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
             .header("x-wsld-request", "1")
             .header("content-type", "application/json")
             .method("POST")
-            .uri(format!("/api/environments/{id}/settings"))
+            .uri(format!("/api/containers/{id}/settings"))
             .body(Body::from(body.to_string()))
             .unwrap();
         async move {
@@ -1678,7 +1718,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
         (serde_json::json!({"dry_run": "yes"}), "dry_run"),
         (
             serde_json::json!({"volume": "x"}),
-            "Unknown environment setting",
+            "Unknown container setting",
         ),
     ] {
         let (status, body) = post("edit-id", request).await;
@@ -1688,7 +1728,7 @@ async fn environment_settings_are_checked_before_any_job_or_docker_work() {
     let (status, _) = post("missing-id", serde_json::json!({"dry_run": true})).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
-    let saved: model::Environment = app.db.get("environment", "edit-id").unwrap();
+    let saved: model::Container = app.db.get(model::CONTAINERS, "edit-id").unwrap();
     assert_eq!(saved.spec.name, "Unity");
 }
 #[test]
@@ -1707,7 +1747,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         target: "/workspace".into(),
         readonly: true,
     }];
-    let mut env = model::Environment {
+    let mut env = model::Container {
         id: "args-id".into(),
         container: "wsld-args-id".into(),
         private_network: "wsld-args-id-private".into(),
@@ -1720,7 +1760,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         working_image: None,
         setup: None,
     };
-    let joined = |env: &model::Environment| app.container_args(env).join(" ");
+    let joined = |env: &model::Container| app.container_args(env).join(" ");
     let args = joined(&env);
     let profile = std::path::Path::new("desktop").join("seccomp.json");
     let seccomp = format!("--security-opt seccomp={}", profile.display());
@@ -1744,7 +1784,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     assert!(args.ends_with(" sha256:source"), "{args}");
     env.working_image = Some(model::WorkingImage {
         image_id: "sha256:working".into(),
-        reference: "bilskirnir/environment:job".into(),
+        reference: "bilskirnir/container:job".into(),
     });
     assert!(joined(&env).ends_with(" sha256:working"));
     assert_eq!(env.source_image_id, "sha256:source");
@@ -1753,7 +1793,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
 fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_place() {
     let mut app = app(false);
     Arc::get_mut(&mut app).unwrap().config.user_namespaces = false;
-    let env = model::Environment {
+    let env = model::Container {
         id: "plain-id".into(),
         container: "wsld-plain-id".into(),
         private_network: "wsld-plain-id-private".into(),

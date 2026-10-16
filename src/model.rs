@@ -2,6 +2,9 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 pub const LABEL: &str = "io.wsl-desktop.managed";
+/// The database kind of container records. They keep the name they were stored under before
+/// environments were called containers, so an existing installation reads them unchanged.
+pub const CONTAINERS: &str = "environment";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -13,7 +16,7 @@ pub struct Mount {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EnvironmentSpec {
+pub struct ContainerSpec {
     pub name: String,
     pub image: String,
     #[serde(default = "resolution")]
@@ -48,10 +51,10 @@ fn shm() -> u64 {
     512
 }
 
-impl EnvironmentSpec {
+impl ContainerSpec {
     pub fn validate(&self) -> Result<()> {
         if self.name.trim().is_empty() || self.name.chars().count() > 100 {
-            bail!("Environment name must be 1–100 characters");
+            bail!("Container name must be 1 to 100 characters");
         }
         image_ref(&self.image)?;
         let (w, h) = self
@@ -152,27 +155,27 @@ pub fn volume_name(value: &str) -> Result<()> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Environment {
+pub struct Container {
     pub id: String,
     pub container: String,
     pub private_network: String,
     pub egress_network: String,
     pub source_image_id: String,
     pub created_at: u64,
-    pub spec: EnvironmentSpec,
+    pub spec: ContainerSpec,
     #[serde(default)]
     pub last_error: Option<String>,
     #[serde(default)]
-    pub desktop: Option<crate::profiles::DesktopInfo>,
+    pub desktop: Option<crate::catalog::DesktopInfo>,
     /// Set once a settings change recreated the container: the container runs this commit of
     /// its earlier files, while `source_image_id` stays the image the desktop started from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub working_image: Option<WorkingImage>,
-    /// Set when the image had a template: its setup's progress and the values it was given.
+    /// Set when the image had a compose: its setup's progress and the values it was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub setup: Option<crate::templates::Setup>,
+    pub setup: Option<crate::compose::Setup>,
 }
-impl Environment {
+impl Container {
     /// The image the container is created from.
     pub fn container_image(&self) -> &str {
         self.working_image
@@ -193,23 +196,27 @@ pub struct ImageRecord {
     pub image_id: String,
     pub reference: String,
     pub parent_image_id: Option<String>,
-    pub source_environment: Option<String>,
+    /// The container a snapshot was taken from. Records saved before environments were called
+    /// containers name it `source_environment`.
+    #[serde(alias = "source_environment")]
+    pub source_container: Option<String>,
     pub kind: String,
     pub created_at: u64,
     pub description: String,
     #[serde(default)]
-    pub desktop: Option<crate::profiles::DesktopInfo>,
+    pub desktop: Option<crate::catalog::DesktopInfo>,
     /// What a script build ran, so the image can be exported and built again. Snapshots,
     /// imports and builds made before it was recorded have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildConfig>,
-    /// What a new environment from this image asks for and runs once its desktop is ready.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<crate::templates::Template>,
+    /// What a new container from this image asks for and runs once its desktop is ready. Records
+    /// saved before templates were called composes name it `template`.
+    #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
+    pub compose: Option<crate::compose::Compose>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildConfig {
-    /// The base as the request named it: a profile reference or a local image ID.
+    /// The base as the request named it: a catalog reference or a local image ID.
     pub base_image: String,
     pub internet: bool,
     pub script: String,
@@ -217,7 +224,8 @@ pub struct BuildConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Application {
     pub id: String,
-    pub environment_id: String,
+    #[serde(alias = "environment_id")]
+    pub container_id: String,
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
@@ -228,7 +236,8 @@ pub struct Application {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Terminal {
     pub id: String,
-    pub environment_id: String,
+    #[serde(alias = "environment_id")]
+    pub container_id: String,
     pub root: bool,
     pub cwd: String,
     pub created_at: u64,
@@ -236,7 +245,8 @@ pub struct Terminal {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Recording {
     pub id: String,
-    pub environment_id: String,
+    #[serde(alias = "environment_id")]
+    pub container_id: String,
     pub name: String,
     pub fps: u8,
     pub created_at: u64,

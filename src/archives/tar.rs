@@ -27,7 +27,7 @@ const SPECIAL: [&str; 5] = [
 ];
 /// `manifest.json` and `index.json` are a few kilobytes in every Docker archive.
 const DESCRIPTOR_LIMIT: u64 = 4 << 20;
-/// The metadata of a script build carries its build script and its template's setup script, up
+/// The metadata of a script build carries its build script and its compose's setup script, up
 /// to a megabyte each before escaping.
 const METADATA_LIMIT: u64 = 16 << 20;
 /// Go refuses longer extension headers.

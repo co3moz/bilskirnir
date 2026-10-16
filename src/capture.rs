@@ -121,7 +121,7 @@ pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screensho
         .acquire()
         .await
         .map_err(|e| anyhow::anyhow!(e))?;
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     let region = options
         .region()?

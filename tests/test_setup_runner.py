@@ -1,4 +1,4 @@
-"""The template setup runner: parameters reach the script as environment variables, secret values
+"""The compose setup runner: parameters reach the script as environment variables, secret values
 never reach the output in one piece, and the script's exit status and time limit are kept."""
 
 import importlib.util

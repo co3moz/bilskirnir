@@ -1,7 +1,7 @@
 import * as React from "react"
 
 import { DockerAlert, PageBody } from "@/components/page"
-import { EnvironmentsTable } from "@/components/environments-table"
+import { ContainersTable } from "@/components/containers-table"
 import { SectionCards } from "@/components/section-cards"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -12,7 +12,7 @@ const ChartAreaInteractive = React.lazy(() =>
   }))
 )
 
-/** dashboard-01: summary cards, the activity chart and the environments table. */
+/** dashboard-01: summary cards, the activity chart and the containers table. */
 export function DashboardPage() {
   return (
     <PageBody>
@@ -23,7 +23,7 @@ export function DashboardPage() {
           <ChartAreaInteractive />
         </React.Suspense>
       </div>
-      <EnvironmentsTable />
+      <ContainersTable />
     </PageBody>
   )
 }

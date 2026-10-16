@@ -21,14 +21,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { attempt, environmentAction, retrySetup, showLog } from "@/lib/actions"
+import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { needsRetry } from "@/lib/format"
-import type { EnvironmentItem } from "@/lib/types"
+import type { ContainerItem } from "@/lib/types"
 
-/** Every action on one environment, as the old details dialog offered them. */
-export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
-  const { id, spec } = item.environment
+/** Every action on one container, as the old details dialog offered them. */
+export function ContainerMenu({ item }: { item: ContainerItem }) {
+  const { id, spec } = item
   const running = item.state === "running"
   return (
     <DropdownMenu>
@@ -54,18 +54,18 @@ export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
           </DropdownMenuItem>
         )}
         {!running && (
-          <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "start"))}>
+          <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "start"))}>
             <RiPlayCircleLine />
             Start
           </DropdownMenuItem>
         )}
         {running && (
-          <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "stop"))}>
+          <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "stop"))}>
             <RiStopCircleLine />
             Stop
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => attempt(() => environmentAction(id, "restart"))}>
+        <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "restart"))}>
           <RiRestartLine />
           Restart
         </DropdownMenuItem>
@@ -83,14 +83,14 @@ export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
           Snapshot
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => attempt(() => showLog(`${spec.name} logs`, `environments/${id}/logs`))}
+          onSelect={() => attempt(() => showLog(`${spec.name} logs`, `containers/${id}/logs`))}
         >
           <RiFileTextLine />
           Logs
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
-            attempt(() => showLog(`${spec.name} diagnostics`, `environments/${id}/diagnostics`))
+            attempt(() => showLog(`${spec.name} diagnostics`, `containers/${id}/diagnostics`))
           }
         >
           <RiStethoscopeLine />
@@ -99,7 +99,7 @@ export function EnvironmentMenu({ item }: { item: EnvironmentItem }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => openDialog({ kind: "delete", id })}>
           <RiDeleteBinLine />
-          Delete environment
+          Delete container
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

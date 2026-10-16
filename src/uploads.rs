@@ -1,7 +1,7 @@
 use crate::{
     App, auth,
     error::{Error, Result},
-    model::EnvironmentSpec,
+    model::ContainerSpec,
     process,
 };
 use axum::{
@@ -37,11 +37,7 @@ fn within(path: &str, root: &str) -> bool {
             .is_some_and(|suffix| suffix.starts_with('/'))
 }
 
-pub fn validate_target(
-    spec: &EnvironmentSpec,
-    destination: &str,
-    name: &str,
-) -> anyhow::Result<()> {
+pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> anyhow::Result<()> {
     if name.is_empty()
         || name.len() > 255
         || name == "."
@@ -157,15 +153,15 @@ pub(crate) async fn save_file(
         )
     })?;
     let transfer = async {
-        let lock = app.resource_lock(&format!("environment:{id}"));
+        let lock = app.resource_lock(&format!("container:{id}"));
         let _guard = lock.lock().await;
-        let environment = app.environment(&id)?;
-        validate_target(&environment.spec, &request.destination, &request.name)?;
-        let container = app.owned(&environment).await?;
+        let record = app.container(&id)?;
+        validate_target(&record.spec, &request.destination, &request.name)?;
+        let container = app.owned(&record).await?;
         if container["State"]["Running"] != true {
             return Err(Error(
                 StatusCode::CONFLICT,
-                "Start the environment before uploading files".into(),
+                "Start the container before uploading files".into(),
             ));
         }
         for mount in container["Mounts"].as_array().into_iter().flatten() {
@@ -265,7 +261,7 @@ pub(crate) async fn save_file(
                     StatusCode::BAD_REQUEST
                 },
                 if error.is_empty() {
-                    "Could not save file in the desktop".into()
+                    "Could not save file in the container".into()
                 } else {
                     error.trim_start_matches("CONFLICT: ").into()
                 },

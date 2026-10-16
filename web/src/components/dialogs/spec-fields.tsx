@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import type { EnvironmentSpec, Mount, Settings, Volume } from "@/lib/types"
+import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
 
 const RESOLUTIONS = ["1920x1080", "1600x900", "1280x720", "2560x1440", "3840x2160"]
 const FLAGS = ["gpu", "internet", "sudo", "audio", "microphone", "gamepad"] as const
@@ -41,7 +41,7 @@ export type SpecDraft = {
 
 let mountKey = 0
 
-export function specDraft(spec: Partial<EnvironmentSpec>, settings?: Settings): SpecDraft {
+export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): SpecDraft {
   return {
     resolution: spec.resolution || RESOLUTIONS[0],
     shm_mb: String(spec.shm_mb ?? 512),
@@ -80,8 +80,8 @@ const flagCopy: Record<Flag, { label: string; description: string }> = {
 }
 
 /**
- * The settings shared by the create and settings dialogs. `spec` is the desktop being changed, if
- * any: a feature the installation switched off cannot be turned on, but a desktop that has it can
+ * The settings shared by the create and settings dialogs. `spec` is the container being changed, if
+ * any: a feature the installation switched off cannot be turned on, but a container that has it can
  * still turn it off.
  */
 export function SpecFields({
@@ -95,7 +95,7 @@ export function SpecFields({
   onChange: (draft: SpecDraft) => void
   settings?: Settings
   volumes: Volume[]
-  spec?: EnvironmentSpec
+  spec?: ContainerSpec
 }) {
   const id = React.useId()
   const resolutions = RESOLUTIONS.includes(draft.resolution)

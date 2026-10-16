@@ -3,7 +3,7 @@
 //! a creation flag, from the commit that carries its files.
 use super::*;
 
-fn spec() -> EnvironmentSpec {
+fn spec() -> ContainerSpec {
     serde_json::from_value(
         json!({"name": "Work", "image": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}),
     )
@@ -15,7 +15,7 @@ fn request(value: Value) -> Map<String, Value> {
 
 #[test]
 fn name_internet_and_limits_change_in_place_while_creation_settings_restart() {
-    let old = EnvironmentSpec {
+    let old = ContainerSpec {
         cpus: Some(2.0),
         memory_mb: Some(2048),
         ..spec()
@@ -103,7 +103,7 @@ fn requests_cannot_change_the_image_or_reach_unknown_or_invalid_settings() {
         .unwrap_err()
         .to_string();
     assert!(
-        error.contains("Unknown environment setting: privileged"),
+        error.contains("Unknown container setting: privileged"),
         "{error}"
     );
     // The result is validated as a whole, as creation does.
@@ -125,7 +125,7 @@ fn requests_cannot_change_the_image_or_reach_unknown_or_invalid_settings() {
 #[test]
 fn limits_change_with_a_swap_limit_that_keeps_dockers_default() {
     let old = spec();
-    let new = EnvironmentSpec {
+    let new = ContainerSpec {
         cpus: Some(2.5),
         memory_mb: Some(3072),
         ..spec()
@@ -143,7 +143,7 @@ fn limits_change_with_a_swap_limit_that_keeps_dockers_default() {
         ]
     );
     // Only the limits that changed are sent; nothing to send is no command at all.
-    let renamed = EnvironmentSpec {
+    let renamed = ContainerSpec {
         name: "Other".into(),
         ..new.clone()
     };

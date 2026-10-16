@@ -59,12 +59,12 @@ impl Geometry {
     }
 }
 async fn x11(app: &App, id: &str, command: &[&str]) -> Result<Vec<u8>> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using its windows".into(),
+            "Start the container before using its windows".into(),
         ));
     }
     let mut args = vec![
@@ -79,7 +79,7 @@ async fn x11(app: &App, id: &str, command: &[&str]) -> Result<Vec<u8>> {
     app.docker(&args).await.map_err(|e| {
         if format!("{e:#}").contains("executable file not found") {
             anyhow::anyhow!(
-                "Window tools need xdotool and wmctrl in the desktop image; rebuild the profile image or update the installation"
+                "Window tools need xdotool and wmctrl in the desktop image; update its catalog image or the installation"
             )
             .into()
         } else {

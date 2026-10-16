@@ -2,7 +2,7 @@
 
 export type Mount = { volume: string; target: string; readonly: boolean }
 
-export type EnvironmentSpec = {
+export type ContainerSpec = {
   name: string
   image: string
   resolution: string
@@ -18,21 +18,23 @@ export type EnvironmentSpec = {
   mounts: Mount[]
 }
 
-export type DesktopInfo = { profile: string; title: string; session: string }
+/** What an image's labels say about its desktop; `catalog_id` names the catalog image it derives from. */
+export type DesktopInfo = { catalog_id: string; title: string; session: string }
 
-export type Environment = {
+export type Container = {
   id: string
+  /** The Docker container's name. */
   container: string
   source_image_id: string
   created_at: number
-  spec: EnvironmentSpec
+  spec: ContainerSpec
   last_error?: string | null
   desktop?: DesktopInfo | null
-  /** Set when the image had a template: its setup's progress and the values it was given. */
-  setup?: EnvironmentSetup | null
+  /** Set when the image had a compose: its setup's progress and the values it was given. */
+  setup?: ContainerSetup | null
 }
 
-/** A template parameter: an environment variable of the setup script. */
+/** A compose parameter: an environment variable of the setup script. */
 export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices"
 
 export type ParameterDisplay =
@@ -41,10 +43,10 @@ export type ParameterDisplay =
 export type ParameterOption = { value: string; label: string }
 
 /**
- * A template parameter: an environment variable of the setup script. Whatever its type, its value
+ * A compose parameter: an environment variable of the setup script. Whatever its type, its value
  * and default are text in the form the script reads: `42`, `true`, or a choice per line.
  */
-export type TemplateParameter = {
+export type ComposeParameter = {
   name: string
   label: string
   /** Help shown with the field, such as where to find the value. */
@@ -63,17 +65,17 @@ export type TemplateParameter = {
   step?: number | null
 }
 
-/** What a new environment from an image asks for, and the script that receives it. */
-export type Template = {
-  parameters: TemplateParameter[]
+/** What a new container from an image asks for, and the script that receives it. */
+export type Compose = {
+  parameters: ComposeParameter[]
   script: string
   root: boolean
   timeout_seconds: number
 }
 
-export type EnvironmentSetup = {
+export type ContainerSetup = {
   status: "pending" | "running" | "completed" | "failed"
-  /** The image record the template came from. */
+  /** The image record the compose came from. */
   image: string
   /** Values of the parameters that are not secret. */
   parameters: Record<string, string>
@@ -84,46 +86,45 @@ export type EnvironmentSetup = {
 
 export type Health = "healthy" | "unhealthy" | "starting" | "unknown"
 
-export type EnvironmentItem = {
-  environment: Environment
+/** A container record with Docker's view of it. */
+export type ContainerItem = Container & {
   /** Docker's container state, `missing` without a container or `unavailable` without Docker. */
   state: string
   health: Health
   status: string | null
 }
 
-export type Profile = {
+/**
+ * An image as `GET images` lists it: the catalog images published with Bilskirnir first, then the
+ * saved ones. `kind` is `catalog`, `build`, `snapshot`, `import` or `archive`.
+ */
+export type ImageItem = {
+  /** A catalog image's catalog ID, such as `ubuntu-xfce`, or a saved image's record ID. */
   id: string
   name: string
-  reference: string
-  session: string
-  description: string
-}
-
-export type ProfileItem = {
-  profile: Profile
-  available: boolean
+  /** Docker's image ID; `null` for a catalog image that is not downloaded. */
   image_id: string | null
-  error?: string | null
-}
-
-export type ImageRecord = {
-  id: string
-  name: string
-  image_id: string
   reference: string
   parent_image_id: string | null
-  source_environment: string | null
+  source_container: string | null
   kind: string
-  created_at: number
+  /** `null` for a catalog image. */
+  created_at: number | null
   description: string
   desktop?: DesktopInfo | null
   /** Recorded by script builds; `GET images/{id}/config` adds the script. */
   build?: Omit<BuildConfig, "name" | "script"> | null
-  /** Lists leave out the setup script; `GET images/{id}/template` returns it. */
-  template?: Omit<Template, "script"> | null
-  /** `null` when Docker could not list images. */
+  /** Lists leave out the setup script; `GET images/{id}/compose` returns it. */
+  compose?: Omit<Compose, "script"> | null
+  /**
+   * Whether a container can start from it now, `null` when Docker could not list images. A
+   * catalog image that is not downloaded is not available, but downloads when it is used.
+   */
   available?: boolean | null
+  /** Catalog images: whether Docker has the reference, even one whose labels do not match. */
+  downloaded?: boolean
+  /** Catalog images: why a downloaded reference cannot be used. */
+  error?: string | null
 }
 
 /** A build request, which is also what an image's exported configuration holds. */
@@ -132,7 +133,7 @@ export type BuildConfig = {
   base_image: string
   internet: boolean
   script: string
-  template?: Template
+  compose?: Compose
 }
 
 /** One line of `docker volume ls --format json`. */
@@ -193,4 +194,4 @@ export type Session = { auth_enabled: boolean; authenticated: boolean }
 
 export type JobStarted = { job_id: string }
 
-export type SettingsPreview = { environment_id: string; live: string[]; restart: string[] }
+export type SettingsPreview = { container_id: string; live: string[]; restart: string[] }

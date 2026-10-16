@@ -21,33 +21,27 @@ import {
   ViewTabs,
   type DataColumn,
 } from "@/components/data-table"
-import { InternetSwitch } from "@/components/environment-card"
-import { EnvironmentMenu } from "@/components/environment-menu"
+import { InternetSwitch } from "@/components/container-card"
+import { ContainerMenu } from "@/components/container-menu"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { runJobs } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import {
-  environmentStatus,
-  needsAttention,
-  profileTitle,
-  shortDate,
-  stateLabels,
-} from "@/lib/format"
-import { useEnvironments, useProfiles } from "@/lib/queries"
+import { containerStatus, desktopTitle, needsAttention, shortDate, stateLabels } from "@/lib/format"
+import { useContainers, useImages } from "@/lib/queries"
 import { href } from "@/lib/route"
-import type { EnvironmentItem, ProfileItem } from "@/lib/types"
+import type { ContainerItem, ImageItem } from "@/lib/types"
 
-const column = columnHelper<EnvironmentItem>()
+const column = columnHelper<ContainerItem>()
 
 const views = {
   all: () => true,
-  running: (item: EnvironmentItem) => item.state === "running",
-  stopped: (item: EnvironmentItem) => item.state !== "running",
+  running: (item: ContainerItem) => item.state === "running",
+  stopped: (item: ContainerItem) => item.state !== "running",
   attention: needsAttention,
-} satisfies Record<string, (item: EnvironmentItem) => boolean>
+} satisfies Record<string, (item: ContainerItem) => boolean>
 type View = keyof typeof views
 
 const labels: Record<string, string> = {
@@ -58,36 +52,36 @@ const labels: Record<string, string> = {
   created: "Created",
 }
 
-function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
+function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
   return [
-    selectColumn<EnvironmentItem>(),
-    column.accessor((item) => item.environment.spec.name, {
+    selectColumn<ContainerItem>(),
+    column.accessor((item) => item.spec.name, {
       id: "name",
       header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
       cell: ({ row }) => {
-        const { environment } = row.original
+        const container = row.original
         return (
           <div className="flex min-w-40 flex-col">
             <Button
               variant="link"
               className="h-auto w-fit p-0 text-left text-foreground"
-              onClick={() => openDialog({ kind: "details", id: environment.id })}
+              onClick={() => openDialog({ kind: "details", id: container.id })}
             >
-              {environment.spec.name}
+              {container.spec.name}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {profileTitle(environment.spec, environment.desktop?.title, profiles)}
+              {desktopTitle(container.spec, container.desktop?.title, images)}
             </span>
           </div>
         )
       },
       enableHiding: false,
     }),
-    column.accessor((item) => stateLabels[environmentStatus(item).key] ?? item.state, {
+    column.accessor((item) => stateLabels[containerStatus(item).key] ?? item.state, {
       id: "status",
       header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
       cell: ({ row }) => {
-        const status = environmentStatus(row.original)
+        const status = containerStatus(row.original)
         return <StatusBadge state={status.key} tone={status.tone} />
       },
     }),
@@ -95,7 +89,7 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
       id: "resources",
       header: "Resources",
       cell: ({ row }) => {
-        const { spec } = row.original.environment
+        const { spec } = row.original
         return (
           <div className="flex flex-col text-xs">
             <span>
@@ -113,7 +107,7 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
       id: "devices",
       header: "Devices",
       cell: ({ row }) => {
-        const { spec } = row.original.environment
+        const { spec } = row.original
         const devices = [
           spec.audio && { icon: <RiVolumeUpLine />, label: "Audio" },
           spec.microphone && { icon: <RiMicLine />, label: "Microphone" },
@@ -141,12 +135,12 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
       header: "Internet",
       cell: ({ row }) => <InternetSwitch item={row.original} />,
     }),
-    column.accessor((item) => item.environment.created_at, {
+    column.accessor((item) => item.created_at, {
       id: "created",
       header: ({ column }) => <SortHeader column={column}>Created</SortHeader>,
       cell: ({ row }) => (
         <span className="text-xs whitespace-nowrap text-muted-foreground">
-          {shortDate(row.original.environment.created_at)}
+          {shortDate(row.original.created_at)}
         </span>
       ),
     }),
@@ -158,34 +152,34 @@ function columns(profiles: ProfileItem[]): DataColumn<EnvironmentItem>[] {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" asChild>
-                  <a href={href({ page: "desktop", id: row.original.environment.id })}>
+                  <a href={href({ page: "desktop", id: row.original.id })}>
                     <RiComputerLine />
-                    <span className="sr-only">Connect to {row.original.environment.spec.name}</span>
+                    <span className="sr-only">Connect to {row.original.spec.name}</span>
                   </a>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Connect</TooltipContent>
             </Tooltip>
           )}
-          <EnvironmentMenu item={row.original} />
+          <ContainerMenu item={row.original} />
         </div>
       ),
     }),
   ]
 }
 
-/** dashboard-01's data table, holding the environments with bulk start and stop. */
-export function EnvironmentsTable() {
-  const environments = useEnvironments()
-  const profiles = useProfiles().data
+/** dashboard-01's data table, holding the containers with bulk start and stop. */
+export function ContainersTable() {
+  const containers = useContainers()
+  const images = useImages().data
   const [view, setView] = React.useState<View>("all")
-  const all = React.useMemo(() => environments.data ?? [], [environments.data])
+  const all = React.useMemo(() => containers.data ?? [], [containers.data])
   const data = React.useMemo(() => all.filter(views[view]), [all, view])
-  const cols = React.useMemo(() => columns(profiles ?? []), [profiles])
+  const cols = React.useMemo(() => columns(images ?? []), [images])
   const table = useDataTable({
     data,
     columns: cols,
-    getRowId: (item) => item.environment.id,
+    getRowId: (item) => item.id,
     selectable: true,
     sorting: [{ id: "name", desc: false }],
   })
@@ -194,11 +188,11 @@ export function EnvironmentsTable() {
   const stoppable = selected.filter((item) => item.state === "running")
   const count = (key: View) => all.filter(views[key]).length
 
-  const bulk = (items: EnvironmentItem[], action: "start" | "stop") => {
+  const bulk = (items: ContainerItem[], action: "start" | "stop") => {
     table.resetRowSelection()
     void runJobs(
       items.map((item) => ({
-        path: `environments/${item.environment.id}/action`,
+        path: `containers/${item.id}/action`,
         body: { action },
       }))
     )
@@ -221,7 +215,7 @@ export function EnvironmentsTable() {
             table.setPageIndex(0)
           }}
           views={[
-            { value: "all", label: "All environments" },
+            { value: "all", label: "All containers" },
             { value: "running", label: "Running", count: count("running") },
             { value: "stopped", label: "Stopped", count: count("stopped") },
             { value: "attention", label: "Needs attention", count: count("attention") },
@@ -261,7 +255,7 @@ export function EnvironmentsTable() {
           <ColumnsMenu table={table} labels={labels} />
           <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "create" })}>
             <RiAddLine data-icon="inline-start" />
-            <span className="hidden lg:inline">New environment</span>
+            <span className="hidden lg:inline">New container</span>
           </Button>
         </div>
       </div>
@@ -269,11 +263,11 @@ export function EnvironmentsTable() {
         <DataTableView
           table={table}
           empty={
-            environments.isPending
-              ? "Loading environments…"
+            containers.isPending
+              ? "Loading containers…"
               : all.length
-                ? "No environments in this view."
-                : "No environments yet."
+                ? "No containers in this view."
+                : "No containers yet."
           }
         />
         <DataTablePagination table={table} selectable />

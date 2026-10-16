@@ -1,12 +1,5 @@
 import { fileSize } from "./uploads"
-import type {
-  DownloadProgress,
-  EnvironmentItem,
-  EnvironmentSpec,
-  ImageRecord,
-  Job,
-  ProfileItem,
-} from "./types"
+import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } from "./types"
 
 export const LEGACY_IMAGE = "wsl-desktop/ubuntu:24.04"
 const LEGACY_TITLE = "Ubuntu 24.04 · Lightweight XFCE (legacy)"
@@ -44,25 +37,30 @@ export const stateLabels: Record<string, string> = {
   interrupted: "Interrupted",
   ready: "Ready",
   not_ready: "Not downloaded",
+  unusable: "Not usable",
+  unknown: "Unknown",
   unhealthy: "Desktop error",
   setting_up: "Setting up",
   setup_failed: "Setup failed",
 }
 
 export const jobNames: Record<string, string> = {
-  create: "Create environment",
+  create: "Create container",
   retry: "Retry setup",
   start: "Start",
   stop: "Stop",
   restart: "Restart",
-  delete: "Delete environment",
+  delete: "Delete container",
   internet: "Internet",
   build: "Build image",
-  "profile-build": "Build profile",
-  "profile-pull": "Download profile",
+  "image-pull": "Download image",
+  "source-build": "Build from source",
+  // The kinds these jobs had before catalog images were listed with the others.
+  "profile-pull": "Download image",
+  "profile-build": "Build from source",
   snapshot: "Snapshot",
   exec: "Run script",
-  reset: "Reset environment",
+  reset: "Reset container",
   settings: "Change settings",
   "image-export": "Export archive",
   "image-import": "Import archive",
@@ -70,34 +68,34 @@ export const jobNames: Record<string, string> = {
 
 export type Tone = "success" | "warning" | "danger" | "muted" | "info"
 
-/** What a card or row shows as the environment's state, and the color family for it. */
-export function environmentStatus(item: EnvironmentItem): { key: string; tone: Tone } {
+/** What a card or row shows as the container's state, and the color family for it. */
+export function containerStatus(item: ContainerItem): { key: string; tone: Tone } {
   const running = item.state === "running"
   if (item.health === "unhealthy") return { key: "unhealthy", tone: "danger" }
   if (running && item.health === "starting") return { key: "created", tone: "warning" }
-  // A template setup that is waiting with an error recorded did not get to run.
-  const setup = item.environment.setup?.status
-  const failed = setup === "failed" || (setup === "pending" && !!item.environment.last_error)
+  // A compose setup that is waiting with an error recorded did not get to run.
+  const setup = item.setup?.status
+  const failed = setup === "failed" || (setup === "pending" && !!item.last_error)
   if (running && failed) return { key: "setup_failed", tone: "danger" }
   if (running && (setup === "pending" || setup === "running"))
     return { key: "setting_up", tone: "info" }
   if (running) return { key: "running", tone: "success" }
-  if (item.state === "missing" || item.state === "unavailable" || item.environment.last_error)
+  if (item.state === "missing" || item.state === "unavailable" || item.last_error)
     return { key: item.state, tone: "danger" }
   if (["created", "restarting", "paused"].includes(item.state))
     return { key: item.state, tone: "warning" }
   return { key: item.state, tone: "muted" }
 }
 
-/** A stopped desktop whose setup did not finish offers a retry instead of a start. */
-export const needsRetry = (item: EnvironmentItem) =>
-  item.state !== "running" && (item.state === "missing" || !!item.environment.last_error)
+/** A stopped container whose setup did not finish offers a retry instead of a start. */
+export const needsRetry = (item: ContainerItem) =>
+  item.state !== "running" && (item.state === "missing" || !!item.last_error)
 
-export const needsAttention = (item: EnvironmentItem) =>
+export const needsAttention = (item: ContainerItem) =>
   needsRetry(item) ||
   item.health === "unhealthy" ||
   item.state === "unavailable" ||
-  environmentStatus(item).key === "setup_failed"
+  containerStatus(item).key === "setup_failed"
 
 export function jobTone(status: string): Tone {
   if (status === "completed") return "success"
@@ -110,36 +108,68 @@ export const jobActive = (job: Pick<Job, "status">) =>
   job.status === "queued" || job.status === "running"
 
 /**
- * What a job worked on, by name. The manager records `environment:<id>`, `profile:<id>` or
- * `image:<id>`; a deleted environment keeps the name its deletion job reported, or a short ID.
+ * What a job worked on, by name. The manager records `container:<id>` or `image:<id>`, where a
+ * catalog image's ID is its catalog ID; a deleted container keeps the name its deletion job
+ * reported, or a short ID.
  */
 export function jobTarget(
   job: Pick<Job, "resource" | "result">,
-  environments: Map<string, string>,
-  profiles: Map<string, string>,
+  containers: Map<string, string>,
   images = new Map<string, string>()
 ) {
   if (!job.resource) return ""
   const [kind, id] = job.resource.split(/:(.*)/s)
   const reported = job.result?.name as string | undefined
-  if (kind === "environment" && id)
-    return environments.get(id) ?? reported ?? `Environment ${id.slice(0, 8)}`
-  if (kind === "profile" && id) return profiles.get(id) ?? id
+  // Jobs from before environments were called containers name them `environment:<id>`.
+  if ((kind === "container" || kind === "environment") && id)
+    return containers.get(id) ?? reported ?? `Container ${id.slice(0, 8)}`
+  // Downloads recorded before catalog images were listed with the others name `profile:<id>`.
+  if (kind === "profile" && id) return images.get(id) ?? id
   if (kind === "image" && id) return images.get(id) ?? reported ?? `Image ${id.slice(0, 8)}`
   return job.resource
 }
 
-export function profileTitle(
-  spec: EnvironmentSpec,
-  desktopTitle: string | undefined,
-  profiles: ProfileItem[]
+/** The desktop a container runs: its image's desktop title, or the catalog image it names. */
+export function desktopTitle(
+  spec: ContainerSpec,
+  title: string | undefined,
+  images: Pick<ImageItem, "kind" | "reference" | "name">[]
 ) {
   return (
-    desktopTitle ||
-    profiles.find((item) => item.profile.reference === spec.image)?.profile.name ||
+    title ||
+    images.find((image) => image.kind === "catalog" && image.reference === spec.image)?.name ||
     (spec.image === LEGACY_IMAGE ? LEGACY_TITLE : "Custom desktop")
   )
 }
+
+/** Where an image came from, as the image list names it. */
+export const imageKinds: Record<string, string> = {
+  catalog: "Catalog",
+  build: "Build",
+  snapshot: "Snapshot",
+  import: "Import",
+  archive: "Archive",
+}
+
+/** Whether an image can start a container now, and the color family for it. */
+export function imageStatus(image: Pick<ImageItem, "kind" | "available" | "error">): {
+  key: string
+  tone: Tone
+} {
+  if (image.available === null || image.available === undefined)
+    return { key: "unknown", tone: "muted" }
+  if (image.available) return { key: "ready", tone: "success" }
+  if (image.kind !== "catalog") return { key: "missing", tone: "danger" }
+  // A catalog image that is not downloaded is fine: it downloads when it is used.
+  return image.error ? { key: "unusable", tone: "danger" } : { key: "not_ready", tone: "muted" }
+}
+
+/**
+ * What a container or a build names to start from an image: a catalog image by its reference, so
+ * one that is not downloaded yet downloads first, and a saved image by its Docker ID.
+ */
+export const imageSource = (image: Pick<ImageItem, "kind" | "reference" | "image_id">) =>
+  image.kind === "catalog" ? image.reference : (image.image_id ?? image.reference)
 
 export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.log?.trim()) return job.log
@@ -148,7 +178,7 @@ export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.status === "completed") {
     if (job.result?.deleted) {
       const name = job.result.name as string | undefined
-      return `${name ? `Deleted "${name}".` : "Environment deleted."}${job.result.volumes_preserved ? " Named volumes were preserved." : ""}${job.result.images_preserved ? " Saved images were preserved." : ""}`
+      return `${name ? `Deleted "${name}".` : "Container deleted."}${job.result.volumes_preserved ? " Named volumes were preserved." : ""}${job.result.images_preserved ? " Saved images were preserved." : ""}`
     }
     return "Operation completed successfully. No detailed log was recorded."
   }
@@ -196,20 +226,24 @@ export function jobProgress(progress?: DownloadProgress | null): DownloadSummary
 
 export type ImageChoice = { value: string; label: string; disabled: boolean }
 
+type Choosable = Pick<
+  ImageItem,
+  "kind" | "reference" | "image_id" | "name" | "desktop" | "available" | "error"
+>
+
 export function imageChoices(
-  profiles: ProfileItem[],
-  records: Pick<ImageRecord, "image_id" | "name" | "desktop" | "available">[],
+  images: Choosable[],
   defaultImage?: string,
   selected?: string
 ): ImageChoice[] {
   const choices = new Map<string, ImageChoice>()
-  // A missing profile downloads when it is used; one whose image does not match its labels cannot be used.
-  for (const item of profiles)
-    choices.set(item.profile.reference, {
-      value: item.profile.reference,
-      label:
-        item.available || item.error ? item.profile.name : `${item.profile.name} · downloads first`,
-      disabled: !item.available && !!item.error,
+  const catalog = images.filter((image) => image.kind === "catalog")
+  // A catalog image downloads when it is used; one whose image does not match its labels cannot be used.
+  for (const image of catalog)
+    choices.set(image.reference, {
+      value: image.reference,
+      label: image.available || image.error ? image.name : `${image.name} · downloads first`,
+      disabled: !image.available && !!image.error,
     })
   if (defaultImage && !choices.has(defaultImage))
     choices.set(defaultImage, {
@@ -217,12 +251,14 @@ export function imageChoices(
       label: defaultImage === LEGACY_IMAGE ? LEGACY_TITLE : defaultImage,
       disabled: false,
     })
-  for (const record of records)
-    choices.set(record.image_id, {
-      value: record.image_id,
-      label: record.desktop ? `${record.name} · ${record.desktop.title}` : record.name,
-      disabled: record.available === false,
+  for (const image of images) {
+    if (image.kind === "catalog" || !image.image_id) continue
+    choices.set(image.image_id, {
+      value: image.image_id,
+      label: image.desktop ? `${image.name} · ${image.desktop.title}` : image.name,
+      disabled: image.available === false,
     })
+  }
   if (selected && !choices.has(selected))
     choices.set(selected, { value: selected, label: selected, disabled: false })
   return [...choices.values()]
@@ -235,7 +271,7 @@ export function initialImage(choices: ImageChoice[], wanted?: string) {
     : choices.find((item) => !item.disabled)?.value
 }
 
-type TreeRecord = Pick<ImageRecord, "id" | "image_id" | "parent_image_id">
+type TreeRecord = Pick<ImageItem, "id" | "image_id" | "parent_image_id">
 
 export function imageTree<T extends TreeRecord>(records: T[]): (T & { depth: number })[] {
   const ids = new Set(records.map((r) => r.image_id))
@@ -254,7 +290,8 @@ export function imageTree<T extends TreeRecord>(records: T[]): (T & { depth: num
       if (seen.has(item.id)) continue
       seen.add(item.id)
       result.push({ ...item, depth: level })
-      const children = parents.get(item.image_id) || []
+      // A catalog image that is not downloaded has no Docker ID, so nothing builds on it.
+      const children = (item.image_id && parents.get(item.image_id)) || []
       for (let i = children.length - 1; i >= 0; i--) stack.push([children[i], level + 1])
     }
   }
@@ -282,13 +319,13 @@ export function restartNotice(fields: string[], running: boolean) {
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]
   const subject = list.charAt(0).toUpperCase() + list.slice(1)
   const effect = running
-    ? "the desktop restarts and open applications close"
-    : "the desktop stays stopped until you start it"
-  return `${subject} ${names.length > 1 ? "need" : "needs"} a new container: ${effect}. Files in the container are kept.`
+    ? "it restarts and open applications close"
+    : "it stays stopped until you start it"
+  return `${subject} ${names.length > 1 ? "recreate" : "recreates"} the container: ${effect}. Its files are kept.`
 }
 
 /** Writable places an upload can go: Downloads unless a read-only volume covers it, and writable volumes. */
-export function uploadLocations(spec: Pick<EnvironmentSpec, "mounts">) {
+export function uploadLocations(spec: Pick<ContainerSpec, "mounts">) {
   const covered = (mount: { target: string }) =>
     DESKTOP_HOME === mount.target || DESKTOP_HOME.startsWith(`${mount.target}/`)
   const homeReadOnly = spec.mounts.some((mount) => mount.readonly && covered(mount))
@@ -341,14 +378,14 @@ export function jobActivity(
   return [...points.values()]
 }
 
-/** Sum of CPU and memory limits over running desktops; an unlimited desktop adds nothing. */
-export function limitTotals(items: EnvironmentItem[]) {
+/** Sum of CPU and memory limits over running containers; an unlimited container adds nothing. */
+export function limitTotals(items: ContainerItem[]) {
   let cpus = 0
   let memoryMb = 0
   let unlimited = 0
   for (const item of items) {
     if (item.state !== "running") continue
-    const { spec } = item.environment
+    const { spec } = item
     if (spec.cpus) cpus += spec.cpus
     if (spec.memory_mb) memoryMb += spec.memory_mb
     if (!spec.cpus || !spec.memory_mb) unlimited++

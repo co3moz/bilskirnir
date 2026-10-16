@@ -1,5 +1,5 @@
-//! Template parameters: what a value of each type accepts, how the create form may show it, and
-//! the text the setup script receives for it. Every value reaches the script as an environment
+//! Compose parameters: what a value of each type accepts, how the create form may show it, and
+//! the text the setup script receives for it. Every value reaches the script as a container
 //! variable, so whatever its type, a value is text here, in the form the script reads it.
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -291,7 +291,7 @@ impl Parameter {
         self.options.iter().any(|option| option.value == value)
     }
 
-    /// The value a new environment gives the script: the one given, otherwise the default. A
+    /// The value a new container gives the script: the one given, otherwise the default. A
     /// boolean without one is `false`.
     pub(super) fn resolve(&self, given: Option<&String>) -> Result<String> {
         let mut value = given.unwrap_or(&self.default).clone();

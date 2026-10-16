@@ -25,7 +25,7 @@ import { ArchiveImport, archiveName, readArchiveInfo, type ArchiveInfo } from "@
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { refreshAll, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
-import { useSubmit } from "./environment-dialogs"
+import { useSubmit } from "./container-dialogs"
 import { Footer } from "./simple-dialogs"
 import type { DialogProps } from "./side-drawer"
 

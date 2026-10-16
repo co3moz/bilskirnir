@@ -120,13 +120,13 @@ async fn a_failed_export_breaks_the_download_and_fails_its_job() {
         image_id: format!("sha256:{}", "a".repeat(64)),
         reference: "bilskirnir/snapshot:saved".into(),
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "snapshot".into(),
         created_at: 1,
         description: String::new(),
         desktop: None,
         build: None,
-        template: None,
+        compose: None,
     };
     app.db.put("image", &record.id, &record).unwrap();
     let response = crate::router(app.clone())
@@ -242,13 +242,13 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         image_id: format!("sha256:{}", "d".repeat(64)),
         reference: "bilskirnir/custom:built".into(),
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "build".into(),
         created_at: 1,
         description: String::new(),
         desktop: None,
         build: Some(build.clone()),
-        template: None,
+        compose: None,
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -263,8 +263,8 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
 }
 
 #[test]
-fn a_template_travels_with_the_archive_and_an_invalid_one_is_dropped() {
-    let template = Template {
+fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
+    let compose = Compose {
         // A choice carries the most fields a parameter has.
         parameters: vec![
             serde_json::from_value(json!({
@@ -284,22 +284,22 @@ fn a_template_travels_with_the_archive_and_an_invalid_one_is_dropped() {
         image_id: format!("sha256:{}", "e".repeat(64)),
         reference: "bilskirnir/snapshot:snap".into(),
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "snapshot".into(),
         created_at: 1,
         description: String::new(),
         desktop: None,
         build: None,
-        template: Some(template.clone()),
+        compose: Some(compose.clone()),
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
-        ArchiveInfo::read(Some(&written)).unwrap().template,
-        Some(template)
+        ArchiveInfo::read(Some(&written)).unwrap().compose,
+        Some(compose)
     );
-    // A template the template route would refuse is not kept, but the rest of the metadata is.
+    // A compose the compose route would refuse is not kept, but the rest of the metadata is.
     let mut refused: Value = serde_json::from_slice(&written).unwrap();
-    refused["template"]["parameters"][0]["name"] = json!("PATH");
+    refused["compose"]["parameters"][0]["name"] = json!("PATH");
     let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
-    assert!(info.template.is_none() && info.name == "Unity project");
+    assert!(info.compose.is_none() && info.name == "Unity project");
 }

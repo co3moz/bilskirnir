@@ -41,7 +41,7 @@ const info = {
   name: "Unity workspace",
   description: "Editor and tools",
   kind: "snapshot",
-  desktop: { profile: "ubuntu-xfce", title: "Ubuntu 24.04 · XFCE", session: "xfce" },
+  desktop: { catalog_id: "ubuntu-xfce", title: "Ubuntu 24.04 · XFCE", session: "xfce" },
 }
 
 /** An exported archive: the metadata entry, then a large layer that does not compress. */

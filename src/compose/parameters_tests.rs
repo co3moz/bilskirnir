@@ -248,8 +248,8 @@ fn a_parameter_is_written_back_as_it_was_given() {
 #[test]
 fn the_interface_offers_the_displays_this_module_accepts() {
     // The editor offers what this list allows, so a display added or dropped here has to reach
-    // web/src/lib/templates.ts in the same change.
-    let interface = include_str!("../../web/src/lib/templates.ts");
+    // web/src/lib/compose.ts in the same change.
+    let interface = include_str!("../../web/src/lib/compose.ts");
     for kind in [
         Kind::Text,
         Kind::Number,
@@ -268,7 +268,7 @@ fn the_interface_offers_the_displays_this_module_accepts() {
         );
         assert!(
             interface.contains(&line),
-            "web/src/lib/templates.ts must list {line}"
+            "web/src/lib/compose.ts must list {line}"
         );
     }
 }

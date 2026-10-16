@@ -59,7 +59,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
   const data = job.data
   const progress = data?.status === "running" ? jobProgress(data.progress) : null
   const result = data?.result as
-    { reference?: string; image_id?: string; environment_id?: string } | null | undefined
+    { reference?: string; image_id?: string; container_id?: string } | null | undefined
 
   return (
     <SideDrawer {...props} wide>
@@ -107,19 +107,19 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
         {result?.image_id && result.reference && (
           <Button onClick={() => openDialog({ kind: "create", image: result.image_id })}>
             <RiAddLine data-icon="inline-start" />
-            Create environment
+            Create container
           </Button>
         )}
-        {result?.environment_id && (
+        {result?.container_id && (
           <Button
             variant="outline"
             onClick={() => {
               closeDialog()
-              navigate({ page: "environments" })
+              navigate({ page: "containers" })
             }}
           >
             <RiComputerLine data-icon="inline-start" />
-            View environments
+            View containers
           </Button>
         )}
         <DrawerClose asChild>

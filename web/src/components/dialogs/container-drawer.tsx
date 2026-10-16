@@ -10,8 +10,8 @@ import {
   RiUploadLine,
 } from "@remixicon/react"
 
-import { PrimaryAction, SpecBadges } from "@/components/environment-card"
-import { EnvironmentPreview } from "@/components/environment-preview"
+import { PrimaryAction, SpecBadges } from "@/components/container-card"
+import { ContainerPreview } from "@/components/container-preview"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -23,12 +23,12 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Separator } from "@/components/ui/separator"
-import { attempt, environmentAction, retrySetup, showLog } from "@/lib/actions"
+import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { date, environmentStatus, profileTitle } from "@/lib/format"
-import { useEnvironments, useProfiles } from "@/lib/queries"
-import { setupLabel } from "@/lib/templates"
-import type { EnvironmentSetup } from "@/lib/types"
+import { containerStatus, date, desktopTitle } from "@/lib/format"
+import { useContainers, useImages } from "@/lib/queries"
+import { setupLabel } from "@/lib/compose"
+import type { ContainerSetup } from "@/lib/types"
 import { SideDrawer, type DialogProps } from "./side-drawer"
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -47,48 +47,43 @@ const setupTone = {
   running: "info",
   completed: "success",
   failed: "danger",
-} as const satisfies Record<EnvironmentSetup["status"], string>
+} as const satisfies Record<ContainerSetup["status"], string>
 
-/** dashboard-01's row viewer for one environment: preview, configuration and every action. */
-export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }) {
-  const item = useEnvironments().data?.find((entry) => entry.environment.id === id)
-  const profiles = useProfiles().data ?? []
+/** dashboard-01's row viewer for one container: preview, configuration and every action. */
+export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) {
+  const item = useContainers().data?.find((entry) => entry.id === id)
+  const images = useImages().data ?? []
   if (!item)
     return (
       <SideDrawer {...props}>
         <DrawerHeader>
-          <DrawerTitle>Environment</DrawerTitle>
-          <DrawerDescription>This environment no longer exists.</DrawerDescription>
+          <DrawerTitle>Container</DrawerTitle>
+          <DrawerDescription>This container no longer exists.</DrawerDescription>
         </DrawerHeader>
       </SideDrawer>
     )
-  const { environment } = item
-  const { spec } = environment
+  const { spec, setup } = item
   const running = item.state === "running"
-  const status = environmentStatus(item)
-  const { setup } = environment
+  const status = containerStatus(item)
   // A setup still waiting after an error did not get to run, which reads as a failure.
-  const setupStatus =
-    setup?.status === "pending" && environment.last_error ? "failed" : setup?.status
+  const setupStatus = setup?.status === "pending" && item.last_error ? "failed" : setup?.status
 
   return (
     <SideDrawer {...props}>
       <DrawerHeader className="gap-1">
         <DrawerTitle>{spec.name}</DrawerTitle>
-        <DrawerDescription>
-          {profileTitle(spec, environment.desktop?.title, profiles)}
-        </DrawerDescription>
+        <DrawerDescription>{desktopTitle(spec, item.desktop?.title, images)}</DrawerDescription>
       </DrawerHeader>
       <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-        <EnvironmentPreview item={item} />
+        <ContainerPreview item={item} />
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge state={status.key} tone={status.tone} />
           {item.status && <span className="text-xs text-muted-foreground">{item.status}</span>}
         </div>
-        {environment.last_error && (
+        {item.last_error && (
           <Alert variant="destructive">
             <AlertTitle>Setup did not finish</AlertTitle>
-            <AlertDescription>{environment.last_error}</AlertDescription>
+            <AlertDescription>{item.last_error}</AlertDescription>
           </Alert>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -108,13 +103,13 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             <RiUploadLine data-icon="inline-start" />
             Upload files
           </Button>
-          <Button variant="outline" onClick={() => attempt(() => environmentAction(id, "restart"))}>
+          <Button variant="outline" onClick={() => attempt(() => containerAction(id, "restart"))}>
             <RiRestartLine data-icon="inline-start" />
             Restart
           </Button>
           <Button
             variant="outline"
-            onClick={() => attempt(() => showLog(`${spec.name} logs`, `environments/${id}/logs`))}
+            onClick={() => attempt(() => showLog(`${spec.name} logs`, `containers/${id}/logs`))}
           >
             <RiFileTextLine data-icon="inline-start" />
             Logs
@@ -122,14 +117,14 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
           <Button
             variant="outline"
             onClick={() =>
-              attempt(() => showLog(`${spec.name} diagnostics`, `environments/${id}/diagnostics`))
+              attempt(() => showLog(`${spec.name} diagnostics`, `containers/${id}/diagnostics`))
             }
           >
             <RiStethoscopeLine data-icon="inline-start" />
             Diagnostics
           </Button>
           {running && (
-            <Button variant="outline" onClick={() => attempt(() => environmentAction(id, "stop"))}>
+            <Button variant="outline" onClick={() => attempt(() => containerAction(id, "stop"))}>
               <RiStopCircleLine data-icon="inline-start" />
               Stop
             </Button>
@@ -146,9 +141,9 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
           <Fact label="Shared memory">{spec.shm_mb} MB</Fact>
           <Fact label="Internet">{yes(spec.internet)}</Fact>
           <Fact label="Sudo">{yes(spec.sudo)}</Fact>
-          <Fact label="Created">{date(environment.created_at)}</Fact>
-          <Fact label="Container">
-            <code className="font-mono text-xs">{environment.container}</code>
+          <Fact label="Created">{date(item.created_at)}</Fact>
+          <Fact label="Docker name">
+            <code className="font-mono text-xs">{item.container}</code>
           </Fact>
           <div className="col-span-2">
             <Fact label="Image">
@@ -182,7 +177,7 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
             <Separator />
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs text-muted-foreground">Template setup</h3>
+                <h3 className="text-xs text-muted-foreground">Compose setup</h3>
                 <StatusBadge
                   state={setupStatus}
                   tone={setupTone[setupStatus]}

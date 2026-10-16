@@ -1,4 +1,4 @@
-//! Changing an environment's settings after it was created.
+//! Changing a container's settings after it was created.
 //!
 //! Docker fixes a container's environment variables, devices, shared memory size and mounts
 //! when it creates the container, and `docker update` changes a resource limit but cannot
@@ -9,8 +9,8 @@ use crate::{App, model::*};
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value, json};
 
-/// Settings an existing environment accepts. The image is not one of them: a reset recreates
-/// the desktop from its image, and a snapshot can start a new environment.
+/// Settings an existing container accepts. The image is not one of them: a reset recreates
+/// the desktop from its image, and a snapshot can start a new container.
 const EDITABLE: &[&str] = &[
     "name",
     "resolution",
@@ -37,31 +37,31 @@ pub(crate) struct Changes {
 
 /// Apply a partial settings object to the current settings.
 pub(crate) fn merged_spec(
-    current: &EnvironmentSpec,
+    current: &ContainerSpec,
     request: &Map<String, Value>,
-) -> Result<EnvironmentSpec> {
+) -> Result<ContainerSpec> {
     let mut value = serde_json::to_value(current)?;
     for (key, field) in request {
         if key == "image" {
             if field.as_str() != Some(current.image.as_str()) {
                 bail!(
-                    "The image of an existing environment cannot change; a reset recreates the desktop from its image, and a snapshot can start a new environment"
+                    "The image of an existing container cannot change; a reset recreates the container from its image, and a snapshot can start a new container"
                 );
             }
         } else if EDITABLE.contains(&key.as_str()) {
             value[key] = field.clone();
         } else {
-            bail!("Unknown environment setting: {key}");
+            bail!("Unknown container setting: {key}");
         }
     }
-    let spec: EnvironmentSpec =
-        serde_json::from_value(value).context("Invalid environment settings")?;
+    let spec: ContainerSpec =
+        serde_json::from_value(value).context("Invalid container settings")?;
     spec.validate()?;
     Ok(spec)
 }
 
 /// Which settings differ, and whether each applies in place or recreates the container.
-pub(crate) fn classify(old: &EnvironmentSpec, new: &EnvironmentSpec) -> Changes {
+pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     let mut changes = Changes::default();
     let mut note = |changed: bool, live: bool, name: &'static str| match (changed, live) {
         (false, _) => {}
@@ -101,7 +101,7 @@ pub(crate) fn classify(old: &EnvironmentSpec, new: &EnvironmentSpec) -> Changes 
 /// `docker update` arguments for limits that change in place, without the container. Docker
 /// keeps the old swap limit unless told otherwise, and it must not fall below the memory limit;
 /// twice the memory is the default that `docker create` gave it.
-pub(crate) fn update_args(old: &EnvironmentSpec, new: &EnvironmentSpec) -> Option<Vec<String>> {
+pub(crate) fn update_args(old: &ContainerSpec, new: &ContainerSpec) -> Option<Vec<String>> {
     let mut args = vec!["update".to_owned()];
     if old.cpus != new.cpus
         && let Some(cpus) = new.cpus
@@ -125,9 +125,9 @@ impl App {
     /// Check a settings request and report what it would change, without changing anything.
     pub(crate) fn settings_preview(
         &self,
-        env: &Environment,
+        env: &Container,
         request: &Map<String, Value>,
-    ) -> Result<(EnvironmentSpec, Changes)> {
+    ) -> Result<(ContainerSpec, Changes)> {
         let spec = merged_spec(&env.spec, request)?;
         // Only a feature being switched on needs the installation's permission; a desktop that
         // already has one keeps it after the installation turns it off, as it did before.
@@ -140,17 +140,16 @@ impl App {
         Ok((spec, changes))
     }
 
-    /// Apply a settings request to an environment.
-    pub async fn update_environment(
+    /// Apply a settings request to a container.
+    pub async fn update_container(
         &self,
         id: &str,
         request: Map<String, Value>,
         job_id: &str,
     ) -> Result<Value> {
-        let mut env = self.environment(id).map_err(|e| anyhow::anyhow!(e.1))?;
+        let mut env = self.container(id).map_err(|e| anyhow::anyhow!(e.1))?;
         let (spec, changes) = self.settings_preview(&env, &request)?;
-        let result =
-            json!({"environment_id": id, "live": changes.live, "restart": changes.restart});
+        let result = json!({"container_id": id, "live": changes.live, "restart": changes.restart});
         if changes.live.is_empty() && changes.restart.is_empty() {
             self.append_log(job_id, "The settings are unchanged.")?;
             return Ok(result);
@@ -166,7 +165,7 @@ impl App {
             .is_none()
         {
             env.spec = spec;
-            self.db.put("environment", id, &env)?;
+            self.db.put(CONTAINERS, id, &env)?;
             self.append_log(
                 job_id,
                 "Saved the settings. The container is missing, so they apply when setup is retried.",
@@ -192,15 +191,15 @@ impl App {
             self.append_log(
                 job_id,
                 if spec.internet {
-                    "Connected the desktop to the internet."
+                    "Connected the container to the internet."
                 } else {
-                    "Disconnected the desktop from the internet."
+                    "Disconnected the container from the internet."
                 },
             )?;
         }
         env.spec = spec;
-        self.db.put("environment", id, &env)?;
-        self.append_log(job_id, "Saved the settings. The desktop kept running.")?;
+        self.db.put(CONTAINERS, id, &env)?;
+        self.append_log(job_id, "Saved the settings. The container kept running.")?;
         Ok(result)
     }
 
@@ -208,8 +207,8 @@ impl App {
     /// The old container is renamed aside, not removed, until its replacement has started.
     async fn recreate(
         &self,
-        mut env: Environment,
-        spec: EnvironmentSpec,
+        mut env: Container,
+        spec: ContainerSpec,
         info: &Value,
         job_id: &str,
     ) -> Result<()> {
@@ -229,14 +228,14 @@ impl App {
             );
         }
         if running {
-            self.append_log(job_id, "Stopping the desktop. Open applications close.")?;
+            self.append_log(job_id, "Stopping the container. Open applications close.")?;
             self.docker(&["stop", "--time", "30", &old_id]).await?;
         }
         self.append_log(
             job_id,
             "Saving the container's files for the new container. Named volumes stay where they are.",
         )?;
-        let reference = format!("bilskirnir/environment:{job_id}");
+        let reference = format!("bilskirnir/container:{job_id}");
         let committed = async {
             self.docker_logged(
                 job_id,
@@ -303,12 +302,12 @@ impl App {
             return Err(error);
         }
         env.last_error = None;
-        self.db.put("environment", &env.id, &env)?;
-        self.remove_environment_records(&env.id)?;
+        self.db.put(CONTAINERS, &env.id, &env)?;
+        self.remove_container_records(&env.id)?;
         self.docker(&["rm", "--force", &old_id])
             .await
             .with_context(|| {
-                format!("The desktop uses the new settings, but {previous} could not be removed")
+                format!("The container uses the new settings, but {previous} could not be removed")
             })?;
         if let Some(image) = earlier {
             self.release_working_image(&image, job_id).await?;
@@ -316,9 +315,9 @@ impl App {
         self.append_log(
             job_id,
             if running {
-                "Recreated and started the desktop with the new settings. Its files were kept."
+                "Recreated and started the container with the new settings. Its files were kept."
             } else {
-                "Recreated the stopped desktop with the new settings. Its files were kept; start it to use them."
+                "Recreated the stopped container with the new settings. Its files were kept; start it to use them."
             },
         )?;
         Ok(())
@@ -331,7 +330,7 @@ impl App {
         image: &WorkingImage,
         job_id: &str,
     ) -> Result<()> {
-        // Only a tag this environment created, and only while it still names the same image.
+        // Only a tag this container created, and only while it still names the same image.
         let Ok(info) = self.inspect("image", &image.reference).await else {
             return Ok(());
         };
@@ -341,7 +340,7 @@ impl App {
         match self.docker(&["image", "rm", &image.reference]).await {
             Ok(_) => self.append_log(
                 job_id,
-                "Removed the image that carried the desktop's files across settings changes.",
+                "Removed the image that carried the container's files across settings changes.",
             ),
             Err(error) => self.append_log(job_id, &format!("Kept {}: {error:#}", image.reference)),
         }

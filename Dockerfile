@@ -13,7 +13,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY desktop/profiles.json desktop/profiles.json
 # A release build names its version, and the manager then downloads the desktop images published
-# with it. Without it, the manager downloads each profile's catalog reference.
+# with it. Without it, the manager downloads each catalog image's reference.
 ARG BILSKIRNIR_RELEASE
 RUN cargo build --release --locked
 

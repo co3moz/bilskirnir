@@ -23,41 +23,23 @@ pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
         json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit}),
     )
 }
-pub async fn profiles(State(app): State<Arc<App>>) -> Json<Value> {
-    let results = futures_util::future::join_all(crate::profiles::catalog().into_iter().map(|profile| {
-        let app = app.clone();
-        async move {
-            match app.inspect("image", &profile.reference).await {
-                Ok(info) => {
-                    let desktop = crate::profiles::from_image(&info);
-                    let available = desktop.as_ref().is_some_and(|d| d.profile == profile.id && d.session == profile.session);
-                    json!({"profile": profile, "available": available, "image_id": info["Id"], "error": if available {None} else {Some("Image labels do not match the profile")}})
-                }
-                Err(_) => json!({"profile": profile, "available": false, "image_id": null}),
-            }
-        }
-    })).await;
-    Json(json!(results))
-}
-pub async fn build_profile(
+/// Build a catalog image from the bundled Docker context instead of downloading it.
+pub async fn build_catalog(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let profile = crate::profiles::catalog()
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(missing)?;
-    let resource = format!("profile:{}", profile.id);
+    let image = crate::catalog::find(&id).ok_or_else(missing)?;
+    let resource = format!("image:{}", image.id);
     launch(
         app,
-        "profile-build",
+        "source-build",
         resource,
         move |app, job_id| async move {
             app.append_log(
                 &job_id,
                 &format!(
                     "Building {}. Package installation requires internet access.",
-                    profile.name
+                    image.name
                 ),
             )?;
             app.docker_logged(
@@ -66,35 +48,30 @@ pub async fn build_profile(
                     "build".into(),
                     "--progress=plain".into(),
                     "--target".into(),
-                    profile.build_target.clone(),
+                    image.build_target.clone(),
                     "-t".into(),
-                    profile.reference.clone(),
+                    image.reference.clone(),
                     app.config.desktop_context.to_string_lossy().into_owned(),
                 ],
             )
             .await?;
-            let info = app.inspect("image", &profile.reference).await?;
+            let info = app.inspect("image", &image.reference).await?;
             Ok(
-                json!({"profile_id": profile.id, "reference": profile.reference, "image_id": info["Id"]}),
+                json!({"id": image.id, "kind": "catalog", "reference": image.reference, "image_id": info["Id"]}),
             )
         },
     )
 }
-pub async fn pull_profile(
+/// Download a catalog image, or a newer release of it.
+pub async fn pull_catalog(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let profile = crate::profiles::catalog()
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(missing)?;
-    let resource = format!("profile:{}", profile.id);
-    launch(
-        app,
-        "profile-pull",
-        resource,
-        move |app, job_id| async move { app.pull_profile(&profile, &job_id).await },
-    )
+    let image = crate::catalog::find(&id).ok_or_else(missing)?;
+    let resource = format!("image:{}", image.id);
+    launch(app, "image-pull", resource, move |app, job_id| async move {
+        app.pull_catalog_image(&image, &job_id).await
+    })
 }
 pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
     match app.docker(&["info", "--format", "{{json .}}"]).await {
@@ -107,8 +84,8 @@ pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
         Err(e) => Json(json!({"connected":false,"error":format!("{e:#}")})),
     }
 }
-pub async fn environments(State(app): State<Arc<App>>) -> Result<Json<Value>> {
-    let environments: Vec<Environment> = app.db.list("environment")?;
+pub async fn containers(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    let containers: Vec<Container> = app.db.list(CONTAINERS)?;
     let ids = app
         .docker(&[
             "ps",
@@ -129,57 +106,78 @@ pub async fn environments(State(app): State<Arc<App>>) -> Result<Json<Value>> {
             }
         }
     }
-    let items = environments.into_iter().map(|e| {
-        let docker = states.get(&e.container);
-        let status = docker.and_then(|d| d["Status"].as_str()).unwrap_or_default();
-        let health = if status.contains("(unhealthy)") { "unhealthy" } else if status.contains("(healthy)") { "healthy" } else if status.contains("(health: starting)") { "starting" } else { "unknown" };
-        json!({"environment":e,"state":if ids.is_err() {"unavailable"} else {docker.and_then(|d|d["State"].as_str()).unwrap_or("missing")},"health":health,"status":docker.map(|d|&d["Status"])})
-    }).collect::<Vec<_>>();
+    // Each record with Docker's view of it beside its own fields.
+    let items = containers
+        .into_iter()
+        .map(|record| {
+            let docker = states.get(&record.container);
+            let status = docker
+                .and_then(|d| d["Status"].as_str())
+                .unwrap_or_default();
+            let health = if status.contains("(unhealthy)") {
+                "unhealthy"
+            } else if status.contains("(healthy)") {
+                "healthy"
+            } else if status.contains("(health: starting)") {
+                "starting"
+            } else {
+                "unknown"
+            };
+            let mut item = json!(record);
+            item["state"] = json!(if ids.is_err() {
+                "unavailable"
+            } else {
+                docker
+                    .and_then(|d| d["State"].as_str())
+                    .unwrap_or("missing")
+            });
+            item["health"] = json!(health);
+            item["status"] = json!(docker.map(|d| &d["Status"]));
+            item
+        })
+        .collect::<Vec<_>>();
     Ok(Json(json!(items)))
 }
 
-pub async fn environment(
-    State(app): State<Arc<App>>,
-    Path(id): Path<String>,
-) -> Result<Json<Value>> {
-    app.environment(&id)?;
-    let Json(items) = environments(State(app)).await?;
+pub async fn container(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
+    app.container(&id)?;
+    let Json(items) = containers(State(app)).await?;
     let item = items
         .as_array()
-        .and_then(|items| items.iter().find(|item| item["environment"]["id"] == id))
+        .and_then(|items| items.iter().find(|item| item["id"] == id))
         .cloned()
         .ok_or_else(missing)?;
     Ok(Json(item))
 }
 
-/// A new environment's settings, and values for the template parameters of its image.
+/// A new container's settings, and values for the compose parameters of its image.
 #[derive(Deserialize)]
-pub struct CreateEnvironment {
+pub struct CreateContainer {
     #[serde(flatten)]
-    pub spec: EnvironmentSpec,
+    pub spec: ContainerSpec,
     #[serde(default)]
     pub parameters: std::collections::BTreeMap<String, String>,
 }
 pub async fn create(
     State(app): State<Arc<App>>,
-    Json(body): Json<CreateEnvironment>,
+    Json(body): Json<CreateContainer>,
 ) -> Result<Json<Value>> {
-    let CreateEnvironment { spec, parameters } = body;
+    let CreateContainer { spec, parameters } = body;
     spec.validate()?;
-    // A template found by the name the request uses is checked now; the job checks again once
+    // A compose found by the name the request uses is checked now; the job checks again once
     // Docker has resolved the image.
     let records: Vec<ImageRecord> = app.db.list("image")?;
-    if let Some(record) = crate::templates::template_image(&records, &spec.image, &spec.image)
-        && let Some(template) = &record.template
+    if let Some(record) = crate::compose::compose_image(&records, &spec.image, &spec.image)
+        && let Some(compose) = &record.compose
     {
-        template.resolve(&parameters)?;
+        compose.resolve(&parameters)?;
     }
     let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
         app,
         "create",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.create_environment(&id, spec, parameters, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.create_container(&id, spec, parameters, &job_id).await },
     )
 }
 #[derive(Deserialize)]
@@ -194,20 +192,20 @@ pub async fn action(
     if !["start", "stop", "restart"].contains(&body.action.as_str()) {
         return Err(Error(StatusCode::BAD_REQUEST, "Invalid action".into()));
     }
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         &body.action.clone(),
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, _| async move {
-            let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
             app.docker(&[
                 &body.action,
                 info["Id"].as_str().context("Missing container ID")?,
             ])
             .await?;
-            Ok(json!({"environment_id":id}))
+            Ok(json!({"container_id":id}))
         },
     )
 }
@@ -220,26 +218,26 @@ pub async fn internet(
     Path(id): Path<String>,
     Json(body): Json<Internet>,
 ) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "internet",
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, _| async move {
-            let mut env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let mut env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             app.set_internet(&mut env, body.enabled).await?;
-            Ok(json!({"environment_id":id,"internet":body.enabled}))
+            Ok(json!({"container_id":id,"internet":body.enabled}))
         },
     )
 }
-/// Change an environment's settings. `dry_run` reports which changes apply in place and which
+/// Change a container's settings. `dry_run` reports which changes apply in place and which
 /// restart the desktop, without a job.
 pub async fn update_settings(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let Value::Object(mut request) = body else {
         return Err(Error(
             StatusCode::BAD_REQUEST,
@@ -259,25 +257,25 @@ pub async fn update_settings(
     let (_, changes) = app.settings_preview(&env, &request)?;
     if dry_run {
         return Ok(Json(
-            json!({"environment_id": id, "live": changes.live, "restart": changes.restart}),
+            json!({"container_id": id, "live": changes.live, "restart": changes.restart}),
         ));
     }
     launch(
         app,
         "settings",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.update_environment(&id, request, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.update_container(&id, request, &job_id).await },
     )
 }
 pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "delete",
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, job_id| async move {
-            let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
-            app.remove_environment(&env, &job_id).await?;
+            let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            app.remove_container(&env, &job_id).await?;
             Ok(
                 json!({"deleted":id,"name":env.spec.name,"volumes_preserved":true,"images_preserved":true}),
             )
@@ -285,7 +283,7 @@ pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resu
     )
 }
 pub async fn logs(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let info = app.owned(&env).await?;
     let args = [
         "logs",
@@ -309,21 +307,21 @@ pub async fn logs(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result
     ))
 }
 pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "retry",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.retry_environment(&id, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.retry_container(&id, &job_id).await },
     )
 }
 pub async fn reset(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "reset",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.reset_environment(&id, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.reset_container(&id, &job_id).await },
     )
 }
 pub async fn screenshot(
@@ -357,7 +355,7 @@ pub async fn diagnostics(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let info = app.owned(&env).await?;
     let bytes = app
         .docker(&[
@@ -372,6 +370,7 @@ pub async fn diagnostics(
         json!({"output":String::from_utf8_lossy(&bytes),"gpu_requested":env.spec.gpu}),
     ))
 }
+/// Every image: the catalog first, then the saved images.
 pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let records = app.db.list::<ImageRecord>("image")?;
     let listed = app
@@ -386,23 +385,31 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
                 .collect()
         })
         .unwrap_or_default();
+    let catalog =
+        futures_util::future::join_all(crate::catalog::catalog().into_iter().map(|image| {
+            let app = app.clone();
+            let docker_listed = listed.is_ok();
+            async move {
+                let inspected = app.inspect("image", &image.reference).await.ok();
+                crate::catalog::listed(&image, inspected.as_ref(), docker_listed)
+            }
+        }))
+        .await;
+    let saved = records.into_iter().map(|r| {
+        let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
+        let mut value = image_summary(&r);
+        value["available"] = json!(available);
+        value
+    });
     Ok(Json(json!(
-        records
-            .into_iter()
-            .map(|r| {
-                let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
-                let mut value = image_summary(&r);
-                value["available"] = json!(available);
-                value
-            })
-            .collect::<Vec<_>>()
+        catalog.into_iter().chain(saved).collect::<Vec<_>>()
     )))
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
-/// megabyte, so only the configuration and template routes return them.
+/// megabyte, so only the configuration and compose routes return them.
 pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
-    for key in ["build", "template"] {
+    for key in ["build", "compose"] {
         if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
             part.remove("script");
         }
@@ -426,7 +433,7 @@ pub async fn image_config(
         base_image: build.base_image,
         internet: build.internet,
         script: build.script,
-        template: record.template,
+        compose: record.compose,
     }))
 }
 #[derive(Deserialize)]
@@ -453,13 +460,13 @@ pub async fn register_image(
         image_id: info["Id"].as_str().context("Missing image ID")?.into(),
         reference: body.reference,
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "import".into(),
         created_at: now(),
         description: String::new(),
-        desktop: crate::profiles::from_image(&info),
+        desktop: crate::catalog::from_image(&info),
         build: None,
-        template: None,
+        compose: None,
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
@@ -473,9 +480,10 @@ pub struct BuildImage {
     #[serde(default = "default_true")]
     pub internet: bool,
     pub script: String,
-    /// The template the built image gets.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<crate::templates::Template>,
+    /// The compose the built image gets. Configurations exported before templates were called
+    /// composes name it `template`.
+    #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
+    pub compose: Option<crate::compose::Compose>,
 }
 fn default_true() -> bool {
     true
@@ -491,15 +499,15 @@ pub async fn build(
     {
         return Err(anyhow::anyhow!("Invalid image name or script").into());
     }
-    if let Some(template) = &body.template {
-        template.validate()?;
+    if let Some(compose) = &body.compose {
+        compose.validate()?;
     }
     launch(
         app,
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         move |app, id| async move {
-            app.ensure_profile_image(&body.base_image, &id).await?;
+            app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
             if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");
@@ -544,17 +552,17 @@ pub async fn build(
                 image_id: info["Id"].as_str().context("Missing image ID")?.into(),
                 reference,
                 parent_image_id: Some(parent),
-                source_environment: None,
+                source_container: None,
                 kind: "build".into(),
                 created_at: now(),
                 description: String::new(),
-                desktop: crate::profiles::from_image(&info),
+                desktop: crate::catalog::from_image(&info),
                 build: Some(BuildConfig {
                     base_image: body.base_image,
                     internet: body.internet,
                     script,
                 }),
-                template: body.template,
+                compose: body.compose,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))
@@ -572,7 +580,7 @@ pub async fn snapshot(
     Path(env_id): Path<String>,
     Json(body): Json<Snapshot>,
 ) -> Result<Json<Value>> {
-    app.environment(&env_id)?;
+    app.container(&env_id)?;
     if body.name.trim().is_empty()
         || body.name.chars().count() > 100
         || body.description.len() > 4096
@@ -582,9 +590,9 @@ pub async fn snapshot(
     launch(
         app,
         "snapshot",
-        format!("environment:{env_id}"),
+        format!("container:{env_id}"),
         move |app, id| async move {
-            let env = app.environment(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let env = app.container(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
             let container = app.owned(&env).await?;
             let reference = format!("bilskirnir/snapshot:{id}");
             app.append_log(&id,"Committing container changes. Volumes, /run, /tmp and running application state are excluded.")?;
@@ -603,21 +611,21 @@ pub async fn snapshot(
             )
             .await?;
             let info = app.inspect("image", &reference).await?;
-            // An environment from the snapshot asks for the same parameters again.
-            let template = app.pinned_template(&env_id);
+            // A container from the snapshot asks for the same parameters again.
+            let compose = app.pinned_compose(&env_id);
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
                 image_id: info["Id"].as_str().context("Missing image ID")?.into(),
                 reference,
                 parent_image_id: Some(env.source_image_id.clone()),
-                source_environment: Some(env_id),
+                source_container: Some(env_id),
                 kind: "snapshot".into(),
                 created_at: now(),
                 description: body.description,
-                desktop: crate::profiles::from_image(&info),
+                desktop: crate::catalog::from_image(&info),
                 build: None,
-                template,
+                compose,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))

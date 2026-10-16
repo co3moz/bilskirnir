@@ -100,18 +100,18 @@ impl Export {
 }
 fn record(app: &App, id: &str, recording: &str) -> Result<Recording> {
     let record: Recording = app.db.get("recording", recording)?;
-    if record.environment_id != id {
+    if record.container_id != id {
         return Err(missing());
     }
     Ok(record)
 }
-async fn running(app: &App, id: &str) -> Result<(crate::model::Environment, Value)> {
-    let env = app.environment(id)?;
+async fn running(app: &App, id: &str) -> Result<(crate::model::Container, Value)> {
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before recording".into(),
+            "Start the container before recording".into(),
         ));
     }
     Ok((env, info))
@@ -133,7 +133,7 @@ async fn control(app: &App, container: &str, arguments: &[&str]) -> anyhow::Resu
 fn describe(record: &Recording, status: Value) -> Value {
     let mut value = json!({
         "recording_id": record.id,
-        "environment_id": record.environment_id,
+        "container_id": record.container_id,
         "name": record.name,
         "fps": record.fps,
         "created_at": record.created_at,
@@ -148,12 +148,12 @@ fn describe(record: &Recording, status: Value) -> Value {
 }
 pub async fn start_recording(app: &Arc<App>, id: &str, body: &StartRecording) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let (_, info) = running(app, id).await?;
     let record = Recording {
         id: uuid::Uuid::new_v4().simple().to_string(),
-        environment_id: id.into(),
+        container_id: id.into(),
         name: body.name.clone().unwrap_or_else(|| "Recording".into()),
         fps: body.fps,
         created_at: now(),
@@ -205,12 +205,12 @@ pub async fn stop_recording(app: &Arc<App>, id: &str, recording: &str) -> Result
     Ok(describe(&record, status))
 }
 pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let records = app
         .db
         .list::<Recording>("recording")?
         .into_iter()
-        .filter(|record| record.environment_id == id)
+        .filter(|record| record.container_id == id)
         .take(100)
         .collect::<Vec<_>>();
     let info = app.owned(&env).await?;
@@ -237,7 +237,7 @@ pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
             describe(
                 record,
                 statuses.get(index).cloned().unwrap_or_else(
-                    || json!({"state": "unknown", "error": "Environment is not running"}),
+                    || json!({"state": "unknown", "error": "Container is not running"}),
                 ),
             )
         })
@@ -246,7 +246,7 @@ pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
 }
 pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let (env, info) = running(app, id).await?;
     uploads::validate_target(&env.spec, &body.destination, &body.name)?;
@@ -258,7 +258,7 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
     let mut applications = serde_json::Map::new();
     for application in &body.application_ids {
         let record: Application = app.db.get("application", application)?;
-        if record.environment_id != id {
+        if record.container_id != id {
             return Err(missing());
         }
         applications.insert(

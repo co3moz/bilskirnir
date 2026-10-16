@@ -1,11 +1,12 @@
-//! Downloads of the supplied desktop profiles from their registry.
+//! Downloads of the catalog images from their registry.
 //!
-//! An installation does not pull every profile up front: a profile is downloaded the first time
-//! a desktop or an image build starts from it, or when its card asks for it. The CLI hides byte
+//! An installation does not pull every catalog image up front: one is downloaded the first time
+//! a container or an image build starts from it, or when the dashboard asks for it. The CLI hides byte
 //! counts from non-terminal output, so pulls go through the Engine API socket and the job carries
 //! one aggregated `progress` value for the dashboard and for agents. A release manager downloads
-//! the desktop images published with it and tags them as the catalog reference (`Profile::source`).
-use crate::{App, profiles::Profile};
+//! the catalog images published with it and tags them as the catalog reference
+//! (`CatalogImage::source`).
+use crate::{App, catalog::CatalogImage};
 use anyhow::{Context, Result, bail};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
@@ -134,7 +135,7 @@ impl PullProgress {
 }
 
 /// Layer sizes from `docker manifest inspect --verbose`. An index lists one entry per platform
-/// and attestation; the profiles are published for linux/amd64 only.
+/// and attestation; the catalog images are published for linux/amd64 only.
 pub(crate) fn manifest_sizes(output: &Value) -> HashMap<String, u64> {
     let manifest = match output {
         Value::Array(entries) => {
@@ -275,17 +276,17 @@ async fn connect(_: &Path) -> std::io::Result<tokio::io::DuplexStream> {
 }
 
 impl App {
-    /// Download a supplied profile the first time a desktop or a build starts from it. Other
+    /// Download a catalog image the first time a container or a build starts from it. Other
     /// references are left to the caller's own availability check.
-    pub async fn ensure_profile_image(&self, reference: &str, job_id: &str) -> Result<()> {
-        let Some(profile) = crate::profiles::catalog()
+    pub async fn ensure_catalog_image(&self, reference: &str, job_id: &str) -> Result<()> {
+        let Some(image) = crate::catalog::catalog()
             .into_iter()
-            .find(|profile| profile.reference == reference)
+            .find(|image| image.reference == reference)
         else {
             return Ok(());
         };
-        // A build or another download of this profile replaces the same tag.
-        let lock = self.resource_lock(&format!("profile:{}", profile.id));
+        // A build or another download of this image replaces the same tag.
+        let lock = self.resource_lock(&format!("image:{}", image.id));
         let _guard = match lock.try_lock() {
             Ok(guard) => guard,
             Err(_) => {
@@ -293,7 +294,7 @@ impl App {
                     job_id,
                     &format!(
                         "Waiting for the current download or build of {}.",
-                        profile.name
+                        image.name
                     ),
                 )?;
                 lock.lock().await
@@ -302,7 +303,7 @@ impl App {
         if self.image_present(reference).await? {
             return Ok(());
         }
-        self.pull_profile(&profile, job_id).await.map(drop)
+        self.pull_catalog_image(&image, job_id).await.map(drop)
     }
 
     async fn image_present(&self, reference: &str) -> Result<bool> {
@@ -330,25 +331,25 @@ impl App {
         }
     }
 
-    /// Pull a profile's published image, or a newer one, and report progress on the job.
-    pub async fn pull_profile(&self, profile: &Profile, job_id: &str) -> Result<Value> {
-        self.pull_profile_from(profile, &profile.source(), job_id)
+    /// Pull a catalog image, or a newer release of it, and report progress on the job.
+    pub async fn pull_catalog_image(&self, image: &CatalogImage, job_id: &str) -> Result<Value> {
+        self.pull_catalog_image_from(image, &image.source(), job_id)
             .await
     }
 
-    async fn pull_profile_from(
+    async fn pull_catalog_image_from(
         &self,
-        profile: &Profile,
+        image: &CatalogImage,
         source: &str,
         job_id: &str,
     ) -> Result<Value> {
         self.append_log(
             job_id,
-            &format!("Downloading {} from {source}.", profile.name),
+            &format!("Downloading {} from {source}.", image.name),
         )?;
         // A release tag that was here before the download is someone else's and stays.
         let source_was_here =
-            source != profile.reference && self.image_present(source).await.unwrap_or(true);
+            source != image.reference && self.image_present(source).await.unwrap_or(true);
         // An empty count tells the dashboard the download is being prepared.
         self.set_progress(job_id, Some(PullProgress::default().summary()))?;
         let sizes = self.layer_sizes(source).await;
@@ -375,9 +376,9 @@ impl App {
         };
         self.set_progress(job_id, None)?;
         pulled?;
-        if source != profile.reference {
-            self.docker(&["tag", source, &profile.reference]).await?;
-            self.append_log(job_id, &format!("Tagged it as {}.", profile.reference))?;
+        if source != image.reference {
+            self.docker(&["tag", source, &image.reference]).await?;
+            self.append_log(job_id, &format!("Tagged it as {}.", image.reference))?;
             // Without the release tag, the image the reference named before is left dangling,
             // as pulling the reference itself would leave it.
             if !source_was_here && let Err(error) = self.docker(&["image", "rm", source]).await {
@@ -385,11 +386,11 @@ impl App {
             }
         }
         let info = self
-            .inspect("image", &profile.reference)
+            .inspect("image", &image.reference)
             .await
             .context("The download finished, but Docker does not list the image")?;
         Ok(
-            json!({"profile_id": profile.id, "reference": profile.reference, "image_id": info["Id"]}),
+            json!({"id": image.id, "kind": "catalog", "reference": image.reference, "image_id": info["Id"]}),
         )
     }
 

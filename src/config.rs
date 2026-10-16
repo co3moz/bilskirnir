@@ -96,7 +96,7 @@ impl Config {
             docker_socket: docker_socket(env::var("DOCKER_HOST").ok().as_deref()),
             manager: env::var("MANAGER_CONTAINER").ok().filter(|s| !s.is_empty()),
             base_image: env::var("DESKTOP_IMAGE")
-                .unwrap_or_else(|_| crate::profiles::DEFAULT_IMAGE.into()),
+                .unwrap_or_else(|_| crate::catalog::DEFAULT_IMAGE.into()),
             desktop_context: env::var("DESKTOP_CONTEXT")
                 .unwrap_or_else(|_| "desktop".into())
                 .into(),

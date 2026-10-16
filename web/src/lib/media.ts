@@ -136,7 +136,7 @@ export class DesktopMedia {
     socket.onerror = () => {
       if (current())
         this.deps.onError?.(
-          `${channel === "output" ? "Audio" : "Microphone"} connection failed. Check the environment logs.`
+          `${channel === "output" ? "Audio" : "Microphone"} connection failed. Check the container logs.`
         )
     }
     socket.onclose = () => {
@@ -162,7 +162,7 @@ export class DesktopMedia {
       const node = this.deps.createNode(ctx, "pcm-output", { outputChannelCount: [2] })
       resource = { nodes: [node], socket: null }
       node.connect(ctx.destination)
-      resource.socket = this.deps.createSocket(this.deps.url(`environments/${s.id}/audio/output`))
+      resource.socket = this.deps.createSocket(this.deps.url(`containers/${s.id}/audio/output`))
       resource.socket.binaryType = "arraybuffer"
       const current = this.attach(s, "output", resource, epoch)
       let remainder = new Uint8Array()
@@ -228,7 +228,7 @@ export class DesktopMedia {
       source.connect(node)
       node.connect(mute)
       mute.connect(ctx.destination)
-      const socket = this.deps.createSocket(this.deps.url(`environments/${s.id}/audio/input`))
+      const socket = this.deps.createSocket(this.deps.url(`containers/${s.id}/audio/input`))
       resource.socket = socket
       socket.binaryType = "arraybuffer"
       const current = this.attach(s, "input", resource, epoch)

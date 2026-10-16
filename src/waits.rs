@@ -107,7 +107,7 @@ impl WaitFor {
 }
 pub async fn wait_for_condition(app: &Arc<App>, id: &str, body: &WaitFor) -> Result<Value> {
     body.validate()?;
-    app.environment(id)?;
+    app.container(id)?;
     let started = Instant::now();
     let deadline = started + Duration::from_millis(body.timeout_ms);
     let interval = Duration::from_millis(body.interval_ms);

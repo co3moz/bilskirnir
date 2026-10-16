@@ -17,8 +17,8 @@ import {
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { displayOf, pickedChoices, sliderValue, toggleChoice } from "@/lib/templates"
-import type { TemplateParameter } from "@/lib/types"
+import { displayOf, pickedChoices, sliderValue, toggleChoice } from "@/lib/compose"
+import type { ComposeParameter } from "@/lib/types"
 
 // Values never contain NUL, so these cannot collide with an option.
 const NONE = "\u0000none"
@@ -28,7 +28,7 @@ const OTHER = "\u0000other"
 const WIDE = new Set(["multiline", "slider", "radio", "checkboxes"])
 
 /**
- * One template parameter as a form field: the control its type and display ask for, holding the
+ * One compose parameter as a form field: the control its type and display ask for, holding the
  * value as the script will read it. `optional` lets a required parameter stay empty, as its
  * default may.
  */
@@ -40,7 +40,7 @@ export function ParameterField({
   optional,
   hints,
 }: {
-  parameter: TemplateParameter
+  parameter: ComposeParameter
   value: string
   onChange: (value: string) => void
   /** The field's label; the parameter's own label or name when left out. */
@@ -106,7 +106,7 @@ function Control({
   title,
   required,
 }: {
-  parameter: TemplateParameter
+  parameter: ComposeParameter
   value: string
   onChange: (value: string) => void
   id: string

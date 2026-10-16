@@ -35,7 +35,7 @@ impl App {
         let mut values: Vec<Value> = serde_json::from_slice(&data)?;
         values.pop().context("Docker object not found")
     }
-    pub async fn owned(&self, env: &Environment) -> Result<Value> {
+    pub async fn owned(&self, env: &Container) -> Result<Value> {
         let info = self.inspect("container", &env.container).await?;
         if info["Config"]["Labels"][LABEL] != "true"
             || info["Config"]["Labels"]["io.wsl-desktop.environment"] != env.id
@@ -62,7 +62,7 @@ impl App {
             }
         }
     }
-    pub fn check_network(env: &Environment, info: &Value, internal: bool) -> Result<()> {
+    pub fn check_network(env: &Container, info: &Value, internal: bool) -> Result<()> {
         if info["Labels"][LABEL] != "true"
             || info["Labels"]["io.wsl-desktop.environment"] != env.id
             || info["Internal"] != internal
@@ -72,7 +72,7 @@ impl App {
         }
         Ok(())
     }
-    async fn ensure_network(&self, env: &Environment, name: &str, internal: bool) -> Result<Value> {
+    async fn ensure_network(&self, env: &Container, name: &str, internal: bool) -> Result<Value> {
         if let Some(info) = self.optional_inspect("network", name).await? {
             Self::check_network(env, &info, internal)?;
             return Ok(info);
@@ -94,13 +94,13 @@ impl App {
         self.inspect("network", String::from_utf8_lossy(&id).trim())
             .await
     }
-    pub fn environment(&self, id: &str) -> crate::error::Result<Environment> {
+    pub fn container(&self, id: &str) -> crate::error::Result<Container> {
         self.db
-            .get("environment", id)
+            .get(CONTAINERS, id)
             .map_err(crate::error::Error::from)
     }
     /// Settings the installation has switched off cannot be chosen for a desktop.
-    pub(crate) fn installation_allows(&self, spec: &EnvironmentSpec) -> Result<()> {
+    pub(crate) fn installation_allows(&self, spec: &ContainerSpec) -> Result<()> {
         if spec.audio && !self.config.audio {
             bail!("Audio is disabled for this installation");
         }
@@ -109,15 +109,15 @@ impl App {
         }
         if spec.gpu && !self.config.wsl_gpu && !self.config.cuda {
             bail!(
-                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); use the environment without GPU"
+                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); use the container without GPU"
             );
         }
         Ok(())
     }
-    pub async fn create_environment(
+    pub async fn create_container(
         &self,
         id: &str,
-        spec: EnvironmentSpec,
+        spec: ContainerSpec,
         parameters: std::collections::BTreeMap<String, String>,
         job_id: &str,
     ) -> Result<Value> {
@@ -132,13 +132,13 @@ impl App {
         if manager_info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
-        // Cheap checks come before a profile download that can take minutes.
+        // Cheap checks come before a catalog image download that can take minutes.
         for m in &spec.mounts {
             self.inspect("volume", &m.volume)
                 .await
                 .context("Volume not found")?;
         }
-        self.ensure_profile_image(&spec.image, job_id).await?;
+        self.ensure_catalog_image(&spec.image, job_id).await?;
         let image = self
             .inspect("image", &spec.image)
             .await
@@ -148,8 +148,8 @@ impl App {
         }
         image_volumes_mounted(&image, &spec)?;
         let image_id = image["Id"].as_str().context("Missing image ID")?;
-        let template = self.pin_template(&spec.image, image_id, &parameters)?;
-        let env = Environment {
+        let compose = self.pin_compose(&spec.image, image_id, &parameters)?;
+        let env = Container {
             id: id.into(),
             container: format!("wsld-{id}"),
             private_network: format!("wsld-{id}-private"),
@@ -158,28 +158,28 @@ impl App {
             spec,
             created_at: now(),
             last_error: None,
-            desktop: crate::profiles::from_image(&image),
+            desktop: crate::catalog::from_image(&image),
             working_image: None,
-            setup: template.as_ref().map(|(image, pinned)| pinned.setup(image)),
+            setup: compose.as_ref().map(|(image, pinned)| pinned.setup(image)),
         };
         // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
-        if let Some((_, pinned)) = &template {
+        if let Some((_, pinned)) = &compose {
             self.save_pinned(id, pinned)?;
         }
-        self.db.put("environment", id, &env)?;
+        self.db.put(CONTAINERS, id, &env)?;
         let result = self.provision(&env, manager).await;
         if let Err(ref e) = result {
             let mut failed = env.clone();
             failed.last_error = Some(format!("{e:#}"));
-            self.db.put("environment", id, &failed)?;
+            self.db.put(CONTAINERS, id, &failed)?;
             // Keep intent and any partial resources for explicit retry/removal; never touch unrelated objects.
         }
         result?;
         self.run_setup(id, job_id).await?;
-        Ok(json!({"environment_id":id}))
+        Ok(json!({"container_id":id}))
     }
-    pub async fn retry_environment(&self, id: &str, job_id: &str) -> Result<Value> {
-        let mut env = self.environment(id).map_err(|e| anyhow::anyhow!(e.1))?;
+    pub async fn retry_container(&self, id: &str, job_id: &str) -> Result<Value> {
+        let mut env = self.container(id).map_err(|e| anyhow::anyhow!(e.1))?;
         let manager = self
             .config
             .manager
@@ -189,25 +189,25 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("Manager label does not match");
         }
-        // A container recreated from the source image lacks what the template setup changed.
+        // A container recreated from the source image lacks what the compose setup changed.
         if env.working_image.is_none()
             && self
                 .optional_inspect("container", &env.container)
                 .await?
                 .is_none()
         {
-            crate::templates::setup_again(&mut env);
-            self.db.put("environment", id, &env)?;
+            crate::compose::setup_again(&mut env);
+            self.db.put(CONTAINERS, id, &env)?;
         }
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
-        self.db.put("environment", id, &env)?;
+        self.db.put(CONTAINERS, id, &env)?;
         result?;
         // Also a setup that failed or was interrupted earlier.
         self.run_setup(id, job_id).await?;
-        Ok(json!({"environment_id":id}))
+        Ok(json!({"container_id":id}))
     }
-    async fn provision(&self, env: &Environment, manager: &str) -> Result<()> {
+    async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
         // Validate all existing resources before creating or starting anything.
         env.spec.validate()?;
         for mount in &env.spec.mounts {
@@ -277,9 +277,9 @@ impl App {
         self.docker(&["start", &env.container]).await?;
         Ok(())
     }
-    /// The `docker create` arguments for an environment's container: every setting that Docker
+    /// The `docker create` arguments for a container: every setting that Docker
     /// fixes when it creates a container is here.
-    pub(crate) fn container_args(&self, env: &Environment) -> Vec<String> {
+    pub(crate) fn container_args(&self, env: &Container) -> Vec<String> {
         let mut args: Vec<String> = vec![
             "create",
             "--name",
@@ -364,7 +364,7 @@ impl App {
         args.push(env.container_image().to_owned());
         args
     }
-    pub async fn set_internet(&self, env: &mut Environment, enabled: bool) -> Result<()> {
+    pub async fn set_internet(&self, env: &mut Container, enabled: bool) -> Result<()> {
         let info = self.owned(env).await?;
         let connected = info["NetworkSettings"]["Networks"]
             .get(&env.egress_network)
@@ -383,10 +383,10 @@ impl App {
             .await?;
         }
         env.spec.internet = enabled;
-        self.db.put("environment", &env.id, env)?;
+        self.db.put(CONTAINERS, &env.id, env)?;
         Ok(())
     }
-    pub async fn remove_environment(&self, env: &Environment, job_id: &str) -> Result<()> {
+    pub async fn remove_container(&self, env: &Container, job_id: &str) -> Result<()> {
         self.append_log(
             job_id,
             &format!("Checking ownership before deleting \"{}\".", env.spec.name),
@@ -422,10 +422,7 @@ impl App {
         }
         if let Some(id) = container_id {
             self.docker(&["rm", "--force", id]).await?;
-            self.append_log(
-                job_id,
-                "Removed the desktop container and its writable layer.",
-            )?;
+            self.append_log(job_id, "Removed the container and its writable layer.")?;
         } else {
             self.append_log(job_id, "Desktop container was already absent.")?;
         }
@@ -447,17 +444,14 @@ impl App {
                 )?;
             }
             self.docker(&["network", "rm", id]).await?;
-            self.append_log(
-                job_id,
-                &format!("Removed the environment's {role} network."),
-            )?;
+            self.append_log(job_id, &format!("Removed the container's {role} network."))?;
         }
         if let Some(image) = &env.working_image {
             self.release_working_image(image, job_id).await?;
         }
-        self.remove_environment_records(&env.id)?;
+        self.remove_container_records(&env.id)?;
         self.forget_pinned(&env.id)?;
-        self.db.remove("environment", &env.id)?;
+        self.db.remove(CONTAINERS, &env.id)?;
         self.append_log(
             job_id,
             &format!(
@@ -468,27 +462,27 @@ impl App {
         Ok(())
     }
     /// Remove records that describe processes inside a container that no longer exists.
-    pub fn remove_environment_records(&self, environment_id: &str) -> Result<()> {
+    pub fn remove_container_records(&self, container_id: &str) -> Result<()> {
         for application in self.db.list::<Application>("application")? {
-            if application.environment_id == environment_id {
+            if application.container_id == container_id {
                 self.db.remove("application", &application.id)?;
             }
         }
         for recording in self.db.list::<Recording>("recording")? {
-            if recording.environment_id == environment_id {
+            if recording.container_id == container_id {
                 self.db.remove("recording", &recording.id)?;
             }
         }
         for terminal in self.db.list::<Terminal>("terminal")? {
-            if terminal.environment_id == environment_id {
+            if terminal.container_id == container_id {
                 self.db.remove("terminal", &terminal.id)?;
             }
         }
         Ok(())
     }
     /// Discard the container's writable layer and recreate it from the pinned source image.
-    pub async fn reset_environment(&self, id: &str, job_id: &str) -> Result<Value> {
-        let mut env = self.environment(id).map_err(|e| anyhow::anyhow!(e.1))?;
+    pub async fn reset_container(&self, id: &str, job_id: &str) -> Result<Value> {
+        let mut env = self.container(id).map_err(|e| anyhow::anyhow!(e.1))?;
         let manager = self
             .config
             .manager
@@ -501,7 +495,7 @@ impl App {
         // Check the image before touching the container, so a missing image leaves the desktop intact.
         self.inspect("image", &env.source_image_id)
             .await
-            .context("Source image is missing; the desktop was left unchanged")?;
+            .context("Source image is missing; the container was left unchanged")?;
         if self
             .optional_inspect("container", &env.container)
             .await?
@@ -516,7 +510,7 @@ impl App {
             .await?;
             self.append_log(
                 job_id,
-                "Removed the desktop container and its writable layer. Named volumes were preserved.",
+                "Removed the container and its writable layer. Named volumes were preserved.",
             )?;
         } else {
             self.append_log(job_id, "Desktop container was already absent.")?;
@@ -525,20 +519,23 @@ impl App {
         if let Some(image) = env.working_image.take() {
             self.release_working_image(&image, job_id).await?;
         }
-        self.remove_environment_records(id)?;
-        crate::templates::setup_again(&mut env);
+        self.remove_container_records(id)?;
+        crate::compose::setup_again(&mut env);
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
-        self.db.put("environment", id, &env)?;
+        self.db.put(CONTAINERS, id, &env)?;
         result?;
-        self.append_log(job_id, "Recreated the desktop from its saved source image.")?;
+        self.append_log(
+            job_id,
+            "Recreated the container from its saved source image.",
+        )?;
         self.run_setup(id, job_id).await?;
-        Ok(json!({"environment_id": id, "volumes_preserved": true, "images_preserved": true}))
+        Ok(json!({"container_id": id, "volumes_preserved": true, "images_preserved": true}))
     }
-    pub async fn address(&self, env: &Environment) -> Result<String> {
+    pub async fn address(&self, env: &Container) -> Result<String> {
         let info = self.owned(env).await?;
         if info["State"]["Running"] != true {
-            bail!("Environment is not running");
+            bail!("Container is not running");
         }
         let ip = info["NetworkSettings"]["Networks"][&env.private_network]["IPAddress"]
             .as_str()
@@ -656,7 +653,7 @@ impl App {
 }
 
 /// An image `VOLUME` path needs an explicit named volume, or snapshots would silently exclude it.
-pub(crate) fn image_volumes_mounted(image: &Value, spec: &EnvironmentSpec) -> Result<()> {
+pub(crate) fn image_volumes_mounted(image: &Value, spec: &ContainerSpec) -> Result<()> {
     if let Some(volumes) = image["Config"]["Volumes"].as_object() {
         for target in volumes.keys() {
             if !spec.mounts.iter().any(|m| m.target == *target) {

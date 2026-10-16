@@ -1,11 +1,11 @@
 import type {
-  EnvironmentSetup,
-  ImageRecord,
+  ContainerSetup,
+  ImageItem,
   ParameterDisplay,
   ParameterOption,
   ParameterType,
-  Template,
-  TemplateParameter,
+  Compose,
+  ComposeParameter,
 } from "./types"
 
 /** The manager's rule for a parameter name, as an input pattern. */
@@ -44,35 +44,35 @@ export const DISPLAY_LABELS: Record<ParameterDisplay, string> = {
   checkboxes: "Checkboxes",
 }
 
-export const displayOf = (parameter: Pick<TemplateParameter, "type" | "display">) =>
+export const displayOf = (parameter: Pick<ComposeParameter, "type" | "display">) =>
   parameter.display && DISPLAYS[parameter.type].includes(parameter.display)
     ? parameter.display
     : DISPLAYS[parameter.type][0]
 
 const hasOptions = (type: ParameterType) => type === "choice" || type === "choices"
 
-type Templated = Pick<ImageRecord, "image_id" | "reference" | "template">
+type WithCompose = Pick<ImageItem, "image_id" | "reference" | "compose">
 
 /**
- * The template a new environment from `value`, an image ID or reference, asks for. The manager
+ * The compose a new container from `value`, an image ID or reference, asks for. The manager
  * takes it from the first record of that image that has one; lists come newest first.
  */
-export function templateFor(records: Templated[], value?: string) {
+export function composeFor(records: WithCompose[], value?: string) {
   if (!value) return undefined
   return (
     records.find(
-      (record) => record.template && (record.image_id === value || record.reference === value)
-    )?.template ?? undefined
+      (record) => record.compose && (record.image_id === value || record.reference === value)
+    )?.compose ?? undefined
   )
 }
 
 /** The values a create request sends: one for every parameter, its default when left alone. */
 export function parameterBody(
-  template: Pick<Template, "parameters"> | null | undefined,
+  compose: Pick<Compose, "parameters"> | null | undefined,
   values: Record<string, string>
 ) {
   return Object.fromEntries(
-    (template?.parameters ?? []).map((parameter) => [
+    (compose?.parameters ?? []).map((parameter) => [
       parameter.name,
       values[parameter.name] ?? parameter.default,
     ])
@@ -122,7 +122,7 @@ export type ParameterDraft = {
   max: string
   step: string
 }
-export type TemplateDraft = {
+export type ComposeDraft = {
   parameters: ParameterDraft[]
   script: string
   root: boolean
@@ -152,7 +152,7 @@ export const newParameter = (): ParameterDraft => ({
 
 const bound = (value?: number | null) => (value === undefined || value === null ? "" : `${value}`)
 
-function parameterDraft(parameter: TemplateParameter): ParameterDraft {
+function parameterDraft(parameter: ComposeParameter): ParameterDraft {
   return {
     ...newParameter(),
     name: parameter.name,
@@ -202,7 +202,7 @@ export function withOptions(draft: ParameterDraft, options: OptionDraft[]): Para
 }
 
 /** The parameter a draft describes, with only the fields its type has. */
-export function draftParameter(draft: ParameterDraft): TemplateParameter {
+export function draftParameter(draft: ParameterDraft): ComposeParameter {
   const secret = draft.type === "text" && draft.secret
   const number = (text: string) => (text.trim() ? { value: Number(text) } : undefined)
   const range = Object.fromEntries(
@@ -234,17 +234,17 @@ export function draftParameter(draft: ParameterDraft): TemplateParameter {
   }
 }
 
-export function templateDraft(template?: Template | null): TemplateDraft {
+export function composeDraft(compose?: Compose | null): ComposeDraft {
   return {
-    parameters: (template?.parameters ?? []).map(parameterDraft),
-    script: template?.script ?? DEFAULT_SETUP,
-    root: template?.root ?? false,
-    timeout_seconds: String(template?.timeout_seconds ?? 600),
+    parameters: (compose?.parameters ?? []).map(parameterDraft),
+    script: compose?.script ?? DEFAULT_SETUP,
+    root: compose?.root ?? false,
+    timeout_seconds: String(compose?.timeout_seconds ?? 600),
   }
 }
 
-/** The template a draft describes. */
-export function templateBody(draft: TemplateDraft): Template {
+/** The compose a draft describes. */
+export function composeBody(draft: ComposeDraft): Compose {
   return {
     parameters: draft.parameters.map(draftParameter),
     script: draft.script,
@@ -255,11 +255,11 @@ export function templateBody(draft: TemplateDraft): Template {
 
 const TYPES = Object.keys(DISPLAYS) as ParameterType[]
 
-function readParameter(value: unknown): TemplateParameter {
+function readParameter(value: unknown): ComposeParameter {
   const parameter = (value ?? {}) as Record<string, unknown>
   const { name } = parameter
   if (typeof name !== "string" || !name) throw new Error("Every parameter needs a name.")
-  const wrong = () => new Error(`The parameter ${name} is not shaped like a template parameter.`)
+  const wrong = () => new Error(`The parameter ${name} is not shaped like a compose parameter.`)
   const text = (key: string) => {
     const field = parameter[key] ?? ""
     if (typeof field !== "string") throw wrong()
@@ -277,7 +277,7 @@ function readParameter(value: unknown): TemplateParameter {
     throw new Error(`The parameter ${name} cannot be shown that way.`)
   const options = parameter.options ?? []
   if (!Array.isArray(options)) throw wrong()
-  const read: TemplateParameter = {
+  const read: ComposeParameter = {
     name,
     label: text("label"),
     description: text("description"),
@@ -306,10 +306,10 @@ function readParameter(value: unknown): TemplateParameter {
   return read
 }
 
-/** A pasted configuration's template, or the reason it cannot be one. */
-export function readTemplate(value: unknown): Template {
+/** A pasted configuration's compose, or the reason it cannot be one. */
+export function readCompose(value: unknown): Compose {
   if (typeof value !== "object" || value === null || Array.isArray(value))
-    throw new Error("The template must be a JSON object.")
+    throw new Error("The compose must be a JSON object.")
   const {
     parameters = [],
     script,
@@ -317,20 +317,20 @@ export function readTemplate(value: unknown): Template {
     timeout_seconds = 600,
   } = value as Record<string, unknown>
   if (typeof script !== "string" || !script.trim())
-    throw new Error("The template has no setup script.")
-  if (!Array.isArray(parameters)) throw new Error("The template's parameters must be a list.")
+    throw new Error("The compose has no setup script.")
+  if (!Array.isArray(parameters)) throw new Error("The compose's parameters must be a list.")
   if (typeof root !== "boolean")
-    throw new Error("The template's root setting must be true or false.")
+    throw new Error("The compose's root setting must be true or false.")
   if (typeof timeout_seconds !== "number")
-    throw new Error("The template's timeout must be a number of seconds.")
+    throw new Error("The compose's timeout must be a number of seconds.")
   return { parameters: parameters.map(readParameter), script, root, timeout_seconds }
 }
 
-const setupCopy: Record<EnvironmentSetup["status"], string> = {
+const setupCopy: Record<ContainerSetup["status"], string> = {
   pending: "Waits for the desktop",
   running: "Running",
   completed: "Completed",
   failed: "Failed",
 }
 
-export const setupLabel = (setup: Pick<EnvironmentSetup, "status">) => setupCopy[setup.status]
+export const setupLabel = (setup: Pick<ContainerSetup, "status">) => setupCopy[setup.status]

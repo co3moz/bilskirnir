@@ -1,13 +1,13 @@
 import { Fragment } from "react"
 
 import { closeDialog, useDialogState, type Dialog } from "@/lib/dialogs"
-import { EnvironmentDrawer } from "./environment-drawer"
-import { CreateEnvironmentDialog, SettingsDialog } from "./environment-dialogs"
+import { ContainerDrawer } from "./container-drawer"
+import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
 import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
 import { ImportImageDialog } from "./import-dialog"
 import { BuildImageDialog, DeleteDialog, SnapshotDialog, VolumeDialog } from "./simple-dialogs"
-import { TemplateDialog } from "./template-dialog"
+import { ComposeDialog } from "./compose-dialog"
 import { UploadDialog } from "./upload-dialog"
 
 /** Renders the one open dialog; see lib/dialogs.ts. */
@@ -22,9 +22,9 @@ function render(dialog: Dialog, open: boolean) {
   const props = { open, onOpenChange: (next: boolean) => !next && closeDialog() }
   switch (dialog.kind) {
     case "create":
-      return <CreateEnvironmentDialog {...props} image={dialog.image} />
+      return <CreateContainerDialog {...props} image={dialog.image} />
     case "details":
-      return <EnvironmentDrawer {...props} id={dialog.id} />
+      return <ContainerDrawer {...props} id={dialog.id} />
     case "settings":
       return <SettingsDialog {...props} id={dialog.id} />
     case "snapshot":
@@ -35,8 +35,8 @@ function render(dialog: Dialog, open: boolean) {
       return <UploadDialog {...props} id={dialog.id} files={dialog.files} />
     case "build":
       return <BuildImageDialog {...props} />
-    case "template":
-      return <TemplateDialog {...props} id={dialog.id} />
+    case "compose":
+      return <ComposeDialog {...props} id={dialog.id} />
     case "import":
       return <ImportImageDialog {...props} />
     case "volume":

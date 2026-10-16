@@ -3,22 +3,16 @@ import { RiComputerLine } from "@remixicon/react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
-import { useEnvironments } from "@/lib/queries"
-import type { EnvironmentItem } from "@/lib/types"
+import { useContainers } from "@/lib/queries"
+import type { ContainerItem } from "@/lib/types"
 
 /** The live desktop, letterboxed rather than cropped so the whole screen stays visible. */
-export function EnvironmentPreview({
-  item,
-  className,
-}: {
-  item: EnvironmentItem
-  className?: string
-}) {
-  const { id, spec } = item.environment
+export function ContainerPreview({ item, className }: { item: ContainerItem; className?: string }) {
+  const { id, spec } = item
   const running = item.state === "running"
   // The picture refreshes with the list, at most every ten seconds; the browser keeps the
   // previous picture on screen until the new one has loaded.
-  const stamp = Math.floor(useEnvironments().dataUpdatedAt / 10000)
+  const stamp = Math.floor(useContainers().dataUpdatedAt / 10000)
   const [failed, setFailed] = React.useState<number | null>(null)
   const shown = running && failed !== stamp
 
@@ -31,12 +25,12 @@ export function EnvironmentPreview({
     >
       <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
         <RiComputerLine className="size-6 opacity-60" />
-        {running ? "Loading preview" : "Desktop stopped"}
+        {running ? "Loading preview" : "Container stopped"}
       </div>
       {shown && (
         <img
           alt={`${spec.name} desktop preview`}
-          src={`/api/environments/${encodeURIComponent(id)}/screenshot?max_width=640&t=${stamp}`}
+          src={`/api/containers/${encodeURIComponent(id)}/screenshot?max_width=640&t=${stamp}`}
           loading="lazy"
           onError={() => setFailed(stamp)}
           className="absolute inset-0 size-full object-contain"

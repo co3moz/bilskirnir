@@ -41,11 +41,11 @@ import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
-import { refreshAll, useEnvironments, useImages, useProfiles, useSettings } from "@/lib/queries"
-import { templateBody, templateDraft, type TemplateDraft } from "@/lib/templates"
-import { useSubmit } from "./environment-dialogs"
+import { refreshAll, useContainers, useImages, useSettings } from "@/lib/queries"
+import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
+import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
-import { TemplateFields } from "./template-dialog"
+import { ComposeFields } from "./compose-dialog"
 
 export function Footer({
   busy,
@@ -76,7 +76,7 @@ export function Footer({
 }
 
 export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
-  const item = useEnvironments().data?.find((entry) => entry.environment.id === id)
+  const item = useContainers().data?.find((entry) => entry.id === id)
   const [name, setName] = React.useState("")
   const [description, setDescription] = React.useState("")
   const { busy, error, submit } = useSubmit()
@@ -86,13 +86,13 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
       <DialogContent className="sm:max-w-md">
         <form
           className="flex flex-col gap-4"
-          onSubmit={submit(() => runJob(`environments/${id}/snapshot`, { name, description }))}
+          onSubmit={submit(() => runJob(`containers/${id}/snapshot`, { name, description }))}
         >
           <DialogHeader>
             <DialogTitle>Create snapshot</DialogTitle>
             <DialogDescription>
-              Saves the files of {item?.environment.spec.name ?? "this environment"} as an image you
-              can start new environments from.
+              Saves the files of {item?.spec.name ?? "this container"} as an image you can start new
+              containers from.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
@@ -130,21 +130,19 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
 }
 
 export function DeleteDialog({ id, ...props }: DialogProps & { id: string }) {
-  const item = useEnvironments().data?.find((entry) => entry.environment.id === id)
+  const item = useContainers().data?.find((entry) => entry.id === id)
   const { busy, error, submit } = useSubmit()
   return (
     <AlertDialog {...props}>
       <AlertDialogContent>
         <form
           className="contents"
-          onSubmit={submit(() => runJob(`environments/${id}`, undefined, "DELETE"))}
+          onSubmit={submit(() => runJob(`containers/${id}`, undefined, "DELETE"))}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {item?.environment.spec.name ?? "environment"}?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete {item?.spec.name ?? "container"}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The desktop and its unsaved changes are deleted. Volumes and snapshots are kept.
+              The container and its unsaved changes are deleted. Volumes and snapshots are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <FieldError>{error}</FieldError>
@@ -169,16 +167,12 @@ rm -rf /var/lib/apt/lists/*`
 
 export function BuildImageDialog(props: DialogProps) {
   const settings = useSettings().data
-  const choices = imageChoices(
-    useProfiles().data ?? [],
-    useImages().data ?? [],
-    settings?.base_image
-  )
+  const choices = imageChoices(useImages().data ?? [], settings?.base_image)
   const [name, setName] = React.useState("")
   const [base, setBase] = React.useState<string | undefined>()
   const [script, setScript] = React.useState(DEFAULT_SCRIPT)
   const [internet, setInternet] = React.useState(true)
-  const [template, setTemplate] = React.useState<TemplateDraft | null>(null)
+  const [compose, setCompose] = React.useState<ComposeDraft | null>(null)
   const [importing, setImporting] = React.useState(false)
   // The base image a loaded configuration named when this host cannot build on it.
   const [missingBase, setMissingBase] = React.useState<string>()
@@ -190,7 +184,7 @@ export function BuildImageDialog(props: DialogProps) {
     if (config.name !== undefined) setName(config.name)
     if (config.internet !== undefined) setInternet(config.internet)
     setScript(config.script)
-    setTemplate(config.template ? templateDraft(config.template) : null)
+    setCompose(config.compose ? composeDraft(config.compose) : null)
     const wanted = config.base_image
     const usable = choices.some((choice) => choice.value === wanted && !choice.disabled)
     if (usable) setBase(wanted)
@@ -212,7 +206,7 @@ export function BuildImageDialog(props: DialogProps) {
                 base_image: chosen,
                 script,
                 internet,
-                ...(template ? { template: templateBody(template) } : {}),
+                ...(compose ? { compose: composeBody(compose) } : {}),
               })
             )}
           >
@@ -278,9 +272,9 @@ export function BuildImageDialog(props: DialogProps) {
               <Tabs defaultValue="build">
                 <TabsList>
                   <TabsTrigger value="build">Build script</TabsTrigger>
-                  <TabsTrigger value="template">
-                    Template
-                    {template?.parameters.length ? ` · ${template.parameters.length}` : ""}
+                  <TabsTrigger value="compose">
+                    Compose
+                    {compose?.parameters.length ? ` · ${compose.parameters.length}` : ""}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="build">
@@ -309,34 +303,33 @@ export function BuildImageDialog(props: DialogProps) {
                   </FieldGroup>
                 </TabsContent>
                 <TabsContent
-                  value="template"
+                  value="compose"
                   className="-mx-4 max-h-[40vh] overflow-y-auto px-4 py-1 sm:max-h-[min(30rem,55vh)]"
                 >
-                  {template ? (
+                  {compose ? (
                     <div className="flex flex-col gap-4">
-                      <TemplateFields draft={template} onChange={setTemplate} />
+                      <ComposeFields draft={compose} onChange={setCompose} />
                       <Button
                         type="button"
                         variant="outline"
                         className="self-start text-destructive"
-                        onClick={() => setTemplate(null)}
+                        onClick={() => setCompose(null)}
                       >
-                        Remove template
+                        Remove compose
                       </Button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-start gap-3 py-2">
                       <p className="text-sm text-muted-foreground">
-                        A template asks for values, such as an account, when an environment is
-                        created from the image, and runs a setup script with them once the desktop
-                        is ready.
+                        A compose asks for values, such as an account, when a container is created
+                        from the image, and runs a setup script with them once the desktop is ready.
                       </p>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setTemplate(templateDraft())}
+                        onClick={() => setCompose(composeDraft())}
                       >
-                        Add template
+                        Add compose
                       </Button>
                     </div>
                   )}
@@ -389,7 +382,7 @@ function ImportConfiguration({
         <DialogTitle>Import configuration</DialogTitle>
         <DialogDescription>
           Paste the JSON that Export copied from a built image. It fills in the name, base image,
-          script, internet setting and template, which you can still change before building.
+          script, internet setting and compose, which you can still change before building.
         </DialogDescription>
       </DialogHeader>
       <FieldGroup>
@@ -442,8 +435,8 @@ export function VolumeDialog(props: DialogProps) {
           <DialogHeader>
             <DialogTitle>New volume</DialogTitle>
             <DialogDescription>
-              A named Docker volume you can mount into environments. Its files outlive the
-              environments and are not part of snapshots.
+              A named Docker volume you can mount into containers. Its files outlive the containers
+              and are not part of snapshots.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>

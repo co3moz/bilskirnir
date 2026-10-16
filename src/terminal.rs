@@ -84,18 +84,18 @@ impl TerminalOutput {
 }
 fn record(app: &App, id: &str, terminal: &str) -> Result<Terminal> {
     let record: Terminal = app.db.get("terminal", terminal)?;
-    if record.environment_id != id {
+    if record.container_id != id {
         return Err(missing());
     }
     Ok(record)
 }
 async fn running(app: &App, id: &str) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using terminals".into(),
+            "Start the container before using terminals".into(),
         ));
     }
     Ok(info)
@@ -125,7 +125,7 @@ async fn control(app: &App, container: &str, who: &str, arguments: &[&str]) -> R
 fn describe(record: &Terminal, status: Value) -> Value {
     let mut value = json!({
         "terminal_id": record.id,
-        "environment_id": record.environment_id,
+        "container_id": record.container_id,
         "root": record.root,
         "cwd": record.cwd,
         "created_at": record.created_at,
@@ -139,13 +139,13 @@ fn describe(record: &Terminal, status: Value) -> Value {
 }
 pub async fn open_terminal(app: &Arc<App>, id: &str, body: &OpenTerminal) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let info = running(app, id).await?;
     let home = if body.root { "/root" } else { "/home/desktop" };
     let record = Terminal {
         id: uuid::Uuid::new_v4().simple().to_string(),
-        environment_id: id.into(),
+        container_id: id.into(),
         root: body.root,
         cwd: body.cwd.clone().unwrap_or_else(|| home.into()),
         created_at: now(),
@@ -246,13 +246,13 @@ pub async fn close_terminal(app: &App, id: &str, terminal: &str) -> Result<Value
     Ok(describe(&record, status))
 }
 pub async fn list_terminals(app: &App, id: &str) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     let records = app
         .db
         .list::<Terminal>("terminal")?
         .into_iter()
-        .filter(|record| record.environment_id == id)
+        .filter(|record| record.container_id == id)
         .take(50)
         .collect::<Vec<_>>();
     let mut items = Vec::new();
@@ -268,7 +268,7 @@ pub async fn list_terminals(app: &App, id: &str) -> Result<Value> {
             .await
             .unwrap_or_else(|_| json!({"state": "unknown"}))
         } else {
-            json!({"state": "unknown", "error": "Environment is not running"})
+            json!({"state": "unknown", "error": "Container is not running"})
         };
         items.push(describe(record, status));
     }

@@ -39,7 +39,7 @@ export type UploadRequest = Pick<
   | "onabort"
 >
 
-export type UploadOptions = { environmentId: string; destination: string; replace: boolean }
+export type UploadOptions = { containerId: string; destination: string; replace: boolean }
 
 export class FileUploads {
   createRequest: () => UploadRequest
@@ -117,7 +117,7 @@ export class FileUploads {
       this.onChange()
     }
   }
-  send(item: UploadItem, { environmentId, destination, replace }: UploadOptions) {
+  send(item: UploadItem, { containerId, destination, replace }: UploadOptions) {
     return new Promise<{ path?: string }>((resolve, reject) => {
       const request = this.createRequest()
       this.request = request
@@ -127,7 +127,7 @@ export class FileUploads {
         size: String(item.size),
         replace: String(replace),
       })
-      request.open("POST", `/api/environments/${encodeURIComponent(environmentId)}/files?${query}`)
+      request.open("POST", `/api/containers/${encodeURIComponent(containerId)}/files?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
       request.setRequestHeader("X-Wsld-Request", "1")
       request.withCredentials = true
