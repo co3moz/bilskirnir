@@ -1030,7 +1030,7 @@ try:
     assert agent_snapshot["parent_image_id"] == agent_image["image_id"]
     assert any(image["id"] == agent_snapshot["id"] for image in tool("list_images")["structuredContent"]["items"])
     reset_job = mcp_job(tool("reset_container", {"container_id":agent_env}))
-    assert reset_job["result"]["volumes_preserved"] and "Recreated the desktop" in reset_job["log"], reset_job
+    assert reset_job["result"]["volumes_preserved"] and "Recreated the container from its saved source image" in reset_job["log"], reset_job
     ready(f"wsld-{agent_env}")
     assert tool("read_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt"}, allow_error=True)["isError"]
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
@@ -1164,7 +1164,7 @@ try:
         result = job(deletion)
         container_ids.remove(eid)
         log = api(f"jobs/{deletion['job_id']}")["log"]
-        assert "Checking ownership" in log and "Removed the desktop container" in log, log
+        assert "Checking ownership" in log and "Removed the container and its writable layer" in log, log
         assert "Named volumes and saved images were preserved" in log, log
         assert result["name"] and result["volumes_preserved"] and result["images_preserved"], result
     assert not api("containers")
