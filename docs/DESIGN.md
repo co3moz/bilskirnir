@@ -70,6 +70,8 @@ Components come from shadcn/ui (Radix base, Maia style) in `web/src/components/u
 
 Below 768 px the sidebar becomes a sheet, drawers open from the bottom and the chart shows the last 7 days. Summary cards and container cards use container queries: one column on a phone, two on a tablet and four or three on a wide page. Tables scroll inside their frame. A narrow viewport must not scroll the page sideways to reach a form field or action.
 
+A dialog stays inside the window: when its content is taller, the body scrolls between the header and the footer so the actions stay in view. Script, configuration and pasted text fields grow with their text up to 500 px and then scroll inside.
+
 Keep keyboard focus visible, give icon buttons accessible names and keep the Radix dialog focus handling. Icons are decorative unless they are the only content of a control. Sign-out must remain reachable on narrow screens. Check text contrast in both themes against the actual surface, not just the page background. Animations are cut short when the system asks for reduced motion.
 
 ## Files to change
