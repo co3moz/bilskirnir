@@ -141,13 +141,15 @@ export type BuildConfig = {
   compose?: Compose
 }
 
-/** One line of `docker volume ls --format json`. */
+/** One line of `docker volume ls --format json`, and whether it is the manager's own. */
 export type Volume = {
   Name: string
   Driver: string
   Scope: string
   Labels?: string
   Mountpoint?: string
+  /** One of the manager's own volumes, such as its data volume: never mounted or opened. */
+  manager?: boolean
 }
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "interrupted"

@@ -1,7 +1,7 @@
 //! Pins down how a volume is opened: the helper container reaches nothing but the volume and
 //! works as the desktop user, its paths stay inside the volume, the manager's own volume is
-//! refused to helpers and desktops alike, and a request is checked before Docker is asked
-//! anything.
+//! refused to helpers and desktops alike and marked in the volume list, and a request is checked
+//! before Docker is asked anything.
 use super::*;
 use crate::tests::app;
 use axum::{body::Body, http::Request};
@@ -145,6 +145,68 @@ fn a_desktop_cannot_mount_the_managers_own_volume() {
         error.to_string(),
         "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
     );
+}
+
+#[test]
+fn a_listing_marks_the_managers_own_volumes() {
+    let manager = serde_json::json!({"Mounts": [
+        {"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"},
+    ]});
+    let listing = || {
+        vec![
+            serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
+            serde_json::json!({"Name": "project", "Driver": "local"}),
+        ]
+    };
+    let mut volumes = listing();
+    mark_manager_volumes(&mut volumes, Some(&manager));
+    assert_eq!(
+        volumes,
+        [
+            serde_json::json!({"Name": "bilskirnir-data", "Driver": "local", "manager": true}),
+            serde_json::json!({"Name": "project", "Driver": "local", "manager": false}),
+        ]
+    );
+    // Without a manager to ask, every line still says it is not the manager's.
+    let mut volumes = listing();
+    mark_manager_volumes(&mut volumes, None);
+    assert!(volumes.iter().all(|volume| volume["manager"] == false));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_volume_list_marks_what_the_manager_mounts() {
+    use axum::extract::State;
+    let mut app = app(false);
+    let calls = crate::tests::manager_docker(&mut app);
+    async fn marks(app: &Arc<App>) -> Vec<(String, bool)> {
+        let listed = crate::api::volumes(State(app.clone())).await.unwrap().0;
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|volume| {
+                let name = volume["Name"].as_str().unwrap().to_owned();
+                (name, volume["manager"].as_bool().unwrap())
+            })
+            .collect()
+    }
+    let data = |manager| ("bilskirnir-data".to_owned(), manager);
+    let project = ("project".to_owned(), false);
+    assert_eq!(marks(&app).await, [data(true), project.clone()]);
+
+    // A MANAGER_CONTAINER that names no container, or none at all, leaves nothing marked
+    // instead of failing the list.
+    Arc::get_mut(&mut app).unwrap().config.manager = Some("gone".into());
+    assert_eq!(marks(&app).await, [data(false), project.clone()]);
+    Arc::get_mut(&mut app).unwrap().config.manager = None;
+    std::fs::remove_file(&calls).unwrap();
+    assert_eq!(marks(&app).await, [data(false), project]);
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "volume ls --format {{json .}}\n"
+    );
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
 
 #[test]

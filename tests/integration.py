@@ -410,6 +410,8 @@ try:
         except urllib.error.HTTPError as error:
             assert error.code == 400
     # The manager's data volume holds its database and sessions, so no desktop mounts it.
+    marked = {item["Name"]: item["manager"] for item in api("volumes")}
+    assert marked[volume] is True and marked[share] is False, marked
     before = len(api("containers"))
     manager_mount = api("containers", {"name": "manager-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": volume, "target": "/workspace", "readonly": True}]})
     failed = wait_for(lambda: (j if (j := api(f"jobs/{manager_mount['job_id']}"))["status"] not in ("queued", "running") else None))

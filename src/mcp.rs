@@ -755,7 +755,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "list_volumes",
-            "List named volumes visible to this Docker Engine. Listing does not grant arbitrary container execution.",
+            "List named volumes visible to this Docker Engine. manager=true marks the manager's own volumes, such as its data volume, which a container cannot mount. Listing does not grant arbitrary container execution.",
             json!({}),
             &[],
             true,

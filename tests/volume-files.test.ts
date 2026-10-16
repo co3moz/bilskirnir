@@ -1,9 +1,11 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
+import type { Volume } from "../web/src/lib/types"
 import {
   entryNameError,
   joinPath,
+  mountableVolumes,
   parentPath,
   pathCrumbs,
   sortEntries,
@@ -64,6 +66,21 @@ test("an archive's file name suggests a volume name the manager accepts", () => 
   assert.equal(volumeArchiveName("ü.tar.gz"), "")
   assert.equal(volumeArchiveName("x.tar"), "")
   assert.equal(volumeArchiveUrl("unity-projects"), "/api/volumes/unity-projects/archive")
+})
+
+test("the manager's own volumes are not offered for a mount", () => {
+  const volume = (Name: string, manager?: boolean): Volume => ({
+    Name,
+    Driver: "local",
+    Scope: "local",
+    manager,
+  })
+  const listed = [volume("bilskirnir-data", true), volume("project", false), volume("saves")]
+  // An older manager sends no mark; such a volume is still offered.
+  assert.deepEqual(
+    mountableVolumes(listed).map((item) => item.Name),
+    ["project", "saves"]
+  )
 })
 
 test("downloads name the volume and the path in the query", () => {

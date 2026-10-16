@@ -37,13 +37,22 @@ const columns: DataColumn<Row>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <RiDatabase2Line className="size-4 shrink-0 text-primary" aria-hidden />
-        <button
-          type="button"
-          className="font-mono text-xs hover:underline"
-          onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
-        >
-          {row.original.Name}
-        </button>
+        {row.original.manager ? (
+          <span className="font-mono text-xs">{row.original.Name}</span>
+        ) : (
+          <button
+            type="button"
+            className="font-mono text-xs hover:underline"
+            onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
+          >
+            {row.original.Name}
+          </button>
+        )}
+        {row.original.manager && (
+          <Badge variant="outline" className="text-muted-foreground">
+            {t("volumes.manager")}
+          </Badge>
+        )}
         {row.original.Labels?.split(",").includes(MANAGED) && (
           <Badge variant="outline" className="text-muted-foreground">
             Bilskirnir
@@ -83,31 +92,36 @@ const columns: DataColumn<Row>[] = [
   column.accessor("Scope", { header: () => t("volumes.scope") }),
   column.display({
     id: "actions",
-    cell: ({ row }) => (
-      <div className="flex justify-end gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => attempt(async () => exportVolume(row.original.Name))}
-              aria-label={t("archives.exportOf", { name: row.original.Name })}
-            >
-              <RiArchive2Line />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("archives.export")}</TooltipContent>
-        </Tooltip>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
-        >
-          <RiFolderOpenLine data-icon="inline-start" />
-          {t("volumes.browse")}
-        </Button>
-      </div>
-    ),
+    cell: ({ row }) =>
+      row.original.manager ? (
+        <p className="ml-auto max-w-64 text-right text-xs whitespace-normal text-muted-foreground">
+          {t("volumes.managerHint")}
+        </p>
+      ) : (
+        <div className="flex justify-end gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => attempt(async () => exportVolume(row.original.Name))}
+                aria-label={t("archives.exportOf", { name: row.original.Name })}
+              >
+                <RiArchive2Line />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("archives.export")}</TooltipContent>
+          </Tooltip>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
+          >
+            <RiFolderOpenLine data-icon="inline-start" />
+            {t("volumes.browse")}
+          </Button>
+        </div>
+      ),
   }),
 ]
 

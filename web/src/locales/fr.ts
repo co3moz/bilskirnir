@@ -239,6 +239,9 @@ export const fr: Messages = {
   "volumes.mountedAtReadOnly": "sur {target} (lecture seule)",
   "volumes.mountedByCompose": "sur {target}, choisi pour le compose",
   "volumes.notMounted": "Non monté",
+  "volumes.manager": "Données du gestionnaire",
+  "volumes.managerHint":
+    "La base de données et les sessions de Bilskirnir. Il ne peut être ni ouvert, ni exporté, ni monté.",
   "volumes.driver": "Pilote",
   "volumes.scope": "Portée",
   "volumes.browse": "Parcourir les fichiers",

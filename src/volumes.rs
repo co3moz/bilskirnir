@@ -1,5 +1,6 @@
 //! Named volumes beyond listing and creating them: their files, read and changed from the
-//! dashboard without a container that mounts them.
+//! dashboard without a container that mounts them, and the manager's own volumes, which no
+//! helper or desktop gets and which a listing marks.
 //!
 //! A volume is reached through a short-lived helper container started from the manager's own
 //! image, which carries python3 and tar. The helper mounts nothing but that volume, has no
@@ -90,6 +91,19 @@ impl App {
         Ok(info)
     }
 
+    /// The manager container, to tell its own volumes apart in a listing. A listing goes on
+    /// without one: when MANAGER_CONTAINER is unset, names no container or not the manager,
+    /// no volume is the manager's.
+    pub(crate) async fn listing_manager(&self) -> Result<Option<Value>> {
+        let Some(manager) = &self.config.manager else {
+            return Ok(None);
+        };
+        Ok(self
+            .optional_inspect("container", manager)
+            .await?
+            .filter(|info| info["Config"]["Labels"]["io.wsl-desktop.manager"] == "true"))
+    }
+
     /// A volume by that name for a helper to mount, the manager's own refused. Whether it exists
     /// is up to the caller.
     pub(crate) async fn volume_named(&self, name: &str) -> Result<Volume> {
@@ -163,6 +177,20 @@ pub(crate) fn manager_volume(manager: &Value, name: &str) -> bool {
         .into_iter()
         .flatten()
         .any(|mount| mount["Type"] == "volume" && mount["Name"] == name)
+}
+
+/// Add `manager` to each line of `docker volume ls`: whether the manager mounts that volume, so a
+/// client offers it for no mount and opens none of its files. Without a manager, none is marked.
+pub(crate) fn mark_manager_volumes(volumes: &mut [Value], manager: Option<&Value>) {
+    for volume in volumes {
+        let own = match (manager, volume["Name"].as_str()) {
+            (Some(manager), Some(name)) => manager_volume(manager, name),
+            _ => false,
+        };
+        if let Value::Object(fields) = volume {
+            fields.insert("manager".into(), own.into());
+        }
+    }
 }
 
 /// Refuse a desktop the manager's own volumes: its data volume holds the database and sessions.

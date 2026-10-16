@@ -90,7 +90,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
-| GET | `/api/volumes` | Docker named volumes. |
+| GET | `/api/volumes` | Docker named volumes, each as `docker volume ls` describes it plus a boolean `manager`. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
 | POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
 | POST | `/api/volumes/{name}/files/read` | Read a bounded file slice as text or base64. |

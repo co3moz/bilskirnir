@@ -646,10 +646,12 @@ pub async fn volumes(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let bytes = app
         .docker(&["volume", "ls", "--format", "{{json .}}"])
         .await?;
-    let values = String::from_utf8_lossy(&bytes)
+    let mut values = String::from_utf8_lossy(&bytes)
         .lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .collect::<Vec<_>>();
+    let manager = app.listing_manager().await?;
+    crate::volumes::mark_manager_volumes(&mut values, manager.as_ref());
     Ok(Json(json!(values)))
 }
 #[derive(Deserialize)]

@@ -1377,8 +1377,9 @@ async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
 }
 
 /// A Docker CLI stand-in for a manager named `bilskirnir-manager` whose data volume is
-/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, fails everything
-/// else and records its arguments in the returned file.
+/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, lists that volume
+/// and `project` as `GET /api/volumes` asks for them, fails everything else and records its
+/// arguments in the returned file.
 #[cfg(unix)]
 pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -1397,8 +1398,10 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  *) exit 1 ;;\nesac\n",
-            calls = calls.display()
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  *) exit 1 ;;\nesac\n",
+            calls = calls.display(),
+            data = serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
+            project = serde_json::json!({"Name": "project", "Driver": "local"}),
         ),
     )
     .unwrap();

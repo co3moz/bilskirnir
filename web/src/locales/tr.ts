@@ -238,6 +238,9 @@ export const tr: Messages = {
   "volumes.mountedAtReadOnly": "{target} konumunda (salt okunur)",
   "volumes.mountedByCompose": "{target} konumunda, Compose için seçildi",
   "volumes.notMounted": "Bağlı değil",
+  "volumes.manager": "Bilskirnir verisi",
+  "volumes.managerHint":
+    "Bilskirnir'in kendi veritabanı ve oturumları. Açılamaz, dışa aktarılamaz ve konteynerlere bağlanamaz.",
   "volumes.driver": "Sürücü",
   "volumes.scope": "Kapsam",
   "volumes.browse": "Dosyalara göz at",

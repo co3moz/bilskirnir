@@ -1,6 +1,10 @@
-// Paths and entries of a volume's files, as the volume browser shows them. A path is absolute
-// within the volume, `/` being its root.
+// Paths and entries of a volume's files, as the volume browser shows them, and which volumes a
+// container may mount. A path is absolute within the volume, `/` being its root.
 import { t } from "./i18n"
+import type { Volume } from "./types"
+
+/** The volumes a container may mount: the manager refuses its own. */
+export const mountableVolumes = (volumes: Volume[]) => volumes.filter((volume) => !volume.manager)
 
 /** One entry of `POST volumes/{name}/files/list`. */
 export type VolumeEntry = {

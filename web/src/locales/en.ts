@@ -250,6 +250,9 @@ export const en = {
   "volumes.mountedAtReadOnly": "at {target} (read-only)",
   "volumes.mountedByCompose": "at {target}, chosen for the compose",
   "volumes.notMounted": "Not mounted",
+  "volumes.manager": "Manager data",
+  "volumes.managerHint":
+    "Bilskirnir's own database and sessions. It cannot be opened, exported or mounted.",
   "volumes.driver": "Driver",
   "volumes.scope": "Scope",
   "volumes.browse": "Browse files",
