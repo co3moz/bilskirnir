@@ -3,6 +3,9 @@
 set -euo pipefail
 INSTALL=/opt/bilskirnir
 PORT=${PORT:-8080}
+# The manager the package installs, and where its releases are listed.
+MANAGER_REPOSITORY=ghcr.io/co3moz/bilskirnir
+RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
 
 usage() {
     cat <<'EOF'
@@ -13,7 +16,7 @@ Usage: bilskirnir <command>
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Pull the latest manager and downloaded desktop images, recreate the manager
+  update    Move the manager to the newest release, pull downloaded desktop images, recreate the manager
   doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
@@ -43,15 +46,56 @@ ensure_docker() {
 address() {
     echo "http://localhost:$PORT"
 }
-# Desktop profiles download on first use, so refresh only the ones this host already has.
+# One setting from .env, without the quotes the first start puts around some values.
+setting() {
+    local value
+    value=$(sed -n "s/^$1=//p" "$INSTALL/.env" | tail -n1)
+    if [[ $value =~ ^\'(.*)\'$ || $value =~ ^\"(.*)\"$ ]]; then value=${BASH_REMATCH[1]}; fi
+    printf '%s\n' "$value"
+}
+# .env belongs to root, so it changes through sudo; sed keeps its owner and mode. The values set
+# here are image references, which hold no character that sed or the shell treats specially.
+set_setting() {
+    if grep -q "^$1=" "$INSTALL/.env"; then
+        sudo sed -i "s|^$1=.*|$1=$2|" "$INSTALL/.env"
+    else
+        printf '%s=%s\n' "$1" "$2" | sudo tee -a "$INSTALL/.env" >/dev/null
+    fi
+}
+# Prints the version of the newest published release, without the v of its tag.
+newest_release() {
+    local version
+    version=$(curl -fsS --max-time 20 "$RELEASES" | grep -o '"tag_name": *"v[^"]*"' | head -n1 |
+        sed 's/.*"v\([^"]*\)"$/\1/') || true
+    if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Could not find the newest release at $RELEASES; nothing was updated." >&2
+        return 1
+    fi
+    echo "$version"
+}
+# Desktop profiles download on first use, so refresh only the ones this host already has. A release
+# manager, labelled with its version, downloads the desktop images published with it and tags them
+# as the catalog reference; any other manager downloads the reference itself. This does the same.
 update_profiles() {
-    local catalog ref
-    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json); then
+    local catalog release ref source source_was_here
+    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
+        ! release=$(docker inspect --format '{{index .Config.Labels "io.wsl-desktop.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
     for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
-        if docker image inspect "$ref" >/dev/null 2>&1; then
+        if ! docker image inspect "$ref" >/dev/null 2>&1; then
+            continue
+        fi
+        if [[ $release =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
+            source=${ref%:*}:$release
+            # As in the manager, a release tag that was here before stays.
+            source_was_here=""
+            if docker image inspect "$source" >/dev/null 2>&1; then source_was_here=yes; fi
+            docker pull "$source"
+            docker tag "$source" "$ref"
+            if [[ -z $source_was_here ]]; then docker image rm "$source" >/dev/null || true; fi
+        else
             docker pull "$ref"
         fi
     done
@@ -89,6 +133,21 @@ case ${1:-help} in
     update)
         require_settings
         ensure_docker
+        # The package pins the manager to the release it belongs to, and only an update moves that pin,
+        # to the newest release and never back. Any other MANAGER_IMAGE, such as latest or a digest, was
+        # chosen by hand and is pulled again as it is.
+        current=$(setting MANAGER_IMAGE)
+        pinned=${current#"$MANAGER_REPOSITORY":}
+        if [[ -z $current || ($pinned != "$current" && $pinned =~ ^[0-9]+\.[0-9]+\.[0-9]+$) ]]; then
+            version=$(newest_release)
+            if [[ -n $current && $(printf '%s\n' "$version" "$pinned" | sort -V | tail -n1) == "$pinned" ]]; then
+                echo "The manager stays on $pinned; the newest release is $version."
+            else
+                docker pull "$MANAGER_REPOSITORY:$version"
+                set_setting MANAGER_IMAGE "$MANAGER_REPOSITORY:$version"
+                echo "The manager moves from ${pinned:-latest} to $version."
+            fi
+        fi
         compose pull
         compose up -d
         update_profiles

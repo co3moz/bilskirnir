@@ -314,3 +314,95 @@ async fn engine_pull_reports_refusals_and_interrupted_streams() {
     server.await.unwrap();
     assert_eq!(error.to_string(), "Docker: denied");
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference() {
+    use std::os::unix::fs::PermissionsExt;
+    let profile = crate::profiles::catalog().remove(0);
+    let reference = profile.reference.clone();
+    let release = format!("{}:1.2.3", reference.rsplit_once(':').unwrap().0);
+    // A Docker CLI stand-in that records its arguments and has no manifest to offer. It lists
+    // every image except the release tag, which it lists only once `release-tag-here` exists.
+    let dir =
+        std::env::temp_dir().join(format!("bilskirnir-pull-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let calls = dir.join("calls");
+    let docker = dir.join("docker");
+    std::fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\ncd '{dir}'\necho \"$*\" >> calls\ncase \"$*\" in\n  'manifest inspect'*) exit 1 ;;\n  'image inspect {release}') [ -e release-tag-here ] || exit 1 ;;\nesac\ncase \"$1 $2\" in\n  'image inspect') echo '[{{\"Id\":\"sha256:feed\"}}]' ;;\nesac\n",
+            dir = dir.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut app = crate::tests::app(false);
+    std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let job = crate::model::Job {
+        id: "pull".into(),
+        kind: "profile-pull".into(),
+        resource: None,
+        status: "running".into(),
+        created_at: crate::model::now(),
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+    };
+    app.db.put("job", "pull", &job).unwrap();
+
+    let result = app
+        .pull_profile_from(&profile, &release, "pull")
+        .await
+        .unwrap();
+    assert_eq!(result["reference"], reference);
+    assert_eq!(result["image_id"], "sha256:feed");
+    assert_eq!(
+        std::fs::read_to_string(&calls)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            format!("image inspect {release}"),
+            format!("image ls --format {{{{.Repository}}}}:{{{{.Tag}}}} {release}"),
+            format!("manifest inspect --verbose {release}"),
+            format!("pull {release}"),
+            format!("tag {release} {reference}"),
+            format!("image rm {release}"),
+            format!("image inspect {reference}"),
+        ]
+    );
+
+    // A release tag that was here before the download stays.
+    std::fs::remove_file(&calls).unwrap();
+    std::fs::write(dir.join("release-tag-here"), "").unwrap();
+    app.pull_profile_from(&profile, &release, "pull")
+        .await
+        .unwrap();
+    let after = std::fs::read_to_string(&calls).unwrap();
+    assert!(
+        after.contains(&format!("tag {release} {reference}")),
+        "{after}"
+    );
+    assert!(!after.contains("image rm"), "{after}");
+
+    // Any other build pulls the catalog reference itself and tags nothing.
+    std::fs::remove_file(&calls).unwrap();
+    app.pull_profile_from(&profile, &reference, "pull")
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&calls)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            format!("manifest inspect --verbose {reference}"),
+            format!("pull {reference}"),
+            format!("image inspect {reference}"),
+        ]
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}

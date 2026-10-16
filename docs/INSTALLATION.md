@@ -56,7 +56,7 @@ The full manifests also accept these Compose settings:
 | `PORT` | `8080` | The manager's HTTP port on the host. |
 | `MANAGER_CONTAINER` | `bilskirnir-manager` | The manager container's name. |
 | `MANAGER_DATA_VOLUME` | `bilskirnir-data` | The volume holding the manager database and temporary uploads. |
-| `MANAGER_IMAGE` | `ghcr.io/co3moz/bilskirnir:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. |
+| `MANAGER_IMAGE` | `ghcr.io/co3moz/bilskirnir:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` follows `master`; the WSL package sets the release it belongs to. |
 | `DESKTOP_HOST` | `localhost` | The hostname for the optional HTTPS service; also added to accepted hosts. |
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
@@ -109,7 +109,7 @@ docker compose up -d
 
 For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
-This updates the manager. Desktop profile images are not Compose services: the manager downloads a profile the first time a desktop is created from it. To get a newer release of a profile you already have, select **Update** on its card under **Images**, or run `docker pull` with the profile's image reference. In the [WSL package](WSL_PACKAGE.md), `bilskirnir update` does both.
+This updates the manager. Desktop profile images are not Compose services: the manager downloads a profile the first time a desktop is created from it. To get a newer release of a profile you already have, select **Update** on its card under **Images**. A release manager, such as `ghcr.io/co3moz/bilskirnir:1.2.0`, downloads the profile published with it (`ubuntu-xfce:1.2.0`) and tags it with the profile's reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `bilskirnir update` does both and moves the manager to the newest release.
 
 Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both profiles at every start. They keep working. To download profiles only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
 

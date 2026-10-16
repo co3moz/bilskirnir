@@ -271,11 +271,20 @@ try:
     # its creation job, which reports byte progress while it runs. Only the profile tag is moved
     # aside, never the local build; it is restored, and only an image this phase pulled is removed.
     xfce_ref = xfce["profile"]["reference"]
+    # A release manager downloads the profile published with it and tags that as the reference.
+    release = docker("inspect", "--format", '{{index .Config.Labels "io.wsl-desktop.release"}}', manager).decode().strip()
+    xfce_source = xfce_ref if release in ("", "<no value>") else f"{xfce_ref.rsplit(':', 1)[0]}:{release}"
     local_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip()
     known_images = set(docker("image", "ls", "-a", "-q", "--no-trunc").decode().split())
     xfce_backup = f"wsld-test-xfce-backup:{tag}"
     docker("image", "tag", xfce_ref, xfce_backup)
     docker("image", "rm", xfce_ref)
+    # A release tag already on the host is moved aside the same way, so the download is a real one.
+    local_source = docker("image", "inspect", "--format", "{{.Id}}", xfce_source, check=False).decode().strip() if xfce_source != xfce_ref else ""
+    source_backup = f"wsld-test-xfce-release-backup:{tag}"
+    if local_source:
+        docker("image", "tag", xfce_source, source_backup)
+        docker("image", "rm", xfce_source)
     try:
         assert not next(p for p in api("profiles") if p["profile"]["id"] == "ubuntu-xfce")["available"]
         created = api("environments", {"name": "Lazy profile download", "image": xfce_ref, "gpu": False, "internet": False})
@@ -288,8 +297,11 @@ try:
         assert state["status"] == "completed", state["log"]
         lazy_env = state["result"]["environment_id"]
         environment_ids.append(lazy_env)
-        assert "progress" not in state and f"from {xfce_ref}" in state["log"], state
+        assert "progress" not in state and f"from {xfce_source}." in state["log"], state
         assert "Status: Downloaded newer image" in state["log"], state["log"]
+        if xfce_source != xfce_ref:
+            assert f"Tagged it as {xfce_ref}." in state["log"], state["log"]
+            assert not docker("image", "ls", "-q", xfce_source).strip(), "the release tag was left behind"
         assert any(p["layers"] and p["total"] is not None for p in samples), samples
         assert [p["current"] for p in samples] == sorted(p["current"] for p in samples), samples
         assert all(p["total"] is None or p["current"] <= p["total"] for p in samples), samples
@@ -299,10 +311,13 @@ try:
         pulled_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref, check=False).decode().strip()
         docker("image", "tag", local_xfce, xfce_ref)
         docker("image", "rm", xfce_backup)
+        if local_source:
+            docker("image", "tag", local_source, xfce_source)
+            docker("image", "rm", source_backup)
         if pulled_xfce and pulled_xfce != local_xfce and pulled_xfce not in known_images:
             image_refs.append(pulled_xfce)
     assert docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip() == local_xfce
-    print("PASS missing profile downloads on creation with byte progress", flush=True)
+    print(f"PASS missing profile downloads from {xfce_source} on creation with byte progress", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
     try:

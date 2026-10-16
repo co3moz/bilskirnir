@@ -144,13 +144,15 @@ The **Publish containers** workflow checks frontend and backend code and validat
 | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce` | `24.04`, `latest` |
 | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome` | `24.04`, `latest` |
 
-Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. Documentation-only changes do not trigger image builds.
+Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Its manager is built with `BILSKIRNIR_RELEASE=1.2.3`: it downloads the `1.2.3` desktop images and tags them as their catalog references, and carries the version in its `io.wsl-desktop.release` label, which `bilskirnir update` reads. Other builds leave it empty and download the catalog references. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. Documentation-only changes do not trigger image builds.
 
 The workflow uses `GITHUB_TOKEN` with package write access, separate BuildKit caches for each image and official actions pinned to commit SHAs. It reads each published manifest back by digest to check registry access. Hosted CI cannot verify WSL GPU behavior.
 
 ## Build the WSL distribution package
 
 `scripts/build-wsl.sh dist/bilskirnir.wsl` builds `wsl/Dockerfile` (Ubuntu 24.04, Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the installation files), exports the container filesystem and compresses it. Test a package with `wsl --install --from-file dist\bilskirnir.wsl --name Bilskirnir-test`, run the first-start setup, then `wsl --unregister Bilskirnir-test`. Release tags attach the package to the GitHub release. Keep the files under `wsl/` in sync with `compose.ghcr.yml` and `.env.example`, which the Dockerfile copies.
+
+The package pins `MANAGER_IMAGE` to the version in `Cargo.toml`, or to `BILSKIRNIR_VERSION` when it is set, so a package built before its tag is published cannot download its manager yet; set `BILSKIRNIR_VERSION` to a published release to test a first start that downloads. The `checks` job refuses a `v*` tag that differs from the version in `Cargo.toml`, and the package job waits until all three images of the tag are published.
 
 ## Keep older installations working
 

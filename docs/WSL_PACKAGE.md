@@ -6,6 +6,8 @@ The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with
 
 The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a desktop is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
+Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since, and that manager downloads the desktop profiles published with 1.2.0. Only [`bilskirnir update`](#update) moves it forward.
+
 ## Requirements
 
 - Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
@@ -57,13 +59,21 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services and the dashboard address. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Pulls the latest manager and the desktop profiles already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env`; run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
 The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env` and `deploy/Caddyfile`. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+
+## Update
+
+`bilskirnir update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it downloads the desktop profiles you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with the profile's usual reference, `ubuntu-xfce:24.04`, which desktops and images record.
+
+A `MANAGER_IMAGE` set by hand to anything other than a release of `ghcr.io/co3moz/bilskirnir`, such as `latest`, which follows `master`, or a digest, is only pulled again. To return to releases, set it to one with `bilskirnir settings`, for example `ghcr.io/co3moz/bilskirnir:1.2.0`, and run `bilskirnir update`.
+
+An update replaces images only. `compose.yml`, `.env.example` and the `bilskirnir` command stay as the package installed them.
 
 ## Memory, processors and disk
 
@@ -143,7 +153,7 @@ The package is produced from `wsl/Dockerfile` with Docker:
 scripts/build-wsl.sh dist/bilskirnir.wsl
 ```
 
-The script builds the root filesystem image, exports it with `docker export` and compresses it with `xz -9e`, which makes the package about 40% smaller than gzip; `WSL_COMPRESS=gzip` builds faster but produces a larger file. It refuses to package a world-writable file, which a `COPY` without `--chmod` produces from a checkout on a Windows drive, or a directory its owner cannot enter, which `COPY --chmod=0644` produces when it creates the destination directory. Release tags publish the package as a GitHub release asset. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command, `keepalive.sh` is the process the Windows launcher keeps open, `daemon.json` configures Docker and `firewall-watch.sh` with `bilskirnir-firewall.service` restores Docker's firewall rules. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, `kmod-static-nodes`, which has no module tree in WSL, and `nftables`, which flushes the firewall shared by all distributions; it also installs the systemd user-session packages so launches do not warn about a missing user session.
+The script builds the root filesystem image, exports it with `docker export` and compresses it with `xz -9e`, which makes the package about 40% smaller than gzip; `WSL_COMPRESS=gzip` builds faster but produces a larger file. The package installs the manager version in `Cargo.toml`; `BILSKIRNIR_VERSION=1.2.0` builds one for another published release, and `BILSKIRNIR_VERSION=latest` one that follows `master`. It refuses to package a world-writable file, which a `COPY` without `--chmod` produces from a checkout on a Windows drive, or a directory its owner cannot enter, which `COPY --chmod=0644` produces when it creates the destination directory. Release tags publish the package as a GitHub release asset once the tag's images are published. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command, `keepalive.sh` is the process the Windows launcher keeps open, `daemon.json` configures Docker and `firewall-watch.sh` with `bilskirnir-firewall.service` restores Docker's firewall rules. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, `kmod-static-nodes`, which has no module tree in WSL, and `nftables`, which flushes the firewall shared by all distributions; it also installs the systemd user-session packages so launches do not warn about a missing user session.
 
 ## Remove
 
