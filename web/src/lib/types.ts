@@ -29,11 +29,11 @@ export type Container = {
   spec: ContainerSpec
   last_error?: string | null
   desktop?: DesktopInfo | null
-  /** Set when the image had a template: its setup's progress and the values it was given. */
+  /** Set when the image had a compose: its setup's progress and the values it was given. */
   setup?: ContainerSetup | null
 }
 
-/** A template parameter: an environment variable of the setup script. */
+/** A compose parameter: an environment variable of the setup script. */
 export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices"
 
 export type ParameterDisplay =
@@ -42,10 +42,10 @@ export type ParameterDisplay =
 export type ParameterOption = { value: string; label: string }
 
 /**
- * A template parameter: an environment variable of the setup script. Whatever its type, its value
+ * A compose parameter: an environment variable of the setup script. Whatever its type, its value
  * and default are text in the form the script reads: `42`, `true`, or a choice per line.
  */
-export type TemplateParameter = {
+export type ComposeParameter = {
   name: string
   label: string
   /** Help shown with the field, such as where to find the value. */
@@ -65,8 +65,8 @@ export type TemplateParameter = {
 }
 
 /** What a new container from an image asks for, and the script that receives it. */
-export type Template = {
-  parameters: TemplateParameter[]
+export type Compose = {
+  parameters: ComposeParameter[]
   script: string
   root: boolean
   timeout_seconds: number
@@ -74,7 +74,7 @@ export type Template = {
 
 export type ContainerSetup = {
   status: "pending" | "running" | "completed" | "failed"
-  /** The image record the template came from. */
+  /** The image record the compose came from. */
   image: string
   /** Values of the parameters that are not secret. */
   parameters: Record<string, string>
@@ -121,8 +121,8 @@ export type ImageRecord = {
   desktop?: DesktopInfo | null
   /** Recorded by script builds; `GET images/{id}/config` adds the script. */
   build?: Omit<BuildConfig, "name" | "script"> | null
-  /** Lists leave out the setup script; `GET images/{id}/template` returns it. */
-  template?: Omit<Template, "script"> | null
+  /** Lists leave out the setup script; `GET images/{id}/compose` returns it. */
+  compose?: Omit<Compose, "script"> | null
   /** `null` when Docker could not list images. */
   available?: boolean | null
 }
@@ -133,7 +133,7 @@ export type BuildConfig = {
   base_image: string
   internet: boolean
   script: string
-  template?: Template
+  compose?: Compose
 }
 
 /** One line of `docker volume ls --format json`. */

@@ -26,14 +26,14 @@ import {
   withType,
   type OptionDraft,
   type ParameterDraft,
-} from "@/lib/templates"
+} from "@/lib/compose"
 import type { ParameterDisplay, ParameterType } from "@/lib/types"
 import { ParameterField } from "./parameter-field"
 
 const TYPES = Object.keys(DISPLAYS) as ParameterType[]
 const small = "text-xs text-muted-foreground"
 
-/** One parameter of the template editor, with the fields its type has. */
+/** One parameter of the compose editor, with the fields its type has. */
 export function ParameterEditor({
   parameter,
   onChange,

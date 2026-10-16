@@ -88,7 +88,7 @@ The server currently exposes 62 tools:
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
-| Reusable images | `list_images`, `import_image`, `build_image`, `get_image_template`, `set_image_template`, `snapshot` |
+| Reusable images | `list_images`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
 | Operation results | `list_jobs`, `get_job` |
 
@@ -117,14 +117,14 @@ Output goes to the job log. A nonzero exit or timeout fails the job and records 
 
 A script holds the container's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
 
-## Ask for values with templates
+## Ask for values with composes
 
-A template makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_template` takes the record's `image_id` from `list_images` and a `template`, or `null` to remove it; `get_image_template` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `template` for the image it builds.
+A compose makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_compose` takes the record's `image_id` from `list_images` and a `compose`, or `null` to remove it; `get_image_compose` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `compose` for the image it builds.
 
 ```json
 {
   "image_id": "IMAGE_RECORD_ID",
-  "template": {
+  "compose": {
     "parameters": [
       {"name": "UNITY_EMAIL", "label": "Unity email", "required": true},
       {"name": "UNITY_PASSWORD", "label": "Unity password", "required": true, "secret": true}
@@ -134,7 +134,7 @@ A template makes a saved image ask for values, such as an account, when a contai
 }
 ```
 
-`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#composes).
 
 ## Read and write files
 

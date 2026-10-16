@@ -1,7 +1,7 @@
-//! Image templates: parameters asked for when a container is created from a saved image, and
+//! Image composes: parameters asked for when a container is created from a saved image, and
 //! a setup script that receives them as environment variables once the new desktop is ready.
 //!
-//! A template belongs to an image record. A new container pins a copy of it together with the
+//! A compose belongs to an image record. A new container pins a copy of it together with the
 //! values it was given, so editing the image later changes neither what the container ran nor
 //! what a reset runs again. The values live in a record of their own that no route returns:
 //! the container shows the values of ordinary parameters and only the names of secret ones,
@@ -29,7 +29,7 @@ use std::{
 };
 
 const RUNNER: &str = include_str!("setup_runner.py");
-/// The database kind of each templated container's pinned template and parameter values.
+/// The database kind of each container's pinned compose and parameter values.
 const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
 const SCRIPT_LIMIT: usize = 1_000_000;
@@ -38,7 +38,7 @@ const READY_LIMIT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Template {
+pub struct Compose {
     /// Asked for when a container is created; each one is an environment variable of the script.
     #[serde(default)]
     pub parameters: Vec<Parameter>,
@@ -54,19 +54,19 @@ fn default_timeout() -> u64 {
     600
 }
 
-impl Template {
+impl Compose {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.script.trim().is_empty()
             || self.script.len() > SCRIPT_LIMIT
             || self.script.contains('\0')
         {
-            bail!("A template needs a setup script of 1 to 1000000 bytes without NUL characters");
+            bail!("A compose needs a setup script of 1 to 1000000 bytes without NUL characters");
         }
         if !(1..=3500).contains(&self.timeout_seconds) {
             bail!("timeout_seconds must be between 1 and 3500");
         }
         if self.parameters.len() > PARAMETER_LIMIT {
-            bail!("A template has at most {PARAMETER_LIMIT} parameters");
+            bail!("A compose has at most {PARAMETER_LIMIT} parameters");
         }
         let mut names = HashSet::new();
         for parameter in &self.parameters {
@@ -87,7 +87,7 @@ impl Template {
             .keys()
             .find(|name| !self.parameters.iter().any(|p| &p.name == *name))
         {
-            bail!("The image's template has no parameter {name}");
+            bail!("The image's compose has no parameter {name}");
         }
         let mut values = BTreeMap::new();
         for parameter in &self.parameters {
@@ -98,12 +98,12 @@ impl Template {
     }
 }
 
-/// Where a container's template setup stands, as its record shows it.
+/// Where a container's compose setup stands, as its record shows it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Setup {
     /// `pending`, `running`, `completed` or `failed`.
     pub status: String,
-    /// The image record whose template the container was created with.
+    /// The image record whose compose the container was created with.
     pub image: String,
     /// The values of the parameters that are not secret.
     pub parameters: BTreeMap<String, String>,
@@ -113,17 +113,19 @@ pub struct Setup {
     pub finished_at: Option<u64>,
 }
 
-/// The template a container was created with and every value it was given, secret ones too.
+/// The compose a container was created with and every value it was given, secret ones too.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Pinned {
-    pub template: Template,
+    /// Saved as `template` before templates were called composes.
+    #[serde(alias = "template")]
+    pub compose: Compose,
     pub values: BTreeMap<String, String>,
 }
 impl Pinned {
     /// What the container record shows of it.
     pub fn setup(&self, image: &str) -> Setup {
         let secret = |name: &String| {
-            self.template
+            self.compose
                 .parameters
                 .iter()
                 .any(|p| &p.name == name && p.secret)
@@ -149,30 +151,30 @@ impl Pinned {
     /// The setup runner's request on stdin, which keeps values out of command lines.
     pub fn request(&self) -> Value {
         let secrets = self
-            .template
+            .compose
             .parameters
             .iter()
             .filter(|p| p.secret)
             .map(|p| &p.name)
             .collect::<Vec<_>>();
         json!({
-            "script": self.template.script.replace("\r\n", "\n"),
+            "script": self.compose.script.replace("\r\n", "\n"),
             "parameters": self.values,
             "secrets": secrets,
-            "timeout_seconds": self.template.timeout_seconds,
+            "timeout_seconds": self.compose.timeout_seconds,
         })
     }
 }
 
-/// The image record whose template applies to a new container from `requested`, a reference
-/// or image ID that Docker resolved to `image_id`. Records of one image share the newest template.
-pub(crate) fn template_image<'a>(
+/// The image record whose compose applies to a new container from `requested`, a reference
+/// or image ID that Docker resolved to `image_id`. Records of one image share the newest compose.
+pub(crate) fn compose_image<'a>(
     records: &'a [ImageRecord],
     requested: &str,
     image_id: &str,
 ) -> Option<&'a ImageRecord> {
     records.iter().find(|record| {
-        record.template.is_some()
+        record.compose.is_some()
             && (record.image_id == image_id
                 || record.image_id == requested
                 || record.reference == requested)
@@ -180,31 +182,31 @@ pub(crate) fn template_image<'a>(
 }
 
 impl App {
-    /// The template and values a new container from this image runs, or `None` without one.
-    pub(crate) fn pin_template(
+    /// The compose and values a new container from this image runs, or `None` without one.
+    pub(crate) fn pin_compose(
         &self,
         requested: &str,
         image_id: &str,
         given: &BTreeMap<String, String>,
     ) -> anyhow::Result<Option<(String, Pinned)>> {
         let records: Vec<ImageRecord> = self.db.list("image")?;
-        let Some(record) = template_image(&records, requested, image_id) else {
+        let Some(record) = compose_image(&records, requested, image_id) else {
             if let Some(name) = given.keys().next() {
-                bail!("The image has no template, so it takes no parameter {name}");
+                bail!("The image has no compose, so it takes no parameter {name}");
             }
             return Ok(None);
         };
-        let template = record.template.clone().context("Missing template")?;
-        let values = template.resolve(given)?;
-        Ok(Some((record.id.clone(), Pinned { template, values })))
+        let compose = record.compose.clone().context("Missing compose")?;
+        let values = compose.resolve(given)?;
+        Ok(Some((record.id.clone(), Pinned { compose, values })))
     }
 
-    /// The template a container was created with, which a snapshot of it keeps.
-    pub(crate) fn pinned_template(&self, container_id: &str) -> Option<Template> {
+    /// The compose a container was created with, which a snapshot of it keeps.
+    pub(crate) fn pinned_compose(&self, container_id: &str) -> Option<Compose> {
         self.db
             .get::<Pinned>(PINNED, container_id)
             .ok()
-            .map(|pinned| pinned.template)
+            .map(|pinned| pinned.compose)
     }
 
     pub(crate) fn save_pinned(&self, container_id: &str, pinned: &Pinned) -> anyhow::Result<()> {
@@ -215,7 +217,7 @@ impl App {
         self.db.remove(PINNED, container_id)
     }
 
-    /// Run the template setup of a container whose setup has not completed. A failure is
+    /// Run the compose setup of a container whose setup has not completed. A failure is
     /// recorded on the container, which keeps running so the outcome can be inspected.
     pub(crate) async fn run_setup(&self, id: &str, job_id: &str) -> anyhow::Result<()> {
         let mut env: Container = self.db.get(CONTAINERS, id)?;
@@ -226,7 +228,7 @@ impl App {
         let pinned: Pinned = self
             .db
             .get(PINNED, id)
-            .context("The template values of this container are missing; create it again")?;
+            .context("The compose values of this container are missing; create it again")?;
         set_status(&mut env, "running", None);
         env.last_error = None;
         self.db.put(CONTAINERS, id, &env)?;
@@ -254,17 +256,17 @@ impl App {
     ) -> anyhow::Result<()> {
         self.append_log(
             job_id,
-            "Waiting for the desktop before running the template setup.",
+            "Waiting for the desktop before running the compose setup.",
         )?;
         let container = self.wait_ready(env).await?;
-        let root = pinned.template.root;
+        let root = pinned.compose.root;
         let user = if root { "root" } else { "1001:1001" };
         let names = pinned.values.keys().cloned().collect::<Vec<_>>();
         self.append_log(
             job_id,
             &format!(
-                "Running the template setup as {user} (timeout: {} seconds). Parameters: {}.",
-                pinned.template.timeout_seconds,
+                "Running the compose setup as {user} (timeout: {} seconds). Parameters: {}.",
+                pinned.compose.timeout_seconds,
                 if names.is_empty() {
                     "none".into()
                 } else {
@@ -277,8 +279,8 @@ impl App {
         let input = serde_json::to_vec(&pinned.request())?;
         self.docker_logged_input(job_id, &args, Some(input))
             .await
-            .context("The template setup failed")?;
-        self.append_log(job_id, "Template setup completed.")?;
+            .context("The compose setup failed")?;
+        self.append_log(job_id, "Compose setup completed.")?;
         Ok(())
     }
 
@@ -310,11 +312,11 @@ impl App {
                 return Ok(id);
             }
             if state["Running"] != true && state["Restarting"] != true {
-                bail!("The container stopped before the template setup could run; check its logs");
+                bail!("The container stopped before the compose setup could run; check its logs");
             }
             if started.elapsed() > READY_LIMIT {
                 bail!(
-                    "The desktop was not ready within {} seconds, so the template setup did not run; check its logs",
+                    "The desktop was not ready within {} seconds, so the compose setup did not run; check its logs",
                     READY_LIMIT.as_secs()
                 );
             }
@@ -347,7 +349,7 @@ pub(crate) fn mark_interrupted(db: &crate::db::Db) -> anyhow::Result<()> {
             set_status(&mut env, "failed", Some(now()));
             // An error that stopped the setup earlier explains more than the restart does.
             env.last_error.get_or_insert_with(|| {
-                "The manager restarted before the template setup finished; retry to run it again"
+                "The manager restarted before the compose setup finished; retry to run it again"
                     .into()
             });
             db.put(CONTAINERS, &env.id, &env)?;
@@ -356,36 +358,36 @@ pub(crate) fn mark_interrupted(db: &crate::db::Db) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn get(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Template>> {
+pub async fn get(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Compose>> {
     let record: ImageRecord = app.db.get("image", &id)?;
     record
-        .template
+        .compose
         .map(Json)
-        .ok_or_else(|| Error(StatusCode::NOT_FOUND, "This image has no template".into()))
+        .ok_or_else(|| Error(StatusCode::NOT_FOUND, "This image has no compose".into()))
 }
 
 pub async fn set(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
-    Json(template): Json<Template>,
+    Json(compose): Json<Compose>,
 ) -> Result<Json<Value>> {
-    template.validate()?;
-    replace(&app, &id, Some(template)).await
+    compose.validate()?;
+    replace(&app, &id, Some(compose)).await
 }
 
 pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
     replace(&app, &id, None).await
 }
 
-async fn replace(app: &App, id: &str, template: Option<Template>) -> Result<Json<Value>> {
+async fn replace(app: &App, id: &str, compose: Option<Compose>) -> Result<Json<Value>> {
     let lock = app.resource_lock(&format!("image:{id}"));
     let _guard = lock.lock().await;
     let mut record: ImageRecord = app.db.get("image", id)?;
-    record.template = template;
+    record.compose = compose;
     app.db.put("image", id, &record)?;
     Ok(Json(crate::api::image_summary(&record)))
 }
 
 #[cfg(test)]
-#[path = "templates_tests.rs"]
+#[path = "compose_tests.rs"]
 mod tests;

@@ -4,6 +4,7 @@ mod archives;
 mod audio;
 mod auth;
 mod capture;
+mod compose;
 mod config;
 mod db;
 mod desktop_input;
@@ -21,7 +22,6 @@ mod profiles;
 mod pulls;
 mod reconfigure;
 mod recordings;
-mod templates;
 mod terminal;
 mod uploads;
 mod waits;
@@ -168,10 +168,8 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/images/{id}/archive", get(archives::export))
         .route("/api/images/{id}/config", get(api::image_config))
         .route(
-            "/api/images/{id}/template",
-            get(templates::get)
-                .put(templates::set)
-                .delete(templates::remove),
+            "/api/images/{id}/compose",
+            get(compose::get).put(compose::set).delete(compose::remove),
         )
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
         .route("/api/jobs", get(api::jobs))
@@ -232,7 +230,7 @@ async fn main() -> anyhow::Result<()> {
             db.put("job", &job.id, &job)?;
         }
     }
-    templates::mark_interrupted(&db)?;
+    compose::mark_interrupted(&db)?;
     let listen = config.listen.clone();
     let app = Arc::new(App {
         config,

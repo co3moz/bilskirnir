@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the starting point for a container. A volume holds files separately from the container, so you can keep using them after the container is gone.
+A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the starting point for a container. A compose belongs to an image and predefines what a new container from it asks for and sets up. A volume holds files separately from the container, so you can keep using them after the container is gone.
 
 ## Find your way around
 
@@ -89,9 +89,9 @@ The image tree follows Docker ancestry. A snapshot is based on the image that or
 
 An image that declares a Docker `VOLUME` needs an explicit named-volume mount for that path when you create a container. This makes it clear which files will be excluded from snapshots.
 
-## Ask for values when a desktop is created
+## Ask for values when a container is created
 
-A template makes an image ask for a few values each time a desktop is created from it, such as the account to sign in with, and runs a short setup script with them before the desktop is yours. Under **Images**, select **Edit template**, the template button on the row of a snapshot, script build or imported image. Add a parameter for each value:
+A compose makes an image ask for a few values each time a container is created from it, such as the account to sign in with, and runs a short setup script with them before the container is yours. Under **Images**, select **Edit compose**, the compose button on the row of a snapshot, script build or imported image. Add a parameter for each value:
 
 - **Name** is the environment variable the script reads, such as `UNITY_EMAIL`.
 - **Label** is what **New container** asks for. A **Description** appears under the field, for help such as where to find the value.
@@ -114,9 +114,9 @@ with the parameters `UNITY_EMAIL` (required), `UNITY_PASSWORD` (required, secret
 
 When you choose such an image in **New container**, its fields appear below the image. The creation job waits until the desktop is ready, runs the script and finishes when the script does; its log shows the script's output. If the script fails, the container keeps running so you can look at it, and **Retry setup** in its details runs the script again. A reset runs it again too, since the reset container starts from the image's files.
 
-The desktop keeps the template it was created with, so editing the image's template later affects only new desktops. A snapshot of the desktop keeps that template: a desktop created from the snapshot asks for the values again, so write the script so it can run where it already ran. Whatever the script writes, such as a license file, is part of the desktop's files and therefore of its snapshots.
+The container keeps the compose it was created with, so editing the image's compose later affects only new containers. A snapshot of the container keeps that compose: a container created from the snapshot asks for the values again, so write the script so it can run where it already ran. Whatever the script writes, such as a license file, is part of the container's files and therefore of its snapshots.
 
-**Build image** has a **Template** tab that gives the new image a template, and **Export configuration** and image archives carry it along.
+**Build image** has a **Compose** tab that gives the new image a compose, and **Export configuration** and image archives carry it along.
 
 ## Move an image to another installation
 

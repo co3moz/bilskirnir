@@ -171,9 +171,9 @@ pub struct Container {
     /// its earlier files, while `source_image_id` stays the image the desktop started from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub working_image: Option<WorkingImage>,
-    /// Set when the image had a template: its setup's progress and the values it was given.
+    /// Set when the image had a compose: its setup's progress and the values it was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub setup: Option<crate::templates::Setup>,
+    pub setup: Option<crate::compose::Setup>,
 }
 impl Container {
     /// The image the container is created from.
@@ -209,9 +209,10 @@ pub struct ImageRecord {
     /// imports and builds made before it was recorded have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildConfig>,
-    /// What a new container from this image asks for and runs once its desktop is ready.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<crate::templates::Template>,
+    /// What a new container from this image asks for and runs once its desktop is ready. Records
+    /// saved before templates were called composes name it `template`.
+    #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
+    pub compose: Option<crate::compose::Compose>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildConfig {

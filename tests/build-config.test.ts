@@ -48,8 +48,8 @@ test("a name of 100 characters outside the basic plane still fits", () => {
   assert.equal(parseBuildConfig(JSON.stringify({ script: "echo", name })).name, name)
 })
 
-test("a configuration carries the image's template both ways", () => {
-  const template = {
+test("a configuration carries the image's compose both ways", () => {
+  const compose = {
     parameters: [
       {
         name: "UNITY_EMAIL",
@@ -65,19 +65,19 @@ test("a configuration carries the image's template both ways", () => {
     root: false,
     timeout_seconds: 600,
   }
-  const text = formatBuildConfig({ ...config, template })
+  const text = formatBuildConfig({ ...config, compose })
   assert.deepEqual(Object.keys(JSON.parse(text)), [
     "name",
     "base_image",
     "internet",
     "script",
-    "template",
+    "compose",
   ])
-  assert.deepEqual(parseBuildConfig(text), { ...config, template })
+  assert.deepEqual(parseBuildConfig(text), { ...config, compose })
   // Without one, the copy stays the plain build request.
-  assert.equal("template" in JSON.parse(formatBuildConfig(config)), false)
+  assert.equal("compose" in JSON.parse(formatBuildConfig(config)), false)
   assert.throws(
-    () => parseBuildConfig(JSON.stringify({ ...config, template: { parameters: [] } })),
-    /template has no setup script/
+    () => parseBuildConfig(JSON.stringify({ ...config, compose: { parameters: [] } })),
+    /compose has no setup script/
   )
 })

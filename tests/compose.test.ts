@@ -6,18 +6,18 @@ import {
   draftParameter,
   newOption,
   parameterBody,
-  readTemplate,
+  readCompose,
   sliderValue,
-  templateBody,
-  templateDraft,
-  templateFor,
+  composeBody,
+  composeDraft,
+  composeFor,
   toggleChoice,
   withOptions,
   withType,
-} from "../web/src/lib/templates"
-import type { Template, TemplateParameter } from "../web/src/lib/types"
+} from "../web/src/lib/compose"
+import type { Compose, ComposeParameter } from "../web/src/lib/types"
 
-const unity: Template = {
+const unity: Compose = {
   parameters: [
     {
       name: "UNITY_EMAIL",
@@ -52,26 +52,26 @@ const unity: Template = {
   timeout_seconds: 600,
 }
 
-const record = (id: string, template?: Template) => ({
+const record = (id: string, compose?: Compose) => ({
   image_id: `sha256:${id}`,
   reference: `bilskirnir/snapshot:${id}`,
-  template: template ?? null,
+  compose: compose ?? null,
 })
 
-test("the template comes from a record of the chosen image, as the manager picks it", () => {
+test("the compose comes from a record of the chosen image, as the manager picks it", () => {
   const records = [record("plain"), record("unity", unity), record("again", unity)]
-  assert.equal(templateFor(records, "sha256:unity"), unity)
-  assert.equal(templateFor(records, "bilskirnir/snapshot:again"), unity)
+  assert.equal(composeFor(records, "sha256:unity"), unity)
+  assert.equal(composeFor(records, "bilskirnir/snapshot:again"), unity)
   // A profile reference or an image without one asks for nothing.
-  assert.equal(templateFor(records, "sha256:plain"), undefined)
-  assert.equal(templateFor(records, "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"), undefined)
-  assert.equal(templateFor(records, undefined), undefined)
-  // Two records of one image: the first, newest one with a template wins.
+  assert.equal(composeFor(records, "sha256:plain"), undefined)
+  assert.equal(composeFor(records, "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"), undefined)
+  assert.equal(composeFor(records, undefined), undefined)
+  // Two records of one image: the first, newest one with a compose wins.
   const shared = [
     { ...record("same"), reference: "a" },
     { ...record("same", { ...unity, root: true }), reference: "b" },
   ]
-  assert.equal(templateFor(shared, "sha256:same")?.root, true)
+  assert.equal(composeFor(shared, "sha256:same")?.root, true)
 })
 
 test("the create form sends a value for every parameter, the default when left alone", () => {
@@ -94,11 +94,11 @@ test("the create form sends a value for every parameter, the default when left a
   assert.deepEqual(parameterBody(undefined, { OTHER: "x" }), {})
 })
 
-test("a template survives the editor unchanged, and a secret loses its default", () => {
-  assert.deepEqual(templateBody(templateDraft(unity)), unity)
-  const draft = templateDraft(unity)
+test("a compose survives the editor unchanged, and a secret loses its default", () => {
+  assert.deepEqual(composeBody(composeDraft(unity)), unity)
+  const draft = composeDraft(unity)
   draft.parameters[2] = { ...draft.parameters[2], secret: true, name: " TOKEN " }
-  const body = templateBody(draft)
+  const body = composeBody(draft)
   assert.deepEqual(body.parameters[2], {
     name: "TOKEN",
     label: "Branch",
@@ -108,14 +108,14 @@ test("a template survives the editor unchanged, and a secret loses its default",
     secret: true,
     default: "",
   })
-  // A new template starts with a script skeleton and the manager's defaults.
-  const fresh = templateDraft()
+  // A new compose starts with a script skeleton and the manager's defaults.
+  const fresh = composeDraft()
   assert.deepEqual([fresh.parameters, fresh.root, fresh.timeout_seconds], [[], false, "600"])
   assert.match(fresh.script, /set -euo pipefail/)
 })
 
-test("a pasted template fills in what it leaves out and says what is wrong", () => {
-  assert.deepEqual(readTemplate({ script: "true", parameters: [{ name: "A" }] }), {
+test("a pasted compose fills in what it leaves out and says what is wrong", () => {
+  assert.deepEqual(readCompose({ script: "true", parameters: [{ name: "A" }] }), {
     parameters: [
       {
         name: "A",
@@ -141,7 +141,7 @@ test("a pasted template fills in what it leaves out and says what is wrong", () 
     [{ script: "true", timeout_seconds: "600" }, /number of seconds/],
   ]
   for (const [value, message] of cases)
-    assert.throws(() => readTemplate(value), message, JSON.stringify(value))
+    assert.throws(() => readCompose(value), message, JSON.stringify(value))
 })
 
 const flavors = [
@@ -150,7 +150,7 @@ const flavors = [
 ]
 
 // Each type with the fields only it has, as the manager writes them back.
-const typed: TemplateParameter[] = [
+const typed: ComposeParameter[] = [
   {
     name: "NOTES",
     label: "",
@@ -219,19 +219,19 @@ const typed: TemplateParameter[] = [
 ]
 
 test("every type survives the editor unchanged", () => {
-  const template = { ...unity, parameters: typed }
-  assert.deepEqual(templateBody(templateDraft(template)), template)
+  const compose = { ...unity, parameters: typed }
+  assert.deepEqual(composeBody(composeDraft(compose)), compose)
 })
 
 test("a new type starts over without the fields the old one had", () => {
-  const [, threads, , , flavor] = templateDraft({ ...unity, parameters: typed }).parameters
+  const [, threads, , , flavor] = composeDraft({ ...unity, parameters: typed }).parameters
   const text = withType(threads, "text")
   assert.deepEqual([text.display, text.default], ["input", ""])
   // Bounds stay in the draft, but a text parameter does not send them.
   assert.equal("min" in draftParameter(text), false)
   const many = draftParameter(withType(flavor, "choices"))
   assert.deepEqual([many.display, many.options, many.allow_custom], [undefined, flavors, undefined])
-  const secret = withType({ ...templateDraft(unity).parameters[1] }, "number")
+  const secret = withType({ ...composeDraft(unity).parameters[1] }, "number")
   assert.equal(draftParameter(secret).secret, false)
   // A choice starts with one empty option to fill in.
   const choice = withType(text, "choice")
@@ -240,7 +240,7 @@ test("a new type starts over without the fields the old one had", () => {
 })
 
 test("removing an option drops a default that picked it", () => {
-  const [, , , , flavor, toppings] = templateDraft({ ...unity, parameters: typed }).parameters
+  const [, , , , flavor, toppings] = composeDraft({ ...unity, parameters: typed }).parameters
   const vanillaOnly = (draft: typeof flavor) => [draft.options[0]]
   assert.equal(withOptions(toppings, vanillaOnly(toppings)).default, "")
   assert.equal(
@@ -267,8 +267,8 @@ test("form values are written the way the script reads them", () => {
   assert.equal(displayOf({ type: "choice" }), "select")
 })
 
-test("a pasted template keeps typed fields and refuses shapes the manager would", () => {
-  const pasted = readTemplate({ script: "true", parameters: typed })
+test("a pasted compose keeps typed fields and refuses shapes the manager would", () => {
+  const pasted = readCompose({ script: "true", parameters: typed })
   assert.deepEqual(pasted.parameters, typed)
   const cases: [unknown, RegExp][] = [
     [{ name: "A", type: "select" }, /unknown type/],
@@ -278,5 +278,5 @@ test("a pasted template keeps typed fields and refuses shapes the manager would"
     [{ name: "A", description: 5 }, /parameter A/],
   ]
   for (const [parameter, message] of cases)
-    assert.throws(() => readTemplate({ script: "true", parameters: [parameter] }), message)
+    assert.throws(() => readCompose({ script: "true", parameters: [parameter] }), message)
 })

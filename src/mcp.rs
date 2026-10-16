@@ -1,6 +1,6 @@
 use crate::{
-    App, api, apps, audio, auth, capture, desktop_input, error, exec, files, gamepad, recordings,
-    templates, terminal, uploads, waits, windows,
+    App, api, apps, audio, auth, capture, compose, desktop_input, error, exec, files, gamepad,
+    recordings, terminal, uploads, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -304,19 +304,19 @@ impl BilskirnirMcp {
             "list_images" => api::images(state).await?.0,
             "import_image" => api::register_image(state, Json(parse(args)?)).await?.0,
             "build_image" => api::build(state, Json(parse(args)?)).await?.0,
-            "get_image_template" => {
+            "get_image_compose" => {
                 json!(
-                    templates::get(state, Path(string(&args, "image_id")?))
+                    compose::get(state, Path(string(&args, "image_id")?))
                         .await?
                         .0
                 )
             }
-            "set_image_template" => {
+            "set_image_compose" => {
                 let image = Path(string(&args, "image_id")?);
-                match args.get("template") {
-                    None | Some(Value::Null) => templates::remove(state, image).await?.0,
-                    Some(template) => {
-                        templates::set(state, image, Json(parse(template.clone())?))
+                match args.get("compose") {
+                    None | Some(Value::Null) => compose::remove(state, image).await?.0,
+                    Some(compose) => {
+                        compose::set(state, image, Json(parse(compose.clone())?))
                             .await?
                             .0
                     }
@@ -627,10 +627,10 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "create_container",
-            "Create a desktop container from a profile image reference or a saved image ID. A profile that is not downloaded yet is pulled first, which can take minutes. A saved image with a template takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
+            "Create a desktop container from a profile image reference or a saved image ID. A profile that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the template parameters of the image, by name. Secret values are masked in job logs and never returned."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -745,8 +745,8 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. A profile base that is not downloaded yet is pulled first. Optional internet access and template (see set_image_template). Returns job_id.",
-            json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"template":template_schema()}),
+            "Build a reusable desktop image by running a root shell script on a selected desktop base. A profile base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Returns job_id.",
+            json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"compose":compose_schema()}),
             &["name", "base_image", "script"],
             false,
             false,
@@ -924,12 +924,12 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             .open_world(true),
     );
     tools.push(input_tool);
-    tools.extend(template_tools());
+    tools.extend(compose_tools());
     tools
 });
 
-/// An image template, as `build_image` and `set_image_template` take it.
-fn template_schema() -> Value {
+/// An image compose, as `build_image` and `set_image_compose` take it.
+fn compose_schema() -> Value {
     schema(
         json!({
             "parameters":{"type":"array","maxItems":32,"default":[],"items":schema(json!({
@@ -954,12 +954,12 @@ fn template_schema() -> Value {
         &["script"],
     )
 }
-fn template_tools() -> [Tool; 2] {
+fn compose_tools() -> [Tool; 2] {
     let image_id = json!({"type":"string","minLength":1,"description":"Saved image ID from list_images (its id field), not a Docker image ID."});
     [
         tool(
-            "get_image_template",
-            "Read a saved image's template: the parameters a new container from it asks for, and the setup script that receives them.",
+            "get_image_compose",
+            "Read a saved image's compose: the parameters a new container from it asks for, and the setup script that receives them.",
             json!({"image_id":image_id}),
             &["image_id"],
             true,
@@ -967,10 +967,10 @@ fn template_tools() -> [Tool; 2] {
             false,
         ),
         tool(
-            "set_image_template",
-            "Set or replace a saved image's template, or remove it with template=null. Each parameter is an environment variable of the setup script, which runs as the desktop user (root=true to change that) once a new desktop from the image is ready, again after a reset, and when retry recreates a missing container. Secret parameters are masked in job logs and never returned. Containers already created keep the template they ran; snapshots keep the template of their container.",
-            json!({"image_id":image_id,"template":{"anyOf":[template_schema(),{"type":"null"}]}}),
-            &["image_id", "template"],
+            "set_image_compose",
+            "Set or replace a saved image's compose, or remove it with compose=null. Each parameter is an environment variable of the setup script, which runs as the desktop user (root=true to change that) once a new container from the image is ready, again after a reset, and when retry recreates a missing container. Secret parameters are masked in job logs and never returned. Containers already created keep the compose they ran; snapshots keep the compose of their container.",
+            json!({"image_id":image_id,"compose":{"anyOf":[compose_schema(),{"type":"null"}]}}),
+            &["image_id", "compose"],
             false,
             true,
             false,

@@ -9,12 +9,12 @@ mod tar;
 
 use crate::{
     App, auth,
+    compose::Compose,
     error::{Error, Result},
     jobs,
     model::{BuildConfig, ImageRecord, image_ref, now},
     process::{self, Overflow},
     profiles::DesktopInfo,
-    templates::Template,
 };
 use anyhow::{Context, anyhow, bail};
 use axum::{
@@ -68,8 +68,9 @@ pub(crate) struct ArchiveInfo {
     pub created_at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<Template>,
+    /// Archives exported before templates were called composes name it `template`.
+    #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
+    pub compose: Option<Compose>,
 }
 
 impl ArchiveInfo {
@@ -84,7 +85,7 @@ impl ArchiveInfo {
             parent_image_id: record.parent_image_id.clone(),
             created_at: record.created_at,
             build: record.build.clone(),
-            template: record.template.clone(),
+            compose: record.compose.clone(),
         }
     }
 
@@ -97,7 +98,7 @@ impl ArchiveInfo {
         info.build = info.build.filter(|build| {
             image_ref(&build.base_image).is_ok() && build.script.len() <= 1_000_000
         });
-        info.template = info.template.filter(|template| template.validate().is_ok());
+        info.compose = info.compose.filter(|compose| compose.validate().is_ok());
         Some(info)
     }
 }
@@ -498,14 +499,14 @@ impl App {
                 .unwrap_or_default(),
             desktop: crate::profiles::from_image(&info),
             build: metadata.as_ref().and_then(|info| info.build.clone()),
-            template: metadata.and_then(|info| info.template),
+            compose: metadata.and_then(|info| info.compose),
         };
         self.db.put("image", id, &record)?;
         if record.build.is_some() {
             self.append_log(job_id, "The archive carried its build configuration.")?;
         }
-        if record.template.is_some() {
-            self.append_log(job_id, "The archive carried its template.")?;
+        if record.compose.is_some() {
+            self.append_log(job_id, "The archive carried its compose.")?;
         }
         self.append_log(
             job_id,

@@ -1,4 +1,4 @@
-//! Template parameters: what a value of each type accepts, how the create form may show it, and
+//! Compose parameters: what a value of each type accepts, how the create form may show it, and
 //! the text the setup script receives for it. Every value reaches the script as a container
 //! variable, so whatever its type, a value is text here, in the form the script reads it.
 use anyhow::{Context, Result, bail};

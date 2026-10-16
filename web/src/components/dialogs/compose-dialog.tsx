@@ -29,27 +29,27 @@ import { closeDialog } from "@/lib/dialogs"
 import { refreshAll, useImages } from "@/lib/queries"
 import {
   newParameter,
-  templateBody,
-  templateDraft,
+  composeBody,
+  composeDraft,
   type ParameterDraft,
-  type TemplateDraft,
-} from "@/lib/templates"
-import type { Template } from "@/lib/types"
+  type ComposeDraft,
+} from "@/lib/compose"
+import type { Compose } from "@/lib/types"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
 
-/** The template editor shared by Build image and Edit template. */
-export function TemplateFields({
+/** The compose editor shared by Build image and Edit compose. */
+export function ComposeFields({
   draft,
   onChange,
 }: {
-  draft: TemplateDraft
-  onChange: (draft: TemplateDraft) => void
+  draft: ComposeDraft
+  onChange: (draft: ComposeDraft) => void
 }) {
   const id = React.useId()
-  const set = (patch: Partial<TemplateDraft>) => onChange({ ...draft, ...patch })
+  const set = (patch: Partial<ComposeDraft>) => onChange({ ...draft, ...patch })
   const setParameter = (key: number, next: ParameterDraft) =>
     set({
       parameters: draft.parameters.map((parameter) => (parameter.key === key ? next : parameter)),
@@ -129,27 +129,27 @@ export function TemplateFields({
   )
 }
 
-/** Gives a saved image a template, changes it or removes it. */
-export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
+/** Gives a saved image a compose, changes it or removes it. */
+export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
   const image = useImages().data?.find((record) => record.id === id)
-  const exists = !!image?.template
-  // The list leaves the script out; the template route has all of it.
+  const exists = !!image?.compose
+  // The list leaves the script out; the compose route has all of it.
   const saved = useQuery({
-    queryKey: ["images", id, "template"],
-    queryFn: () => api<Template>(`images/${id}/template`),
+    queryKey: ["images", id, "compose"],
+    queryFn: () => api<Compose>(`images/${id}/compose`),
     enabled: exists,
     staleTime: 0,
   })
-  const [fresh] = React.useState(templateDraft)
-  const [draft, setDraft] = React.useState<TemplateDraft>()
+  const [fresh] = React.useState(composeDraft)
+  const [draft, setDraft] = React.useState<ComposeDraft>()
   const { busy, error, submit } = useSubmit()
-  const current = draft ?? (exists ? saved.data && templateDraft(saved.data) : fresh)
+  const current = draft ?? (exists ? saved.data && composeDraft(saved.data) : fresh)
   const save = async (remove: boolean) => {
-    if (remove) await api(`images/${id}/template`, undefined, "DELETE")
-    else if (current) await api(`images/${id}/template`, templateBody(current), "PUT")
+    if (remove) await api(`images/${id}/compose`, undefined, "DELETE")
+    else if (current) await api(`images/${id}/compose`, composeBody(current), "PUT")
     else return
     closeDialog()
-    toast.success(remove ? "Removed the template." : `Saved the template of ${image?.name}.`)
+    toast.success(remove ? "Removed the compose." : `Saved the compose of ${image?.name}.`)
     void refreshAll()
   }
 
@@ -165,7 +165,7 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>{exists ? "Edit template" : "Add template"}</DialogTitle>
+            <DialogTitle>{exists ? "Edit compose" : "Add compose"}</DialogTitle>
             <DialogDescription>
               What a new container from {image?.name ?? "this image"} asks for, and the script that
               receives it.
@@ -174,10 +174,10 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
           <div className="-mx-4 flex max-h-[min(36rem,60vh)] flex-col gap-5 overflow-y-auto px-4 py-1">
             {current ? (
               <>
-                <TemplateFields draft={current} onChange={setDraft} />
+                <ComposeFields draft={current} onChange={setDraft} />
                 {exists && (
                   <FieldDescription className="text-xs">
-                    Containers created earlier keep the template they were created with.
+                    Containers created earlier keep the compose they were created with.
                   </FieldDescription>
                 )}
               </>
@@ -188,7 +188,7 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
             )}
           </div>
           <FieldError>{error}</FieldError>
-          <Footer busy={busy} label="Save template" disabled={!current}>
+          <Footer busy={busy} label="Save compose" disabled={!current}>
             {exists && (
               <Button
                 type="submit"
@@ -198,7 +198,7 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
                 className="text-destructive sm:mr-auto"
                 disabled={busy}
               >
-                Remove template
+                Remove compose
               </Button>
             )}
           </Footer>

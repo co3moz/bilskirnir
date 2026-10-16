@@ -240,20 +240,20 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
     assert_eq!(tools.len(), 62);
-    // Template values reach a new desktop through create_container; the schema forbids
+    // Compose values reach a new desktop through create_container; the schema forbids
     // properties it does not list, so a missing one is a value no agent can send.
     let create = tools
         .iter()
         .find(|t| t["name"] == "create_container")
         .unwrap();
     assert!(create["inputSchema"]["properties"]["parameters"].is_object());
-    let template = tools
+    let compose = tools
         .iter()
-        .find(|t| t["name"] == "set_image_template")
+        .find(|t| t["name"] == "set_image_compose")
         .unwrap();
-    assert_eq!(template["annotations"]["destructiveHint"], true);
+    assert_eq!(compose["annotations"]["destructiveHint"], true);
     assert_eq!(
-        template["inputSchema"]["properties"]["template"]["anyOf"][0]["required"],
+        compose["inputSchema"]["properties"]["compose"]["anyOf"][0]["required"],
         serde_json::json!(["script"])
     );
     let delete = tools
@@ -1029,7 +1029,7 @@ fn database_round_trip_keeps_snapshot_parent() {
         description: String::new(),
         desktop: None,
         build: None,
-        template: None,
+        compose: None,
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(

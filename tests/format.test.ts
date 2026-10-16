@@ -262,7 +262,7 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
   assert.equal(jobProgress(null), null)
 })
 
-test("a running container shows its template setup until the setup completes", () => {
+test("a running container shows its compose setup until the setup completes", () => {
   const item = (status?: ContainerSetup["status"], last_error?: string): ContainerItem => ({
     id: "e",
     container: "wsld-e",
@@ -279,7 +279,7 @@ test("a running container shows its template setup until the setup completes", (
   assert.equal(containerStatus(item("pending")).key, "setting_up")
   assert.equal(containerStatus(item("running")).key, "setting_up")
   assert.equal(containerStatus(item("completed")).key, "running")
-  assert.equal(containerStatus(item("failed", "The template setup failed")).key, "setup_failed")
+  assert.equal(containerStatus(item("failed", "The compose setup failed")).key, "setup_failed")
   // A setup that never started because recreating the container failed is not in progress.
   assert.equal(containerStatus(item("pending", "Docker: no such image")).key, "setup_failed")
   assert.equal(needsAttention(item("failed")), true)

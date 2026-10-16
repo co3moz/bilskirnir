@@ -41,9 +41,9 @@ import { imageTree, shortDate } from "@/lib/format"
 import { useImages, useProfiles } from "@/lib/queries"
 import type { ImageRecord, ProfileItem } from "@/lib/types"
 
-/** What a template asks for, in a few words. */
-function templateSummary(template: NonNullable<ImageRecord["template"]>) {
-  const names = template.parameters.map((parameter) => parameter.name)
+/** What a compose asks for, in a few words. */
+function composeSummary(compose: NonNullable<ImageRecord["compose"]>) {
+  const names = compose.parameters.map((parameter) => parameter.name)
   return names.length ? `Asks for ${names.join(", ")}` : "Runs a setup script"
 }
 
@@ -162,9 +162,9 @@ const columns: DataColumn<Row>[] = [
         <Badge variant="outline" className="border-violet/40 text-violet capitalize">
           {row.original.kind}
         </Badge>
-        {row.original.template && (
-          <Badge variant="outline" title={templateSummary(row.original.template)}>
-            Template
+        {row.original.compose && (
+          <Badge variant="outline" title={composeSummary(row.original.compose)}>
+            Compose
           </Badge>
         )}
       </div>
@@ -216,14 +216,14 @@ const columns: DataColumn<Row>[] = [
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => openDialog({ kind: "template", id: image.id })}
-                aria-label={`${image.template ? "Edit" : "Add"} the template of ${image.name}`}
+                onClick={() => openDialog({ kind: "compose", id: image.id })}
+                aria-label={`${image.compose ? "Edit" : "Add"} the compose of ${image.name}`}
               >
                 <RiListSettingsLine />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {image.template ? "Edit template" : "Add a template: values asked for on creation"}
+              {image.compose ? "Edit compose" : "Add a compose: values asked for on creation"}
             </TooltipContent>
           </Tooltip>
           {/* Any saved image moves as an archive, the base desktop included. */}

@@ -7,7 +7,7 @@ import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
 import { ImportImageDialog } from "./import-dialog"
 import { BuildImageDialog, DeleteDialog, SnapshotDialog, VolumeDialog } from "./simple-dialogs"
-import { TemplateDialog } from "./template-dialog"
+import { ComposeDialog } from "./compose-dialog"
 import { UploadDialog } from "./upload-dialog"
 
 /** Renders the one open dialog; see lib/dialogs.ts. */
@@ -35,8 +35,8 @@ function render(dialog: Dialog, open: boolean) {
       return <UploadDialog {...props} id={dialog.id} files={dialog.files} />
     case "build":
       return <BuildImageDialog {...props} />
-    case "template":
-      return <TemplateDialog {...props} id={dialog.id} />
+    case "compose":
+      return <ComposeDialog {...props} id={dialog.id} />
     case "import":
       return <ImportImageDialog {...props} />
     case "volume":

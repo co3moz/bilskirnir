@@ -173,7 +173,7 @@ pub async fn container(State(app): State<Arc<App>>, Path(id): Path<String>) -> R
     Ok(Json(item))
 }
 
-/// A new container's settings, and values for the template parameters of its image.
+/// A new container's settings, and values for the compose parameters of its image.
 #[derive(Deserialize)]
 pub struct CreateContainer {
     #[serde(flatten)]
@@ -187,13 +187,13 @@ pub async fn create(
 ) -> Result<Json<Value>> {
     let CreateContainer { spec, parameters } = body;
     spec.validate()?;
-    // A template found by the name the request uses is checked now; the job checks again once
+    // A compose found by the name the request uses is checked now; the job checks again once
     // Docker has resolved the image.
     let records: Vec<ImageRecord> = app.db.list("image")?;
-    if let Some(record) = crate::templates::template_image(&records, &spec.image, &spec.image)
-        && let Some(template) = &record.template
+    if let Some(record) = crate::compose::compose_image(&records, &spec.image, &spec.image)
+        && let Some(compose) = &record.compose
     {
-        template.resolve(&parameters)?;
+        compose.resolve(&parameters)?;
     }
     let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
@@ -420,10 +420,10 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     )))
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
-/// megabyte, so only the configuration and template routes return them.
+/// megabyte, so only the configuration and compose routes return them.
 pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
-    for key in ["build", "template"] {
+    for key in ["build", "compose"] {
         if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
             part.remove("script");
         }
@@ -447,7 +447,7 @@ pub async fn image_config(
         base_image: build.base_image,
         internet: build.internet,
         script: build.script,
-        template: record.template,
+        compose: record.compose,
     }))
 }
 #[derive(Deserialize)]
@@ -480,7 +480,7 @@ pub async fn register_image(
         description: String::new(),
         desktop: crate::profiles::from_image(&info),
         build: None,
-        template: None,
+        compose: None,
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
@@ -494,9 +494,10 @@ pub struct BuildImage {
     #[serde(default = "default_true")]
     pub internet: bool,
     pub script: String,
-    /// The template the built image gets.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<crate::templates::Template>,
+    /// The compose the built image gets. Configurations exported before templates were called
+    /// composes name it `template`.
+    #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
+    pub compose: Option<crate::compose::Compose>,
 }
 fn default_true() -> bool {
     true
@@ -512,8 +513,8 @@ pub async fn build(
     {
         return Err(anyhow::anyhow!("Invalid image name or script").into());
     }
-    if let Some(template) = &body.template {
-        template.validate()?;
+    if let Some(compose) = &body.compose {
+        compose.validate()?;
     }
     launch(
         app,
@@ -575,7 +576,7 @@ pub async fn build(
                     internet: body.internet,
                     script,
                 }),
-                template: body.template,
+                compose: body.compose,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))
@@ -625,7 +626,7 @@ pub async fn snapshot(
             .await?;
             let info = app.inspect("image", &reference).await?;
             // A container from the snapshot asks for the same parameters again.
-            let template = app.pinned_template(&env_id);
+            let compose = app.pinned_compose(&env_id);
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
@@ -638,7 +639,7 @@ pub async fn snapshot(
                 description: body.description,
                 desktop: crate::profiles::from_image(&info),
                 build: None,
-                template,
+                compose,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))

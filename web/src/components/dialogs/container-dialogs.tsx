@@ -37,7 +37,7 @@ import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
 import { useContainers, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
-import { parameterBody, templateFor } from "@/lib/templates"
+import { parameterBody, composeFor } from "@/lib/compose"
 import type { ImageRecord, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
 import { ParameterField } from "./parameter-field"
@@ -64,29 +64,29 @@ export function useSubmit() {
 
 const scrollBody = "-mx-4 flex max-h-[min(36rem,70vh)] flex-col gap-5 overflow-y-auto px-4 py-1"
 
-/** The values an image's template asks for, filled in with its defaults. */
-function TemplateValues({
-  template,
+/** The values an image's compose asks for, filled in with its defaults. */
+function ComposeValues({
+  compose,
   values,
   onChange,
 }: {
-  template: NonNullable<ImageRecord["template"]>
+  compose: NonNullable<ImageRecord["compose"]>
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
 }) {
-  if (!template.parameters.length)
+  if (!compose.parameters.length)
     return (
       <FieldDescription>The image runs a setup script once the desktop is ready.</FieldDescription>
     )
   return (
     <FieldSet>
-      <FieldLegend variant="label">Template</FieldLegend>
+      <FieldLegend variant="label">Compose</FieldLegend>
       <FieldDescription className="text-xs">
         The image's setup script receives these once the desktop is ready. Secret values are not
         shown again.
       </FieldDescription>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {template.parameters.map((parameter) => (
+        {compose.parameters.map((parameter) => (
           <ParameterField
             key={`${parameter.name}-${parameter.type}`}
             parameter={parameter}
@@ -110,7 +110,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
   const [selected, setSelected] = React.useState<string | undefined>()
   const [draft, setDraft] = React.useState<SpecDraft>(() => specDraft({}, settings))
   const chosen = selected ?? initialImage(choices, image ?? settings?.base_image)
-  const template = templateFor(images, chosen)
+  const compose = composeFor(images, chosen)
   // Values typed for one image are kept while another is chosen, and sent only for its own fields.
   const [values, setValues] = React.useState<Record<string, string>>({})
   const { busy, error, submit } = useSubmit()
@@ -126,7 +126,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
               name,
               image: chosen,
               ...specBody(draft),
-              ...(template ? { parameters: parameterBody(template, values) } : {}),
+              ...(compose ? { parameters: parameterBody(compose, values) } : {}),
             })
           )}
         >
@@ -173,9 +173,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
                   </SelectContent>
                 </Select>
               </Field>
-              {template && (
-                <TemplateValues template={template} values={values} onChange={setValues} />
-              )}
+              {compose && <ComposeValues compose={compose} values={values} onChange={setValues} />}
             </FieldGroup>
             <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
           </div>

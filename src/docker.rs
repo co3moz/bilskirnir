@@ -148,7 +148,7 @@ impl App {
         }
         image_volumes_mounted(&image, &spec)?;
         let image_id = image["Id"].as_str().context("Missing image ID")?;
-        let template = self.pin_template(&spec.image, image_id, &parameters)?;
+        let compose = self.pin_compose(&spec.image, image_id, &parameters)?;
         let env = Container {
             id: id.into(),
             container: format!("wsld-{id}"),
@@ -160,10 +160,10 @@ impl App {
             last_error: None,
             desktop: crate::profiles::from_image(&image),
             working_image: None,
-            setup: template.as_ref().map(|(image, pinned)| pinned.setup(image)),
+            setup: compose.as_ref().map(|(image, pinned)| pinned.setup(image)),
         };
         // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
-        if let Some((_, pinned)) = &template {
+        if let Some((_, pinned)) = &compose {
             self.save_pinned(id, pinned)?;
         }
         self.db.put(CONTAINERS, id, &env)?;
@@ -189,14 +189,14 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("Manager label does not match");
         }
-        // A container recreated from the source image lacks what the template setup changed.
+        // A container recreated from the source image lacks what the compose setup changed.
         if env.working_image.is_none()
             && self
                 .optional_inspect("container", &env.container)
                 .await?
                 .is_none()
         {
-            crate::templates::setup_again(&mut env);
+            crate::compose::setup_again(&mut env);
             self.db.put(CONTAINERS, id, &env)?;
         }
         let result = self.provision(&env, manager).await;
@@ -520,7 +520,7 @@ impl App {
             self.release_working_image(&image, job_id).await?;
         }
         self.remove_container_records(id)?;
-        crate::templates::setup_again(&mut env);
+        crate::compose::setup_again(&mut env);
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
         self.db.put(CONTAINERS, id, &env)?;

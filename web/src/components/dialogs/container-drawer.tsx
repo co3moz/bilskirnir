@@ -27,7 +27,7 @@ import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { date, containerStatus, profileTitle } from "@/lib/format"
 import { useContainers, useProfiles } from "@/lib/queries"
-import { setupLabel } from "@/lib/templates"
+import { setupLabel } from "@/lib/compose"
 import type { ContainerSetup } from "@/lib/types"
 import { SideDrawer, type DialogProps } from "./side-drawer"
 
@@ -177,7 +177,7 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
             <Separator />
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs text-muted-foreground">Template setup</h3>
+                <h3 className="text-xs text-muted-foreground">Compose setup</h3>
                 <StatusBadge
                   state={setupStatus}
                   tone={setupTone[setupStatus]}

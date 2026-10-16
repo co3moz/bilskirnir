@@ -42,10 +42,10 @@ import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
 import { refreshAll, useContainers, useImages, useProfiles, useSettings } from "@/lib/queries"
-import { templateBody, templateDraft, type TemplateDraft } from "@/lib/templates"
+import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
-import { TemplateFields } from "./template-dialog"
+import { ComposeFields } from "./compose-dialog"
 
 export function Footer({
   busy,
@@ -176,7 +176,7 @@ export function BuildImageDialog(props: DialogProps) {
   const [base, setBase] = React.useState<string | undefined>()
   const [script, setScript] = React.useState(DEFAULT_SCRIPT)
   const [internet, setInternet] = React.useState(true)
-  const [template, setTemplate] = React.useState<TemplateDraft | null>(null)
+  const [compose, setCompose] = React.useState<ComposeDraft | null>(null)
   const [importing, setImporting] = React.useState(false)
   // The base image a loaded configuration named when this host cannot build on it.
   const [missingBase, setMissingBase] = React.useState<string>()
@@ -188,7 +188,7 @@ export function BuildImageDialog(props: DialogProps) {
     if (config.name !== undefined) setName(config.name)
     if (config.internet !== undefined) setInternet(config.internet)
     setScript(config.script)
-    setTemplate(config.template ? templateDraft(config.template) : null)
+    setCompose(config.compose ? composeDraft(config.compose) : null)
     const wanted = config.base_image
     const usable = choices.some((choice) => choice.value === wanted && !choice.disabled)
     if (usable) setBase(wanted)
@@ -210,7 +210,7 @@ export function BuildImageDialog(props: DialogProps) {
                 base_image: chosen,
                 script,
                 internet,
-                ...(template ? { template: templateBody(template) } : {}),
+                ...(compose ? { compose: composeBody(compose) } : {}),
               })
             )}
           >
@@ -276,9 +276,9 @@ export function BuildImageDialog(props: DialogProps) {
               <Tabs defaultValue="build">
                 <TabsList>
                   <TabsTrigger value="build">Build script</TabsTrigger>
-                  <TabsTrigger value="template">
-                    Template
-                    {template?.parameters.length ? ` · ${template.parameters.length}` : ""}
+                  <TabsTrigger value="compose">
+                    Compose
+                    {compose?.parameters.length ? ` · ${compose.parameters.length}` : ""}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="build">
@@ -307,33 +307,33 @@ export function BuildImageDialog(props: DialogProps) {
                   </FieldGroup>
                 </TabsContent>
                 <TabsContent
-                  value="template"
+                  value="compose"
                   className="-mx-4 max-h-[40vh] overflow-y-auto px-4 py-1 sm:max-h-[min(30rem,55vh)]"
                 >
-                  {template ? (
+                  {compose ? (
                     <div className="flex flex-col gap-4">
-                      <TemplateFields draft={template} onChange={setTemplate} />
+                      <ComposeFields draft={compose} onChange={setCompose} />
                       <Button
                         type="button"
                         variant="outline"
                         className="self-start text-destructive"
-                        onClick={() => setTemplate(null)}
+                        onClick={() => setCompose(null)}
                       >
-                        Remove template
+                        Remove compose
                       </Button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-start gap-3 py-2">
                       <p className="text-sm text-muted-foreground">
-                        A template asks for values, such as an account, when a container is created
+                        A compose asks for values, such as an account, when a container is created
                         from the image, and runs a setup script with them once the desktop is ready.
                       </p>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setTemplate(templateDraft())}
+                        onClick={() => setCompose(composeDraft())}
                       >
-                        Add template
+                        Add compose
                       </Button>
                     </div>
                   )}
@@ -386,7 +386,7 @@ function ImportConfiguration({
         <DialogTitle>Import configuration</DialogTitle>
         <DialogDescription>
           Paste the JSON that Export copied from a built image. It fills in the name, base image,
-          script, internet setting and template, which you can still change before building.
+          script, internet setting and compose, which you can still change before building.
         </DialogDescription>
       </DialogHeader>
       <FieldGroup>

@@ -75,7 +75,7 @@ export function containerStatus(item: ContainerItem): { key: string; tone: Tone 
   const running = item.state === "running"
   if (item.health === "unhealthy") return { key: "unhealthy", tone: "danger" }
   if (running && item.health === "starting") return { key: "created", tone: "warning" }
-  // A template setup that is waiting with an error recorded did not get to run.
+  // A compose setup that is waiting with an error recorded did not get to run.
   const setup = item.setup?.status
   const failed = setup === "failed" || (setup === "pending" && !!item.last_error)
   if (running && failed) return { key: "setup_failed", tone: "danger" }

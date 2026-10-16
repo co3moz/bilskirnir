@@ -35,10 +35,10 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; a release manager downloads the one published with it. Returns a job. |
 | POST | `/api/profiles/{profile_id}/build` | Build a supplied profile; returns a job. |
 | GET | `/api/containers` | Managed containers, state and health. |
-| POST | `/api/containers` | Create a container, with values for its image's [template](#image-templates) in `parameters`; returns a job. |
+| POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. |
 | GET | `/api/containers/{id}` | One container's configuration, state and health. |
 | POST | `/api/containers/{id}/action` | Start, stop or restart; returns a job. |
-| POST | `/api/containers/{id}/retry` | Retry partial setup or a template setup that did not finish; returns a job. |
+| POST | `/api/containers/{id}/retry` | Retry partial setup or a compose setup that did not finish; returns a job. |
 | POST | `/api/containers/{id}/internet` | Set internet egress; returns a job. |
 | POST | `/api/containers/{id}/settings` | Change settings after creation; `dry_run` reports what recreates the container. Returns a job. |
 | DELETE | `/api/containers/{id}` | Delete the container and networks; returns a job. |
@@ -82,11 +82,11 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/containers/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/containers/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a template its parameters without the script. |
+| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a compose its parameters without the script. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
-| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet` and `template`; returns a job. |
-| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `template` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
-| GET, PUT, DELETE | `/api/images/{id}/template` | Read, set or remove an image's [template](#image-templates). `id` is the record's `id`. |
+| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet` and `compose`; returns a job. |
+| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `compose` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
+| GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes. |
@@ -132,7 +132,7 @@ Creation accepts `name`, `image` and these optional fields:
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. |
-| `parameters` | `{}` | Values for the [template](#image-templates) parameters of the image, by name. |
+| `parameters` | `{}` | Values for the [compose](#composes) parameters of the image, by name. |
 
 ## Change settings after creation
 
@@ -162,9 +162,9 @@ POST to `/api/containers/{id}/exec`:
 
 The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1 to 3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the container's network and resource limits apply. The script holds the container's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
 
-## Image templates
+## Composes
 
-A saved image can carry a template: parameters that a new container from it asks for, and a setup script that receives them. `PUT /api/images/{id}/template` sets or replaces it, `GET` returns it with its script and `DELETE` removes it; `id` is the record's `id`. Image lists and job results show the template without its script.
+A saved image can carry a compose: parameters that a new container from it asks for, and a setup script that receives them. `PUT /api/images/{id}/compose` sets or replaces it, `GET` returns it with its script and `DELETE` removes it; `id` is the record's `id`. Image lists and job results show the compose without its script.
 
 ```json
 {
@@ -193,7 +193,7 @@ A saved image can carry a template: parameters that a new container from it asks
 | `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
 | `timeout_seconds` | `600` | From 1 to 3500 seconds. |
 
-A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. A `description` of at most 500 characters is shown with the field, such as where to find the value. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the template.
+A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. A `description` of at most 500 characters is shown with the field, such as where to find the value. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the compose.
 
 Every value reaches the script as text, so a parameter's `type` decides what text it accepts and how the dashboard asks for it. `default` is written the same way the script receives it.
 
@@ -209,9 +209,9 @@ Every value reaches the script as text, so a parameter's `type` decides what tex
 
 `POST /api/containers` takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. A value that is left out uses the default. Every parameter reaches the script, an optional one without a value as an empty string, so `set -u` does not trip on it. An unknown name or a missing required value fails the request. The creation job waits until the desktop reports ready, for at most five minutes, then runs the script in the desktop session's environment (`HOME`, `DISPLAY`, `XDG_RUNTIME_DIR`) and completes only when the script succeeds.
 
-The container pins the template and the values, so editing the image later does not change what it runs. Its `setup` field reports `status` (`pending`, `running`, `completed` or `failed`), the `image` record the template came from, the values of ordinary `parameters` and the names of the `secrets`. Secret values are never returned, and the setup job's log shows `***` in their place. The manager keeps them in its database until the container is deleted, so that the setup can run again: after a reset, and when retry recreates a missing container from the source image. A settings change keeps the container's files and does not run it. A script that fails leaves the container running with `last_error` set; retry runs it again.
+The container pins the compose and the values, so editing the image later does not change what it runs. Its `setup` field reports `status` (`pending`, `running`, `completed` or `failed`), the `image` record the compose came from, the values of ordinary `parameters` and the names of the `secrets`. Secret values are never returned, and the setup job's log shows `***` in their place. The manager keeps them in its database until the container is deleted, so that the setup can run again: after a reset, and when retry recreates a missing container from the source image. A settings change keeps the container's files and does not run it. A script that fails leaves the container running with `last_error` set; retry runs it again.
 
-A snapshot keeps the template its container was created with, so a container created from the snapshot asks for the values again. Write the script so it also works in a container where it already ran. The build configuration and an image archive carry the template too.
+A snapshot keeps the compose its container was created with, so a container created from the snapshot asks for the values again. Write the script so it also works in a container where it already ran. The build configuration and an image archive carry the compose too.
 
 The job stops reading the script's output a second after the script exits. A program the script leaves running fails if it writes to that output later, so start long-running programs with the [applications API](#applications-and-windows), or redirect their output.
 

@@ -15,7 +15,7 @@ The name is a nod to Thor.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.
 - **Snapshots and images**: save a container once and start new ones from it, or build an image from a script.
-- **Templates** that ask for values such as an account when a container is created, and run a setup script with them.
+- **Composes** that ask for values such as an account when a container is created, and run a setup script with them.
 - **Volumes** that keep your files after a container is deleted.
 - **Drag and drop uploads** into a container.
 
