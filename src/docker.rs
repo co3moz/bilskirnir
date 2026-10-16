@@ -146,9 +146,38 @@ impl App {
         if image["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
             bail!("Image must be derived from a Bilskirnir desktop image");
         }
-        image_volumes_mounted(&image, &spec)?;
         let image_id = image["Id"].as_str().context("Missing image ID")?;
         let compose = self.pin_compose(&spec.image, image_id, &parameters)?;
+        let compose_mounts = compose
+            .as_ref()
+            .map(|(_, pinned)| pinned.mounts())
+            .unwrap_or_default();
+        crate::compose::check_mounts(&spec.mounts, &compose_mounts)?;
+        for mount in &compose_mounts {
+            // An image's compose names its default volume; it cannot hand a desktop the
+            // manager's database.
+            if crate::volumes::manager_volume(&manager_info, &mount.volume) {
+                bail!(
+                    "{} is the manager's own volume and cannot be mounted in a desktop",
+                    mount.volume
+                );
+            }
+            self.inspect("volume", &mount.volume)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Volume not found: {}, chosen for {}. Create it first, or choose another volume",
+                        mount.volume, mount.target
+                    )
+                })?;
+        }
+        let all_mounts = spec
+            .mounts
+            .iter()
+            .chain(&compose_mounts)
+            .cloned()
+            .collect::<Vec<_>>();
+        image_volumes_mounted(&image, &all_mounts)?;
         let env = Container {
             id: id.into(),
             container: format!("wsld-{id}"),
@@ -210,7 +239,7 @@ impl App {
     async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
         // Validate all existing resources before creating or starting anything.
         env.spec.validate()?;
-        for mount in &env.spec.mounts {
+        for mount in env.mounts() {
             self.inspect("volume", &mount.volume).await.context(
                 "Configured volume is missing; setup stopped without creating an empty replacement",
             )?;
@@ -326,7 +355,7 @@ impl App {
         if let Some(m) = env.spec.memory_mb {
             args.extend(["--memory".into(), format!("{m}m")]);
         }
-        for m in &env.spec.mounts {
+        for m in env.mounts() {
             args.extend([
                 "--mount".into(),
                 format!(
@@ -653,10 +682,10 @@ impl App {
 }
 
 /// An image `VOLUME` path needs an explicit named volume, or snapshots would silently exclude it.
-pub(crate) fn image_volumes_mounted(image: &Value, spec: &ContainerSpec) -> Result<()> {
+pub(crate) fn image_volumes_mounted(image: &Value, mounts: &[Mount]) -> Result<()> {
     if let Some(volumes) = image["Config"]["Volumes"].as_object() {
         for target in volumes.keys() {
-            if !spec.mounts.iter().any(|m| m.target == *target) {
+            if !mounts.iter().any(|m| m.target == *target) {
                 bail!(
                     "Choose a named volume for the image's {target} VOLUME path; otherwise snapshots would exclude its data"
                 );

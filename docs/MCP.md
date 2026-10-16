@@ -134,7 +134,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 }
 ```
 
-`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#composes).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes` or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
 
 ## Read and write files
 

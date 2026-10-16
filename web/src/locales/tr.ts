@@ -220,6 +220,7 @@ export const tr: Messages = {
   "volumes.mountedIn": "Bağlı olduğu konteynerler",
   "volumes.mountedAt": "{target} konumunda",
   "volumes.mountedAtReadOnly": "{target} konumunda (salt okunur)",
+  "volumes.mountedByCompose": "{target} konumunda, Compose için seçildi",
   "volumes.notMounted": "Bağlı değil",
   "volumes.driver": "Sürücü",
   "volumes.scope": "Kapsam",
@@ -245,6 +246,7 @@ export const tr: Messages = {
   "compose.type.boolean": "Açık veya kapalı",
   "compose.type.choice": "Tek seçim",
   "compose.type.choices": "Çoklu seçim",
+  "compose.type.volume": "Volume",
   "compose.display.input": "Alan",
   "compose.display.multiline": "Metin alanı",
   "compose.display.slider": "Kaydırıcı",
@@ -569,6 +571,15 @@ export const tr: Messages = {
   "parameter.otherChoice": "Diğer",
   "parameter.choose": "Seçin…",
   "parameter.otherEllipsis": "Diğer…",
+  "parameter.path": "Masaüstündeki yol",
+  "parameter.pathPattern": "/opt/unity gibi mutlak bir klasör",
+  "parameter.pathHint":
+    "Konteyner oluşturulurken seçilen volume buraya bağlanır; volume seçilmezse klasör konteynerin içinde kalır. Betik bu yolu, volume'un adını da {name}_VOLUME değişkeninden okur.",
+  "parameter.volume.none": "Volume yok",
+  "parameter.volume.create": "Yeni volume oluştur…",
+  "parameter.volume.newName": "Yeni volume adı",
+  "parameter.volume.mountedAt": "{path} konumuna bağlanır.",
+  "parameter.volume.stays": "Volume olmadan {path} konteynerin içinde kalır.",
   "import.archive.description":
     "Bilskirnir'den dışa aktarılmış ya da docker save ile kaydedilmiş bir arşivi Docker'a yükler.",
   "import.docker.description":

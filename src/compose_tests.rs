@@ -190,6 +190,172 @@ fn the_container_shows_ordinary_values_and_only_the_names_of_secrets() {
     assert!(!request["script"].as_str().unwrap().contains('\r'));
 }
 
+/// A compose that installs Unity into a volume, with a cache that may stay in the container.
+fn installs() -> Compose {
+    let volume = |name: &str, path: &str| Parameter {
+        kind: parameters::Kind::Volume,
+        path: path.into(),
+        ..parameter(name)
+    };
+    Compose {
+        parameters: vec![
+            Parameter {
+                label: "Unity installs".into(),
+                default: "unity-installs".into(),
+                ..volume("UNITY_HOME", "/opt/unity")
+            },
+            volume("UNITY_CACHE", "/home/desktop/.cache/unity"),
+            parameter("UNITY_EDITOR"),
+        ],
+        script: "mkdir -p \"$UNITY_HOME/$UNITY_EDITOR\"\n".into(),
+        root: false,
+        timeout_seconds: 600,
+    }
+}
+
+fn mount(volume: &str, target: &str) -> Mount {
+    Mount {
+        volume: volume.into(),
+        target: target.into(),
+        readonly: false,
+    }
+}
+
+#[test]
+fn volume_parameters_need_paths_and_variables_of_their_own() {
+    installs().validate().unwrap();
+    let with = |change: &dyn Fn(&mut Compose)| {
+        let mut compose = installs();
+        change(&mut compose);
+        compose.validate().map_err(|e| e.to_string())
+    };
+    assert!(
+        with(&|c| c.parameters[1].path = "/opt/unity".into())
+            .unwrap_err()
+            .contains("/opt/unity is used twice")
+    );
+    // The volume's own variable would overwrite a parameter of that name.
+    assert!(
+        with(&|c| c.parameters[2].name = "UNITY_HOME_VOLUME".into())
+            .unwrap_err()
+            .contains("carries the volume of UNITY_HOME")
+    );
+    // Nested folders are separate mounts, as volume settings can be.
+    with(&|c| c.parameters[1].path = "/opt/unity/cache".into()).unwrap();
+}
+
+#[test]
+fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
+    let values = installs()
+        .resolve(&given(&[("UNITY_EDITOR", "6000.0.23f1")]))
+        .unwrap();
+    // The default volume is chosen unless the request clears it; the cache has none.
+    assert_eq!(values["UNITY_HOME"], "unity-installs");
+    assert_eq!(values["UNITY_CACHE"], "");
+    let pinned = Pinned {
+        compose: installs(),
+        values,
+    };
+    assert_eq!(pinned.mounts(), [mount("unity-installs", "/opt/unity")]);
+    assert_eq!(pinned.paths(), ["/opt/unity", "/home/desktop/.cache/unity"]);
+    // The container record shows the volume chosen and where it is mounted.
+    let setup = pinned.setup("img");
+    assert_eq!(setup.parameters["UNITY_HOME"], "unity-installs");
+    assert_eq!(setup.mounts, pinned.mounts());
+    let request = pinned.request();
+    assert_eq!(
+        request["parameters"],
+        json!({
+            "UNITY_HOME": "/opt/unity", "UNITY_HOME_VOLUME": "unity-installs",
+            "UNITY_CACHE": "/home/desktop/.cache/unity", "UNITY_CACHE_VOLUME": "",
+            "UNITY_EDITOR": "6000.0.23f1"
+        })
+    );
+    let cleared = installs()
+        .resolve(&given(&[
+            ("UNITY_HOME", ""),
+            ("UNITY_CACHE", "unity-cache"),
+        ]))
+        .unwrap();
+    assert_eq!(
+        installs().mounts(&cleared),
+        [mount("unity-cache", "/home/desktop/.cache/unity")]
+    );
+    assert!(
+        installs()
+            .resolve(&given(&[("UNITY_HOME", "not a volume")]))
+            .is_err()
+    );
+}
+
+#[test]
+fn a_compose_volume_has_its_path_and_its_volume_to_itself() {
+    let compose = [mount("unity-installs", "/opt/unity")];
+    check_mounts(&[mount("projects", "/home/desktop/Projects")], &compose).unwrap();
+    check_mounts(&[mount("cache", "/opt/unity/cache")], &compose).unwrap();
+    let refused =
+        |own: &[Mount], compose: &[Mount]| check_mounts(own, compose).unwrap_err().to_string();
+    assert!(
+        refused(&[mount("projects", "/opt/unity")], &compose)
+            .contains("remove the volume setting with that path")
+    );
+    assert!(
+        refused(&[mount("unity-installs", "/srv/unity")], &compose)
+            .contains("mounted at both /srv/unity and /opt/unity")
+    );
+    assert!(
+        refused(
+            &[],
+            &[compose[0].clone(), mount("unity-installs", "/srv/cache")]
+        )
+        .contains("mounted at both /opt/unity and /srv/cache")
+    );
+    // A parameter left without a volume leaves its path to the volume settings.
+    check_mounts(&[mount("projects", "/opt/unity")], &[]).unwrap();
+}
+
+#[test]
+fn every_new_container_mounts_the_volumes_its_compose_was_given() {
+    let app = crate::tests::app(false);
+    let pinned = Pinned {
+        compose: installs(),
+        values: installs().resolve(&BTreeMap::new()).unwrap(),
+    };
+    let mut env = Container {
+        setup: Some(pinned.setup("img")),
+        ..container()
+    };
+    env.spec.mounts = vec![mount("projects", "/home/desktop/Projects")];
+    assert_eq!(
+        env.mounts(),
+        [
+            mount("projects", "/home/desktop/Projects"),
+            mount("unity-installs", "/opt/unity")
+        ]
+    );
+    let args = app.container_args(&env).join(" ");
+    for flag in [
+        "--mount type=volume,src=projects,dst=/home/desktop/Projects",
+        "--mount type=volume,src=unity-installs,dst=/opt/unity ",
+    ] {
+        assert!(args.contains(flag), "{flag} missing from {args}");
+    }
+    // A reset or a retry runs the setup again on the same record, mounts and all.
+    setup_again(&mut env);
+    assert_eq!(env.compose_mounts(), pinned.mounts());
+    // The settings never list them, so a change of volume settings cannot drop them.
+    let changed =
+        crate::reconfigure::merged_spec(&env.spec, json!({"mounts": []}).as_object().unwrap())
+            .unwrap();
+    env.spec = changed;
+    assert_eq!(env.mounts(), pinned.mounts());
+    // Records saved before volume parameters read as having none.
+    let mut old = serde_json::to_value(pinned.setup("img")).unwrap();
+    old.as_object_mut().unwrap().remove("mounts");
+    let old: Setup = serde_json::from_value(old).unwrap();
+    assert!(old.mounts.is_empty());
+}
+
 #[test]
 fn the_compose_comes_from_a_record_of_the_requested_image() {
     let records = [

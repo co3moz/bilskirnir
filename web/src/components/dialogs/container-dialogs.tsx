@@ -89,6 +89,7 @@ function ComposeValues({
             value={values[parameter.name] ?? parameter.default}
             onChange={(value) => onChange({ ...values, [parameter.name]: value })}
             hints
+            createVolumes
           />
         ))}
       </div>

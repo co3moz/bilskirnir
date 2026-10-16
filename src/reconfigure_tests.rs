@@ -149,3 +149,49 @@ fn limits_change_with_a_swap_limit_that_keeps_dockers_default() {
     };
     assert_eq!(update_args(&new, &renamed), None);
 }
+
+#[test]
+fn volume_settings_leave_the_compose_volumes_alone() {
+    let app = crate::tests::app(false);
+    let compose = Mount {
+        volume: "unity-installs".into(),
+        target: "/opt/unity".into(),
+        readonly: false,
+    };
+    let setup: crate::compose::Setup = serde_json::from_value(json!({
+        "status": "completed", "image": "img", "parameters": {"UNITY_HOME": "unity-installs"},
+        "secrets": [], "mounts": [compose]
+    }))
+    .unwrap();
+    let env = Container {
+        id: "e".into(),
+        container: "wsld-e".into(),
+        private_network: "wsld-e-private".into(),
+        egress_network: "wsld-e-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: Some(setup),
+    };
+    let mounts = |mounts: Value| {
+        app.settings_preview(&env, &request(json!({"mounts": mounts})))
+            .map(|(_, changes)| changes)
+            .map_err(|e| e.to_string())
+    };
+    let projects = json!([{"volume": "projects", "target": "/home/desktop/Projects"}]);
+    assert_eq!(mounts(projects).unwrap().restart, ["mounts"]);
+    // Another volume at the compose's path, or the compose's volume at another path.
+    assert!(
+        mounts(json!([{"volume": "projects", "target": "/opt/unity"}]))
+            .unwrap_err()
+            .contains("/opt/unity")
+    );
+    assert!(
+        mounts(json!([{"volume": "unity-installs", "target": "/srv/unity"}]))
+            .unwrap_err()
+            .contains("unity-installs")
+    );
+}

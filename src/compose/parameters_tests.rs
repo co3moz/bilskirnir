@@ -24,12 +24,31 @@ fn every_type_has_its_own_displays_and_fields() {
         json!({"type": "choice", "display": "radio", "options": flavors()}),
         json!({"type": "choice", "options": flavors(), "allow_custom": true}),
         json!({"type": "choices", "display": "checkboxes", "options": flavors()}),
+        json!({"type": "volume", "path": "/opt/unity"}),
+        json!({"type": "volume", "display": "select", "path": "/home/desktop/Unity", "default": "unity-installs"}),
     ] {
         parameter(valid.clone())
             .validate()
             .unwrap_or_else(|e| panic!("{valid}: {e:#}"));
     }
     for (invalid, reason) in [
+        (json!({"type": "volume"}), "The path of VALUE"),
+        (
+            json!({"path": "/opt/unity"}),
+            "Only volume parameters have a path",
+        ),
+        (
+            json!({"type": "volume", "path": "/opt/unity", "display": "radio"}),
+            "cannot be shown as radio",
+        ),
+        (
+            json!({"type": "volume", "path": "/opt/unity", "secret": true}),
+            "Only text parameters can be secret",
+        ),
+        (
+            json!({"type": "volume", "path": "/opt/unity", "default": "-unity"}),
+            "The default of VALUE",
+        ),
         (json!({"display": "slider"}), "cannot be shown as slider"),
         (
             json!({"type": "boolean", "display": "radio"}),
@@ -80,6 +99,95 @@ fn every_type_has_its_own_displays_and_fields() {
     assert!(infinite.validate().is_err());
     // A misspelled type is an error, not a text parameter.
     assert!(serde_json::from_value::<Parameter>(json!({"name": "A", "type": "select"})).is_err());
+}
+
+#[test]
+fn a_volume_path_is_where_a_volume_setting_could_be_mounted() {
+    let at = |path: &str| parameter(json!({"type": "volume", "path": path})).validate();
+    for valid in [
+        "/opt/unity",
+        "/unity-install-location",
+        "/home/desktop/Unity",
+        "/srv/cache/unity_v1",
+    ] {
+        at(valid).unwrap_or_else(|e| panic!("{valid}: {e:#}"));
+    }
+    // Relative or unnormalized paths, the system folders and what the manager mounts itself:
+    // its tmpfs folders, the GPU libraries under /usr/lib/wsl and shared memory under /dev.
+    for invalid in [
+        "",
+        "opt/unity",
+        "/",
+        "/opt/unity/",
+        "/opt//unity",
+        "/opt/./unity",
+        "/opt/../etc",
+        "/opt",
+        "/home",
+        "/tmp/unity",
+        "/run/desktop",
+        "/usr/lib/wsl",
+        "/dev/shm",
+        "/etc/unity",
+        "/opt/VirtualGL",
+        "/opt/a,b",
+    ] {
+        assert!(at(invalid).is_err(), "{invalid:?} was accepted");
+    }
+}
+
+#[test]
+fn a_volume_parameter_takes_a_volume_and_gives_the_script_its_path() {
+    let unity = Parameter {
+        name: "UNITY_HOME".into(),
+        label: "Unity installs".into(),
+        ..parameter(json!({"type": "volume", "path": "/opt/unity"}))
+    };
+    for valid in ["unity-installs", "ab", "Unity_2022.3"] {
+        unity
+            .check(valid)
+            .unwrap_or_else(|e| panic!("{valid}: {e:#}"));
+    }
+    for invalid in ["a", "-unity", ".unity", "with space", "a/b", "two\nlines"] {
+        assert!(unity.check(invalid).is_err(), "{invalid:?}");
+    }
+    // No volume is a choice of its own, unless one is required.
+    assert_eq!(unity.resolve(None).unwrap(), "");
+    let required = Parameter {
+        required: true,
+        ..unity.clone()
+    };
+    assert_eq!(
+        required.resolve(None).unwrap_err().to_string(),
+        "Choose a volume for Unity installs"
+    );
+    // The script reads the path either way, and the volume beside it.
+    let variables = |value: &str| unity.environment(value);
+    assert_eq!(
+        variables("unity-installs"),
+        [
+            ("UNITY_HOME".into(), "/opt/unity".into()),
+            ("UNITY_HOME_VOLUME".into(), "unity-installs".into()),
+        ]
+    );
+    assert_eq!(
+        variables("")[1],
+        ("UNITY_HOME_VOLUME".into(), String::new())
+    );
+    assert_eq!(
+        unity.mount("unity-installs"),
+        Some(crate::model::Mount {
+            volume: "unity-installs".into(),
+            target: "/opt/unity".into(),
+            readonly: false,
+        })
+    );
+    assert_eq!(unity.mount(""), None);
+    // Other types pass their value through and mount nothing.
+    let text = parameter(json!({}));
+    assert_eq!(text.environment("x"), [("VALUE".into(), "x".into())]);
+    assert_eq!(text.mount("unity-installs"), None);
+    assert_eq!(text.volume_variable(), None);
 }
 
 #[test]
@@ -243,6 +351,13 @@ fn a_parameter_is_written_back_as_it_was_given() {
         serde_json::to_value(&text).unwrap(),
         json!({"name": "A", "label": "", "description": "", "type": "text", "required": false, "secret": false, "default": ""})
     );
+    // A volume parameter keeps its path, which configurations and archives carry along.
+    let volume = json!({
+        "name": "UNITY_HOME", "label": "Unity installs", "description": "", "type": "volume",
+        "required": false, "secret": false, "default": "unity-installs", "path": "/opt/unity"
+    });
+    let parsed: Parameter = serde_json::from_value(volume.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&parsed).unwrap(), volume);
 }
 
 #[test]
@@ -250,13 +365,7 @@ fn the_interface_offers_the_displays_this_module_accepts() {
     // The editor offers what this list allows, so a display added or dropped here has to reach
     // web/src/lib/compose.ts in the same change.
     let interface = include_str!("../../web/src/lib/compose.ts");
-    for kind in [
-        Kind::Text,
-        Kind::Number,
-        Kind::Boolean,
-        Kind::Choice,
-        Kind::Choices,
-    ] {
+    for kind in kinds() {
         let displays = kind
             .displays()
             .iter()
@@ -270,6 +379,53 @@ fn the_interface_offers_the_displays_this_module_accepts() {
             interface.contains(&line),
             "web/src/lib/compose.ts must list {line}"
         );
+    }
+}
+
+/// Every type. The match stops compiling when a type is added, so the list is looked at then.
+fn kinds() -> [Kind; 6] {
+    let kinds = [
+        Kind::Text,
+        Kind::Number,
+        Kind::Boolean,
+        Kind::Choice,
+        Kind::Choices,
+        Kind::Volume,
+    ];
+    for kind in kinds {
+        match kind {
+            Kind::Text | Kind::Number | Kind::Boolean | Kind::Choice | Kind::Choices => {}
+            Kind::Volume => {}
+        }
+    }
+    kinds
+}
+
+#[test]
+fn agents_and_the_api_guide_are_offered_every_type_and_display() {
+    // The MCP schema lists the types and displays by hand, and the guide has a row per type.
+    let mcp = include_str!("../mcp.rs");
+    let types = kinds().map(|kind| format!("\"{}\"", wire(kind))).join(",");
+    assert!(
+        mcp.contains(&format!("\"enum\":[{types}]")),
+        "the compose schema in src/mcp.rs must offer the types [{types}]"
+    );
+    let mut displays = Vec::new();
+    for display in kinds().iter().flat_map(|kind| kind.displays()) {
+        let display = format!("\"{}\"", wire(display));
+        if !displays.contains(&display) {
+            displays.push(display);
+        }
+    }
+    let displays = displays.join(",");
+    assert!(
+        mcp.contains(&format!("\"enum\":[{displays}]")),
+        "the compose schema in src/mcp.rs must offer the displays [{displays}]"
+    );
+    let guide = include_str!("../../docs/API.md");
+    for kind in kinds() {
+        let row = format!("\n| `{}`", wire(kind));
+        assert!(guide.contains(&row), "docs/API.md has no row for {row:?}");
     }
 }
 

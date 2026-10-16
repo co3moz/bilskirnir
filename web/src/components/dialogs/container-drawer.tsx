@@ -166,13 +166,24 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
         <Separator />
         <div className="flex flex-col gap-2">
           <h3 className="text-xs text-muted-foreground">{t("nav.volumes")}</h3>
-          {spec.mounts.length ? (
+          {spec.mounts.length || setup?.mounts?.length ? (
             <ul className="flex flex-col gap-1">
               {spec.mounts.map((mount) => (
                 <li key={mount.target} className="flex flex-wrap items-center gap-x-1 text-xs">
                   <code className="font-mono">{mount.volume}</code>
                   <span className="text-muted-foreground">
                     {rich(mount.readonly ? "volumes.mountedAtReadOnly" : "volumes.mountedAt", {
+                      target: <code className="font-mono text-foreground">{mount.target}</code>,
+                    })}
+                  </span>
+                </li>
+              ))}
+              {/* Chosen for the compose's volume parameters; the settings do not change them. */}
+              {setup?.mounts?.map((mount) => (
+                <li key={mount.target} className="flex flex-wrap items-center gap-x-1 text-xs">
+                  <code className="font-mono">{mount.volume}</code>
+                  <span className="text-muted-foreground">
+                    {rich("volumes.mountedByCompose", {
                       target: <code className="font-mono text-foreground">{mount.target}</code>,
                     })}
                   </span>

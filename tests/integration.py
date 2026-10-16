@@ -93,6 +93,9 @@ share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
 restored_volume = f"wsld-test-restored-{tag}"
+installs_volume = f"wsld-test-installs-{tag}"
+cache_volume = f"wsld-test-cache-{tag}"
+absent_volume = f"wsld-test-absent-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
@@ -1008,6 +1011,67 @@ try:
     assert api(f"images/{moved['id']}/compose") == {"parameters": [], "script": "true", "root": False, "timeout_seconds": 600}
     assert "compose" not in tool("set_image_compose", {"image_id": moved["id"], "compose": None})["structuredContent"]
     print("PASS MCP compose read, replace and removal", flush=True)
+    # A volume parameter mounts the volume chosen for it at its path whenever the container is
+    # created; without one the path stays in the container. Either way the desktop user owns the
+    # folder before the setup script runs, which reads the path and the volume's name.
+    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\n"}
+    for parameters in [[{"name": "UNITY_HOME", "type": "volume"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/tmp/unity"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/opt/../etc"}], [*volume_compose["parameters"], {"name": "UNITY_HOME_VOLUME"}]]:
+        assert refused(f"images/{built['id']}/compose", {**volume_compose, "parameters": parameters}, "PUT") == 400, parameters
+    installs_image = job(api("images/build", {"name": "volume-parameters", "base_image": xfce["reference"], "internet": False, "script": f"# volume parameters {tag}\ntrue\n", "compose": volume_compose}))
+    assert installs_image["compose"]["parameters"] == [{**p, "label": "", "description": "", "required": p.get("required", False), "secret": False, "default": ""} for p in volume_compose["parameters"]], installs_image["compose"]
+    api("volumes", {"name": installs_volume})
+    base = {"image": installs_image["image_id"], "internet": False}
+    # Refused before a job: no volume for a required parameter, a volume also in the volume
+    # settings or chosen twice, and another volume at the parameter's path.
+    for name, parameters, mounts in [("no-volume", {}, []), ("twice", {"UNITY_HOME": installs_volume}, [{"volume": installs_volume, "target": "/srv/unity"}]), ("same-path", {"UNITY_HOME": installs_volume}, [{"volume": share, "target": "/unity-install-location"}]), ("same-volume", {"UNITY_HOME": installs_volume, "UNITY_CACHE": installs_volume}, [])]:
+        assert refused("containers", {**base, "name": name, "parameters": parameters, "mounts": mounts}) == 400, name
+    # Refused by the job: a volume that does not exist is not created, and the manager's own data
+    # volume is never handed to a desktop.
+    for name, chosen, reason in [("absent", absent_volume, "Volume not found"), ("manager", volume, "manager's own volume")]:
+        response = api("containers", {**base, "name": name, "parameters": {"UNITY_HOME": chosen}})
+        failed = wait_for(lambda: (j if (j := api(f"jobs/{response['job_id']}"))["status"] not in ("queued", "running") else None))
+        assert failed["status"] == "failed" and reason in failed["log"], failed
+    assert json.loads(docker("volume", "inspect", absent_volume, check=False) or b"[]") == []
+    assert not [item for item in api("containers") if item["spec"]["name"] in ("absent", "manager")]
+    def volume_mounts(container):
+        return {m["Destination"]: m["Name"] for m in json.loads(docker("inspect", container))[0]["Mounts"] if m["Type"] == "volume"}
+    kept = job(api("containers", {**base, "name": "Volume parameter", "parameters": {"UNITY_HOME": installs_volume}}))["container_id"]
+    container_ids.append(kept)
+    kept_container = f"wsld-{kept}"
+    ready(kept_container)
+    assert docker("exec", kept_container, "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache||1001".encode()
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    assert docker("exec", kept_container, "stat", "-c", "%U", "/unity-install-location", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\ndesktop\n"
+    assert api(f"containers/{kept}")["setup"]["mounts"] == [{"volume": installs_volume, "target": "/unity-install-location", "readonly": False}]
+    # The volume settings cannot put another volume at its path, and a recreation keeps it.
+    assert refused(f"containers/{kept}/settings", {"mounts": [{"volume": share, "target": "/unity-install-location"}]}) == 400
+    job(api(f"containers/{kept}/settings", {"resolution": "1280x720"}))
+    image_refs.append(api(f"containers/{kept}")["working_image"]["reference"])
+    ready(kept_container)
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    # A reset starts from the image again: the volume keeps its files, the folder without a volume
+    # loses them, and the setup runs again.
+    docker("exec", "--user", "desktop", kept_container, "sh", "-c", "printf kept > /unity-install-location/extra && printf layer > /home/desktop/Unity/Cache/extra")
+    job(api(f"containers/{kept}/reset", {}))
+    ready(kept_container)
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    assert docker("exec", kept_container, "cat", "/unity-install-location/extra") == b"kept"
+    assert subprocess.run(["docker", "exec", kept_container, "test", "-e", "/home/desktop/Unity/Cache/extra"]).returncode != 0
+    assert docker("exec", kept_container, "cat", "/home/desktop/Unity/Cache/marker") == b"cached"
+    # A volume created for the cache, as the dashboard does inline, and the installs shared with
+    # the first container. Docker makes the folder above the cache, which the desktop user gets.
+    api("volumes", {"name": cache_volume})
+    shared = job(api("containers", {**base, "name": "Shared installs", "parameters": {"UNITY_HOME": installs_volume, "UNITY_CACHE": cache_volume}}))["container_id"]
+    container_ids.append(shared)
+    ready(f"wsld-{shared}")
+    assert volume_mounts(f"wsld-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume}
+    assert docker("exec", f"wsld-{shared}", "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache|{cache_volume}|1001".encode()
+    assert docker("exec", f"wsld-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\n"
+    for eid in [kept, shared]:
+        job(api(f"containers/{eid}", method="DELETE"))
+        container_ids.remove(eid)
+    assert docker("volume", "inspect", installs_volume) and docker("volume", "inspect", cache_volume)
+    print("PASS volume parameters mount the chosen volume, keep it across settings and reset, and give the desktop user its folder", flush=True)
     # Settings change after creation: the name and new limits apply to the running container, while
     # audio and removing a limit need a new container that keeps the old one's files.
     edit = job(api("containers", {"name": "Settings edit", "image": xfce["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
@@ -1083,5 +1147,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

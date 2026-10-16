@@ -170,7 +170,8 @@ pub async fn create(
     if let Some(record) = crate::compose::compose_image(&records, &spec.image, &spec.image)
         && let Some(compose) = &record.compose
     {
-        compose.resolve(&parameters)?;
+        let values = compose.resolve(&parameters)?;
+        crate::compose::check_mounts(&spec.mounts, &compose.mounts(&values))?;
     }
     let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
