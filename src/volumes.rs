@@ -6,18 +6,20 @@
 //! network, a read-only root, no capabilities beyond the few an operation needs, and is removed
 //! when the operation ends; it never gets the Docker socket. Files are read and written as the
 //! desktop user (UID/GID 1001), as a desktop that mounts the volume would.
+mod archive;
 mod files;
 
 use crate::{
     App,
     error::{Error, Result, missing},
-    model::volume_name,
+    model::{LABEL, volume_name},
     process,
 };
 use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
+pub(crate) use archive::{export, import};
 pub(crate) use files::{delete, download, list, make_directory, move_, read, upload, write};
 
 /// Where a helper mounts the volume.
@@ -36,6 +38,8 @@ pub(crate) enum Access {
     /// The desktop user, writing. Docker creates a volume's root owned by root; while it is still
     /// empty, it is first given to the desktop user, as mounting it over a desktop folder would.
     Write,
+    /// Root on a read-only mount, allowed to read every file so an archive is complete.
+    Archive,
 }
 
 /// A volume a request may open, and the image its helper runs.
@@ -45,10 +49,34 @@ pub(crate) struct Volume {
 }
 
 impl App {
-    /// Check a volume before any helper mounts it: `docker run` would create a missing one, and
-    /// the manager's own data volume holds its database and sessions.
-    pub(crate) async fn open_volume(&self, name: &str) -> Result<Volume> {
-        volume_name(name)?;
+    /// Create a volume the manager owns. The caller holds the volume's lock.
+    pub(crate) async fn new_volume(&self, name: &str) -> Result<()> {
+        if self.optional_inspect("volume", name).await?.is_some() {
+            return Err(Error(
+                StatusCode::CONFLICT,
+                "A volume with this name already exists".into(),
+            ));
+        }
+        self.docker(&[
+            "volume",
+            "create",
+            "--label",
+            &format!("{LABEL}=true"),
+            name,
+        ])
+        .await?;
+        let created = self.inspect("volume", name).await?;
+        if created["Labels"][LABEL] != "true" {
+            return Err(anyhow::anyhow!(
+                "Volume was created by another operation; ownership does not match"
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    /// The manager container, whose image every helper runs.
+    async fn manager_container(&self) -> Result<Value> {
         let manager = self.config.manager.as_ref().ok_or_else(|| {
             Error(
                 StatusCode::CONFLICT,
@@ -59,16 +87,21 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             return Err(anyhow::anyhow!("MANAGER_CONTAINER does not point to the manager").into());
         }
-        if manager_volume(&info, name) {
+        Ok(info)
+    }
+
+    /// A volume by that name for a helper to mount, the manager's own refused. Whether it exists
+    /// is up to the caller.
+    pub(crate) async fn volume_named(&self, name: &str) -> Result<Volume> {
+        volume_name(name)?;
+        let manager = self.manager_container().await?;
+        if manager_volume(&manager, name) {
             return Err(Error(
                 StatusCode::FORBIDDEN,
                 "This is the manager's own volume; its files cannot be opened here".into(),
             ));
         }
-        self.optional_inspect("volume", name)
-            .await?
-            .ok_or_else(missing)?;
-        let image = info["Image"]
+        let image = manager["Image"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing manager image"))?
             .to_owned();
@@ -76,6 +109,16 @@ impl App {
             name: name.into(),
             image,
         })
+    }
+
+    /// Check a volume before any helper mounts it: `docker run` would create a missing one, and
+    /// the manager's own data volume holds its database and sessions.
+    pub(crate) async fn open_volume(&self, name: &str) -> Result<Volume> {
+        let volume = self.volume_named(name).await?;
+        self.optional_inspect("volume", name)
+            .await?
+            .ok_or_else(missing)?;
+        Ok(volume)
     }
 
     /// Run `command` in a helper and return what it printed. A helper's own message on stderr
@@ -189,6 +232,19 @@ pub(crate) fn helper_args(
             args.push(volume.image.clone());
             args.extend(["-c".into(), CLAIM.into()]);
             args.extend(command.iter().cloned());
+        }
+        Access::Archive => {
+            mount.push_str(",readonly");
+            args.extend(["--user".into(), "0:0".into()]);
+            args.extend(["--cap-add".into(), "DAC_READ_SEARCH".into()]);
+            args.extend([
+                "--mount".into(),
+                mount,
+                "--entrypoint".into(),
+                program.clone(),
+            ]);
+            args.push(volume.image.clone());
+            args.extend(rest.iter().cloned());
         }
     }
     args

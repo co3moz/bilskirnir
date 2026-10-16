@@ -1,5 +1,11 @@
 import * as React from "react"
-import { RiDatabase2Line, RiAddLine, RiFolderOpenLine } from "@remixicon/react"
+import {
+  RiArchive2Line,
+  RiDatabase2Line,
+  RiAddLine,
+  RiFolderOpenLine,
+  RiImportLine,
+} from "@remixicon/react"
 
 import {
   columnHelper,
@@ -12,6 +18,8 @@ import {
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { attempt, exportVolume } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { useContainers, useVolumes } from "@/lib/queries"
 import type { Volume } from "@/lib/types"
@@ -75,6 +83,19 @@ const columns: DataColumn<Row>[] = [
     id: "actions",
     cell: ({ row }) => (
       <div className="flex justify-end gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => attempt(async () => exportVolume(row.original.Name))}
+              aria-label={`Export ${row.original.Name} as an archive`}
+            >
+              <RiArchive2Line />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Export archive (.tar.gz)</TooltipContent>
+        </Tooltip>
         <Button
           variant="outline"
           size="sm"
@@ -122,6 +143,10 @@ export function VolumesPage() {
         title="Named volumes"
         description="Files that outlive containers. Volumes are excluded from snapshots; browse one to read or change its files."
       >
+        <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "volume-import" })}>
+          <RiImportLine data-icon="inline-start" />
+          Import volume
+        </Button>
         <Button size="sm" onClick={() => openDialog({ kind: "volume" })}>
           <RiAddLine data-icon="inline-start" />
           New volume

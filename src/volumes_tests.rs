@@ -28,7 +28,7 @@ fn after<'a>(args: &'a [String], flag: &str) -> &'a str {
 
 #[test]
 fn a_helper_reaches_nothing_but_the_volume() {
-    for access in [Access::Read, Access::Write] {
+    for access in [Access::Read, Access::Write, Access::Archive] {
         let args = helper_args(&volume(), access, "wsld-volume-test", false, &command());
         let joined = args.join(" ");
         assert_eq!(&args[..2], ["run", "--rm"]);

@@ -653,27 +653,7 @@ pub async fn create_volume(
     volume_name(&body.name)?;
     let lock = app.resource_lock(&format!("volume:{}", body.name));
     let _guard = lock.lock().await;
-    if app.optional_inspect("volume", &body.name).await?.is_some() {
-        return Err(Error(
-            StatusCode::CONFLICT,
-            "A volume with this name already exists".into(),
-        ));
-    }
-    app.docker(&[
-        "volume",
-        "create",
-        "--label",
-        &format!("{LABEL}=true"),
-        &body.name,
-    ])
-    .await?;
-    let created = app.inspect("volume", &body.name).await?;
-    if created["Labels"][LABEL] != "true" {
-        return Err(anyhow::anyhow!(
-            "Volume was created by another operation; ownership does not match"
-        )
-        .into());
-    }
+    app.new_volume(&body.name).await?;
     Ok(Json(json!({"name":body.name})))
 }
 pub async fn jobs(State(app): State<Arc<App>>) -> Result<Json<Value>> {

@@ -88,8 +88,12 @@ function join(chunks: Uint8Array[], length: number) {
 
 export type ImportStatus = "idle" | "uploading" | "checking" | "started" | "failed" | "cancelled"
 
-/** One archive upload; the manager answers with a job once the archive has passed its checks. */
+/**
+ * One archive upload; the manager answers with a job once the archive has passed its checks.
+ * `path` is the import route: `images/import` for an image, `volumes/import` for a volume.
+ */
 export class ArchiveImport {
+  path: string
   createRequest: () => UploadRequest
   onChange: () => void
   onUnauthorized: () => void
@@ -102,14 +106,17 @@ export class ArchiveImport {
   request: UploadRequest | null = null
 
   constructor({
+    path = "images/import",
     createRequest,
     onChange = () => {},
     onUnauthorized = () => {},
   }: {
+    path?: string
     createRequest: () => UploadRequest
     onChange?: () => void
     onUnauthorized?: () => void
   }) {
+    this.path = path
     this.createRequest = createRequest
     this.onChange = onChange
     this.onUnauthorized = onUnauthorized
@@ -123,7 +130,7 @@ export class ArchiveImport {
     this.request?.abort()
   }
   /** Resolves with the job ID, or with an empty string after a failure described by `error`. */
-  async start(file: Blob, details: { name: string; description: string }, limit: number) {
+  async start(file: Blob, details: Record<string, string>, limit: number) {
     if (this.running) return ""
     this.size = file.size
     this.loaded = 0
@@ -150,12 +157,12 @@ export class ArchiveImport {
     }
     return this.jobId
   }
-  send(file: Blob, { name, description }: { name: string; description: string }) {
+  send(file: Blob, details: Record<string, string>) {
     return new Promise<string>((resolve, reject) => {
       const request = this.createRequest()
       this.request = request
-      const query = new URLSearchParams({ size: String(file.size), name, description })
-      request.open("POST", `/api/images/import?${query}`)
+      const query = new URLSearchParams({ size: String(file.size), ...details })
+      request.open("POST", `/api/${this.path}?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
       request.setRequestHeader("X-Wsld-Request", "1")
       request.withCredentials = true

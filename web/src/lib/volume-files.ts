@@ -62,3 +62,18 @@ export const volumeApi = (volume: string) => `volumes/${encodeURIComponent(volum
 
 export const volumeDownloadUrl = (volume: string, path: string) =>
   `/api/${volumeApi(volume)}/files/download?${new URLSearchParams({ path })}`
+
+export const volumeArchiveUrl = (volume: string) => `/api/${volumeApi(volume)}/archive`
+
+/** A volume name the manager accepts: letters, digits, dots, dashes and underscores. */
+export const VOLUME_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,127}$/
+
+/** A volume name from an archive's file name: its extension dropped, other characters dashed. */
+export function volumeArchiveName(fileName: string) {
+  const name = fileName
+    .replace(/\.(tar\.gz|tgz|tar|gz)$/i, "")
+    .replace(/[^a-zA-Z0-9_.-]+/g, "-")
+    .replace(/^[^a-zA-Z0-9]+/, "")
+    .slice(0, 128)
+  return VOLUME_NAME.test(name) ? name : ""
+}

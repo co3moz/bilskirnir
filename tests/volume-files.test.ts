@@ -7,6 +7,8 @@ import {
   parentPath,
   pathCrumbs,
   sortEntries,
+  volumeArchiveName,
+  volumeArchiveUrl,
   volumeDownloadUrl,
   type VolumeEntry,
 } from "../web/src/lib/volume-files"
@@ -52,6 +54,16 @@ test("folders come first, then files by name", () => {
     sorted.map((item) => item.name),
     ["assets", "src", "a.txt", "b.txt"]
   )
+})
+
+test("an archive's file name suggests a volume name the manager accepts", () => {
+  assert.equal(volumeArchiveName("unity-projects.tar.gz"), "unity-projects")
+  assert.equal(volumeArchiveName("Game Saves (2).TGZ"), "Game-Saves-2-")
+  assert.equal(volumeArchiveName("__backup.tar"), "backup")
+  // Nothing usable is left for some names; the field then stays empty.
+  assert.equal(volumeArchiveName("ü.tar.gz"), "")
+  assert.equal(volumeArchiveName("x.tar"), "")
+  assert.equal(volumeArchiveUrl("unity-projects"), "/api/volumes/unity-projects/archive")
 })
 
 test("downloads name the volume and the path in the query", () => {

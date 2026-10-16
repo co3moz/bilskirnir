@@ -92,6 +92,7 @@ volume = f"wsld-test-data-{tag}"
 share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
+restored_volume = f"wsld-test-restored-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
@@ -349,6 +350,35 @@ try:
     with client.open(f"http://127.0.0.1:{port}/api/{files}/download?" + urllib.parse.urlencode({"path": "/notes/blob.bin"}), timeout=130) as response:
         assert response.read() == b"\x00\x01\x02"
     api(f"{files}/move", {"source": "/notes/hello.txt", "destination": "/notes/renamed.txt"})
+    # A volume leaves as an ordinary .tar.gz and comes back into a new volume, never over one.
+    with client.open(f"http://127.0.0.1:{port}/api/volumes/{files_volume}/archive", timeout=130) as response:
+        export_job = response.headers["X-Job-Id"]
+        exported_volume = response.read()
+    assert job({"job_id": export_job})["bytes"] == len(exported_volume)
+    with tarfile.open(fileobj=io.BytesIO(exported_volume), mode="r:gz") as archive:
+        assert {member.name for member in archive.getmembers()} >= {"./notes/renamed.txt", "./notes/blob.bin"}
+    def import_volume(name, data):
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name, "size": len(data)}), data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+        with client.open(request, timeout=130) as response:
+            return json.loads(response.read())
+    try:
+        import_volume(files_volume, exported_volume); raise AssertionError("import replaced a volume")
+    except urllib.error.HTTPError as error:
+        assert error.code == 409
+    assert job(import_volume(restored_volume, exported_volume))["name"] == restored_volume
+    assert api(f"volumes/{restored_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
+    restored_owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={restored_volume},dst=/v,readonly", "--entrypoint", "stat", "bilskirnir/manager:local", "-c", "%u:%g", "/v", "/v/notes/blob.bin").decode().split()
+    assert restored_owners == ["1001:1001"] * 2, restored_owners
+    # A broken archive leaves no volume behind.
+    broken = f"wsld-test-broken-{tag}"
+    try:
+        started = import_volume(broken, exported_volume[: len(exported_volume) // 2])
+    except urllib.error.HTTPError as error:
+        assert error.code == 400, error.code
+    else:
+        finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+        assert finished["status"] == "failed", finished
+    assert json.loads(docker("volume", "inspect", broken, check=False) or b"[]") == []
     listed = api(f"{files}/list", {"path": "/notes"})
     assert listed["path"] == "/notes" and sorted(i["name"] for i in listed["items"]) == ["blob.bin", "renamed.txt"], listed
     assert refused(f"{files}/delete", {"path": "/notes"}) == 400
@@ -363,7 +393,7 @@ try:
     assert json.loads(docker("volume", "inspect", missing, check=False) or b"[]") == []
     assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
-    print("PASS volume files are read and changed as the desktop user through a removed helper", flush=True)
+    print("PASS volume files and archives go through a removed helper as the desktop user", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
     except urllib.error.HTTPError as error:
@@ -1040,5 +1070,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

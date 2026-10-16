@@ -7,6 +7,7 @@ import { openDialog } from "./dialogs"
 import { refreshAll } from "./queries"
 import { navigate } from "./route"
 import type { BuildConfig, ImageItem, JobStarted } from "./types"
+import { volumeArchiveUrl } from "./volume-files"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
 export async function runJob(path: string, body?: unknown, method?: string) {
@@ -79,6 +80,20 @@ export async function attempt(action: () => Promise<unknown>) {
   } catch (error) {
     toast.error((error as Error).message)
   }
+}
+
+/** Downloads a volume's files as a .tar.gz archive, recorded as a job like an image export. */
+export function exportVolume(name: string) {
+  const link = document.createElement("a")
+  link.href = volumeArchiveUrl(name)
+  link.download = ""
+  document.body.append(link)
+  link.click()
+  link.remove()
+  toast.success(`Exporting ${name}.`, {
+    action: { label: "Jobs", onClick: () => navigate({ page: "jobs" }) },
+  })
+  setTimeout(() => void refreshAll(), 1000)
 }
 
 /**

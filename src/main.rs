@@ -52,7 +52,7 @@ pub struct App {
     screenshots: tokio::sync::Semaphore,
     uploads: tokio::sync::Semaphore,
     desktop_inputs: tokio::sync::Semaphore,
-    /// Image archive exports and imports, which each hold a Docker save or load.
+    /// Image and volume archive exports and imports, which each hold a Docker save, load or tar.
     archives: Arc<tokio::sync::Semaphore>,
 }
 fn router(app: Arc<App>) -> Router {
@@ -172,6 +172,13 @@ fn router(app: Arc<App>) -> Router {
             get(compose::get).put(compose::set).delete(compose::remove),
         )
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
+        .route(
+            "/api/volumes/import",
+            post(volumes::import).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
+            )),
+        )
+        .route("/api/volumes/{name}/archive", get(volumes::export))
         .route("/api/volumes/{name}/files/list", post(volumes::list))
         .route("/api/volumes/{name}/files/read", post(volumes::read))
         .route("/api/volumes/{name}/files/write", post(volumes::write))

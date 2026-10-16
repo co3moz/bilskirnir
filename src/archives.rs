@@ -526,11 +526,12 @@ async fn docker_error(errors: tokio::task::JoinHandle<anyhow::Result<Vec<u8>>>) 
     anyhow!("Docker: {}", String::from_utf8_lossy(&errors).trim())
 }
 
-fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
+/// Image and volume archives share two transfer slots: each holds a Docker save, load or tar.
+pub(crate) fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
     app.archives.clone().try_acquire_owned().map_err(|_| {
         Error(
             StatusCode::TOO_MANY_REQUESTS,
-            "Two image archive transfers are already running. Try again when one finishes.".into(),
+            "Two archive transfers are already running. Try again when one finishes.".into(),
         )
     })
 }

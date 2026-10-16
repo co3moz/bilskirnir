@@ -93,10 +93,11 @@ test("the metadata comes from the start of a gzip or plain archive", async () =>
   assert.equal(await readArchiveInfo(new Blob([gzip.subarray(0, 40)])), null)
 })
 
-function fixture() {
+function fixture(path?: string) {
   const requests: any[] = []
   let unauthorized = 0
   const upload = new ArchiveImport({
+    path,
     createRequest: () => {
       const request: any = {
         upload: {},
@@ -154,6 +155,19 @@ test("an archive uploads with its details and resolves with the job", async () =
   assert.equal(await done, "job-1")
   assert.equal(upload.status, "started")
   assert.ok(!upload.running)
+})
+
+test("a volume archive goes to the volume import with the new volume's name", async () => {
+  const { upload, requests } = fixture("volumes/import")
+  const done = upload.start(file(12), { name: "unity-projects" }, 100)
+  const request = requests[0]
+  assert.equal(request.url.pathname, "/api/volumes/import")
+  assert.deepEqual(Object.fromEntries(request.url.searchParams), {
+    size: "12",
+    name: "unity-projects",
+  })
+  request.complete(200, { job_id: "job-2" })
+  assert.equal(await done, "job-2")
 })
 
 test("refusals, an expired session, cancellation and the size limit", async () => {
