@@ -12,6 +12,9 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY desktop/profiles.json desktop/profiles.json
+# A release build names its version, and the manager then downloads the desktop images published
+# with it. Without it, the manager downloads each profile's catalog reference.
+ARG BILSKIRNIR_RELEASE
 RUN cargo build --release --locked
 
 FROM docker:28-cli AS dockercli
@@ -33,4 +36,8 @@ WORKDIR /app
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=3s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/bilskirnir"]
+# The same release as a label, which `bilskirnir update` in the WSL package reads to download the
+# desktop images this manager would. Declared last so it leaves the cache of the layers above alone.
+ARG BILSKIRNIR_RELEASE
+LABEL io.wsl-desktop.release="${BILSKIRNIR_RELEASE}"
 

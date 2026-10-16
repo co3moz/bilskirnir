@@ -3,7 +3,8 @@
 //! An installation does not pull every profile up front: a profile is downloaded the first time
 //! a desktop or an image build starts from it, or when its card asks for it. The CLI hides byte
 //! counts from non-terminal output, so pulls go through the Engine API socket and the job carries
-//! one aggregated `progress` value for the dashboard and for agents.
+//! one aggregated `progress` value for the dashboard and for agents. A release manager downloads
+//! the desktop images published with it and tags them as the catalog reference (`Profile::source`).
 use crate::{App, profiles::Profile};
 use anyhow::{Context, Result, bail};
 use http_body_util::BodyExt;
@@ -331,13 +332,26 @@ impl App {
 
     /// Pull a profile's published image, or a newer one, and report progress on the job.
     pub async fn pull_profile(&self, profile: &Profile, job_id: &str) -> Result<Value> {
+        self.pull_profile_from(profile, &profile.source(), job_id)
+            .await
+    }
+
+    async fn pull_profile_from(
+        &self,
+        profile: &Profile,
+        source: &str,
+        job_id: &str,
+    ) -> Result<Value> {
         self.append_log(
             job_id,
-            &format!("Downloading {} from {}.", profile.name, profile.reference),
+            &format!("Downloading {} from {source}.", profile.name),
         )?;
+        // A release tag that was here before the download is someone else's and stays.
+        let source_was_here =
+            source != profile.reference && self.image_present(source).await.unwrap_or(true);
         // An empty count tells the dashboard the download is being prepared.
         self.set_progress(job_id, Some(PullProgress::default().summary()))?;
-        let sizes = self.layer_sizes(&profile.reference).await;
+        let sizes = self.layer_sizes(source).await;
         let mut attempt = 1;
         let pulled = loop {
             // Layers finished by an earlier attempt are reported as already present, so each
@@ -346,10 +360,7 @@ impl App {
                 sizes: sizes.clone(),
                 ..Default::default()
             };
-            match self
-                .pull_image(job_id, &profile.reference, &mut progress)
-                .await
-            {
+            match self.pull_image(job_id, source, &mut progress).await {
                 Err(error) if attempt < ATTEMPTS && error.downcast_ref::<Refused>().is_none() => {
                     let wait = 5 * attempt;
                     self.append_log(
@@ -364,6 +375,15 @@ impl App {
         };
         self.set_progress(job_id, None)?;
         pulled?;
+        if source != profile.reference {
+            self.docker(&["tag", source, &profile.reference]).await?;
+            self.append_log(job_id, &format!("Tagged it as {}.", profile.reference))?;
+            // Without the release tag, the image the reference named before is left dangling,
+            // as pulling the reference itself would leave it.
+            if !source_was_here && let Err(error) = self.docker(&["image", "rm", source]).await {
+                tracing::warn!("Could not remove the tag {source}: {error:#}");
+            }
+        }
         let info = self
             .inspect("image", &profile.reference)
             .await

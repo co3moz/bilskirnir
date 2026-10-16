@@ -6,7 +6,7 @@ The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with
 
 The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a desktop is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
-Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since. Only [`bilskirnir update`](#update) moves it forward.
+Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since, and that manager downloads the desktop profiles published with 1.2.0. Only [`bilskirnir update`](#update) moves it forward.
 
 ## Requirements
 
@@ -69,7 +69,7 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 
 ## Update
 
-`bilskirnir update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it pulls the desktop profiles you have already downloaded again; those follow the moving `24.04` tag rather than the release.
+`bilskirnir update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it downloads the desktop profiles you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with the profile's usual reference, `ubuntu-xfce:24.04`, which desktops and images record.
 
 A `MANAGER_IMAGE` set by hand to anything other than a release of `ghcr.io/co3moz/bilskirnir`, such as `latest`, which follows `master`, or a digest, is only pulled again. To return to releases, set it to one with `bilskirnir settings`, for example `ghcr.io/co3moz/bilskirnir:1.2.0`, and run `bilskirnir update`.
 

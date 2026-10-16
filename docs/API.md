@@ -32,7 +32,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/settings` | Defaults and supported features, without credentials. |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/profiles` | Desktop profile catalog and whether each image is downloaded. |
-| POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; returns a job. |
+| POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; a release manager downloads the one published with it. Returns a job. |
 | POST | `/api/profiles/{profile_id}/build` | Build a supplied profile; returns a job. |
 | GET | `/api/environments` | Managed environments, state and health. |
 | POST | `/api/environments` | Create an environment; returns a job. |

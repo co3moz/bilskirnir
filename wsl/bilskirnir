@@ -73,15 +73,29 @@ newest_release() {
     fi
     echo "$version"
 }
-# Desktop profiles download on first use, so refresh only the ones this host already has.
+# Desktop profiles download on first use, so refresh only the ones this host already has. A release
+# manager, labelled with its version, downloads the desktop images published with it and tags them
+# as the catalog reference; any other manager downloads the reference itself. This does the same.
 update_profiles() {
-    local catalog ref
-    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json); then
+    local catalog release ref source source_was_here
+    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
+        ! release=$(docker inspect --format '{{index .Config.Labels "io.wsl-desktop.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
     for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
-        if docker image inspect "$ref" >/dev/null 2>&1; then
+        if ! docker image inspect "$ref" >/dev/null 2>&1; then
+            continue
+        fi
+        if [[ $release =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
+            source=${ref%:*}:$release
+            # As in the manager, a release tag that was here before stays.
+            source_was_here=""
+            if docker image inspect "$source" >/dev/null 2>&1; then source_was_here=yes; fi
+            docker pull "$source"
+            docker tag "$source" "$ref"
+            if [[ -z $source_was_here ]]; then docker image rm "$source" >/dev/null || true; fi
+        else
             docker pull "$ref"
         fi
     done

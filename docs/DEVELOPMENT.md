@@ -143,7 +143,7 @@ The **Publish containers** workflow checks frontend and backend code and validat
 | `ghcr.io/co3moz/bilskirnir/ubuntu-xfce` | `24.04`, `latest` |
 | `ghcr.io/co3moz/bilskirnir/ubuntu-gnome` | `24.04`, `latest` |
 
-Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. Documentation-only changes do not trigger image builds.
+Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Its manager is built with `BILSKIRNIR_RELEASE=1.2.3`: it downloads the `1.2.3` desktop images and tags them as their catalog references, and carries the version in its `io.wsl-desktop.release` label, which `bilskirnir update` reads. Other builds leave it empty and download the catalog references. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. Documentation-only changes do not trigger image builds.
 
 The workflow uses `GITHUB_TOKEN` with package write access, separate BuildKit caches for each image and official actions pinned to commit SHAs. It reads each published manifest back by digest to check registry access. Hosted CI cannot verify WSL GPU behavior.
 
