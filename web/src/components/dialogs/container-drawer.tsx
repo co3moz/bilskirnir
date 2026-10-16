@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   RiCameraLine,
   RiStopCircleLine,
@@ -23,6 +24,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, date, desktopTitle } from "@/lib/format"
@@ -40,6 +42,11 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
     </div>
   )
 }
+
+// The charts load with the charting library, after the drawer has opened.
+const ContainerUsage = React.lazy(() =>
+  import("@/components/usage-charts").then((module) => ({ default: module.ContainerUsage }))
+)
 
 const yes = (value: boolean) => (value ? t("common.on") : t("common.off"))
 
@@ -145,6 +152,10 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
           </Button>
         </div>
         <SpecBadges spec={spec} />
+        <Separator />
+        <React.Suspense fallback={<Skeleton className="h-[140px] rounded-xl" />}>
+          <ContainerUsage item={item} />
+        </React.Suspense>
         <Separator />
         <dl className="grid grid-cols-2 gap-4">
           <Fact label={t("spec.resolution")}>{spec.resolution}</Fact>

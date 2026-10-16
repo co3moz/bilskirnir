@@ -10,7 +10,7 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 61 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 62 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.

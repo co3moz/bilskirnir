@@ -24,6 +24,7 @@ mod reconfigure;
 mod recordings;
 mod terminal;
 mod uploads;
+mod usage;
 mod volumes;
 mod waits;
 mod windows;
@@ -54,12 +55,15 @@ pub struct App {
     desktop_inputs: tokio::sync::Semaphore,
     /// Image and volume archive exports and imports, which each hold a Docker save, load or tar.
     archives: Arc<tokio::sync::Semaphore>,
+    /// Resource usage of the running containers over the last 30 minutes, in memory only.
+    usage: usage::Usage,
 }
 fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
         .route("/api/system", get(api::system))
+        .route("/api/usage", get(usage::all))
         .route("/api/containers", get(api::containers).post(api::create))
         .route(
             "/api/containers/{id}",
@@ -146,6 +150,7 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/containers/{id}/logs", get(api::logs))
         .route("/api/containers/{id}/diagnostics", get(api::diagnostics))
+        .route("/api/containers/{id}/usage", get(usage::container))
         .route("/api/containers/{id}/screenshot", get(api::screenshot))
         .route(
             "/api/containers/{id}/files",
@@ -267,7 +272,9 @@ async fn main() -> anyhow::Result<()> {
         uploads: tokio::sync::Semaphore::new(2),
         desktop_inputs: tokio::sync::Semaphore::new(4),
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
+        usage: usage::Usage::default(),
     });
+    usage::spawn(app.clone());
     let reconcile = app.clone();
     let cleanup = app.clone();
     tokio::spawn(async move {

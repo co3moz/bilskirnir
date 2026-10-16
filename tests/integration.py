@@ -244,6 +244,8 @@ def ready(container):
 try:
     port = start_manager()
     login()
+    # GPU usage helpers of another manager on this Docker are not this run's to judge.
+    foreign_helpers = set(docker("ps", "-q", "--filter", "label=io.wsl-desktop.usage-helper=true").decode().split())
     try:
         api("containers", anonymous=True)
         raise AssertionError("anonymous API access accepted")
@@ -523,6 +525,36 @@ try:
     rejected = tool("desktop_input", {"container_id":env_id,"actions":[{"type":"click","x":2000,"y":y}]}, allow_error=True)
     assert rejected["isError"]
     print("PASS MCP/HTTP shared VNC mouse, keyboard, drag, scroll, Fence acknowledgement and bounds", flush=True)
+    # The manager follows every running container once a second and keeps 30 minutes in memory.
+    usage = wait_for(lambda: (u if (u := api("usage"))["available"] and any(c["id"] == env_id and len(c["samples"]) >= 3 for c in u["containers"]) else None), 30)
+    mine = next(c for c in usage["containers"] if c["id"] == env_id)
+    assert mine["cpu_limit"] == 2 and mine["memory_limit"] == 2048 * 1024 ** 2, mine
+    last = mine["samples"][-1]
+    assert set(last) == {"t", "cpu", "memory", "disk_read", "disk_write", "net_rx", "net_tx"}, last
+    assert 0 <= last["cpu"] <= 2.5 and 0 < last["memory"] <= mine["memory_limit"], last
+    stamps = [s["t"] for s in mine["samples"]]
+    assert stamps == sorted(set(stamps)), stamps
+    # The cursor returns only what came after it.
+    def after_cursor():
+        report = api(f"usage?since={usage['cursor']}")
+        return report if any(c["id"] == env_id and c["samples"] for c in report["containers"]) else None
+    newer = wait_for(after_cursor, 10)
+    assert all(s["t"] > usage["cursor"] for c in newer["containers"] for s in c["samples"]), newer
+    one = api(f"containers/{env_id}/usage")
+    assert one["id"] == env_id and one["samples"] and "gpu" not in one, one
+    # A GPU container runs, so the whole host GPU is sampled through a helper without a network.
+    gpu = wait_for(lambda: (g if (g := api("usage")["gpu"])["state"] == "sampling" and g["devices"] and g["devices"][0]["samples"] else None), 90)
+    assert gpu["scope"] == "host" and "NVIDIA" in gpu["devices"][0]["name"], gpu
+    helpers = set(docker("ps", "-q", "--filter", "label=io.wsl-desktop.usage-helper=true").decode().split()) - foreign_helpers
+    assert len(helpers) == 1, helpers
+    for helper in helpers:
+        info = json.loads(docker("inspect", helper))[0]
+        assert info["HostConfig"]["NetworkMode"] == "none" and info["HostConfig"]["ReadonlyRootfs"], info["HostConfig"]
+        assert not any(m.get("Source", "").endswith("docker.sock") for m in info["Mounts"]), info["Mounts"]
+    summary = tool("get_usage", {"container_id": env_id, "seconds": 30})["structuredContent"]
+    assert summary["containers"][0]["id"] == env_id and summary["containers"][0]["cpu_cores"]["peak"] >= 0, summary
+    assert summary["gpu"]["devices"] and summary["gpu"]["devices"][0]["utilization_percent"] is not None, summary
+    print("PASS resource usage history, cursor, per-container route, host GPU helper and MCP summary", flush=True)
     # Script stdin is closed: a command reading input cannot consume the rest of the script.
     isolated = mcp_job(tool("exec_container", {"container_id":env_id,"script":"consumed=$(cat); echo \"stdin-bytes=${#consumed}\"\necho AFTER_STDIN\n"}))
     assert "stdin-bytes=0" in isolated["log"] and "AFTER_STDIN" in isolated["log"], isolated["log"]
@@ -1037,6 +1069,9 @@ try:
         assert result["name"] and result["volumes_preserved"] and result["images_preserved"], result
     assert not api("containers")
     assert docker("volume", "inspect", share)
+    # Without a GPU container the manager stops sampling the GPU, and its helper goes.
+    wait_for(lambda: not set(docker("ps", "-aq", "--filter", "label=io.wsl-desktop.usage-helper=true").decode().split()) - foreign_helpers, 30)
+    assert api("usage")["gpu"]["state"] == "idle"
     print("PASS container cleanup preserves volumes", flush=True)
     print("ALL DOCKER ACCEPTANCE CHECKS PASSED", flush=True)
 finally:

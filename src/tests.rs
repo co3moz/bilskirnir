@@ -42,6 +42,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         uploads: tokio::sync::Semaphore::new(2),
         desktop_inputs: tokio::sync::Semaphore::new(4),
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
+        usage: usage::Usage::default(),
     })
 }
 fn spec() -> model::ContainerSpec {
@@ -239,7 +240,12 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 61);
+    assert_eq!(tools.len(), 62);
+    // Usage is read for every container unless one is named.
+    let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
+    assert_eq!(usage["annotations"]["readOnlyHint"], true);
+    assert_eq!(usage["inputSchema"]["required"], serde_json::json!([]));
+    assert!(usage["inputSchema"]["properties"]["container_id"].is_object());
     // Compose values reach a new container through create_container; the schema forbids
     // properties it does not list, so a missing one is a value no agent can send.
     let create = tools
@@ -348,6 +354,15 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     assert_eq!(body["result"]["isError"], false, "{body}");
     assert!(body["result"]["structuredContent"]["base_image"].is_string());
     assert!(!body.to_string().contains("test-token"));
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"get_usage","arguments":{"seconds":30}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], false, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["seconds"], 30);
+    assert_eq!(body["result"]["structuredContent"]["gpu"]["scope"], "host");
     let (_, body) = mcp_request(
         app,
         "tools/call",

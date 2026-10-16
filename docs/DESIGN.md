@@ -18,7 +18,7 @@ The layout is `dashboard-01`, filled with Bilskirnir's own data:
 
 - **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the five pages, a **Running containers** group where the block lists documents, links to the documentation and agent access, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
 - **Site header**: the sidebar button, the page title, the Docker connection and the page's main action.
-- **Dashboard**: four summary cards, the job activity chart and the containers table, in that order, as in the block.
+- **Dashboard**: four summary cards, resource usage, the job activity chart and the containers table, in that order. The block has one chart; resource usage is the second, in the same card style.
 - **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Volumes** and **Jobs**: tables.
 - **Desktop view**: full screen without the sidebar. A 48 px toolbar leaves as much room as possible for the remote desktop.
 
@@ -45,8 +45,10 @@ Colors are the shadcn theme variables in `web/src/index.css`, with a light and a
 | `--destructive` | `oklch(0.704 0.191 22.216)` | `oklch(0.577 0.245 27.325)` | Errors and destructive actions |
 | `--success` | `#a9dfcd` | `#1d7f60` | Running containers and successful outcomes |
 | `--chart-1` to `--chart-5` | greys, light to dark | the same greys | Neutral chart series |
+| `--series-1` to `--series-5` | `#3987e5` `#d95926` `#199e70` `#c98500` `#d55181` | `#2a78d6` `#eb6834` `#1baf7a` `#eda100` `#e87ba4` | Containers in the usage charts, in this order |
+| `--series-other` | `oklch(0.708 0 0)` | `oklch(0.556 0 0)` | Containers past the fifth, drawn together |
 
-The surfaces are the neutral palette of the shadcn preset, without a blue or warm cast. The primary color is near white on dark and near black on light, and it marks what the user can act on. Hue is kept for meaning: violet identifies images and their relationships, and green, amber and red carry states. Always pair a status color with text and an icon: `StatusBadge` does this for every state. A chart whose series are outcomes uses those colors too: the job activity chart draws completed jobs in `--primary` and failed ones in `--destructive`, because two greys cannot be told apart on a dark card. There is no background lighting; leave remote desktop screenshots in their original colors.
+The surfaces are the neutral palette of the shadcn preset, without a blue or warm cast. The primary color is near white on dark and near black on light, and it marks what the user can act on. Hue is kept for meaning: violet identifies images and their relationships, and green, amber and red carry states. Always pair a status color with text and an icon: `StatusBadge` does this for every state. A chart whose series are outcomes uses those colors too: the job activity chart draws completed jobs in `--primary` and failed ones in `--destructive`, because two greys cannot be told apart on a dark card. The usage charts tell containers apart, so each running container gets one of the `--series` hues in their order and keeps it while it is listed; past five they share the grey `--series-other`. That order was checked with a color vision deficiency validator against both card surfaces: every adjacent pair stays distinct. Three light-theme hues sit below 3:1 against the white card, so the legend names each one and a table under the charts gives the current figures; never let the hue alone say which container is which. The host GPU is not a container and is drawn in `--primary`. There is no background lighting; leave remote desktop screenshots in their original colors.
 
 ## Type and spacing
 

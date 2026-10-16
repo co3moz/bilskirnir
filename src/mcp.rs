@@ -1,6 +1,6 @@
 use crate::{
     App, api, apps, audio, auth, capture, compose, desktop_input, error, exec, files, gamepad,
-    recordings, terminal, uploads, waits, windows,
+    recordings, terminal, uploads, usage, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -328,6 +328,7 @@ impl BilskirnirMcp {
             }
             "list_volumes" => api::volumes(state).await?.0,
             "create_volume" => api::create_volume(state, Json(parse(args)?)).await?.0,
+            "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
             "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
             _ => return Box::pin(self.dispatch_desktop(name, id, args)).await,
@@ -847,6 +848,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(tool("reset_container", "Recreate a container from its saved source image. Its unsaved changes are discarded; named volumes, networks and the container ID are kept. Returns job_id.", env(), &["container_id"], false, true, false));
     tools.push(tool("application_diagnostics", "Inspect a launched application: state, exit status, process tree with memory, open files, threads and the latest log lines.", json!({"container_id": id, "application_id": application}), &["container_id", "application_id"], true, false, false));
     tools.push(derived::<apps::Metrics>("sample_metrics", "Sample CPU and memory use of a launched application's processes over duration_ms, with container memory figures. Frame rate is not available.", &[container.clone(), ("application_id", application.clone(), true)], true, false, false));
+    tools.push(derived::<usage::Summary>("get_usage", "Read CPU, memory, disk and network use of the containers over the last seconds as latest, average and peak values, from the history the manager keeps in memory once a second for 30 minutes. Leave out container_id for every container. cpu_cores counts host CPU cores in use (1.0 is one full core) and is not relative to cpu_limit; disk and network are bytes per second. gpu is the whole host GPU, sampled with nvidia-smi while a GPU container runs: WSL cannot tell which container uses it, so it is never a container's share.", &[("container_id", id.clone(), false)], true, false, false));
     tools.push(derived::<recordings::StartRecording>("start_recording", "Record the desktop as a sequence of JPEG frames at 1 to 5 fps until stop_recording or max_seconds, within 3000 frames and 256 MiB. Frames are stored under /tmp in the desktop; read them with read_file or package them with export_artifacts.", std::slice::from_ref(&container), false, false, false));
     let recording = json!({"type":"string","minLength":1,"description":"Recording ID returned by start_recording."});
     tools.push(tool(
