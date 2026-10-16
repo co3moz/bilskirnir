@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-Bilskirnir includes an MCP server at `/mcp`, on the same port as the dashboard. An agent can create a desktop, install software, read and write files, inspect its screen, interact with applications and save the result as an image. You do not need a separate MCP container.
+Bilskirnir includes an MCP server at `/mcp`, on the same port as the dashboard. An agent can create a container, install software, read and write files, inspect its screen, interact with applications and save the result as an image. You do not need a separate MCP container.
 
 The server uses the [official Rust MCP SDK](https://github.com/modelcontextprotocol/rust-sdk) and Streamable HTTP. The same operations are available through the [HTTP API](API.md) for scripts and other applications.
 
@@ -25,7 +25,7 @@ Configure your MCP client with:
 | URL | `http://localhost:8080/mcp` |
 | Authorization header | `Bearer YOUR_MCP_TOKEN` |
 
-Use the hostname and HTTPS address of your installation for LAN access. The token grants administrator access to the managed desktops, including root script execution and deletion. It is separate from the dashboard password and does not expire with a browser session. Rotate it by changing `MCP_TOKEN` and recreating the manager.
+Use the hostname and HTTPS address of your installation for LAN access. The token grants administrator access to the managed containers, including root script execution and deletion. It is separate from the dashboard password and does not expire with a browser session. Rotate it by changing `MCP_TOKEN` and recreating the manager.
 
 `MCP_AUTH_MODE=none` accepts agent requests without a token; leave the authorization header out of the client settings, or keep it, since the manager then ignores it. The Host and Origin checks still apply, so a web page opened in a browser cannot call the endpoint, but any program that can reach the manager's address gets the same administrator access. Use it only while the manager listens on localhost.
 
@@ -67,12 +67,12 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 ## A useful first workflow
 
 1. Call `get_settings` and `list_profiles` to see the available desktops and defaults.
-2. Call `create_environment` with a name and a profile image reference or saved image ID. A profile that is not downloaded yet is pulled first, which can take several minutes; `pull_profile` fetches it ahead of time.
-3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `environment_id`.
-4. Call `exec_environment` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
+2. Call `create_container` with a name and a profile image reference or saved image ID. A profile that is not downloaded yet is pulled first, which can take several minutes; `pull_profile` fetches it ahead of time.
+3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `container_id`.
+4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
-6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another environment.
-7. Delete an environment only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
+6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another container.
+7. Delete a container only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
 
 An accepted job is not a completed operation. `get_job` reports `queued`, `running`, `completed`, `failed` or `interrupted`, with the log and result. While an image downloads, it also reports `progress` with `current` and `total` bytes and `layers_done` of `layers`. Inspect a failed or interrupted job before trying again. A lost connection does not mean a queued operation was cancelled.
 
@@ -83,8 +83,8 @@ The server currently exposes 62 tools:
 | Work | Tools |
 | --- | --- |
 | Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `pull_profile`, `build_profile` |
-| Desktop lifecycle | `list_environments`, `get_environment`, `create_environment`, `update_environment`, `environment_action`, `set_internet`, `retry_environment`, `reset_environment`, `delete_environment` |
-| Work inside a desktop | `exec_environment`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `environment_logs`, `environment_diagnostics` |
+| Container lifecycle | `list_containers`, `get_container`, `create_container`, `update_container`, `container_action`, `set_internet`, `retry_container`, `reset_container`, `delete_container` |
+| Work inside a container | `exec_container`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `container_logs`, `container_diagnostics` |
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
@@ -98,28 +98,28 @@ Successful data results are returned as `structuredContent`, with text content f
 
 ## Run commands and install software
 
-`exec_environment` takes `environment_id`, `script`, optional `root` and optional `timeout_seconds`. It runs bash with fail-on-error. The default user is UID/GID 1001:1001 and the working directory is `/home/desktop`.
+`exec_container` takes `container_id`, `script`, optional `root` and optional `timeout_seconds`. It runs bash with fail-on-error. The default user is UID/GID 1001:1001 and the working directory is `/home/desktop`.
 
 For example:
 
 ```json
 {
-  "environment_id": "ENVIRONMENT_ID",
+  "container_id": "CONTAINER_ID",
   "root": true,
   "timeout_seconds": 600,
   "script": "apt-get update\napt-get install -y --no-install-recommends git curl"
 }
 ```
 
-The environment needs internet access for package downloads. Its CPU, memory and networking settings still apply. `root=true` is an administrator operation and does not depend on whether desktop-user sudo was enabled.
+The container needs internet access for package downloads. Its CPU, memory and networking settings still apply. `root=true` is an administrator operation and does not depend on whether desktop-user sudo was enabled.
 
 Output goes to the job log. A nonzero exit or timeout fails the job and records the exit status. The default time limit is 300 seconds; the allowed range is 1–3500. The script may contain at most 1,000,000 bytes. Scripts are copied into the desktop before they run, so large scripts do not rely on Docker command-line argument limits. The script's standard input is closed: a command that reads input receives end-of-file instead of consuming the rest of the script.
 
-A script holds the environment's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
+A script holds the container's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
 
 ## Ask for values with templates
 
-A template makes a saved image ask for values, such as an account, when an environment is created from it, and run a setup script with them once the desktop is ready. `set_image_template` takes the record's `image_id` from `list_images` and a `template`, or `null` to remove it; `get_image_template` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `template` for the image it builds.
+A template makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_template` takes the record's `image_id` from `list_images` and a `template`, or `null` to remove it; `get_image_template` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `template` for the image it builds.
 
 ```json
 {
@@ -134,7 +134,7 @@ A template makes a saved image ask for values, such as an account, when an envir
 }
 ```
 
-`create_environment` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_environment` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
 
 ## Read and write files
 
@@ -150,7 +150,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 ## Launch and observe applications
 
-`launch_application` starts a program in the background as the desktop user and returns an `application_id`. It takes `command`, optional `args`, `cwd` (default `/home/desktop`), `env` and `name`. Set `gpu=true` to run the program through `gpu-run` for hardware OpenGL; this needs a GPU-enabled environment. A Chromium-based browser also needs its own flags, listed under [running graphics applications](USAGE.md#running-graphics-applications), passed in `args`. The call returns after a short check, so a missing program or working directory is reported as `failed` immediately.
+`launch_application` starts a program in the background as the desktop user and returns an `application_id`. It takes `command`, optional `args`, `cwd` (default `/home/desktop`), `env` and `name`. Set `gpu=true` to run the program through `gpu-run` for hardware OpenGL; this needs a GPU-enabled container. A Chromium-based browser also needs its own flags, listed under [running graphics applications](USAGE.md#running-graphics-applications), passed in `args`. The call returns after a short check, so a missing program or working directory is reported as `failed` immediately.
 
 `get_application` and `list_applications` report `state` (`starting`, `running`, `exited`, `failed` or `unknown`), the process ID, `exit_code` or the terminating `signal`, and the log size. `application_logs` returns the last `tail_bytes` of the combined stdout/stderr log, which keeps about the latest 1 MiB. `stop_application` sends SIGTERM to the application's process group and SIGKILL after `grace_seconds`.
 
@@ -158,7 +158,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 `wait_for_condition` replaces fixed delays: it polls until a window title appears, a launched application reaches `application_state` (default `exited`) or logs `log_contains`, or the screen (optionally a `region`) has not changed for `screen_stable_ms`. All supplied conditions must hold. After `timeout_ms` it returns `satisfied=false` with the last observation instead of an error.
 
-Supervisor files live under `/tmp` in the desktop, so they are not part of snapshots and do not survive a desktop restart; afterwards the state is `unknown`. Application records are removed with their environment. A launched application does not hold the environment lock, so scripts, file access and desktop input keep working while it runs.
+Supervisor files live under `/tmp` in the desktop, so they are not part of snapshots and do not survive a desktop restart; afterwards the state is `unknown`. Application records are removed with their container. A launched application does not hold the container lock, so scripts, file access and desktop input keep working while it runs.
 
 `list_windows` returns visible X11 windows with their IDs, titles, PIDs, geometry and the active window. `focus_window` raises a window so keyboard input reaches it, and `set_window_geometry` moves or resizes it so that screenshots and coordinates stay predictable. These tools, window screenshots and relative pointer movement use `xdotool` and `wmctrl` in the desktop image; desktops built from images that predate them need an updated image.
 
@@ -166,17 +166,17 @@ Supervisor files live under `/tmp` in the desktop, so they are not part of snaps
 
 `start_recording` captures the desktop as JPEG frames at `fps` (1–5) until `stop_recording`, `max_seconds` (up to 600), 3000 frames or 256 MiB. `max_width` scales frames (default 960) and `region` limits them to part of the desktop. `list_recordings` shows each recording's state, frame count and size; frames are regular files under `/tmp/bilskirnir-recordings/<recording_id>` and can be read with `read_file`. The frames are a sequence, not an encoded video.
 
-Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv and ffmpeg play; the stop result describes it under `video`. `export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in Downloads or a writable mounted volume so the files outlive the desktop, and returns the archive's `path` and `download_url`. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting an environment.
+Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv and ffmpeg play; the stop result describes it under `video`. `export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in Downloads or a writable mounted volume so the files outlive the desktop, and returns the archive's `path` and `download_url`. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting a container.
 
 ## Listen, talk, type and press buttons
 
-`capture_audio` records what the desktop plays for up to 10 seconds and returns a WAV audio block plus `peak`, `rms` and `silent`, so an agent can tell whether sound is produced even without listening. With `source=microphone` it records what reaches the desktop's microphone. `inject_audio` plays 16-bit PCM WAV data into the microphone or the speakers to test voice input or playback. Both need audio enabled for the environment; the microphone side also needs the microphone option.
+`capture_audio` records what the desktop plays for up to 10 seconds and returns a WAV audio block plus `peak`, `rms` and `silent`, so an agent can tell whether sound is produced even without listening. With `source=microphone` it records what reaches the desktop's microphone. `inject_audio` plays 16-bit PCM WAV data into the microphone or the speakers to test voice input or playback. Both need audio enabled for the container; the microphone side also needs the microphone option.
 
 `open_terminal` starts bash on a pseudo-terminal and returns a `terminal_id`; `terminal_input` types text (with Enter by default) and `terminal_output` reads from a byte offset, returning `next_offset` for incremental reads and stripping escape sequences. Use it for installers that ask questions, debuggers and other interactive programs; `close_terminal` hangs up. `root=true` opens a root shell and is an explicit administrator choice. Terminal state lives in tmpfs and ends with a desktop restart.
 
 `inspect_ui` reads the AT-SPI accessibility tree of applications that expose one, such as GTK and Electron applications or Qt with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`. Nodes carry roles, names, states, screen extents, text and action names, which lets an agent find a button by name instead of guessing pixels. Games and Unity players usually expose no tree; use screenshots for those.
 
-`gamepad_input` drives a virtual Xbox-style controller in environments created with `gamepad=true`. Buttons stay pressed and axes keep their value between requests until `reset`, so holding a stick while pressing a button is a two-action request. The device appears as `/dev/input/eventN` inside the desktop; SDL applications normally detect it, and `SDL_JOYSTICK_DISABLE_UDEV=1` in `launch_application` env helps those that rely on udev.
+`gamepad_input` drives a virtual Xbox-style controller in containers created with `gamepad=true`. Buttons stay pressed and axes keep their value between requests until `reset`, so holding a stick while pressing a button is a two-action request. The device appears as `/dev/input/eventN` inside the desktop; SDL applications normally detect it, and `SDL_JOYSTICK_DISABLE_UDEV=1` in `launch_application` env helps those that rely on udev.
 
 ## Use the mouse and keyboard
 
@@ -184,7 +184,7 @@ Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv a
 
 ```json
 {
-  "environment_id": "ENVIRONMENT_ID",
+  "container_id": "CONTAINER_ID",
   "actions": [
     {"type": "click", "x": 400, "y": 250},
     {"type": "key_press", "keys": ["Control", "a"]},
@@ -210,18 +210,18 @@ Requests allow 1–100 actions, up to 10,000 typed characters, single waits or h
 
 ## Hand files to the user
 
-Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/environments/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the MCP token does not authorize it. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that desktops are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
+Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the MCP token does not authorize it. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
 
 The bundled TigerVNC server acknowledges input with RFB Fence. This confirms that the server processed the events; an application may still need time to update. Inspect the next screenshot before making a decision. If a connection fails after input starts, check the screen before repeating an action that could submit, purchase or delete something. A custom desktop VNC server must support RFB 3.8, shared connections and Fence.
 
 ## Keep agent work recoverable
 
-MCP uses the same ownership checks, environment locks, jobs and snapshot behavior as the dashboard. An operation on another desktop can proceed independently. A script running in one environment holds that environment's operation lock until it finishes; a launched application does not.
+MCP uses the same ownership checks, container locks, jobs and snapshot behavior as the dashboard. An operation on another container can proceed independently. A script running in one container holds that container's operation lock until it finishes; a launched application does not.
 
-Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the environment, especially when the desktop is browsing external sites.
+Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the container, especially when the desktop is browsing external sites.
 
-`reset_environment` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from the environment's saved source image, keeping the environment ID, networks and named volumes. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
+`reset_container` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from its saved source image, keeping the container ID, networks and named volumes. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
 
-`update_environment` changes a desktop's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
+`update_container` changes a container's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
-Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive environment deletion, and save an image before deleting a desktop whose installation you want to reuse.
+Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse.

@@ -2,7 +2,7 @@
 
 export type Mount = { volume: string; target: string; readonly: boolean }
 
-export type EnvironmentSpec = {
+export type ContainerSpec = {
   name: string
   image: string
   resolution: string
@@ -20,16 +20,17 @@ export type EnvironmentSpec = {
 
 export type DesktopInfo = { profile: string; title: string; session: string }
 
-export type Environment = {
+export type Container = {
   id: string
+  /** The Docker container's name. */
   container: string
   source_image_id: string
   created_at: number
-  spec: EnvironmentSpec
+  spec: ContainerSpec
   last_error?: string | null
   desktop?: DesktopInfo | null
   /** Set when the image had a template: its setup's progress and the values it was given. */
-  setup?: EnvironmentSetup | null
+  setup?: ContainerSetup | null
 }
 
 /** A template parameter: an environment variable of the setup script. */
@@ -63,7 +64,7 @@ export type TemplateParameter = {
   step?: number | null
 }
 
-/** What a new environment from an image asks for, and the script that receives it. */
+/** What a new container from an image asks for, and the script that receives it. */
 export type Template = {
   parameters: TemplateParameter[]
   script: string
@@ -71,7 +72,7 @@ export type Template = {
   timeout_seconds: number
 }
 
-export type EnvironmentSetup = {
+export type ContainerSetup = {
   status: "pending" | "running" | "completed" | "failed"
   /** The image record the template came from. */
   image: string
@@ -84,8 +85,8 @@ export type EnvironmentSetup = {
 
 export type Health = "healthy" | "unhealthy" | "starting" | "unknown"
 
-export type EnvironmentItem = {
-  environment: Environment
+/** A container record with Docker's view of it. */
+export type ContainerItem = Container & {
   /** Docker's container state, `missing` without a container or `unavailable` without Docker. */
   state: string
   health: Health
@@ -113,7 +114,7 @@ export type ImageRecord = {
   image_id: string
   reference: string
   parent_image_id: string | null
-  source_environment: string | null
+  source_container: string | null
   kind: string
   created_at: number
   description: string
@@ -193,4 +194,4 @@ export type Session = { auth_enabled: boolean; authenticated: boolean }
 
 export type JobStarted = { job_id: string }
 
-export type SettingsPreview = { environment_id: string; live: string[]; restart: string[] }
+export type SettingsPreview = { container_id: string; live: string[]; restart: string[] }

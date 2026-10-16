@@ -1,10 +1,10 @@
-//! Image templates: parameters asked for when an environment is created from a saved image, and
+//! Image templates: parameters asked for when a container is created from a saved image, and
 //! a setup script that receives them as environment variables once the new desktop is ready.
 //!
-//! A template belongs to an image record. A new environment pins a copy of it together with the
-//! values it was given, so editing the image later changes neither what the environment ran nor
+//! A template belongs to an image record. A new container pins a copy of it together with the
+//! values it was given, so editing the image later changes neither what the container ran nor
 //! what a reset runs again. The values live in a record of their own that no route returns:
-//! the environment shows the values of ordinary parameters and only the names of secret ones,
+//! the container shows the values of ordinary parameters and only the names of secret ones,
 //! and the setup job's log masks every secret value.
 mod parameters;
 
@@ -29,7 +29,7 @@ use std::{
 };
 
 const RUNNER: &str = include_str!("setup_runner.py");
-/// The database kind of each templated environment's pinned template and parameter values.
+/// The database kind of each templated container's pinned template and parameter values.
 const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
 const SCRIPT_LIMIT: usize = 1_000_000;
@@ -39,7 +39,7 @@ const READY_LIMIT: Duration = Duration::from_secs(300);
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Template {
-    /// Asked for when an environment is created; each one is an environment variable of the script.
+    /// Asked for when a container is created; each one is an environment variable of the script.
     #[serde(default)]
     pub parameters: Vec<Parameter>,
     /// A bash script, run with fail-on-error and stdin closed.
@@ -78,7 +78,7 @@ impl Template {
         Ok(())
     }
 
-    /// Every parameter's value for a new environment: the one given, otherwise the default.
+    /// Every parameter's value for a new container: the one given, otherwise the default.
     pub fn resolve(
         &self,
         given: &BTreeMap<String, String>,
@@ -98,12 +98,12 @@ impl Template {
     }
 }
 
-/// Where an environment's template setup stands, as its record shows it.
+/// Where a container's template setup stands, as its record shows it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Setup {
     /// `pending`, `running`, `completed` or `failed`.
     pub status: String,
-    /// The image record whose template the environment was created with.
+    /// The image record whose template the container was created with.
     pub image: String,
     /// The values of the parameters that are not secret.
     pub parameters: BTreeMap<String, String>,
@@ -113,14 +113,14 @@ pub struct Setup {
     pub finished_at: Option<u64>,
 }
 
-/// The template an environment was created with and every value it was given, secret ones too.
+/// The template a container was created with and every value it was given, secret ones too.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Pinned {
     pub template: Template,
     pub values: BTreeMap<String, String>,
 }
 impl Pinned {
-    /// What the environment record shows of it.
+    /// What the container record shows of it.
     pub fn setup(&self, image: &str) -> Setup {
         let secret = |name: &String| {
             self.template
@@ -164,7 +164,7 @@ impl Pinned {
     }
 }
 
-/// The image record whose template applies to a new environment from `requested`, a reference
+/// The image record whose template applies to a new container from `requested`, a reference
 /// or image ID that Docker resolved to `image_id`. Records of one image share the newest template.
 pub(crate) fn template_image<'a>(
     records: &'a [ImageRecord],
@@ -180,7 +180,7 @@ pub(crate) fn template_image<'a>(
 }
 
 impl App {
-    /// The template and values a new environment from this image runs, or `None` without one.
+    /// The template and values a new container from this image runs, or `None` without one.
     pub(crate) fn pin_template(
         &self,
         requested: &str,
@@ -199,26 +199,26 @@ impl App {
         Ok(Some((record.id.clone(), Pinned { template, values })))
     }
 
-    /// The template an environment was created with, which a snapshot of it keeps.
-    pub(crate) fn pinned_template(&self, environment_id: &str) -> Option<Template> {
+    /// The template a container was created with, which a snapshot of it keeps.
+    pub(crate) fn pinned_template(&self, container_id: &str) -> Option<Template> {
         self.db
-            .get::<Pinned>(PINNED, environment_id)
+            .get::<Pinned>(PINNED, container_id)
             .ok()
             .map(|pinned| pinned.template)
     }
 
-    pub(crate) fn save_pinned(&self, environment_id: &str, pinned: &Pinned) -> anyhow::Result<()> {
-        self.db.put(PINNED, environment_id, pinned)
+    pub(crate) fn save_pinned(&self, container_id: &str, pinned: &Pinned) -> anyhow::Result<()> {
+        self.db.put(PINNED, container_id, pinned)
     }
 
-    pub(crate) fn forget_pinned(&self, environment_id: &str) -> anyhow::Result<()> {
-        self.db.remove(PINNED, environment_id)
+    pub(crate) fn forget_pinned(&self, container_id: &str) -> anyhow::Result<()> {
+        self.db.remove(PINNED, container_id)
     }
 
-    /// Run the template setup of an environment whose setup has not completed. A failure is
-    /// recorded on the environment, which keeps running so the outcome can be inspected.
+    /// Run the template setup of a container whose setup has not completed. A failure is
+    /// recorded on the container, which keeps running so the outcome can be inspected.
     pub(crate) async fn run_setup(&self, id: &str, job_id: &str) -> anyhow::Result<()> {
-        let mut env: Environment = self.db.get("environment", id)?;
+        let mut env: Container = self.db.get(CONTAINERS, id)?;
         match &env.setup {
             Some(setup) if setup.status != "completed" => {}
             _ => return Ok(()),
@@ -226,12 +226,12 @@ impl App {
         let pinned: Pinned = self
             .db
             .get(PINNED, id)
-            .context("The template values of this environment are missing; create it again")?;
+            .context("The template values of this container are missing; create it again")?;
         set_status(&mut env, "running", None);
         env.last_error = None;
-        self.db.put("environment", id, &env)?;
+        self.db.put(CONTAINERS, id, &env)?;
         let outcome = self.execute_setup(&env, &pinned, job_id).await;
-        let mut env: Environment = self.db.get("environment", id)?;
+        let mut env: Container = self.db.get(CONTAINERS, id)?;
         set_status(
             &mut env,
             if outcome.is_ok() {
@@ -242,13 +242,13 @@ impl App {
             Some(now()),
         );
         env.last_error = outcome.as_ref().err().map(|e| format!("{e:#}"));
-        self.db.put("environment", id, &env)?;
+        self.db.put(CONTAINERS, id, &env)?;
         outcome
     }
 
     async fn execute_setup(
         &self,
-        env: &Environment,
+        env: &Container,
         pinned: &Pinned,
         job_id: &str,
     ) -> anyhow::Result<()> {
@@ -283,7 +283,7 @@ impl App {
     }
 
     /// Wait until the desktop session reports ready and return the container ID.
-    async fn wait_ready(&self, env: &Environment) -> anyhow::Result<String> {
+    async fn wait_ready(&self, env: &Container) -> anyhow::Result<String> {
         let started = Instant::now();
         loop {
             let info = self.owned(env).await?;
@@ -310,7 +310,7 @@ impl App {
                 return Ok(id);
             }
             if state["Running"] != true && state["Restarting"] != true {
-                bail!("The desktop stopped before the template setup could run; check its logs");
+                bail!("The container stopped before the template setup could run; check its logs");
             }
             if started.elapsed() > READY_LIMIT {
                 bail!(
@@ -323,7 +323,7 @@ impl App {
     }
 }
 
-fn set_status(env: &mut Environment, status: &str, finished_at: Option<u64>) {
+fn set_status(env: &mut Container, status: &str, finished_at: Option<u64>) {
     if let Some(setup) = env.setup.as_mut() {
         setup.status = status.into();
         setup.finished_at = finished_at;
@@ -331,14 +331,14 @@ fn set_status(env: &mut Environment, status: &str, finished_at: Option<u64>) {
 }
 
 /// A new container made from the source image lacks what the setup changed, so it runs again.
-pub(crate) fn setup_again(env: &mut Environment) {
+pub(crate) fn setup_again(env: &mut Container) {
     set_status(env, "pending", None);
 }
 
 /// No job survives a restart, so a setup still waiting or running then will not finish on its
 /// own; retry runs it again.
 pub(crate) fn mark_interrupted(db: &crate::db::Db) -> anyhow::Result<()> {
-    for mut env in db.list::<Environment>("environment")? {
+    for mut env in db.list::<Container>(CONTAINERS)? {
         if env
             .setup
             .as_ref()
@@ -350,7 +350,7 @@ pub(crate) fn mark_interrupted(db: &crate::db::Db) -> anyhow::Result<()> {
                 "The manager restarted before the template setup finished; retry to run it again"
                     .into()
             });
-            db.put("environment", &env.id, &env)?;
+            db.put(CONTAINERS, &env.id, &env)?;
         }
     }
     Ok(())

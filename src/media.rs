@@ -30,7 +30,7 @@ pub async fn vnc(
             "WebSocket origin rejected".into(),
         ));
     }
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let address = app.address(&env).await?;
     let stream = tokio::time::timeout(Duration::from_secs(10), TcpStream::connect(address))
         .await
@@ -86,10 +86,10 @@ pub async fn audio(
             "WebSocket origin rejected".into(),
         ));
     }
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
-        return Err(anyhow::anyhow!("Environment is not running").into());
+        return Err(anyhow::anyhow!("Container is not running").into());
     }
     if !env.spec.audio || !app.config.audio {
         return Err(Error(StatusCode::BAD_REQUEST, "Audio is disabled".into()));

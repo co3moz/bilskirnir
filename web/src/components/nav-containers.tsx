@@ -22,41 +22,43 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { attempt, environmentAction } from "@/lib/actions"
+import { attempt, containerAction } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { useEnvironments } from "@/lib/queries"
+import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
 
 const SHOWN = 6
 
-/** Quick access to running desktops, where dashboard-01 lists documents. */
-export function NavDesktops() {
+/** Quick access to running containers, where dashboard-01 lists documents. */
+export function NavContainers() {
   const { isMobile, setOpenMobile } = useSidebar()
-  const running = (useEnvironments().data ?? []).filter((item) => item.state === "running")
+  const running = (useContainers().data ?? []).filter((item) => item.state === "running")
   const close = () => isMobile && setOpenMobile(false)
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Running desktops</SidebarGroupLabel>
+      <SidebarGroupLabel>Running containers</SidebarGroupLabel>
       <SidebarMenu>
         {running.length === 0 && (
           <SidebarMenuItem>
-            <span className="px-2 text-xs text-sidebar-foreground/60">No desktop is running.</span>
+            <span className="px-2 text-xs text-sidebar-foreground/60">
+              No container is running.
+            </span>
           </SidebarMenuItem>
         )}
-        {running.slice(0, SHOWN).map(({ environment }) => (
-          <SidebarMenuItem key={environment.id}>
-            <SidebarMenuButton asChild tooltip={`Connect to ${environment.spec.name}`}>
-              <a href={href({ page: "desktop", id: environment.id })}>
+        {running.slice(0, SHOWN).map((container) => (
+          <SidebarMenuItem key={container.id}>
+            <SidebarMenuButton asChild tooltip={`Connect to ${container.spec.name}`}>
+              <a href={href({ page: "desktop", id: container.id })}>
                 <RiComputerLine />
-                <span>{environment.spec.name}</span>
+                <span>{container.spec.name}</span>
               </a>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover className="rounded-sm data-[state=open]:bg-accent">
                   <RiMoreLine />
-                  <span className="sr-only">{environment.spec.name} actions</span>
+                  <span className="sr-only">{container.spec.name} actions</span>
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -65,7 +67,7 @@ export function NavDesktops() {
                 align={isMobile ? "end" : "start"}
               >
                 <DropdownMenuItem asChild>
-                  <a href={href({ page: "desktop", id: environment.id })}>
+                  <a href={href({ page: "desktop", id: container.id })}>
                     <RiComputerLine />
                     Connect
                   </a>
@@ -73,7 +75,7 @@ export function NavDesktops() {
                 <DropdownMenuItem
                   onSelect={() => {
                     close()
-                    openDialog({ kind: "upload", id: environment.id })
+                    openDialog({ kind: "upload", id: container.id })
                   }}
                 >
                   <RiUploadLine />
@@ -82,7 +84,7 @@ export function NavDesktops() {
                 <DropdownMenuItem
                   onSelect={() => {
                     close()
-                    openDialog({ kind: "details", id: environment.id })
+                    openDialog({ kind: "details", id: container.id })
                   }}
                 >
                   <RiInformationLine />
@@ -91,7 +93,7 @@ export function NavDesktops() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => attempt(() => environmentAction(environment.id, "stop"))}
+                  onSelect={() => attempt(() => containerAction(container.id, "stop"))}
                 >
                   <RiStopCircleLine />
                   Stop
@@ -103,7 +105,7 @@ export function NavDesktops() {
         {running.length > SHOWN && (
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="text-sidebar-foreground/70">
-              <a href={href({ page: "environments" })} onClick={close}>
+              <a href={href({ page: "containers" })} onClick={close}>
                 <RiMoreLine className="text-sidebar-foreground/70" />
                 <span>{running.length - SHOWN} more</span>
               </a>

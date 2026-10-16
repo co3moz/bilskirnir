@@ -59,12 +59,12 @@ impl Geometry {
     }
 }
 async fn x11(app: &App, id: &str, command: &[&str]) -> Result<Vec<u8>> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using its windows".into(),
+            "Start the container before using its windows".into(),
         ));
     }
     let mut args = vec![

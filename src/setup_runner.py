@@ -1,4 +1,4 @@
-"""Run an environment's template setup script, started by the manager through docker exec.
+"""Run a container's template setup script, started by the manager through docker exec.
 
 Reads one JSON request from stdin: the script, the parameter values, the names of the secret
 parameters and the time limit. Each parameter becomes an environment variable of the script,

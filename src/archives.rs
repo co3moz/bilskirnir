@@ -488,7 +488,7 @@ impl App {
                 .as_ref()
                 .and_then(|info| info.parent_image_id.clone())
                 .filter(|parent| image_digest(parent)),
-            source_environment: None,
+            source_container: None,
             kind: "archive".into(),
             created_at: now(),
             description: request

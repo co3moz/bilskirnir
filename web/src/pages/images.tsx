@@ -83,7 +83,7 @@ function ProfileCard({ item }: { item: ProfileItem }) {
           <>
             <Button onClick={() => openDialog({ kind: "create", image: profile.reference })}>
               <RiAddLine data-icon="inline-start" />
-              Create environment
+              Create container
             </Button>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -249,7 +249,7 @@ const columns: DataColumn<Row>[] = [
             onClick={() => openDialog({ kind: "create", image: image.image_id })}
           >
             <RiAddLine data-icon="inline-start" />
-            Create environment
+            Create container
           </Button>
         </div>
       )
@@ -295,7 +295,7 @@ export function ImagesPage() {
           empty={
             images.isPending
               ? "Loading images…"
-              : "No saved images. Snapshot an environment, build an image or import an archive."
+              : "No saved images. Snapshot a container, build an image or import an archive."
           }
         />
         <DataTablePagination table={table} />

@@ -23,7 +23,7 @@ import {
   jobTone,
   shortDate,
 } from "@/lib/format"
-import { useEnvironments, useImages, useJobs, useProfiles } from "@/lib/queries"
+import { useContainers, useImages, useJobs, useProfiles } from "@/lib/queries"
 import type { Job } from "@/lib/types"
 
 type Row = Job & { target: string }
@@ -112,21 +112,19 @@ type View = keyof typeof views
 /** The latest 100 manager jobs, each with its log. */
 export function JobsPage() {
   const jobs = useJobs()
-  const environments = useEnvironments().data
+  const containers = useContainers().data
   const profiles = useProfiles().data
   const images = useImages().data
   const [view, setView] = React.useState<View>("all")
   const all = React.useMemo<Row[]>(() => {
-    const names = new Map(
-      environments?.map(({ environment }) => [environment.id, environment.spec.name])
-    )
+    const names = new Map(containers?.map((container) => [container.id, container.spec.name]))
     const profileNames = new Map(profiles?.map(({ profile }) => [profile.id, profile.name]))
     const imageNames = new Map(images?.map((image) => [image.id, image.name]))
     return (jobs.data ?? []).map((job) => ({
       ...job,
       target: jobTarget(job, names, profileNames, imageNames),
     }))
-  }, [jobs.data, environments, profiles, images])
+  }, [jobs.data, containers, profiles, images])
   const data = React.useMemo(() => all.filter(views[view]), [all, view])
   const table = useDataTable({
     data,

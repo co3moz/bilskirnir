@@ -35,7 +35,7 @@ import {
   type TemplateDraft,
 } from "@/lib/templates"
 import type { Template } from "@/lib/types"
-import { useSubmit } from "./environment-dialogs"
+import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
@@ -74,7 +74,7 @@ export function TemplateFields({
           </Button>
         </div>
         <FieldDescription className="text-xs">
-          New environments ask for these. Each one reaches the script as an environment variable.
+          New containers ask for these. Each one reaches the script as an environment variable.
         </FieldDescription>
         {draft.parameters.map((parameter) => (
           <ParameterEditor
@@ -167,8 +167,8 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
           <DialogHeader>
             <DialogTitle>{exists ? "Edit template" : "Add template"}</DialogTitle>
             <DialogDescription>
-              What a new environment from {image?.name ?? "this image"} asks for, and the script
-              that receives it.
+              What a new container from {image?.name ?? "this image"} asks for, and the script that
+              receives it.
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-4 flex max-h-[min(36rem,60vh)] flex-col gap-5 overflow-y-auto px-4 py-1">
@@ -177,7 +177,7 @@ export function TemplateDialog({ id, ...props }: DialogProps & { id: string }) {
                 <TemplateFields draft={current} onChange={setDraft} />
                 {exists && (
                   <FieldDescription className="text-xs">
-                    Environments created earlier keep the template they were created with.
+                    Containers created earlier keep the template they were created with.
                   </FieldDescription>
                 )}
               </>

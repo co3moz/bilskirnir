@@ -107,8 +107,8 @@ pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
         Err(e) => Json(json!({"connected":false,"error":format!("{e:#}")})),
     }
 }
-pub async fn environments(State(app): State<Arc<App>>) -> Result<Json<Value>> {
-    let environments: Vec<Environment> = app.db.list("environment")?;
+pub async fn containers(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    let containers: Vec<Container> = app.db.list(CONTAINERS)?;
     let ids = app
         .docker(&[
             "ps",
@@ -129,42 +129,63 @@ pub async fn environments(State(app): State<Arc<App>>) -> Result<Json<Value>> {
             }
         }
     }
-    let items = environments.into_iter().map(|e| {
-        let docker = states.get(&e.container);
-        let status = docker.and_then(|d| d["Status"].as_str()).unwrap_or_default();
-        let health = if status.contains("(unhealthy)") { "unhealthy" } else if status.contains("(healthy)") { "healthy" } else if status.contains("(health: starting)") { "starting" } else { "unknown" };
-        json!({"environment":e,"state":if ids.is_err() {"unavailable"} else {docker.and_then(|d|d["State"].as_str()).unwrap_or("missing")},"health":health,"status":docker.map(|d|&d["Status"])})
-    }).collect::<Vec<_>>();
+    // Each record with Docker's view of it beside its own fields.
+    let items = containers
+        .into_iter()
+        .map(|record| {
+            let docker = states.get(&record.container);
+            let status = docker
+                .and_then(|d| d["Status"].as_str())
+                .unwrap_or_default();
+            let health = if status.contains("(unhealthy)") {
+                "unhealthy"
+            } else if status.contains("(healthy)") {
+                "healthy"
+            } else if status.contains("(health: starting)") {
+                "starting"
+            } else {
+                "unknown"
+            };
+            let mut item = json!(record);
+            item["state"] = json!(if ids.is_err() {
+                "unavailable"
+            } else {
+                docker
+                    .and_then(|d| d["State"].as_str())
+                    .unwrap_or("missing")
+            });
+            item["health"] = json!(health);
+            item["status"] = json!(docker.map(|d| &d["Status"]));
+            item
+        })
+        .collect::<Vec<_>>();
     Ok(Json(json!(items)))
 }
 
-pub async fn environment(
-    State(app): State<Arc<App>>,
-    Path(id): Path<String>,
-) -> Result<Json<Value>> {
-    app.environment(&id)?;
-    let Json(items) = environments(State(app)).await?;
+pub async fn container(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
+    app.container(&id)?;
+    let Json(items) = containers(State(app)).await?;
     let item = items
         .as_array()
-        .and_then(|items| items.iter().find(|item| item["environment"]["id"] == id))
+        .and_then(|items| items.iter().find(|item| item["id"] == id))
         .cloned()
         .ok_or_else(missing)?;
     Ok(Json(item))
 }
 
-/// A new environment's settings, and values for the template parameters of its image.
+/// A new container's settings, and values for the template parameters of its image.
 #[derive(Deserialize)]
-pub struct CreateEnvironment {
+pub struct CreateContainer {
     #[serde(flatten)]
-    pub spec: EnvironmentSpec,
+    pub spec: ContainerSpec,
     #[serde(default)]
     pub parameters: std::collections::BTreeMap<String, String>,
 }
 pub async fn create(
     State(app): State<Arc<App>>,
-    Json(body): Json<CreateEnvironment>,
+    Json(body): Json<CreateContainer>,
 ) -> Result<Json<Value>> {
-    let CreateEnvironment { spec, parameters } = body;
+    let CreateContainer { spec, parameters } = body;
     spec.validate()?;
     // A template found by the name the request uses is checked now; the job checks again once
     // Docker has resolved the image.
@@ -178,8 +199,8 @@ pub async fn create(
     launch(
         app,
         "create",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.create_environment(&id, spec, parameters, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.create_container(&id, spec, parameters, &job_id).await },
     )
 }
 #[derive(Deserialize)]
@@ -194,20 +215,20 @@ pub async fn action(
     if !["start", "stop", "restart"].contains(&body.action.as_str()) {
         return Err(Error(StatusCode::BAD_REQUEST, "Invalid action".into()));
     }
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         &body.action.clone(),
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, _| async move {
-            let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
             app.docker(&[
                 &body.action,
                 info["Id"].as_str().context("Missing container ID")?,
             ])
             .await?;
-            Ok(json!({"environment_id":id}))
+            Ok(json!({"container_id":id}))
         },
     )
 }
@@ -220,26 +241,26 @@ pub async fn internet(
     Path(id): Path<String>,
     Json(body): Json<Internet>,
 ) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "internet",
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, _| async move {
-            let mut env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let mut env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             app.set_internet(&mut env, body.enabled).await?;
-            Ok(json!({"environment_id":id,"internet":body.enabled}))
+            Ok(json!({"container_id":id,"internet":body.enabled}))
         },
     )
 }
-/// Change an environment's settings. `dry_run` reports which changes apply in place and which
+/// Change a container's settings. `dry_run` reports which changes apply in place and which
 /// restart the desktop, without a job.
 pub async fn update_settings(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let Value::Object(mut request) = body else {
         return Err(Error(
             StatusCode::BAD_REQUEST,
@@ -259,25 +280,25 @@ pub async fn update_settings(
     let (_, changes) = app.settings_preview(&env, &request)?;
     if dry_run {
         return Ok(Json(
-            json!({"environment_id": id, "live": changes.live, "restart": changes.restart}),
+            json!({"container_id": id, "live": changes.live, "restart": changes.restart}),
         ));
     }
     launch(
         app,
         "settings",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.update_environment(&id, request, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.update_container(&id, request, &job_id).await },
     )
 }
 pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "delete",
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, job_id| async move {
-            let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
-            app.remove_environment(&env, &job_id).await?;
+            let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            app.remove_container(&env, &job_id).await?;
             Ok(
                 json!({"deleted":id,"name":env.spec.name,"volumes_preserved":true,"images_preserved":true}),
             )
@@ -285,7 +306,7 @@ pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resu
     )
 }
 pub async fn logs(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let info = app.owned(&env).await?;
     let args = [
         "logs",
@@ -309,21 +330,21 @@ pub async fn logs(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result
     ))
 }
 pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "retry",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.retry_environment(&id, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.retry_container(&id, &job_id).await },
     )
 }
 pub async fn reset(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "reset",
-        format!("environment:{id}"),
-        move |app, job_id| async move { app.reset_environment(&id, &job_id).await },
+        format!("container:{id}"),
+        move |app, job_id| async move { app.reset_container(&id, &job_id).await },
     )
 }
 pub async fn screenshot(
@@ -357,7 +378,7 @@ pub async fn diagnostics(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let info = app.owned(&env).await?;
     let bytes = app
         .docker(&[
@@ -453,7 +474,7 @@ pub async fn register_image(
         image_id: info["Id"].as_str().context("Missing image ID")?.into(),
         reference: body.reference,
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "import".into(),
         created_at: now(),
         description: String::new(),
@@ -544,7 +565,7 @@ pub async fn build(
                 image_id: info["Id"].as_str().context("Missing image ID")?.into(),
                 reference,
                 parent_image_id: Some(parent),
-                source_environment: None,
+                source_container: None,
                 kind: "build".into(),
                 created_at: now(),
                 description: String::new(),
@@ -572,7 +593,7 @@ pub async fn snapshot(
     Path(env_id): Path<String>,
     Json(body): Json<Snapshot>,
 ) -> Result<Json<Value>> {
-    app.environment(&env_id)?;
+    app.container(&env_id)?;
     if body.name.trim().is_empty()
         || body.name.chars().count() > 100
         || body.description.len() > 4096
@@ -582,9 +603,9 @@ pub async fn snapshot(
     launch(
         app,
         "snapshot",
-        format!("environment:{env_id}"),
+        format!("container:{env_id}"),
         move |app, id| async move {
-            let env = app.environment(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let env = app.container(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
             let container = app.owned(&env).await?;
             let reference = format!("bilskirnir/snapshot:{id}");
             app.append_log(&id,"Committing container changes. Volumes, /run, /tmp and running application state are excluded.")?;
@@ -603,7 +624,7 @@ pub async fn snapshot(
             )
             .await?;
             let info = app.inspect("image", &reference).await?;
-            // An environment from the snapshot asks for the same parameters again.
+            // A container from the snapshot asks for the same parameters again.
             let template = app.pinned_template(&env_id);
             let rec = ImageRecord {
                 id: id.clone(),
@@ -611,7 +632,7 @@ pub async fn snapshot(
                 image_id: info["Id"].as_str().context("Missing image ID")?.into(),
                 reference,
                 parent_image_id: Some(env.source_image_id.clone()),
-                source_environment: Some(env_id),
+                source_container: Some(env_id),
                 kind: "snapshot".into(),
                 created_at: now(),
                 description: body.description,

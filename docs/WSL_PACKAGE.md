@@ -4,15 +4,15 @@
 
 The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, with images and containers separate from Docker in any other WSL distribution; only the network is shared, see [Docker in other WSL distributions](#docker-in-other-wsl-distributions).
 
-The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a desktop is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
+The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a container is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
 Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since, and that manager downloads the desktop profiles published with 1.2.0. Only [`bilskirnir update`](#update) moves it forward.
 
 ## Requirements
 
 - Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
-- For GPU desktops, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
-- About 2 GB of disk space for the distribution, plus the manager image, each desktop profile you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your desktops.
+- For GPU containers, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
+- About 2 GB of disk space for the distribution, plus the manager image, each desktop profile you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your containers.
 
 ## Install
 
@@ -27,8 +27,8 @@ Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`
 Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
 
 - **Random token** (the default) generates a 64-character token.
-- **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every desktop.
-- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every desktop.
+- **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every container.
+- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every container.
 
 The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and asks whether to start Bilskirnir now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.
 
@@ -128,13 +128,13 @@ wsl --shutdown
 .\windows\bilskirnir.ps1 start
 ```
 
-The manager comes back on its own; desktops do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `bilskirnir doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `bilskirnir doctor` warns when it is below 8 GB.
+The manager comes back on its own; containers do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `bilskirnir doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `bilskirnir doctor` warns when it is below 8 GB.
 
-A desktop without a memory limit can use all of the virtual machine's memory. When that runs out, Linux ends processes inside the virtual machine, which can include the manager or another desktop; Windows itself stays protected by the limit above. Give desktops that run heavy applications a memory limit when you [create them](USAGE.md#create-and-connect) or change their settings. A limit is a ceiling, not a reservation: memory a desktop does not use stays available to the rest.
+A container without a memory limit can use all of the virtual machine's memory. When that runs out, Linux ends processes inside the virtual machine, which can include the manager or another container; Windows itself stays protected by the limit above. Give containers that run heavy applications a memory limit when you [create them](USAGE.md#create-and-connect) or change their settings. A limit is a ceiling, not a reservation: memory a container does not use stays available to the rest.
 
 ### Disk
 
-The distribution's virtual disk grows as it fills, up to a maximum of 1 TB unless chosen otherwise. Images, snapshots, desktops and volumes all live in it, so the Windows drive that holds the disk needs the space too. Choose the location and the maximum when installing:
+The distribution's virtual disk grows as it fills, up to a maximum of 1 TB unless chosen otherwise. Images, snapshots, containers and volumes all live in it, so the Windows drive that holds the disk needs the space too. Choose the location and the maximum when installing:
 
 ```powershell
 wsl --install --from-file .\bilskirnir.wsl --location D:\WSL\Bilskirnir --vhd-size 200GB
@@ -151,22 +151,22 @@ wsl --manage Bilskirnir --move D:\WSL\Bilskirnir
 
 A smaller maximum works only while the data still fits. `bilskirnir doctor` shows the space left before the maximum and warns below 10 GB.
 
-The disk file does not shrink when images or desktops are deleted. Two ways return freed space to Windows, and they exclude each other: run `wsl --manage Bilskirnir --set-sparse true` once, which WSL still labels experimental, or run `wsl --manage Bilskirnir --compact` on the stopped distribution from time to time. A sparse disk cannot be compacted.
+The disk file does not shrink when images or containers are deleted. Two ways return freed space to Windows, and they exclude each other: run `wsl --manage Bilskirnir --set-sparse true` once, which WSL still labels experimental, or run `wsl --manage Bilskirnir --compact` on the stopped distribution from time to time. A sparse disk cannot be compacted.
 
 ## What the package decides for you
 
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group, and its name is the dashboard's `ADMIN_USERNAME`. The distribution is a single-purpose appliance for the Windows user who installed it.
 - `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `bilskirnir settings` saves it through `sudoedit`, which keeps that owner and mode; change it any other way with `sudo`.
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing LAN access.
-- Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise desktops run without GPU acceleration. Change these in `.env` if the detection is wrong.
-- Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every desktop, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
+- Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
+- Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every container, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
 - The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
 
 ## Docker in other WSL distributions
 
 WSL 2 runs every distribution in one network namespace. Docker Engines in different distributions keep their own images and containers, but they write their NAT, port and isolation rules into the same firewall, and none of them notices when another distribution removes its rules:
 
-- An enabled `nftables` service removes every rule twice: the default `/etc/nftables.conf` it loads at boot starts with `flush ruleset`, and stopping it at shutdown runs `nft flush ruleset`. Desktops stop reaching the internet even with internet access on, and creating a desktop fails with `iptables: No chain/target/match by that name`. Installing Docker Engine on Ubuntu 24.04 brings in that package with the service enabled.
+- An enabled `nftables` service removes every rule twice: the default `/etc/nftables.conf` it loads at boot starts with `flush ruleset`, and stopping it at shutdown runs `nft flush ruleset`. Containers stop reaching the internet even with internet access on, and creating a container fails with `iptables: No chain/target/match by that name`. Installing Docker Engine on Ubuntu 24.04 brings in that package with the service enabled.
 - A Docker Engine starting in another distribution rebuilds Docker's shared chains with only its own networks. Internet access keeps working, but the isolation between networks does not.
 
 The package masks the `nftables` service, and `bilskirnir doctor` reports it when an installation from an older package still has it enabled. Mask it in the other distributions that run Docker too:
@@ -175,7 +175,7 @@ The package masks the `nftables` service, and `bilskirnir doctor` reports it whe
 sudo systemctl mask nftables
 ```
 
-The `bilskirnir-firewall` service repairs the damage when the rules disappear anyway. Every 10 seconds it checks that each Docker network still has its rule in Docker's `DOCKER-FORWARD` chain; when one is missing twice in a row, it restarts Docker. Docker runs with `live-restore`, so desktops and the manager keep running, but an operation talking to Docker at that moment, such as a script whose output is being streamed, can fail. `journalctl -u bilskirnir-firewall` lists the repairs and `bilskirnir doctor` shows the current state.
+The `bilskirnir-firewall` service repairs the damage when the rules disappear anyway. Every 10 seconds it checks that each Docker network still has its rule in Docker's `DOCKER-FORWARD` chain; when one is missing twice in a row, it restarts Docker. Docker runs with `live-restore`, so containers and the manager keep running, but an operation talking to Docker at that moment, such as a script whose output is being streamed, can fail. `journalctl -u bilskirnir-firewall` lists the repairs and `bilskirnir doctor` shows the current state.
 
 ## Build the package
 
@@ -189,4 +189,4 @@ The script builds the root filesystem image, exports it with `docker export` and
 
 ## Remove
 
-`.\windows\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, desktops and named volumes, so export anything you want to keep first.
+`.\windows\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.

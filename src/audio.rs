@@ -72,24 +72,24 @@ impl InjectAudio {
     }
 }
 async fn container(app: &App, id: &str, microphone: bool) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using its audio".into(),
+            "Start the container before using its audio".into(),
         ));
     }
     if !env.spec.audio || !app.config.audio {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "Audio is disabled for this environment".into(),
+            "Audio is disabled for this container".into(),
         ));
     }
     if microphone && (!env.spec.microphone || !app.config.microphone) {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "Microphone is disabled for this environment".into(),
+            "Microphone is disabled for this container".into(),
         ));
     }
     Ok(info)

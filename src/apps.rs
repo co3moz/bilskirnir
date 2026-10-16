@@ -1,7 +1,7 @@
 use crate::{
     App,
     error::{Error, Result, missing},
-    model::{Application, Environment, now},
+    model::{Application, Container, now},
 };
 use anyhow::{Context, bail};
 use axum::{
@@ -30,7 +30,7 @@ pub struct Launch {
     /// Working directory; defaults to /home/desktop.
     #[serde(default)]
     pub cwd: Option<String>,
-    /// Run through gpu-run (VirtualGL) for hardware OpenGL; needs a GPU-enabled environment.
+    /// Run through gpu-run (VirtualGL) for hardware OpenGL; needs a GPU-enabled container.
     #[serde(default)]
     pub gpu: bool,
     /// Extra environment variables for the application.
@@ -139,18 +139,18 @@ impl Launch {
 }
 fn record(app: &App, id: &str, application: &str) -> Result<Application> {
     let record: Application = app.db.get("application", application)?;
-    if record.environment_id != id {
+    if record.container_id != id {
         return Err(missing());
     }
     Ok(record)
 }
-async fn running(app: &App, id: &str) -> Result<(Environment, Value)> {
-    let env = app.environment(id)?;
+async fn running(app: &App, id: &str) -> Result<(Container, Value)> {
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before working with its applications".into(),
+            "Start the container before working with its applications".into(),
         ));
     }
     Ok((env, info))
@@ -172,7 +172,7 @@ async fn control(app: &App, container: &str, arguments: &[&str]) -> anyhow::Resu
 fn describe(record: &Application, status: Value) -> Value {
     let mut value = json!({
         "application_id": record.id,
-        "environment_id": record.environment_id,
+        "container_id": record.container_id,
         "name": record.name,
         "command": record.command,
         "args": record.args,
@@ -195,18 +195,19 @@ fn first(status: Value) -> anyhow::Result<Value> {
 }
 pub async fn launch_application(app: &Arc<App>, id: &str, body: &Launch) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let (env, info) = running(app, id).await?;
     if body.gpu && !env.spec.gpu {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "This environment was created without GPU access; gpu=true needs a GPU-enabled environment".into(),
+            "This container was created without GPU access; gpu=true needs a GPU-enabled container"
+                .into(),
         ));
     }
     let record = Application {
         id: uuid::Uuid::new_v4().simple().to_string(),
-        environment_id: id.into(),
+        container_id: id.into(),
         name: body.name.clone().unwrap_or_else(|| body.command.clone()),
         command: body.command.clone(),
         args: body.args.clone(),
@@ -258,12 +259,12 @@ pub async fn launch_application(app: &Arc<App>, id: &str, body: &Launch) -> Resu
     Ok(describe(&record, status))
 }
 pub async fn list_applications(app: &App, id: &str) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let records = app
         .db
         .list::<Application>("application")?
         .into_iter()
-        .filter(|record| record.environment_id == id)
+        .filter(|record| record.container_id == id)
         .take(100)
         .collect::<Vec<_>>();
     let info = app.owned(&env).await?;
@@ -290,7 +291,7 @@ pub async fn list_applications(app: &App, id: &str) -> Result<Value> {
             describe(
                 record,
                 statuses.get(index).cloned().unwrap_or_else(
-                    || json!({"state": "unknown", "error": "Environment is not running"}),
+                    || json!({"state": "unknown", "error": "Container is not running"}),
                 ),
             )
         })
@@ -299,7 +300,7 @@ pub async fn list_applications(app: &App, id: &str) -> Result<Value> {
 }
 pub async fn get_application(app: &App, id: &str, application: &str) -> Result<Value> {
     let record = record(app, id, application)?;
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let info = app.owned(&env).await?;
     let status = if info["State"]["Running"] == true {
         let container = info["Id"].as_str().context("Missing container ID")?;
@@ -312,7 +313,7 @@ pub async fn get_application(app: &App, id: &str, application: &str) -> Result<V
             .await?,
         )?
     } else {
-        json!({"state": "unknown", "error": "Environment is not running"})
+        json!({"state": "unknown", "error": "Container is not running"})
     };
     Ok(describe(&record, status))
 }
@@ -357,7 +358,7 @@ pub async fn stop_application(
         ));
     }
     let record = record(app, id, application)?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let (_, info) = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;

@@ -30,13 +30,13 @@ export async function runJobs(requests: { path: string; body?: unknown }[]) {
   void refreshAll()
 }
 
-export const environmentAction = (id: string, action: "start" | "stop" | "restart") =>
-  runJob(`environments/${id}/action`, { action })
+export const containerAction = (id: string, action: "start" | "stop" | "restart") =>
+  runJob(`containers/${id}/action`, { action })
 
-export const retrySetup = (id: string) => runJob(`environments/${id}/retry`, {})
+export const retrySetup = (id: string) => runJob(`containers/${id}/retry`, {})
 
 export const setInternet = (id: string, enabled: boolean) =>
-  runJob(`environments/${id}/internet`, { enabled })
+  runJob(`containers/${id}/internet`, { enabled })
 
 export async function showLog(title: string, path: string) {
   const data = await api<{ log?: string; output?: string; status?: string }>(path)

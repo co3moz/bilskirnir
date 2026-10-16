@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 
 import {
   downloadProgress,
-  environmentStatus,
+  containerStatus,
   imageChoices,
   imageTree,
   jobActivity,
@@ -15,20 +15,15 @@ import {
   subfolderError,
   uploadLocations,
 } from "../web/src/lib/format"
-import type {
-  EnvironmentItem,
-  EnvironmentSetup,
-  JobStatus,
-  ProfileItem,
-} from "../web/src/lib/types"
+import type { ContainerItem, ContainerSetup, JobStatus, ProfileItem } from "../web/src/lib/types"
 
 test("completed legacy deletion explains the result rather than waiting or displaying an ID", () => {
   const log = jobLogText({
     status: "completed",
     log: "",
-    result: { deleted: "old-environment-id", volumes_preserved: true },
+    result: { deleted: "old-container-id", volumes_preserved: true },
   })
-  assert.equal(log, "Environment deleted. Named volumes were preserved.")
+  assert.equal(log, "Container deleted. Named volumes were preserved.")
   assert.equal(jobLogText({ status: "queued", log: "" }), "Waiting to start…")
   assert.equal(
     jobLogText({ status: "failed", log: "" }),
@@ -154,14 +149,14 @@ test("download progress reads as bytes once the size is known and never claims a
   )
 })
 
-test("the restart warning names the settings that need a new container and what happens", () => {
+test("the restart warning names the settings that recreate the container and what happens", () => {
   assert.equal(
     restartNotice(["audio"], true),
-    "Audio needs a new container: the desktop restarts and open applications close. Files in the container are kept."
+    "Audio recreates the container: it restarts and open applications close. Its files are kept."
   )
   assert.equal(
     restartNotice(["gpu", "mounts", "cpus"], false),
-    "GPU, volumes and removing the CPU limit need a new container: the desktop stays stopped until you start it. Files in the container are kept."
+    "GPU, volumes and removing the CPU limit recreate the container: it stays stopped until you start it. Its files are kept."
   )
 })
 
@@ -222,28 +217,27 @@ test("job activity counts finished jobs per local day and leaves out running one
   )
 })
 
-test("a job names what it worked on, even after that environment was deleted", () => {
-  const environments = new Map([["e1", "Unity workspace"]])
+test("a job names what it worked on, even after that container was deleted", () => {
+  const containers = new Map([["e1", "Unity workspace"]])
   const profiles = new Map([["ubuntu-gnome", "Ubuntu 24.04 · GNOME"]])
   const target = (resource: string | null, result?: Record<string, unknown>) =>
-    jobTarget({ resource, result }, environments, profiles)
+    jobTarget({ resource, result }, containers, profiles)
+  assert.equal(target("container:e1"), "Unity workspace")
+  assert.equal(target("container:gone", { deleted: "gone", name: "Old QA" }), "Old QA")
+  assert.equal(target("container:0123456789abcdef"), "Container 01234567")
+  // Jobs recorded before the rename still find their container.
   assert.equal(target("environment:e1"), "Unity workspace")
-  assert.equal(target("environment:gone", { deleted: "gone", name: "Old QA" }), "Old QA")
-  assert.equal(target("environment:0123456789abcdef"), "Environment 01234567")
   assert.equal(target("profile:ubuntu-gnome"), "Ubuntu 24.04 · GNOME")
   assert.equal(target("profile:retired"), "retired")
   assert.equal(target(null), "")
   const images = new Map([["i1", "Unity snapshot"]])
+  assert.equal(jobTarget({ resource: "image:i1" }, containers, profiles, images), "Unity snapshot")
   assert.equal(
-    jobTarget({ resource: "image:i1" }, environments, profiles, images),
-    "Unity snapshot"
-  )
-  assert.equal(
-    jobTarget({ resource: "image:new", result: { name: "Imported" } }, environments, profiles),
+    jobTarget({ resource: "image:new", result: { name: "Imported" } }, containers, profiles),
     "Imported"
   )
   assert.equal(
-    jobTarget({ resource: "image:0123456789ab" }, environments, profiles),
+    jobTarget({ resource: "image:0123456789ab" }, containers, profiles),
     "Image 01234567"
   )
 })
@@ -268,30 +262,28 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
   assert.equal(jobProgress(null), null)
 })
 
-test("a running desktop shows its template setup until the setup completes", () => {
-  const item = (status?: EnvironmentSetup["status"], last_error?: string): EnvironmentItem => ({
-    environment: {
-      id: "e",
-      container: "wsld-e",
-      source_image_id: "sha256:a",
-      created_at: 0,
-      spec: {} as EnvironmentItem["environment"]["spec"],
-      last_error,
-      setup: status ? { status, image: "i", parameters: {}, secrets: [] } : null,
-    },
+test("a running container shows its template setup until the setup completes", () => {
+  const item = (status?: ContainerSetup["status"], last_error?: string): ContainerItem => ({
+    id: "e",
+    container: "wsld-e",
+    source_image_id: "sha256:a",
+    created_at: 0,
+    spec: {} as ContainerItem["spec"],
+    last_error,
+    setup: status ? { status, image: "i", parameters: {}, secrets: [] } : null,
     state: "running",
     health: "healthy",
     status: "Up",
   })
-  assert.equal(environmentStatus(item()).key, "running")
-  assert.equal(environmentStatus(item("pending")).key, "setting_up")
-  assert.equal(environmentStatus(item("running")).key, "setting_up")
-  assert.equal(environmentStatus(item("completed")).key, "running")
-  assert.equal(environmentStatus(item("failed", "The template setup failed")).key, "setup_failed")
+  assert.equal(containerStatus(item()).key, "running")
+  assert.equal(containerStatus(item("pending")).key, "setting_up")
+  assert.equal(containerStatus(item("running")).key, "setting_up")
+  assert.equal(containerStatus(item("completed")).key, "running")
+  assert.equal(containerStatus(item("failed", "The template setup failed")).key, "setup_failed")
   // A setup that never started because recreating the container failed is not in progress.
-  assert.equal(environmentStatus(item("pending", "Docker: no such image")).key, "setup_failed")
+  assert.equal(containerStatus(item("pending", "Docker: no such image")).key, "setup_failed")
   assert.equal(needsAttention(item("failed")), true)
   assert.equal(needsAttention(item("completed")), false)
   // Until the desktop answers its health check, it is starting, whatever the setup says.
-  assert.equal(environmentStatus({ ...item("pending"), health: "starting" }).key, "created")
+  assert.equal(containerStatus({ ...item("pending"), health: "starting" }).key, "created")
 })

@@ -44,7 +44,7 @@ function fixture() {
   }
 }
 const files = (...list: { name: string; size: number }[]) => list as any[]
-const options = { environmentId: "environment", destination: "/shared/project", replace: false }
+const options = { containerId: "container", destination: "/shared/project", replace: false }
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 test("files upload sequentially with encoded names, CSRF and progress", async () => {

@@ -1,8 +1,8 @@
 import { fileSize } from "./uploads"
 import type {
   DownloadProgress,
-  EnvironmentItem,
-  EnvironmentSpec,
+  ContainerItem,
+  ContainerSpec,
   ImageRecord,
   Job,
   ProfileItem,
@@ -50,19 +50,19 @@ export const stateLabels: Record<string, string> = {
 }
 
 export const jobNames: Record<string, string> = {
-  create: "Create environment",
+  create: "Create container",
   retry: "Retry setup",
   start: "Start",
   stop: "Stop",
   restart: "Restart",
-  delete: "Delete environment",
+  delete: "Delete container",
   internet: "Internet",
   build: "Build image",
   "profile-build": "Build profile",
   "profile-pull": "Download profile",
   snapshot: "Snapshot",
   exec: "Run script",
-  reset: "Reset environment",
+  reset: "Reset container",
   settings: "Change settings",
   "image-export": "Export archive",
   "image-import": "Import archive",
@@ -70,34 +70,34 @@ export const jobNames: Record<string, string> = {
 
 export type Tone = "success" | "warning" | "danger" | "muted" | "info"
 
-/** What a card or row shows as the environment's state, and the color family for it. */
-export function environmentStatus(item: EnvironmentItem): { key: string; tone: Tone } {
+/** What a card or row shows as the container's state, and the color family for it. */
+export function containerStatus(item: ContainerItem): { key: string; tone: Tone } {
   const running = item.state === "running"
   if (item.health === "unhealthy") return { key: "unhealthy", tone: "danger" }
   if (running && item.health === "starting") return { key: "created", tone: "warning" }
   // A template setup that is waiting with an error recorded did not get to run.
-  const setup = item.environment.setup?.status
-  const failed = setup === "failed" || (setup === "pending" && !!item.environment.last_error)
+  const setup = item.setup?.status
+  const failed = setup === "failed" || (setup === "pending" && !!item.last_error)
   if (running && failed) return { key: "setup_failed", tone: "danger" }
   if (running && (setup === "pending" || setup === "running"))
     return { key: "setting_up", tone: "info" }
   if (running) return { key: "running", tone: "success" }
-  if (item.state === "missing" || item.state === "unavailable" || item.environment.last_error)
+  if (item.state === "missing" || item.state === "unavailable" || item.last_error)
     return { key: item.state, tone: "danger" }
   if (["created", "restarting", "paused"].includes(item.state))
     return { key: item.state, tone: "warning" }
   return { key: item.state, tone: "muted" }
 }
 
-/** A stopped desktop whose setup did not finish offers a retry instead of a start. */
-export const needsRetry = (item: EnvironmentItem) =>
-  item.state !== "running" && (item.state === "missing" || !!item.environment.last_error)
+/** A stopped container whose setup did not finish offers a retry instead of a start. */
+export const needsRetry = (item: ContainerItem) =>
+  item.state !== "running" && (item.state === "missing" || !!item.last_error)
 
-export const needsAttention = (item: EnvironmentItem) =>
+export const needsAttention = (item: ContainerItem) =>
   needsRetry(item) ||
   item.health === "unhealthy" ||
   item.state === "unavailable" ||
-  environmentStatus(item).key === "setup_failed"
+  containerStatus(item).key === "setup_failed"
 
 export function jobTone(status: string): Tone {
   if (status === "completed") return "success"
@@ -110,27 +110,28 @@ export const jobActive = (job: Pick<Job, "status">) =>
   job.status === "queued" || job.status === "running"
 
 /**
- * What a job worked on, by name. The manager records `environment:<id>`, `profile:<id>` or
- * `image:<id>`; a deleted environment keeps the name its deletion job reported, or a short ID.
+ * What a job worked on, by name. The manager records `container:<id>`, `profile:<id>` or
+ * `image:<id>`; a deleted container keeps the name its deletion job reported, or a short ID.
  */
 export function jobTarget(
   job: Pick<Job, "resource" | "result">,
-  environments: Map<string, string>,
+  containers: Map<string, string>,
   profiles: Map<string, string>,
   images = new Map<string, string>()
 ) {
   if (!job.resource) return ""
   const [kind, id] = job.resource.split(/:(.*)/s)
   const reported = job.result?.name as string | undefined
-  if (kind === "environment" && id)
-    return environments.get(id) ?? reported ?? `Environment ${id.slice(0, 8)}`
+  // Jobs from before environments were called containers name them `environment:<id>`.
+  if ((kind === "container" || kind === "environment") && id)
+    return containers.get(id) ?? reported ?? `Container ${id.slice(0, 8)}`
   if (kind === "profile" && id) return profiles.get(id) ?? id
   if (kind === "image" && id) return images.get(id) ?? reported ?? `Image ${id.slice(0, 8)}`
   return job.resource
 }
 
 export function profileTitle(
-  spec: EnvironmentSpec,
+  spec: ContainerSpec,
   desktopTitle: string | undefined,
   profiles: ProfileItem[]
 ) {
@@ -148,7 +149,7 @@ export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.status === "completed") {
     if (job.result?.deleted) {
       const name = job.result.name as string | undefined
-      return `${name ? `Deleted "${name}".` : "Environment deleted."}${job.result.volumes_preserved ? " Named volumes were preserved." : ""}${job.result.images_preserved ? " Saved images were preserved." : ""}`
+      return `${name ? `Deleted "${name}".` : "Container deleted."}${job.result.volumes_preserved ? " Named volumes were preserved." : ""}${job.result.images_preserved ? " Saved images were preserved." : ""}`
     }
     return "Operation completed successfully. No detailed log was recorded."
   }
@@ -282,13 +283,13 @@ export function restartNotice(fields: string[], running: boolean) {
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]
   const subject = list.charAt(0).toUpperCase() + list.slice(1)
   const effect = running
-    ? "the desktop restarts and open applications close"
-    : "the desktop stays stopped until you start it"
-  return `${subject} ${names.length > 1 ? "need" : "needs"} a new container: ${effect}. Files in the container are kept.`
+    ? "it restarts and open applications close"
+    : "it stays stopped until you start it"
+  return `${subject} ${names.length > 1 ? "recreate" : "recreates"} the container: ${effect}. Its files are kept.`
 }
 
 /** Writable places an upload can go: Downloads unless a read-only volume covers it, and writable volumes. */
-export function uploadLocations(spec: Pick<EnvironmentSpec, "mounts">) {
+export function uploadLocations(spec: Pick<ContainerSpec, "mounts">) {
   const covered = (mount: { target: string }) =>
     DESKTOP_HOME === mount.target || DESKTOP_HOME.startsWith(`${mount.target}/`)
   const homeReadOnly = spec.mounts.some((mount) => mount.readonly && covered(mount))
@@ -341,14 +342,14 @@ export function jobActivity(
   return [...points.values()]
 }
 
-/** Sum of CPU and memory limits over running desktops; an unlimited desktop adds nothing. */
-export function limitTotals(items: EnvironmentItem[]) {
+/** Sum of CPU and memory limits over running containers; an unlimited container adds nothing. */
+export function limitTotals(items: ContainerItem[]) {
   let cpus = 0
   let memoryMb = 0
   let unlimited = 0
   for (const item of items) {
     if (item.state !== "running") continue
-    const { spec } = item.environment
+    const { spec } = item
     if (spec.cpus) cpus += spec.cpus
     if (spec.memory_mb) memoryMb += spec.memory_mb
     if (!spec.cpus || !spec.memory_mb) unlimited++

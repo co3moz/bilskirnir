@@ -1,5 +1,5 @@
-//! Pins down what a template accepts, how a new environment's values are resolved from it, and
-//! that a secret value reaches only the setup runner: never the environment record, an image
+//! Pins down what a template accepts, how a new container's values are resolved from it, and
+//! that a secret value reaches only the setup runner: never the container record, an image
 //! list or a route.
 use super::*;
 
@@ -50,7 +50,7 @@ fn image(id: &str, template: Option<Template>) -> ImageRecord {
         image_id: format!("sha256:{id}"),
         reference: format!("bilskirnir/snapshot:{id}"),
         parent_image_id: None,
-        source_environment: None,
+        source_container: None,
         kind: "snapshot".into(),
         created_at: 1,
         description: String::new(),
@@ -162,7 +162,7 @@ fn values_come_from_the_request_then_the_default() {
 }
 
 #[test]
-fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
+fn the_container_shows_ordinary_values_and_only_the_names_of_secrets() {
     let values = unity()
         .resolve(&given(&[
             ("UNITY_EMAIL", "dev@example.com"),
@@ -178,9 +178,9 @@ fn the_environment_shows_ordinary_values_and_only_the_names_of_secrets() {
     assert_eq!(setup.secrets, ["UNITY_PASSWORD"]);
     assert!(!setup.parameters.contains_key("UNITY_PASSWORD"));
     assert_eq!(setup.parameters["UNITY_EMAIL"], "dev@example.com");
-    let env = Environment {
+    let env = Container {
         setup: Some(setup),
-        ..environment()
+        ..container()
     };
     assert!(!serde_json::to_string(&env).unwrap().contains("hunter2"));
     // The runner gets every value and the names to mask, with the script's line endings fixed.
@@ -209,7 +209,7 @@ fn the_template_comes_from_a_record_of_the_requested_image() {
 }
 
 #[tokio::test]
-async fn a_new_environment_pins_the_template_and_its_values() {
+async fn a_new_container_pins_the_template_and_its_values() {
     let app = crate::tests::app(false);
     app.db
         .put("image", "unity", &image("unity", Some(unity())))
@@ -291,18 +291,18 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
     for (id, (status, error)) in cases.iter().enumerate() {
         let mut setup = pinned.setup("unity");
         setup.status = status.to_string();
-        let env = Environment {
+        let env = Container {
             id: id.to_string(),
             last_error: error.map(str::to_owned),
             setup: Some(setup),
-            ..environment()
+            ..container()
         };
-        app.db.put("environment", &id.to_string(), &env).unwrap();
+        app.db.put(CONTAINERS, &id.to_string(), &env).unwrap();
     }
     mark_interrupted(&app.db).unwrap();
     let after = |id: usize| {
         app.db
-            .get::<Environment>("environment", &id.to_string())
+            .get::<Container>(CONTAINERS, &id.to_string())
             .unwrap()
     };
     for id in 0..2 {
@@ -318,8 +318,8 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
     assert!(after(3).last_error.is_none());
 }
 
-fn environment() -> Environment {
-    Environment {
+fn container() -> Container {
+    Container {
         id: "e".into(),
         container: "wsld-e".into(),
         private_network: "wsld-e-private".into(),

@@ -1,5 +1,5 @@
 import type {
-  EnvironmentSetup,
+  ContainerSetup,
   ImageRecord,
   ParameterDisplay,
   ParameterOption,
@@ -54,7 +54,7 @@ const hasOptions = (type: ParameterType) => type === "choice" || type === "choic
 type Templated = Pick<ImageRecord, "image_id" | "reference" | "template">
 
 /**
- * The template a new environment from `value`, an image ID or reference, asks for. The manager
+ * The template a new container from `value`, an image ID or reference, asks for. The manager
  * takes it from the first record of that image that has one; lists come newest first.
  */
 export function templateFor(records: Templated[], value?: string) {
@@ -326,11 +326,11 @@ export function readTemplate(value: unknown): Template {
   return { parameters: parameters.map(readParameter), script, root, timeout_seconds }
 }
 
-const setupCopy: Record<EnvironmentSetup["status"], string> = {
+const setupCopy: Record<ContainerSetup["status"], string> = {
   pending: "Waits for the desktop",
   running: "Running",
   completed: "Completed",
   failed: "Failed",
 }
 
-export const setupLabel = (setup: Pick<EnvironmentSetup, "status">) => setupCopy[setup.status]
+export const setupLabel = (setup: Pick<ContainerSetup, "status">) => setupCopy[setup.status]

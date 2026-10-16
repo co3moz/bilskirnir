@@ -13,7 +13,7 @@ import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { openDialog } from "@/lib/dialogs"
-import { useEnvironments, useVolumes } from "@/lib/queries"
+import { useContainers, useVolumes } from "@/lib/queries"
 import type { Volume } from "@/lib/types"
 
 // The ownership label the manager puts on what it creates; see src/model.rs.
@@ -69,23 +69,23 @@ const columns: DataColumn<Row>[] = [
 
 export function VolumesPage() {
   const volumes = useVolumes()
-  const environments = useEnvironments().data
+  const containers = useContainers().data
   const data = React.useMemo<Row[]>(
     () =>
       (volumes.data ?? []).map((volume) => ({
         ...volume,
-        users: (environments ?? []).flatMap(({ environment }) =>
-          environment.spec.mounts
+        users: (containers ?? []).flatMap((container) =>
+          container.spec.mounts
             .filter((mount) => mount.volume === volume.Name)
             .map((mount) => ({
-              id: environment.id,
-              name: environment.spec.name,
+              id: container.id,
+              name: container.spec.name,
               target: mount.target,
               readonly: mount.readonly,
             }))
         ),
       })),
-    [volumes.data, environments]
+    [volumes.data, containers]
   )
   const table = useDataTable({
     data,
@@ -99,7 +99,7 @@ export function VolumesPage() {
       <DockerAlert />
       <SectionHeading
         title="Named volumes"
-        description="Files that outlive environments. Volumes are excluded from snapshots."
+        description="Files that outlive containers. Volumes are excluded from snapshots."
       >
         <Button size="sm" onClick={() => openDialog({ kind: "volume" })}>
           <RiAddLine data-icon="inline-start" />

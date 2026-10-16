@@ -10,7 +10,7 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
         image_id: format!("sha256:{id}"),
         reference: format!("bilskirnir/{kind}:{id}"),
         parent_image_id: Some("sha256:base".into()),
-        source_environment: None,
+        source_container: None,
         kind: kind.into(),
         created_at: 1,
         description: String::new(),
@@ -88,7 +88,7 @@ async fn image_list_leaves_out_build_scripts() {
 
 #[test]
 fn a_create_request_carries_template_values_beside_the_settings() {
-    let body = serde_json::from_value::<CreateEnvironment>(json!({
+    let body = serde_json::from_value::<CreateContainer>(json!({
         "name": "Unity", "image": "sha256:a", "gpu": true,
         "parameters": {"UNITY_EMAIL": "dev@example.com"}
     }))
@@ -96,13 +96,13 @@ fn a_create_request_carries_template_values_beside_the_settings() {
     assert!(body.spec.gpu && body.spec.internet && body.spec.shm_mb == 512);
     assert_eq!(body.parameters["UNITY_EMAIL"], "dev@example.com");
     // Requests from before templates, the MCP tool's included, still parse.
-    let plain = serde_json::from_value::<CreateEnvironment>(
+    let plain = serde_json::from_value::<CreateContainer>(
         json!({"name": "Plain", "image": "sha256:a", "cpus": 1.5}),
     )
     .unwrap();
     assert!(plain.parameters.is_empty() && plain.spec.cpus == Some(1.5));
     assert!(
-        serde_json::from_value::<CreateEnvironment>(
+        serde_json::from_value::<CreateContainer>(
             json!({"name": "Bad", "image": "sha256:a", "parameters": {"A": 1}})
         )
         .is_err()

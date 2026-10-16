@@ -5,7 +5,7 @@ import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
 import type {
-  EnvironmentItem,
+  ContainerItem,
   ImageRecord,
   Job,
   ProfileItem,
@@ -66,7 +66,7 @@ function useList<T>(path: string, poll: boolean) {
   })
 }
 
-export const useEnvironments = (poll = true) => useList<EnvironmentItem[]>("environments", poll)
+export const useContainers = (poll = true) => useList<ContainerItem[]>("containers", poll)
 export const useImages = (poll = true) => useList<ImageRecord[]>("images", poll)
 export const useProfiles = (poll = true) => useList<ProfileItem[]>("profiles", poll)
 export const useVolumes = (poll = true) => useList<Volume[]>("volumes", poll)

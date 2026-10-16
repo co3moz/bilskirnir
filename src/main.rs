@@ -62,113 +62,101 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/profiles/{id}/build", post(api::build_profile))
         .route("/api/profiles/{id}/pull", post(api::pull_profile))
         .route("/api/system", get(api::system))
+        .route("/api/containers", get(api::containers).post(api::create))
         .route(
-            "/api/environments",
-            get(api::environments).post(api::create),
+            "/api/containers/{id}",
+            get(api::container).delete(api::remove),
         )
+        .route("/api/containers/{id}/action", post(api::action))
+        .route("/api/containers/{id}/retry", post(api::retry))
+        .route("/api/containers/{id}/internet", post(api::internet))
+        .route("/api/containers/{id}/settings", post(api::update_settings))
+        .route("/api/containers/{id}/snapshot", post(api::snapshot))
+        .route("/api/containers/{id}/exec", post(exec::execute))
+        .route("/api/containers/{id}/files/read", post(files::read))
+        .route("/api/containers/{id}/files/write", post(files::write))
+        .route("/api/containers/{id}/files/list", post(files::list))
+        .route("/api/containers/{id}/files/move", post(files::move_))
+        .route("/api/containers/{id}/files/delete", post(files::delete))
+        .route("/api/containers/{id}/files/download", get(files::download))
+        .route("/api/containers/{id}/audio-capture", post(audio::capture))
+        .route("/api/containers/{id}/audio-inject", post(audio::inject))
         .route(
-            "/api/environments/{id}",
-            get(api::environment).delete(api::remove),
-        )
-        .route("/api/environments/{id}/action", post(api::action))
-        .route("/api/environments/{id}/retry", post(api::retry))
-        .route("/api/environments/{id}/internet", post(api::internet))
-        .route(
-            "/api/environments/{id}/settings",
-            post(api::update_settings),
-        )
-        .route("/api/environments/{id}/snapshot", post(api::snapshot))
-        .route("/api/environments/{id}/exec", post(exec::execute))
-        .route("/api/environments/{id}/files/read", post(files::read))
-        .route("/api/environments/{id}/files/write", post(files::write))
-        .route("/api/environments/{id}/files/list", post(files::list))
-        .route("/api/environments/{id}/files/move", post(files::move_))
-        .route("/api/environments/{id}/files/delete", post(files::delete))
-        .route(
-            "/api/environments/{id}/files/download",
-            get(files::download),
-        )
-        .route("/api/environments/{id}/audio-capture", post(audio::capture))
-        .route("/api/environments/{id}/audio-inject", post(audio::inject))
-        .route(
-            "/api/environments/{id}/terminals",
+            "/api/containers/{id}/terminals",
             get(terminal::list).post(terminal::open),
         )
         .route(
-            "/api/environments/{id}/terminals/{terminal}/input",
+            "/api/containers/{id}/terminals/{terminal}/input",
             post(terminal::input),
         )
         .route(
-            "/api/environments/{id}/terminals/{terminal}/output",
+            "/api/containers/{id}/terminals/{terminal}/output",
             get(terminal::output),
         )
         .route(
-            "/api/environments/{id}/terminals/{terminal}/close",
+            "/api/containers/{id}/terminals/{terminal}/close",
             post(terminal::close),
         )
-        .route("/api/environments/{id}/ui", get(windows::inspect))
-        .route("/api/environments/{id}/gamepad", post(gamepad::input))
-        .route("/api/environments/{id}/input", post(desktop_input::input))
-        .route("/api/environments/{id}/act-and-observe", post(capture::act))
-        .route("/api/environments/{id}/screenshots", post(capture::save))
+        .route("/api/containers/{id}/ui", get(windows::inspect))
+        .route("/api/containers/{id}/gamepad", post(gamepad::input))
+        .route("/api/containers/{id}/input", post(desktop_input::input))
+        .route("/api/containers/{id}/act-and-observe", post(capture::act))
+        .route("/api/containers/{id}/screenshots", post(capture::save))
         .route(
-            "/api/environments/{id}/applications",
+            "/api/containers/{id}/applications",
             get(apps::list).post(apps::launch),
         )
         .route(
-            "/api/environments/{id}/applications/{application}",
+            "/api/containers/{id}/applications/{application}",
             get(apps::get),
         )
         .route(
-            "/api/environments/{id}/applications/{application}/logs",
+            "/api/containers/{id}/applications/{application}/logs",
             get(apps::logs),
         )
         .route(
-            "/api/environments/{id}/applications/{application}/stop",
+            "/api/containers/{id}/applications/{application}/stop",
             post(apps::stop),
         )
         .route(
-            "/api/environments/{id}/applications/{application}/diagnostics",
+            "/api/containers/{id}/applications/{application}/diagnostics",
             get(apps::diagnostics),
         )
         .route(
-            "/api/environments/{id}/applications/{application}/metrics",
+            "/api/containers/{id}/applications/{application}/metrics",
             get(apps::metrics),
         )
-        .route("/api/environments/{id}/wait", post(waits::wait))
+        .route("/api/containers/{id}/wait", post(waits::wait))
         .route(
-            "/api/environments/{id}/recordings",
+            "/api/containers/{id}/recordings",
             get(recordings::list).post(recordings::start),
         )
         .route(
-            "/api/environments/{id}/recordings/{recording}/stop",
+            "/api/containers/{id}/recordings/{recording}/stop",
             post(recordings::stop),
         )
-        .route("/api/environments/{id}/artifacts", post(recordings::export))
-        .route("/api/environments/{id}/reset", post(api::reset))
-        .route("/api/environments/{id}/windows", get(windows::list))
+        .route("/api/containers/{id}/artifacts", post(recordings::export))
+        .route("/api/containers/{id}/reset", post(api::reset))
+        .route("/api/containers/{id}/windows", get(windows::list))
         .route(
-            "/api/environments/{id}/windows/{window}/focus",
+            "/api/containers/{id}/windows/{window}/focus",
             post(windows::focus),
         )
         .route(
-            "/api/environments/{id}/windows/{window}/geometry",
+            "/api/containers/{id}/windows/{window}/geometry",
             post(windows::geometry),
         )
-        .route("/api/environments/{id}/logs", get(api::logs))
-        .route("/api/environments/{id}/diagnostics", get(api::diagnostics))
-        .route("/api/environments/{id}/screenshot", get(api::screenshot))
+        .route("/api/containers/{id}/logs", get(api::logs))
+        .route("/api/containers/{id}/diagnostics", get(api::diagnostics))
+        .route("/api/containers/{id}/screenshot", get(api::screenshot))
         .route(
-            "/api/environments/{id}/files",
+            "/api/containers/{id}/files",
             post(uploads::upload).layer(tower_http::limit::RequestBodyLimitLayer::new(
                 app.config.upload_limit as usize,
             )),
         )
-        .route("/api/environments/{id}/vnc", get(media::vnc))
-        .route(
-            "/api/environments/{id}/audio/{direction}",
-            get(media::audio),
-        )
+        .route("/api/containers/{id}/vnc", get(media::vnc))
+        .route("/api/containers/{id}/audio/{direction}", get(media::audio))
         .route("/api/images", get(api::images).post(api::register_image))
         .route("/api/images/build", post(api::build))
         .route(
@@ -299,13 +287,13 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
     if m["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
         anyhow::bail!("Missing manager label");
     }
-    for mut env in app.db.list::<model::Environment>("environment")? {
-        let lock = app.resource_lock(&format!("environment:{}", env.id));
+    for mut env in app.db.list::<model::Container>(model::CONTAINERS)? {
+        let lock = app.resource_lock(&format!("container:{}", env.id));
         let Ok(_guard) = lock.try_lock() else {
             continue;
         };
         // Reload after taking the lock; a queued mutation may have removed/updated this record.
-        env = match app.environment(&env.id) {
+        env = match app.container(&env.id) {
             Ok(e) => e,
             Err(_) => continue,
         };
@@ -336,13 +324,13 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
                 .is_some();
             if env.spec.internet != actual {
                 env.spec.internet = actual;
-                app.db.put("environment", &env.id, &env)?;
+                app.db.put(model::CONTAINERS, &env.id, &env)?;
             }
             anyhow::Ok(())
         }
         .await;
         if let Err(e) = result {
-            tracing::debug!("Environment {} network reconciliation: {e:#}", env.id);
+            tracing::debug!("Container {} network reconciliation: {e:#}", env.id);
         }
     }
     Ok(())

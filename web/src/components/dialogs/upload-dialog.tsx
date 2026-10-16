@@ -26,7 +26,7 @@ import {
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
 import { subfolderError, uploadLocations } from "@/lib/format"
-import { useEnvironments, useSettings } from "@/lib/queries"
+import { useContainers, useSettings } from "@/lib/queries"
 import { FileUploads, fileSize, type UploadStatus } from "@/lib/uploads"
 import type { DialogProps } from "./side-drawer"
 
@@ -50,7 +50,7 @@ function useUploads() {
         onUnauthorized: sessionExpired,
       })
   )
-  // Closing the dialog cancels what is left; completed files stay in the desktop.
+  // Closing the dialog cancels what is left; completed files stay in the container.
   React.useEffect(() => () => uploads.cancel(), [uploads])
   return uploads
 }
@@ -61,14 +61,14 @@ export function UploadDialog({
   open,
   onOpenChange,
 }: DialogProps & { id: string; files?: File[] }) {
-  const item = useEnvironments(false).data?.find((entry) => entry.environment.id === id)
+  const item = useContainers(false).data?.find((entry) => entry.id === id)
   const limit = useSettings().data?.upload_limit_bytes ?? 0
   const uploads = useUploads()
   // A closing dialog stays mounted for its animation, so stop the queue as soon as it closes.
   React.useEffect(() => {
     if (!open) uploads.cancel()
   }, [open, uploads])
-  const locations = item ? uploadLocations(item.environment.spec) : []
+  const locations = item ? uploadLocations(item.spec) : []
   const [destination, setDestination] = React.useState(locations[0]?.target ?? "")
   const [subfolder, setSubfolder] = React.useState("")
   const [replace, setReplace] = React.useState(false)
@@ -100,7 +100,7 @@ export function UploadDialog({
     setError(problem)
     if (problem) return
     void uploads.start({
-      environmentId: id,
+      containerId: id,
       destination: folder ? `${destination}/${folder}` : destination,
       replace,
     })
@@ -117,11 +117,11 @@ export function UploadDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Upload files</DialogTitle>
-          <DialogDescription>{item?.environment.spec.name}</DialogDescription>
+          <DialogDescription>{item?.spec.name}</DialogDescription>
         </DialogHeader>
         {!item || item.state !== "running" ? (
           <p className="text-sm text-muted-foreground">
-            Start the environment before uploading files.
+            Start the container before uploading files.
           </p>
         ) : !locations.length ? (
           <p className="text-sm text-muted-foreground">

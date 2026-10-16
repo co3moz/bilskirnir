@@ -75,12 +75,12 @@ pub async fn read(
         )
         .into());
     }
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
-        return Err(anyhow::anyhow!("Start the environment before reading files").into());
+        return Err(anyhow::anyhow!("Start the container before reading files").into());
     }
     let bytes = app
         .docker(&[
@@ -135,12 +135,12 @@ pub async fn write(
         return Err(anyhow::anyhow!("File writes are limited to 512 KiB").into());
     }
     let size = data.len();
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(&id)?;
+    let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
-        return Err(anyhow::anyhow!("Start the environment before writing files").into());
+        return Err(anyhow::anyhow!("Start the container before writing files").into());
     }
     let args = [
         "exec",
@@ -230,7 +230,7 @@ impl MoveFile {
     }
 }
 impl DeleteFile {
-    pub fn validate(&self, spec: &crate::model::EnvironmentSpec) -> anyhow::Result<()> {
+    pub fn validate(&self, spec: &crate::model::ContainerSpec) -> anyhow::Result<()> {
         split_path(&self.path)?;
         if self.path[1..].split('/').count() < 2
             || self.path == "/home/desktop"
@@ -244,12 +244,12 @@ impl DeleteFile {
     }
 }
 async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
-        return Err(anyhow::anyhow!("Start the environment before using its files").into());
+        return Err(anyhow::anyhow!("Start the container before using its files").into());
     }
     let mut args = vec![
         "exec",
@@ -301,7 +301,7 @@ pub async fn move_file(app: &App, id: &str, body: &MoveFile) -> Result<Value> {
     .await
 }
 pub async fn delete_file(app: &App, id: &str, body: &DeleteFile) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     body.validate(&env.spec)?;
     operate(
         app,
@@ -349,7 +349,7 @@ pub fn download_url(id: &str, path: &str) -> String {
             encoded.push_str(&format!("%{byte:02X}"));
         }
     }
-    format!("/api/environments/{id}/files/download?path={encoded}")
+    format!("/api/containers/{id}/files/download?path={encoded}")
 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -403,12 +403,12 @@ pub(crate) fn percent_encode(name: &str) -> String {
         .collect()
 }
 async fn running_container(app: &App, id: &str) -> Result<Value> {
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using its files".into(),
+            "Start the container before using its files".into(),
         ));
     }
     Ok(container)
@@ -421,7 +421,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
             "max_bytes must be 1–5242880".into(),
         ));
     }
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let container = running_container(app, id).await?;
     let args = [
@@ -465,7 +465,7 @@ pub async fn download(
     Query(query): Query<DownloadQuery>,
 ) -> Result<Response> {
     let (_, name) = split_path(&query.path)?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let container = running_container(&app, &id).await?;
     let cid = container["Id"].as_str().context("Missing container ID")?;

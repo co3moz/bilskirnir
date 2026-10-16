@@ -37,11 +37,11 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useFileDrop } from "@/hooks/use-file-drop"
-import { attempt, environmentAction } from "@/lib/actions"
+import { attempt, containerAction } from "@/lib/actions"
 import { wsUrl } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
 import { DesktopMedia, type MediaState } from "@/lib/media"
-import { useEnvironments } from "@/lib/queries"
+import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
 
 // noVNC 1.5 is CommonJS that sets `exports.default`. This package is `"type": "module"`, so the
@@ -104,11 +104,11 @@ function useMedia() {
 
 /** The remote desktop over VNC, with audio, microphone, clipboard and uploads. */
 export function DesktopPage({ id }: { id: string }) {
-  const environments = useEnvironments(false)
-  const item = environments.data?.find((entry) => entry.environment.id === id)
+  const containers = useContainers(false)
+  const item = containers.data?.find((entry) => entry.id === id)
   const running = item?.state === "running"
   // A stopped desktop is watched until it runs, so starting it here connects.
-  useEnvironments(!!item && !running)
+  useContainers(!!item && !running)
 
   const view = React.useRef<HTMLElement>(null)
   const screen = React.useRef<HTMLDivElement>(null)
@@ -130,7 +130,7 @@ export function DesktopPage({ id }: { id: string }) {
     const report = (value: Connection) => setStatus({ key: attemptKey, value })
     let current: RFB
     try {
-      current = new RFB(screen.current, wsUrl(`environments/${encodeURIComponent(id)}/vnc`))
+      current = new RFB(screen.current, wsUrl(`containers/${encodeURIComponent(id)}/vnc`))
     } catch (error) {
       toast.error((error as Error).message)
       // Reported like the connection's own events, after the effect has run.
@@ -169,17 +169,17 @@ export function DesktopPage({ id }: { id: string }) {
     return () => document.removeEventListener("fullscreenchange", update)
   }, [])
 
-  const name = item?.environment.spec.name ?? "Desktop"
-  const spec = item?.environment.spec
+  const name = item?.spec.name ?? "Desktop"
+  const spec = item?.spec
 
   return (
     <section ref={view} className="flex h-dvh flex-col bg-background">
       <header className="flex h-12 shrink-0 items-center gap-1 border-b bg-sidebar px-2 sm:gap-2 sm:px-3">
         <Button variant="ghost" size="sm" asChild>
-          <a href={href({ page: "environments" })}>
+          <a href={href({ page: "containers" })}>
             <RiArrowLeftLine data-icon="inline-start" />
-            <span className="hidden md:inline">Environments</span>
-            <span className="sr-only md:hidden">Back to environments</span>
+            <span className="hidden md:inline">Containers</span>
+            <span className="sr-only md:hidden">Back to containers</span>
           </a>
         </Button>
         <Separator
@@ -280,25 +280,25 @@ export function DesktopPage({ id }: { id: string }) {
           <Empty className="h-full text-white/80">
             <EmptyHeader>
               <EmptyTitle className="text-base">
-                {environments.isPending
-                  ? "Loading environment…"
+                {containers.isPending
+                  ? "Loading container…"
                   : item
                     ? `${name} is not running`
-                    : "This environment no longer exists"}
+                    : "This container no longer exists"}
               </EmptyTitle>
               {item && <EmptyDescription>Start it to connect to its desktop.</EmptyDescription>}
             </EmptyHeader>
             <EmptyContent>
-              {environments.isPending ? (
+              {containers.isPending ? (
                 <Spinner />
               ) : item ? (
-                <Button onClick={() => attempt(() => environmentAction(id, "start"))}>
+                <Button onClick={() => attempt(() => containerAction(id, "start"))}>
                   <RiPlayCircleLine data-icon="inline-start" />
                   Start
                 </Button>
               ) : (
                 <Button variant="outline" asChild>
-                  <a href={href({ page: "environments" })}>Back to environments</a>
+                  <a href={href({ page: "containers" })}>Back to containers</a>
                 </Button>
               )}
             </EmptyContent>

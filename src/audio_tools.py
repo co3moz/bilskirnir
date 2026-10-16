@@ -27,7 +27,7 @@ def capture(seconds, source):
         process.terminate()
         process.wait(timeout=5)
     if not data:
-        raise RuntimeError("No audio data was captured; check that audio is enabled for this environment")
+        raise RuntimeError("No audio data was captured; check that audio is enabled for this container")
     samples = struct.unpack("<%dh" % (len(data) // 2), data[:len(data) // 2 * 2])
     peak = max(abs(sample) for sample in samples) / 32768
     rms = math.sqrt(sum(sample * sample for sample in samples) / len(samples)) / 32768

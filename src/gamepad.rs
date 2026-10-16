@@ -154,20 +154,20 @@ async fn control(
 /// Feed a virtual controller; the device is created on first use and persists until the desktop restarts.
 pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("environment:{id}"));
+    let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
-    let env = app.environment(id)?;
+    let env = app.container(id)?;
     if !env.spec.gamepad {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "Create the environment with gamepad=true to use a virtual controller".into(),
+            "Create the container with gamepad=true to use a virtual controller".into(),
         ));
     }
     let info = app.owned(&env).await?;
     if info["State"]["Running"] != true {
         return Err(Error(
             StatusCode::CONFLICT,
-            "Start the environment before using the gamepad".into(),
+            "Start the container before using the gamepad".into(),
         ));
     }
     let container = info["Id"].as_str().context("Missing container ID")?;
@@ -200,7 +200,7 @@ pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Res
     }
     let payload = serde_json::to_vec(&body.payload()).map_err(|e| anyhow::anyhow!(e))?;
     let mut result = control(app, container, "send", Some(payload)).await?;
-    result["environment_id"] = json!(id);
+    result["container_id"] = json!(id);
     Ok(result)
 }
 pub async fn input(

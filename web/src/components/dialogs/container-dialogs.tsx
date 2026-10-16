@@ -36,7 +36,7 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
-import { useEnvironments, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
+import { useContainers, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
 import { parameterBody, templateFor } from "@/lib/templates"
 import type { ImageRecord, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
@@ -100,7 +100,7 @@ function TemplateValues({
   )
 }
 
-export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { image?: string }) {
+export function CreateContainerDialog({ image, ...props }: DialogProps & { image?: string }) {
   const settings = useSettings().data
   const profiles = useProfiles().data ?? []
   const images = useImages().data ?? []
@@ -122,7 +122,7 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
         <form
           className="flex flex-col gap-4"
           onSubmit={submit(() =>
-            runJob("environments", {
+            runJob("containers", {
               name,
               image: chosen,
               ...specBody(draft),
@@ -131,9 +131,9 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
           )}
         >
           <DialogHeader>
-            <DialogTitle>New environment</DialogTitle>
+            <DialogTitle>New container</DialogTitle>
             <DialogDescription>
-              A desktop from a profile, snapshot or custom image. A profile that is not downloaded
+              A container from a profile, snapshot or custom image. A profile that is not downloaded
               yet downloads first.
             </DialogDescription>
           </DialogHeader>
@@ -199,10 +199,10 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
 }
 
 export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
-  const item = useEnvironments().data?.find((entry) => entry.environment.id === id)
+  const item = useContainers().data?.find((entry) => entry.id === id)
   const settings = useSettings().data
   const volumes = useVolumes().data ?? []
-  const spec = item?.environment.spec
+  const spec = item?.spec
   const [name, setName] = React.useState(spec?.name ?? "")
   const [draft, setDraftState] = React.useState<SpecDraft>(() => specDraft(spec ?? {}, settings))
   // A restart warning is confirmed for one set of values; editing the form asks again.
@@ -218,9 +218,9 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
 
   const save = async () => {
     const body = { name, ...specBody(draft) }
-    // The server decides what restarts the desktop; ask it first and warn once before applying.
+    // The server decides what restarts the container; ask it first and warn once before applying.
     if (!notice) {
-      const preview = await api<SettingsPreview>(`environments/${id}/settings`, {
+      const preview = await api<SettingsPreview>(`containers/${id}/settings`, {
         ...body,
         dry_run: true,
       })
@@ -234,7 +234,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
         return
       }
     }
-    await runJob(`environments/${id}/settings`, body)
+    await runJob(`containers/${id}/settings`, body)
   }
 
   if (!spec) return null
@@ -243,10 +243,10 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
       <DialogContent className="sm:max-w-2xl">
         <form className="flex flex-col gap-4" onSubmit={submit(save)}>
           <DialogHeader>
-            <DialogTitle>Environment settings</DialogTitle>
+            <DialogTitle>Container settings</DialogTitle>
             <DialogDescription>
-              Name, internet and resource limits apply to the running desktop. Other changes need a
-              new container; its files are kept.
+              Name, internet and resource limits apply to the running container. Other changes need
+              a new container; its files are kept.
             </DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>

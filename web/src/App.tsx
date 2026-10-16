@@ -13,7 +13,7 @@ import { closeDialog, openDialog } from "@/lib/dialogs"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
 import { DashboardPage } from "@/pages/dashboard"
-import { EnvironmentsPage } from "@/pages/environments"
+import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
@@ -26,7 +26,7 @@ const DesktopPage = React.lazy(() =>
 
 const pages: Record<Page, () => React.ReactNode> = {
   dashboard: DashboardPage,
-  environments: EnvironmentsPage,
+  containers: ContainersPage,
   images: ImagesPage,
   volumes: VolumesPage,
   jobs: JobsPage,
@@ -73,11 +73,11 @@ function Shell({ page }: { page: Page }) {
       <AppSidebar variant="inset" page={page} />
       <SidebarInset>
         <SiteHeader title={pageTitles[page]}>
-          {page === "environments" && (
+          {page === "containers" && (
             <Button size="sm" onClick={() => openDialog({ kind: "create" })}>
               <RiAddLine data-icon="inline-start" />
-              <span className="hidden sm:inline">New environment</span>
-              <span className="sr-only sm:hidden">New environment</span>
+              <span className="hidden sm:inline">New container</span>
+              <span className="sr-only sm:hidden">New container</span>
             </Button>
           )}
         </SiteHeader>
@@ -127,7 +127,7 @@ function useDropGuard() {
     const drop = (event: DragEvent) => {
       if (!files(event)) return
       event.preventDefault()
-      toast.error("Drop files on an environment card or its desktop.")
+      toast.error("Drop files on a container card or its desktop.")
     }
     document.addEventListener("dragover", over)
     document.addEventListener("drop", drop)

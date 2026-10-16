@@ -71,16 +71,16 @@ pub async fn execute(
     Json(body): Json<Execute>,
 ) -> Result<Json<Value>> {
     body.validate()?;
-    app.environment(&id)?;
+    app.container(&id)?;
     launch(
         app,
         "exec",
-        format!("environment:{id}"),
+        format!("container:{id}"),
         move |app, job_id| async move {
-            let env = app.environment(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+            let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
             if info["State"]["Running"] != true {
-                bail!("Start the environment before executing a script");
+                bail!("Start the container before executing a script");
             }
             let user = if body.root { "root" } else { "1001:1001" };
             app.append_log(
@@ -104,7 +104,7 @@ pub async fn execute(
             app.docker_logged_input(&job_id, &args, Some(body.script.into_bytes()))
                 .await?;
             app.append_log(&job_id, "Script completed successfully.")?;
-            Ok(json!({"environment_id": id, "user": user, "exit_code": 0}))
+            Ok(json!({"container_id": id, "user": user, "exit_code": 0}))
         },
     )
 }

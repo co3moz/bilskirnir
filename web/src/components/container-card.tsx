@@ -11,8 +11,8 @@ import {
 } from "@remixicon/react"
 import { cn } from "cn"
 
-import { EnvironmentMenu } from "@/components/environment-menu"
-import { EnvironmentPreview } from "@/components/environment-preview"
+import { ContainerMenu } from "@/components/container-menu"
+import { ContainerPreview } from "@/components/container-preview"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -30,14 +30,14 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useFileDrop } from "@/hooks/use-file-drop"
-import { attempt, environmentAction, retrySetup, setInternet } from "@/lib/actions"
+import { attempt, containerAction, retrySetup, setInternet } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { environmentStatus, needsRetry, profileTitle } from "@/lib/format"
+import { containerStatus, needsRetry, profileTitle } from "@/lib/format"
 import { href } from "@/lib/route"
-import type { EnvironmentItem, EnvironmentSpec, ProfileItem } from "@/lib/types"
+import type { ContainerItem, ContainerSpec, ProfileItem } from "@/lib/types"
 
-/** The resources and devices a desktop was given, as compact badges. */
-export function SpecBadges({ spec, className }: { spec: EnvironmentSpec; className?: string }) {
+/** The resources and devices a container was given, as compact badges. */
+export function SpecBadges({ spec, className }: { spec: ContainerSpec; className?: string }) {
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
       <Badge variant="outline" className="text-muted-foreground">
@@ -72,9 +72,9 @@ export function SpecBadges({ spec, className }: { spec: EnvironmentSpec; classNa
   )
 }
 
-/** The main action for an environment's state: connect, retry its setup or start it. */
-export function PrimaryAction({ item, className }: { item: EnvironmentItem; className?: string }) {
-  const { id } = item.environment
+/** The main action for a container's state: connect, retry its setup or start it. */
+export function PrimaryAction({ item, className }: { item: ContainerItem; className?: string }) {
+  const { id } = item
   const [busy, setBusy] = React.useState(false)
   const run = (action: () => Promise<unknown>) => async () => {
     setBusy(true)
@@ -107,7 +107,7 @@ export function PrimaryAction({ item, className }: { item: EnvironmentItem; clas
       variant="outline"
       className={className}
       disabled={busy}
-      onClick={run(() => environmentAction(id, "start"))}
+      onClick={run(() => containerAction(id, "start"))}
     >
       <RiPlayCircleLine data-icon="inline-start" />
       Start
@@ -115,35 +115,33 @@ export function PrimaryAction({ item, className }: { item: EnvironmentItem; clas
   )
 }
 
-export function InternetSwitch({ item, id }: { item: EnvironmentItem; id?: string }) {
-  const { environment } = item
+export function InternetSwitch({ item, id }: { item: ContainerItem; id?: string }) {
   const [busy, setBusy] = React.useState(false)
   return (
     <Switch
       id={id}
-      checked={environment.spec.internet}
+      checked={item.spec.internet}
       disabled={busy}
-      aria-label={`${environment.spec.name} internet access`}
+      aria-label={`${item.spec.name} internet access`}
       onCheckedChange={async (enabled) => {
         setBusy(true)
-        await attempt(() => setInternet(environment.id, enabled))
+        await attempt(() => setInternet(item.id, enabled))
         setBusy(false)
       }}
     />
   )
 }
 
-export function EnvironmentCard({
+export function ContainerCard({
   item,
   profiles,
 }: {
-  item: EnvironmentItem
+  item: ContainerItem
   profiles: ProfileItem[]
 }) {
-  const { environment } = item
-  const { id, spec } = environment
+  const { id, spec } = item
   const running = item.state === "running"
-  const status = environmentStatus(item)
+  const status = containerStatus(item)
   const drop = useFileDrop((files) => openDialog({ kind: "upload", id, files }))
   const switchId = React.useId()
 
@@ -156,7 +154,7 @@ export function EnvironmentCard({
       )}
     >
       <CardContent className="px-3">
-        <EnvironmentPreview item={item} />
+        <ContainerPreview item={item} />
       </CardContent>
       <CardHeader>
         <CardTitle className="truncate text-base">
@@ -169,7 +167,7 @@ export function EnvironmentCard({
           </button>
         </CardTitle>
         <CardDescription className="truncate">
-          {profileTitle(spec, environment.desktop?.title, profiles)}
+          {profileTitle(spec, item.desktop?.title, profiles)}
         </CardDescription>
         <CardAction>
           <StatusBadge state={status.key} tone={status.tone} />
@@ -183,9 +181,9 @@ export function EnvironmentCard({
           </Label>
           <InternetSwitch item={item} id={switchId} />
         </div>
-        {environment.last_error && (
+        {item.last_error && (
           <Alert variant="destructive">
-            <AlertDescription className="line-clamp-3">{environment.last_error}</AlertDescription>
+            <AlertDescription className="line-clamp-3">{item.last_error}</AlertDescription>
           </Alert>
         )}
       </CardContent>
@@ -206,10 +204,10 @@ export function EnvironmentCard({
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {running ? "Upload files" : "Start the environment to upload files"}
+            {running ? "Upload files" : "Start the container to upload files"}
           </TooltipContent>
         </Tooltip>
-        <EnvironmentMenu item={item} />
+        <ContainerMenu item={item} />
       </CardFooter>
     </Card>
   )

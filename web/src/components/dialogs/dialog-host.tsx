@@ -1,8 +1,8 @@
 import { Fragment } from "react"
 
 import { closeDialog, useDialogState, type Dialog } from "@/lib/dialogs"
-import { EnvironmentDrawer } from "./environment-drawer"
-import { CreateEnvironmentDialog, SettingsDialog } from "./environment-dialogs"
+import { ContainerDrawer } from "./container-drawer"
+import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
 import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
 import { ImportImageDialog } from "./import-dialog"
@@ -22,9 +22,9 @@ function render(dialog: Dialog, open: boolean) {
   const props = { open, onOpenChange: (next: boolean) => !next && closeDialog() }
   switch (dialog.kind) {
     case "create":
-      return <CreateEnvironmentDialog {...props} image={dialog.image} />
+      return <CreateContainerDialog {...props} image={dialog.image} />
     case "details":
-      return <EnvironmentDrawer {...props} id={dialog.id} />
+      return <ContainerDrawer {...props} id={dialog.id} />
     case "settings":
       return <SettingsDialog {...props} id={dialog.id} />
     case "snapshot":
