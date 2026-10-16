@@ -6,6 +6,7 @@ import {
   RiFileCopyLine,
   RiHammerLine,
   RiImportLine,
+  RiListSettingsLine,
   RiStackLine,
   RiAddLine,
   RiRefreshLine,
@@ -39,6 +40,12 @@ import { openDialog } from "@/lib/dialogs"
 import { imageTree, shortDate } from "@/lib/format"
 import { useImages, useProfiles } from "@/lib/queries"
 import type { ImageRecord, ProfileItem } from "@/lib/types"
+
+/** What a template asks for, in a few words. */
+function templateSummary(template: NonNullable<ImageRecord["template"]>) {
+  const names = template.parameters.map((parameter) => parameter.name)
+  return names.length ? `Asks for ${names.join(", ")}` : "Runs a setup script"
+}
 
 function ProfileCard({ item }: { item: ProfileItem }) {
   const { profile } = item
@@ -151,9 +158,16 @@ const columns: DataColumn<Row>[] = [
   column.accessor("kind", {
     header: "Kind",
     cell: ({ row }) => (
-      <Badge variant="outline" className="border-violet/40 text-violet capitalize">
-        {row.original.kind}
-      </Badge>
+      <div className="flex flex-wrap gap-1">
+        <Badge variant="outline" className="border-violet/40 text-violet capitalize">
+          {row.original.kind}
+        </Badge>
+        {row.original.template && (
+          <Badge variant="outline" title={templateSummary(row.original.template)}>
+            Template
+          </Badge>
+        )}
+      </div>
     ),
   }),
   column.display({
@@ -197,6 +211,21 @@ const columns: DataColumn<Row>[] = [
               <TooltipContent>Export configuration as JSON</TooltipContent>
             </Tooltip>
           )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => openDialog({ kind: "template", id: image.id })}
+                aria-label={`${image.template ? "Edit" : "Add"} the template of ${image.name}`}
+              >
+                <RiListSettingsLine />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {image.template ? "Edit template" : "Add a template: values asked for on creation"}
+            </TooltipContent>
+          </Tooltip>
           {/* Any saved image moves as an archive, the base desktop included. */}
           <Tooltip>
             <TooltipTrigger asChild>

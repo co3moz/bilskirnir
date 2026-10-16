@@ -118,6 +118,7 @@ impl App {
         &self,
         id: &str,
         spec: EnvironmentSpec,
+        parameters: std::collections::BTreeMap<String, String>,
         job_id: &str,
     ) -> Result<Value> {
         spec.validate()?;
@@ -146,19 +147,25 @@ impl App {
             bail!("Image must be derived from a Bilskirnir desktop image");
         }
         image_volumes_mounted(&image, &spec)?;
+        let image_id = image["Id"].as_str().context("Missing image ID")?;
+        let template = self.pin_template(&spec.image, image_id, &parameters)?;
         let env = Environment {
             id: id.into(),
             container: format!("wsld-{id}"),
             private_network: format!("wsld-{id}-private"),
             egress_network: format!("wsld-{id}-egress"),
-            source_image_id: image["Id"].as_str().context("Missing image ID")?.into(),
+            source_image_id: image_id.into(),
             spec,
             created_at: now(),
             last_error: None,
             desktop: crate::profiles::from_image(&image),
             working_image: None,
+            setup: template.as_ref().map(|(image, pinned)| pinned.setup(image)),
         };
         // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
+        if let Some((_, pinned)) = &template {
+            self.save_pinned(id, pinned)?;
+        }
         self.db.put("environment", id, &env)?;
         let result = self.provision(&env, manager).await;
         if let Err(ref e) = result {
@@ -168,9 +175,10 @@ impl App {
             // Keep intent and any partial resources for explicit retry/removal; never touch unrelated objects.
         }
         result?;
+        self.run_setup(id, job_id).await?;
         Ok(json!({"environment_id":id}))
     }
-    pub async fn retry_environment(&self, id: &str) -> Result<Value> {
+    pub async fn retry_environment(&self, id: &str, job_id: &str) -> Result<Value> {
         let mut env = self.environment(id).map_err(|e| anyhow::anyhow!(e.1))?;
         let manager = self
             .config
@@ -181,10 +189,22 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("Manager label does not match");
         }
+        // A container recreated from the source image lacks what the template setup changed.
+        if env.working_image.is_none()
+            && self
+                .optional_inspect("container", &env.container)
+                .await?
+                .is_none()
+        {
+            crate::templates::setup_again(&mut env);
+            self.db.put("environment", id, &env)?;
+        }
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
         self.db.put("environment", id, &env)?;
         result?;
+        // Also a setup that failed or was interrupted earlier.
+        self.run_setup(id, job_id).await?;
         Ok(json!({"environment_id":id}))
     }
     async fn provision(&self, env: &Environment, manager: &str) -> Result<()> {
@@ -436,6 +456,7 @@ impl App {
             self.release_working_image(image, job_id).await?;
         }
         self.remove_environment_records(&env.id)?;
+        self.forget_pinned(&env.id)?;
         self.db.remove("environment", &env.id)?;
         self.append_log(
             job_id,
@@ -505,11 +526,13 @@ impl App {
             self.release_working_image(&image, job_id).await?;
         }
         self.remove_environment_records(id)?;
+        crate::templates::setup_again(&mut env);
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
         self.db.put("environment", id, &env)?;
         result?;
         self.append_log(job_id, "Recreated the desktop from its saved source image.")?;
+        self.run_setup(id, job_id).await?;
         Ok(json!({"environment_id": id, "volumes_preserved": true, "images_preserved": true}))
     }
     pub async fn address(&self, env: &Environment) -> Result<String> {

@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 60 tools:
+The server currently exposes 62 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -88,7 +88,7 @@ The server currently exposes 60 tools:
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
-| Reusable images | `list_images`, `import_image`, `build_image`, `snapshot` |
+| Reusable images | `list_images`, `import_image`, `build_image`, `get_image_template`, `set_image_template`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
 | Operation results | `list_jobs`, `get_job` |
 
@@ -116,6 +116,25 @@ The environment needs internet access for package downloads. Its CPU, memory and
 Output goes to the job log. A nonzero exit or timeout fails the job and records the exit status. The default time limit is 300 seconds; the allowed range is 1–3500. The script may contain at most 1,000,000 bytes. Scripts are copied into the desktop before they run, so large scripts do not rely on Docker command-line argument limits. The script's standard input is closed: a command that reads input receives end-of-file instead of consuming the rest of the script.
 
 A script holds the environment's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
+
+## Ask for values with templates
+
+A template makes a saved image ask for values, such as an account, when an environment is created from it, and run a setup script with them once the desktop is ready. `set_image_template` takes the record's `image_id` from `list_images` and a `template`, or `null` to remove it; `get_image_template` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `template` for the image it builds.
+
+```json
+{
+  "image_id": "IMAGE_RECORD_ID",
+  "template": {
+    "parameters": [
+      {"name": "UNITY_EMAIL", "label": "Unity email", "required": true},
+      {"name": "UNITY_PASSWORD", "label": "Unity password", "required": true, "secret": true}
+    ],
+    "script": "set -eu\nprintf '%s\\n' \"$UNITY_EMAIL\" > ~/.unity-account\n"
+  }
+}
+```
+
+`create_environment` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_environment` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
 
 ## Read and write files
 

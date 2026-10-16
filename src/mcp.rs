@@ -1,6 +1,6 @@
 use crate::{
     App, api, apps, audio, auth, capture, desktop_input, error, exec, files, gamepad, recordings,
-    terminal, uploads, waits, windows,
+    templates, terminal, uploads, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -300,6 +300,52 @@ impl BilskirnirMcp {
                     .await?
                     .0
             }
+            "reset_environment" => api::reset(state, Path(id.unwrap())).await?.0,
+            "list_images" => api::images(state).await?.0,
+            "import_image" => api::register_image(state, Json(parse(args)?)).await?.0,
+            "build_image" => api::build(state, Json(parse(args)?)).await?.0,
+            "get_image_template" => {
+                json!(
+                    templates::get(state, Path(string(&args, "image_id")?))
+                        .await?
+                        .0
+                )
+            }
+            "set_image_template" => {
+                let image = Path(string(&args, "image_id")?);
+                match args.get("template") {
+                    None | Some(Value::Null) => templates::remove(state, image).await?.0,
+                    Some(template) => {
+                        templates::set(state, image, Json(parse(template.clone())?))
+                            .await?
+                            .0
+                    }
+                }
+            }
+            "snapshot" => {
+                api::snapshot(state, Path(id.unwrap()), Json(parse(args)?))
+                    .await?
+                    .0
+            }
+            "list_volumes" => api::volumes(state).await?.0,
+            "create_volume" => api::create_volume(state, Json(parse(args)?)).await?.0,
+            "list_jobs" => api::jobs(state).await?.0,
+            "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
+            _ => return Box::pin(self.dispatch_desktop(name, id, args)).await,
+        };
+        Ok(structured(value))
+    }
+    /// Tools that work inside a running desktop. They are matched apart from the others because
+    /// a debug build gives every arm of one `match` its own room in a single stack frame, which
+    /// together outgrew the 2 MiB of a test thread.
+    async fn dispatch_desktop(
+        &self,
+        name: &str,
+        id: Option<String>,
+        mut args: Value,
+    ) -> error::Result<CallToolResult> {
+        let state = State(self.app.clone());
+        let value = match name {
             "read_file" => {
                 files::read(state, Path(id.unwrap()), Json(parse(args)?))
                     .await?
@@ -387,7 +433,6 @@ impl BilskirnirMcp {
             "wait_for_condition" => {
                 waits::wait_for_condition(&self.app, &id.unwrap(), &parse(args)?).await?
             }
-            "reset_environment" => api::reset(state, Path(id.unwrap())).await?.0,
             "application_diagnostics" => {
                 apps::application_diagnostics(
                     &self.app,
@@ -424,18 +469,6 @@ impl BilskirnirMcp {
                 let geometry: windows::Geometry = parse(args)?;
                 windows::set_window_geometry(&self.app, &id.unwrap(), &window, &geometry).await?
             }
-            "list_images" => api::images(state).await?.0,
-            "import_image" => api::register_image(state, Json(parse(args)?)).await?.0,
-            "build_image" => api::build(state, Json(parse(args)?)).await?.0,
-            "snapshot" => {
-                api::snapshot(state, Path(id.unwrap()), Json(parse(args)?))
-                    .await?
-                    .0
-            }
-            "list_volumes" => api::volumes(state).await?.0,
-            "create_volume" => api::create_volume(state, Json(parse(args)?)).await?.0,
-            "list_jobs" => api::jobs(state).await?.0,
-            "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
             "upload_file" => {
                 let encoded = string(&args, "data_base64")?;
                 if encoded.len() > FILE_LIMIT.div_ceil(3) * 4 {
@@ -594,9 +627,10 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "create_environment",
-            "Create an Ubuntu desktop from a profile image reference or a saved image ID. A profile that is not downloaded yet is pulled first, which can take minutes. Returns job_id; poll get_job for environment_id before using the desktop.",
+            "Create an Ubuntu desktop from a profile image reference or a saved image ID. A profile that is not downloaded yet is pulled first, which can take minutes. A saved image with a template takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for environment_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the template parameters of the image, by name. Secret values are masked in job logs and never returned."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -711,8 +745,8 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. A profile base that is not downloaded yet is pulled first. Optional internet access. Returns job_id.",
-            json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true}}),
+            "Build a reusable desktop image by running a root shell script on a selected desktop base. A profile base that is not downloaded yet is pulled first. Optional internet access and template (see set_image_template). Returns job_id.",
+            json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"template":template_schema()}),
             &["name", "base_image", "script"],
             false,
             false,
@@ -882,5 +916,56 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             .open_world(true),
     );
     tools.push(input_tool);
+    tools.extend(template_tools());
     tools
 });
+
+/// An image template, as `build_image` and `set_image_template` take it.
+fn template_schema() -> Value {
+    schema(
+        json!({
+            "parameters":{"type":"array","maxItems":32,"default":[],"items":schema(json!({
+                "name":{"type":"string","pattern":"^[A-Z][A-Z0-9_]{0,63}$","description":"The environment variable that carries the value to the setup script."},
+                "label":{"type":"string","maxLength":100,"default":"","description":"What the create form asks for."},
+                "description":{"type":"string","maxLength":500,"default":"","description":"Help the create form shows with the field, such as where to find the value."},
+                "type":{"type":"string","enum":["text","number","boolean","choice","choices"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line."},
+                "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes."},
+                "required":{"type":"boolean","default":false,"description":"A required boolean must be true."},
+                "secret":{"type":"boolean","default":false,"description":"Text only. Masked in job logs and never returned; cannot have a default."},
+                "default":{"type":"string","maxLength":16384,"default":"","description":"In the form the script receives it."},
+                "options":{"type":"array","minItems":1,"maxItems":100,"description":"choice and choices only.","items":schema(json!({"value":{"type":"string","minLength":1,"maxLength":1024},"label":{"type":"string","maxLength":100,"default":""}}), &["value"])},
+                "allow_custom":{"type":"boolean","default":false,"description":"choice only: also accept text that is not an option."},
+                "min":{"type":"number","description":"number only."},
+                "max":{"type":"number","description":"number only."},
+                "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."}
+            }), &["name"])},
+            "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
+            "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},
+            "timeout_seconds":{"type":"integer","minimum":1,"maximum":3500,"default":600}
+        }),
+        &["script"],
+    )
+}
+fn template_tools() -> [Tool; 2] {
+    let image_id = json!({"type":"string","minLength":1,"description":"Saved image ID from list_images (its id field), not a Docker image ID."});
+    [
+        tool(
+            "get_image_template",
+            "Read a saved image's template: the parameters a new environment from it asks for, and the setup script that receives them.",
+            json!({"image_id":image_id}),
+            &["image_id"],
+            true,
+            false,
+            false,
+        ),
+        tool(
+            "set_image_template",
+            "Set or replace a saved image's template, or remove it with template=null. Each parameter is an environment variable of the setup script, which runs as the desktop user (root=true to change that) once a new desktop from the image is ready, again after a reset, and when retry recreates a missing container. Secret parameters are masked in job logs and never returned. Environments already created keep the template they ran; snapshots keep the template of their environment.",
+            json!({"image_id":image_id,"template":{"anyOf":[template_schema(),{"type":"null"}]}}),
+            &["image_id", "template"],
+            false,
+            true,
+            false,
+        ),
+    ]
+}

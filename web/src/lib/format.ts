@@ -45,6 +45,8 @@ export const stateLabels: Record<string, string> = {
   ready: "Ready",
   not_ready: "Not downloaded",
   unhealthy: "Desktop error",
+  setting_up: "Setting up",
+  setup_failed: "Setup failed",
 }
 
 export const jobNames: Record<string, string> = {
@@ -73,6 +75,12 @@ export function environmentStatus(item: EnvironmentItem): { key: string; tone: T
   const running = item.state === "running"
   if (item.health === "unhealthy") return { key: "unhealthy", tone: "danger" }
   if (running && item.health === "starting") return { key: "created", tone: "warning" }
+  // A template setup that is waiting with an error recorded did not get to run.
+  const setup = item.environment.setup?.status
+  const failed = setup === "failed" || (setup === "pending" && !!item.environment.last_error)
+  if (running && failed) return { key: "setup_failed", tone: "danger" }
+  if (running && (setup === "pending" || setup === "running"))
+    return { key: "setting_up", tone: "info" }
   if (running) return { key: "running", tone: "success" }
   if (item.state === "missing" || item.state === "unavailable" || item.environment.last_error)
     return { key: item.state, tone: "danger" }
@@ -86,7 +94,10 @@ export const needsRetry = (item: EnvironmentItem) =>
   item.state !== "running" && (item.state === "missing" || !!item.environment.last_error)
 
 export const needsAttention = (item: EnvironmentItem) =>
-  needsRetry(item) || item.health === "unhealthy" || item.state === "unavailable"
+  needsRetry(item) ||
+  item.health === "unhealthy" ||
+  item.state === "unavailable" ||
+  environmentStatus(item).key === "setup_failed"
 
 export function jobTone(status: string): Tone {
   if (status === "completed") return "success"

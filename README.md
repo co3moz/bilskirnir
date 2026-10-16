@@ -10,11 +10,12 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 60 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 62 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate desktops with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** desktops from the browser.
 - **Snapshots and images**: save a desktop once and start new ones from it, or build an image from a script.
+- **Templates** that ask for values such as an account when a desktop is created, and run a setup script with them.
 - **Volumes** that keep your files after a desktop is deleted.
 - **Drag and drop uploads** into a desktop.
 

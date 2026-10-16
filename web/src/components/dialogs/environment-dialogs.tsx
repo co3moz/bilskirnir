@@ -13,7 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -29,8 +37,10 @@ import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
 import { useEnvironments, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
-import type { SettingsPreview } from "@/lib/types"
+import { parameterBody, templateFor } from "@/lib/templates"
+import type { ImageRecord, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
+import { ParameterField } from "./parameter-field"
 import { specBody, specDraft, SpecFields, type SpecDraft } from "./spec-fields"
 
 /** A dialog whose form submits once at a time and shows the manager's error in place. */
@@ -54,6 +64,42 @@ export function useSubmit() {
 
 const scrollBody = "-mx-4 flex max-h-[min(36rem,70vh)] flex-col gap-5 overflow-y-auto px-4 py-1"
 
+/** The values an image's template asks for, filled in with its defaults. */
+function TemplateValues({
+  template,
+  values,
+  onChange,
+}: {
+  template: NonNullable<ImageRecord["template"]>
+  values: Record<string, string>
+  onChange: (values: Record<string, string>) => void
+}) {
+  if (!template.parameters.length)
+    return (
+      <FieldDescription>The image runs a setup script once the desktop is ready.</FieldDescription>
+    )
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">Template</FieldLegend>
+      <FieldDescription className="text-xs">
+        The image's setup script receives these once the desktop is ready. Secret values are not
+        shown again.
+      </FieldDescription>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {template.parameters.map((parameter) => (
+          <ParameterField
+            key={`${parameter.name}-${parameter.type}`}
+            parameter={parameter}
+            value={values[parameter.name] ?? parameter.default}
+            onChange={(value) => onChange({ ...values, [parameter.name]: value })}
+            hints
+          />
+        ))}
+      </div>
+    </FieldSet>
+  )
+}
+
 export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { image?: string }) {
   const settings = useSettings().data
   const profiles = useProfiles().data ?? []
@@ -64,6 +110,9 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
   const [selected, setSelected] = React.useState<string | undefined>()
   const [draft, setDraft] = React.useState<SpecDraft>(() => specDraft({}, settings))
   const chosen = selected ?? initialImage(choices, image ?? settings?.base_image)
+  const template = templateFor(images, chosen)
+  // Values typed for one image are kept while another is chosen, and sent only for its own fields.
+  const [values, setValues] = React.useState<Record<string, string>>({})
   const { busy, error, submit } = useSubmit()
   const id = React.useId()
 
@@ -73,7 +122,12 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
         <form
           className="flex flex-col gap-4"
           onSubmit={submit(() =>
-            runJob("environments", { name, image: chosen, ...specBody(draft) })
+            runJob("environments", {
+              name,
+              image: chosen,
+              ...specBody(draft),
+              ...(template ? { parameters: parameterBody(template, values) } : {}),
+            })
           )}
         >
           <DialogHeader>
@@ -119,6 +173,9 @@ export function CreateEnvironmentDialog({ image, ...props }: DialogProps & { ima
                   </SelectContent>
                 </Select>
               </Field>
+              {template && (
+                <TemplateValues template={template} values={values} onChange={setValues} />
+              )}
             </FieldGroup>
             <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
           </div>
