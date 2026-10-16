@@ -32,9 +32,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { attempt, containerAction, retrySetup, setInternet } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { containerStatus, needsRetry, profileTitle } from "@/lib/format"
+import { containerStatus, desktopTitle, needsRetry } from "@/lib/format"
 import { href } from "@/lib/route"
-import type { ContainerItem, ContainerSpec, ProfileItem } from "@/lib/types"
+import type { ContainerItem, ContainerSpec, ImageItem } from "@/lib/types"
 
 /** The resources and devices a container was given, as compact badges. */
 export function SpecBadges({ spec, className }: { spec: ContainerSpec; className?: string }) {
@@ -132,13 +132,7 @@ export function InternetSwitch({ item, id }: { item: ContainerItem; id?: string 
   )
 }
 
-export function ContainerCard({
-  item,
-  profiles,
-}: {
-  item: ContainerItem
-  profiles: ProfileItem[]
-}) {
+export function ContainerCard({ item, images }: { item: ContainerItem; images: ImageItem[] }) {
   const { id, spec } = item
   const running = item.state === "running"
   const status = containerStatus(item)
@@ -167,7 +161,7 @@ export function ContainerCard({
           </button>
         </CardTitle>
         <CardDescription className="truncate">
-          {profileTitle(spec, item.desktop?.title, profiles)}
+          {desktopTitle(spec, item.desktop?.title, images)}
         </CardDescription>
         <CardAction>
           <StatusBadge state={status.key} tone={status.tone} />

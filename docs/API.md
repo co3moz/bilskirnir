@@ -31,9 +31,6 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials. |
 | GET | `/api/system` | Docker connection and host summary. |
-| GET | `/api/profiles` | Desktop profile catalog and whether each image is downloaded. |
-| POST | `/api/profiles/{profile_id}/pull` | Download a supplied profile's published image, or a newer one; a release manager downloads the one published with it. Returns a job. |
-| POST | `/api/profiles/{profile_id}/build` | Build a supplied profile; returns a job. |
 | GET | `/api/containers` | Managed containers, state and health. |
 | POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. |
 | GET | `/api/containers/{id}` | One container's configuration, state and health. |
@@ -82,9 +79,11 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/containers/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/containers/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Saved images, snapshots, ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a compose its parameters without the script. |
+| GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a compose its parameters without the script. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet` and `compose`; returns a job. |
+| POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
+| POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `compose` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
@@ -117,7 +116,7 @@ A job is finished when its status is `completed`, `failed` or `interrupted`. A s
 
 `GET /api/containers` returns each container's record, with `id`, `spec` (its creation settings), `container` (the Docker container's name), `source_image_id` and `last_error`, and Docker's view beside those fields: `state` is Docker's container state, `missing` when the container is gone or `unavailable` when Docker cannot be reached; `health` is `healthy`, `unhealthy`, `starting` or `unknown`; `status` is Docker's status text. `GET /api/containers/{id}` returns one item of the same shape.
 
-Creating a container or building an image from a supplied profile that is not downloaded yet pulls it first, in the same job. While the download runs, the job carries `progress`: `current` and `total` compressed bytes, where `total` is `null` until the size of every remaining layer is known, and `layers_done` of `layers`. Layers already on the host count as done and are not part of the byte total. The field is removed when the download ends. A download that fails is tried up to three times in the same job, unless Docker refused it, such as for an unknown image.
+Creating a container or building an image from a catalog image that is not downloaded yet pulls it first, in the same job. While the download runs, the job carries `progress`: `current` and `total` compressed bytes, where `total` is `null` until the size of every remaining layer is known, and `layers_done` of `layers`. Layers already on the host count as done and are not part of the byte total. The field is removed when the download ends. A download that fails is tried up to three times in the same job, unless Docker refused it, such as for an unknown image.
 
 Creation accepts `name`, `image` and these optional fields:
 
@@ -161,6 +160,20 @@ POST to `/api/containers/{id}/exec`:
 ```
 
 The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1 to 3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the container's network and resource limits apply. The script holds the container's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
+
+## Images
+
+`GET /api/images` lists every image a container can start from, each with a `kind`:
+
+| Kind | Image |
+| --- | --- |
+| `catalog` | A desktop published with Bilskirnir. It is downloaded the first time a container or a build starts from it. |
+| `build` | Built from a base image with a script through `/api/images/build`. |
+| `snapshot` | A container's files saved with `.../snapshot`. |
+| `import` | A desktop image already on the Docker host, registered with `POST /api/images`. |
+| `archive` | Loaded from an [image archive](#image-archives). |
+
+The catalog images come first. Their `id` is the catalog ID, such as `ubuntu-xfce`, and a container or a build names one by its `reference`. `image_id` is `null` until the image is downloaded, `downloaded` tells whether Docker has the reference and `available` whether it can be used; `error` explains a downloaded reference whose labels belong to another desktop. `created_at`, `parent_image_id` and `source_container` are `null`. The other kinds are saved records, named by their Docker `image_id`, with `available: false` once Docker no longer has the image. Every kind reports `desktop`, the catalog image it derives from (`catalog_id`) and its session, when its labels say so.
 
 ## Composes
 
@@ -251,7 +264,7 @@ Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and desti
 
 ## Image archives
 
-`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind and desktop profile, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
+`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind and desktop information, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
 
 ```bash
 curl --cookie bilskirnir.cookies --output unity.tar.gz \
@@ -270,7 +283,7 @@ curl --cookie bilskirnir.cookies \
   'http://localhost:8080/api/images/import?size=FILE_SIZE_IN_BYTES&name=Unity%20workspace'
 ```
 
-The archive streams into `docker load` as it arrives. On the way, the manager removes every tag and image name the archive carries, so an import cannot replace a profile image or any other existing tag. Docker can register the image only after the archive has passed these checks:
+The archive streams into `docker load` as it arrives. On the way, the manager removes every tag and image name the archive carries, so an import cannot replace a catalog image or any other existing tag. Docker can register the image only after the archive has passed these checks:
 
 - It holds exactly one image, with its `manifest.json` and configuration.
 - The image has the `io.wsl-desktop.desktop=true` label.

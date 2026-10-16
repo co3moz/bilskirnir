@@ -132,13 +132,13 @@ impl App {
         if manager_info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
-        // Cheap checks come before a profile download that can take minutes.
+        // Cheap checks come before a catalog image download that can take minutes.
         for m in &spec.mounts {
             self.inspect("volume", &m.volume)
                 .await
                 .context("Volume not found")?;
         }
-        self.ensure_profile_image(&spec.image, job_id).await?;
+        self.ensure_catalog_image(&spec.image, job_id).await?;
         let image = self
             .inspect("image", &spec.image)
             .await
@@ -158,7 +158,7 @@ impl App {
             spec,
             created_at: now(),
             last_error: None,
-            desktop: crate::profiles::from_image(&image),
+            desktop: crate::catalog::from_image(&image),
             working_image: None,
             setup: compose.as_ref().map(|(image, pinned)| pinned.setup(image)),
         };

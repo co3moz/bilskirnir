@@ -4,15 +4,15 @@
 
 The `bilskirnir.wsl` package is a ready-made WSL distribution: Ubuntu 24.04 with Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. Installing it replaces the "install Ubuntu, install Docker, configure the GPU, prepare Compose" steps with one command. The distribution runs its own Docker Engine, with images and containers separate from Docker in any other WSL distribution; only the network is shared, see [Docker in other WSL distributions](#docker-in-other-wsl-distributions).
 
-The package contains no application images. The first start downloads the manager from GHCR, and each desktop profile downloads the first time a container is created from it. This keeps the package small, leaves profiles you never use off the disk and lets `bilskirnir update` fetch newer images later.
+The package contains no application images. The first start downloads the manager from GHCR, and each catalog image downloads the first time a container is created from it. This keeps the package small, leaves images you never use off the disk and lets `bilskirnir update` fetch newer images later.
 
-Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since, and that manager downloads the desktop profiles published with 1.2.0. Only [`bilskirnir update`](#update) moves it forward.
+Each package installs the manager release it belongs to. The package from release 1.2.0 writes `MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:1.2.0` to `.env`, so installing it months later still gives you manager 1.2.0, however many releases came out since, and that manager downloads the catalog images published with 1.2.0. Only [`bilskirnir update`](#update) moves it forward.
 
 ## Requirements
 
 - Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
 - For GPU containers, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
-- About 2 GB of disk space for the distribution, plus the manager image, each desktop profile you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your containers.
+- About 2 GB of disk space for the distribution, plus the manager image, each catalog image you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your containers.
 
 ## Install
 
@@ -59,7 +59,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services and the dashboard address. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
@@ -69,7 +69,7 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 
 ## Update
 
-`bilskirnir update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it downloads the desktop profiles you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with the profile's usual reference, `ubuntu-xfce:24.04`, which desktops and images record.
+`bilskirnir update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it downloads the catalog images you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with their usual catalog reference, `ubuntu-xfce:24.04`, which containers and images record.
 
 A `MANAGER_IMAGE` set by hand to anything other than a release of `ghcr.io/co3moz/bilskirnir`, such as `latest`, which follows `master`, or a digest, is only pulled again. To return to releases, set it to one with `bilskirnir settings`, for example `ghcr.io/co3moz/bilskirnir:1.2.0`, and run `bilskirnir update`.
 

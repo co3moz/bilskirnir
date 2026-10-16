@@ -239,8 +239,8 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 62);
-    // Compose values reach a new desktop through create_container; the schema forbids
+    assert_eq!(tools.len(), 61);
+    // Compose values reach a new container through create_container; the schema forbids
     // properties it does not list, so a missing one is a value no agent can send.
     let create = tools
         .iter()
@@ -917,8 +917,8 @@ fn job_list_is_bounded_and_strips_logs_before_deserialization() {
 }
 
 #[test]
-fn profile_catalog_is_unique_and_metadata_is_explicit() {
-    let catalog = profiles::catalog();
+fn image_catalog_is_unique_and_metadata_is_explicit() {
+    let catalog = catalog::catalog();
     assert_eq!(catalog.len(), 2);
     assert_eq!(
         catalog
@@ -931,7 +931,7 @@ fn profile_catalog_is_unique_and_metadata_is_explicit() {
     assert!(
         catalog
             .iter()
-            .any(|p| p.reference == profiles::DEFAULT_IMAGE && p.session == "xfce")
+            .any(|p| p.reference == catalog::DEFAULT_IMAGE && p.session == "xfce")
     );
     assert!(
         catalog
@@ -939,16 +939,43 @@ fn profile_catalog_is_unique_and_metadata_is_explicit() {
             .any(|p| p.id == "ubuntu-gnome" && p.session == "gnome")
     );
     assert!(
-        profiles::from_image(
+        catalog::from_image(
             &serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.desktop":"true"}}})
         )
         .is_none()
     );
-    let info = profiles::from_image(&serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.profile":"ubuntu-gnome","io.wsl-desktop.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
+    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.profile":"ubuntu-gnome","io.wsl-desktop.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
     assert_eq!(info.session, "gnome");
+    assert_eq!(info.catalog_id, "ubuntu-gnome");
+    // Records saved while catalog images were profiles still carry their desktop.
+    let old: catalog::DesktopInfo = serde_json::from_value(
+        serde_json::json!({"profile":"ubuntu-xfce","title":"Ubuntu 24.04 · Lightweight XFCE","session":"xfce"}),
+    )
+    .unwrap();
+    assert_eq!(old.catalog_id, "ubuntu-xfce");
 }
 #[test]
-fn old_container_records_remain_readable_without_profile_metadata() {
+fn catalog_images_are_listed_with_the_saved_images() {
+    let xfce = catalog::find("ubuntu-xfce").unwrap();
+    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"io.wsl-desktop.profile":id,"io.wsl-desktop.session":session,"org.opencontainers.image.title":"XFCE"}}});
+    // Not downloaded yet: still listed, so a container can start from it and download it.
+    let missing = catalog::listed(&xfce, None, true);
+    assert_eq!(missing["kind"], "catalog");
+    assert_eq!(missing["reference"], xfce.reference);
+    assert!(missing["available"] == false && missing["downloaded"] == false);
+    assert!(missing["image_id"].is_null() && missing["error"].is_null());
+    let ready = catalog::listed(&xfce, Some(&labels("ubuntu-xfce", "xfce")), true);
+    assert!(ready["available"] == true && ready["image_id"] == "sha256:x");
+    assert_eq!(ready["desktop"]["catalog_id"], "ubuntu-xfce");
+    // A tag that points at another desktop is reported instead of being used.
+    let foreign = catalog::listed(&xfce, Some(&labels("ubuntu-gnome", "gnome")), true);
+    assert!(foreign["available"] == false && foreign["downloaded"] == true);
+    assert!(foreign["error"].is_string());
+    // Without Docker nobody knows.
+    assert!(catalog::listed(&xfce, None, false)["available"].is_null());
+}
+#[test]
+fn old_container_records_remain_readable_without_desktop_metadata() {
     let value = serde_json::json!({"id":"old","container":"wsld-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"wsl-desktop/ubuntu:24.04"}});
     let env: model::Container = serde_json::from_value(value).unwrap();
     assert!(env.desktop.is_none());
@@ -973,16 +1000,16 @@ fn records_saved_before_containers_were_renamed_keep_their_container() {
     assert_eq!(model::CONTAINERS, "environment");
 }
 #[tokio::test]
-async fn unknown_profile_build_is_rejected_without_queuing_docker_work() {
+async fn only_catalog_images_are_built_or_pulled() {
     let app = app(false);
-    // Only catalog profiles are built or pulled; a free-form reference never reaches a registry.
+    // A free-form reference or a saved image never reaches a registry or the bundled context.
     for action in ["build", "pull"] {
         let response = router(app.clone())
             .oneshot(
                 Request::builder()
                     .header("host", "localhost:8080")
                     .method("POST")
-                    .uri(format!("/api/profiles/not-a-profile/{action}"))
+                    .uri(format!("/api/images/not-in-catalog/{action}"))
                     .header("x-wsld-request", "1")
                     .body(Body::empty())
                     .unwrap(),
@@ -1060,7 +1087,6 @@ async fn protected_routes_require_login_before_touching_docker() {
     let router = router(app(true));
     for path in [
         "/api/containers",
-        "/api/profiles",
         "/api/containers/unknown/screenshot",
         "/api/containers/unknown/vnc",
         "/api/jobs",

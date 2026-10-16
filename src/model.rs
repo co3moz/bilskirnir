@@ -166,7 +166,7 @@ pub struct Container {
     #[serde(default)]
     pub last_error: Option<String>,
     #[serde(default)]
-    pub desktop: Option<crate::profiles::DesktopInfo>,
+    pub desktop: Option<crate::catalog::DesktopInfo>,
     /// Set once a settings change recreated the container: the container runs this commit of
     /// its earlier files, while `source_image_id` stays the image the desktop started from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -204,7 +204,7 @@ pub struct ImageRecord {
     pub created_at: u64,
     pub description: String,
     #[serde(default)]
-    pub desktop: Option<crate::profiles::DesktopInfo>,
+    pub desktop: Option<crate::catalog::DesktopInfo>,
     /// What a script build ran, so the image can be exported and built again. Snapshots,
     /// imports and builds made before it was recorded have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -216,7 +216,7 @@ pub struct ImageRecord {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildConfig {
-    /// The base as the request named it: a profile reference or a local image ID.
+    /// The base as the request named it: a catalog reference or a local image ID.
     pub base_image: String,
     pub internet: bool,
     pub script: String,

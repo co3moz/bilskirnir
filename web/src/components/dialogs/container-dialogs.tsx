@@ -36,9 +36,9 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
-import { useContainers, useImages, useProfiles, useSettings, useVolumes } from "@/lib/queries"
+import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { parameterBody, composeFor } from "@/lib/compose"
-import type { ImageRecord, SettingsPreview } from "@/lib/types"
+import type { ImageItem, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
 import { ParameterField } from "./parameter-field"
 import { specBody, specDraft, SpecFields, type SpecDraft } from "./spec-fields"
@@ -70,7 +70,7 @@ function ComposeValues({
   values,
   onChange,
 }: {
-  compose: NonNullable<ImageRecord["compose"]>
+  compose: NonNullable<ImageItem["compose"]>
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
 }) {
@@ -102,10 +102,9 @@ function ComposeValues({
 
 export function CreateContainerDialog({ image, ...props }: DialogProps & { image?: string }) {
   const settings = useSettings().data
-  const profiles = useProfiles().data ?? []
   const images = useImages().data ?? []
   const volumes = useVolumes().data ?? []
-  const choices = imageChoices(profiles, images, settings?.base_image, image)
+  const choices = imageChoices(images, settings?.base_image, image)
   const [name, setName] = React.useState("")
   const [selected, setSelected] = React.useState<string | undefined>()
   const [draft, setDraft] = React.useState<SpecDraft>(() => specDraft({}, settings))
@@ -133,8 +132,8 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
           <DialogHeader>
             <DialogTitle>New container</DialogTitle>
             <DialogDescription>
-              A container from a profile, snapshot or custom image. A profile that is not downloaded
-              yet downloads first.
+              A container from any image. A catalog image that is not downloaded yet downloads
+              first.
             </DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>

@@ -41,7 +41,7 @@ import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
-import { refreshAll, useContainers, useImages, useProfiles, useSettings } from "@/lib/queries"
+import { refreshAll, useContainers, useImages, useSettings } from "@/lib/queries"
 import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
@@ -167,11 +167,7 @@ rm -rf /var/lib/apt/lists/*`
 
 export function BuildImageDialog(props: DialogProps) {
   const settings = useSettings().data
-  const choices = imageChoices(
-    useProfiles().data ?? [],
-    useImages().data ?? [],
-    settings?.base_image
-  )
+  const choices = imageChoices(useImages().data ?? [], settings?.base_image)
   const [name, setName] = React.useState("")
   const [base, setBase] = React.useState<string | undefined>()
   const [script, setScript] = React.useState(DEFAULT_SCRIPT)

@@ -16,9 +16,9 @@ docker compose --profile images build desktop desktop-gnome manager
 docker compose up -d --no-build manager
 ```
 
-This builds both desktop profiles and the manager. The manager is tagged `bilskirnir/manager:local`. Desktop builds use the GHCR references in the profile catalog, so local builds and registry installations agree on image names.
+This builds both catalog images and the manager. The manager is tagged `bilskirnir/manager:local`. Desktop builds use the GHCR references in the image catalog, so local builds and registry installations agree on image names.
 
-When a supplied profile image is missing, its card under **Images** offers **Download**, which pulls the published image, and **Build**, which builds the profile using the manager's bundled Docker context. Creating a desktop or an image from a missing profile downloads it in that job. Pulls use the Engine API socket so the job can report byte progress; the socket follows `DOCKER_HOST`, and a daemon that is not on a Unix socket is pulled through `docker pull` without byte counts. Script builds and imported images are separate entries in the image library.
+When a catalog image is missing, its row under **Images** offers a download button, which pulls the published image, and a build button, which builds it from the manager's bundled Docker context. Creating a container or an image from a missing catalog image downloads it in that job. Pulls use the Engine API socket so the job can report byte progress; the socket follows `DOCKER_HOST`, and a daemon that is not on a Unix socket is pulled through `docker pull` without byte counts. Script builds, snapshots and imported images follow the catalog images in the same list.
 
 ## Find the code
 
@@ -26,10 +26,10 @@ When a supplied profile image is missing, its card under **Images** offers **Dow
 | --- | --- |
 | HTTP API, settings and authentication | `src/main.rs`, `src/api.rs`, `src/config.rs`, `src/auth.rs` |
 | Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
-| Profile downloads and their progress | `src/pulls.rs` |
+| Catalog image downloads and their progress | `src/pulls.rs` |
 | Settings changes after creation | `src/reconfigure.rs` |
 | Composes and their setup runs | `src/compose.rs`, `src/setup_runner.py`, `tests/test_setup_runner.py`, `web/src/lib/compose.ts`, `web/src/components/dialogs/compose-dialog.tsx` |
-| Metadata and profile catalog | `src/db.rs`, `src/model.rs`, `src/profiles.rs`, `desktop/profiles.json` |
+| Metadata and image catalog | `src/db.rs`, `src/model.rs`, `src/catalog.rs`, `desktop/profiles.json` |
 | VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
 | MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
 | Background applications, windows, screenshots and waits | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs`, `src/waits.rs` |
@@ -84,11 +84,11 @@ Standard Docker CLI operations have a 120-second timeout; image builds and commi
 
 Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Destinations must remain within Downloads or writable mounted volumes. The receiver rejects symlink traversal and writes completed files atomically. Preserve these constraints when changing the upload path.
 
-## Add a desktop profile
+## Add a catalog image
 
-Add an entry to `desktop/profiles.json` with an ID, display name, image reference, session, description, `build_target` and `build_service`; every field is required. Then add the matching Dockerfile stage, startup session and desktop metadata labels.
+Add an entry to `desktop/profiles.json` with an ID, display name, image reference, session, description, `build_target` and `build_service`; every field is required. The file keeps its name because the WSL package's `bilskirnir update` reads it from the manager. Then add the matching Dockerfile stage, startup session and desktop metadata labels; the `io.wsl-desktop.profile` label carries the catalog ID.
 
-Update Compose and the publishing workflow if the new profile needs its own build service or published image. Rebuild the manager so its catalog includes the profile. Keep image references aligned across the catalog, configuration defaults and installation files.
+Update Compose and the publishing workflow if the new image needs its own build service or published image. Rebuild the manager so its catalog includes the image. Keep image references aligned across the catalog, configuration defaults and installation files.
 
 ## Check a change
 
@@ -124,13 +124,13 @@ docker compose --env-file .env.example --profile images config --quiet
 docker compose -f compose.ghcr.yml --env-file .env.example --profile https config --quiet
 ```
 
-For Docker or GPU lifecycle changes, build both desktop profiles and the manager, then run the acceptance suite inside WSL:
+For Docker or GPU lifecycle changes, build both catalog images and the manager, then run the acceptance suite inside WSL:
 
 ```bash
 python3 tests/integration.py
 ```
 
-The suite creates uniquely named resources and cleans only resources it owns. It covers both desktop profiles, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and MJPEG video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
+The suite creates uniquely named resources and cleans only resources it owns. It covers both catalog images, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and MJPEG video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
 
 Inspect interface changes in a live browser at desktop and narrow widths. Open saved screenshots to confirm their actual layout before adding them to the documentation. Do not run acceptance tests or rebuild images for a wording-only change.
 

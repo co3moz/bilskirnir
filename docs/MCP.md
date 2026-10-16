@@ -66,8 +66,8 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 
 ## A useful first workflow
 
-1. Call `get_settings` and `list_profiles` to see the available desktops and defaults.
-2. Call `create_container` with a name and a profile image reference or saved image ID. A profile that is not downloaded yet is pulled first, which can take several minutes; `pull_profile` fetches it ahead of time.
+1. Call `get_settings` and `list_images` to see the available images and defaults.
+2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `container_id`.
 4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
@@ -78,17 +78,17 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 62 tools:
+The server currently exposes 61 tools:
 
 | Work | Tools |
 | --- | --- |
-| Installation and profiles | `get_settings`, `get_system`, `list_profiles`, `pull_profile`, `build_profile` |
+| Installation | `get_settings`, `get_system` |
 | Container lifecycle | `list_containers`, `get_container`, `create_container`, `update_container`, `container_action`, `set_internet`, `retry_container`, `reset_container`, `delete_container` |
 | Work inside a container | `exec_container`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `container_logs`, `container_diagnostics` |
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
-| Reusable images | `list_images`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
+| Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume` |
 | Operation results | `list_jobs`, `get_job` |
 

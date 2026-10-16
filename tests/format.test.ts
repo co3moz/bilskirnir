@@ -4,7 +4,10 @@ import assert from "node:assert/strict"
 import {
   downloadProgress,
   containerStatus,
+  desktopTitle,
   imageChoices,
+  imageSource,
+  imageStatus,
   imageTree,
   jobActivity,
   jobLogText,
@@ -15,7 +18,7 @@ import {
   subfolderError,
   uploadLocations,
 } from "../web/src/lib/format"
-import type { ContainerItem, ContainerSetup, JobStatus, ProfileItem } from "../web/src/lib/types"
+import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../web/src/lib/types"
 
 test("completed legacy deletion explains the result rather than waiting or displaying an ID", () => {
   const log = jobLogText({
@@ -72,48 +75,75 @@ test("missing parents, duplicate image IDs and cycles remain visible", () => {
   assert.equal(new Set(imageTree(records).map((r) => r.id)).size, 3)
 })
 
-test("profile choices distinguish GNOME, XFCE and unavailable images", () => {
-  const profile = (reference: string, name: string) => ({
-    id: reference,
-    reference,
-    name,
-    session: "",
-    description: "",
-  })
-  const profiles: ProfileItem[] = [
-    {
-      profile: profile("xfce:24.04", "Ubuntu · Lightweight XFCE"),
+const image = (fields: Partial<ImageItem>): ImageItem => ({
+  id: "i",
+  name: "Image",
+  image_id: null,
+  reference: "",
+  parent_image_id: null,
+  source_container: null,
+  kind: "snapshot",
+  created_at: null,
+  description: "",
+  ...fields,
+})
+const catalogImage = (reference: string, name: string, fields: Partial<ImageItem> = {}) =>
+  image({ id: reference, reference, name, kind: "catalog", available: false, ...fields })
+
+test("image choices distinguish GNOME, XFCE and unavailable images", () => {
+  const images = [
+    catalogImage("xfce:24.04", "Ubuntu · Lightweight XFCE", {
       available: true,
       image_id: "sha256:x",
-    },
-    { profile: profile("gnome:24.04", "Ubuntu · GNOME"), available: false, image_id: null },
-    {
-      profile: profile("other:24.04", "Ubuntu · Other"),
-      available: false,
+    }),
+    catalogImage("gnome:24.04", "Ubuntu · GNOME"),
+    catalogImage("other:24.04", "Ubuntu · Other", {
       image_id: "sha256:wrong",
-      error: "Image labels do not match the profile",
-    },
+      downloaded: true,
+      error: "Image labels do not match the catalog",
+    }),
+    image({
+      image_id: "sha256:custom",
+      name: "My game",
+      available: true,
+      desktop: { catalog_id: "ubuntu-gnome", title: "Ubuntu · GNOME", session: "gnome" },
+    }),
   ]
-  const choices = imageChoices(
-    profiles,
-    [
-      {
-        image_id: "sha256:custom",
-        name: "My game",
-        desktop: { profile: "", title: "Ubuntu · GNOME", session: "" },
-      },
-    ],
-    "xfce:24.04"
-  )
+  const choices = imageChoices(images, "xfce:24.04")
   assert.equal(choices.length, 4)
-  // A profile that is not downloaded stays selectable: creating from it downloads the image first.
+  // A catalog image that is not downloaded stays selectable: creating from it downloads it first.
   assert.deepEqual(
     [choices[1].disabled, choices[1].label],
     [false, "Ubuntu · GNOME · downloads first"]
   )
   assert.deepEqual([choices[2].disabled, choices[2].label], [true, "Ubuntu · Other"])
   assert.equal(choices[3].label, "My game · Ubuntu · GNOME")
-  assert.ok(imageChoices([], [], "wsl-desktop/ubuntu:24.04")[0].label.includes("Lightweight XFCE"))
+  assert.ok(imageChoices([], "wsl-desktop/ubuntu:24.04")[0].label.includes("Lightweight XFCE"))
+})
+
+test("catalog images are images: listed, started and nested like the others", () => {
+  const xfce = catalogImage("xfce:24.04", "XFCE", { available: true, image_id: "sha:x" })
+  const gnome = catalogImage("gnome:24.04", "GNOME")
+  const snapshot = image({ id: "s", image_id: "sha:s", parent_image_id: "sha:x" })
+  // Children of a downloaded catalog image sit under it; one without a Docker ID has none.
+  assert.deepEqual(
+    imageTree([xfce, gnome, snapshot]).map((r) => [r.id, r.depth]),
+    [
+      ["xfce:24.04", 0],
+      ["s", 1],
+      ["gnome:24.04", 0],
+    ]
+  )
+  // A catalog image starts by its reference, so a missing one downloads first.
+  assert.equal(imageSource(gnome), "gnome:24.04")
+  assert.equal(imageSource(snapshot), "sha:s")
+  assert.equal(imageStatus(gnome).key, "not_ready")
+  assert.equal(imageStatus({ ...gnome, error: "Image labels do not match" }).key, "unusable")
+  assert.equal(imageStatus({ ...snapshot, available: false }).key, "missing")
+  assert.equal(imageStatus({ ...snapshot, available: null }).key, "unknown")
+  const spec = { image: "gnome:24.04" } as ContainerItem["spec"]
+  assert.equal(desktopTitle(spec, undefined, [xfce, gnome]), "GNOME")
+  assert.equal(desktopTitle(spec, "Ubuntu · GNOME", [xfce, gnome]), "Ubuntu · GNOME")
 })
 
 test("download progress reads as bytes once the size is known and never claims a size it lacks", () => {
@@ -219,27 +249,25 @@ test("job activity counts finished jobs per local day and leaves out running one
 
 test("a job names what it worked on, even after that container was deleted", () => {
   const containers = new Map([["e1", "Unity workspace"]])
-  const profiles = new Map([["ubuntu-gnome", "Ubuntu 24.04 · GNOME"]])
+  const images = new Map([
+    ["ubuntu-gnome", "Ubuntu 24.04 · GNOME"],
+    ["i1", "Unity snapshot"],
+  ])
   const target = (resource: string | null, result?: Record<string, unknown>) =>
-    jobTarget({ resource, result }, containers, profiles)
+    jobTarget({ resource, result }, containers, images)
   assert.equal(target("container:e1"), "Unity workspace")
   assert.equal(target("container:gone", { deleted: "gone", name: "Old QA" }), "Old QA")
   assert.equal(target("container:0123456789abcdef"), "Container 01234567")
   // Jobs recorded before the rename still find their container.
   assert.equal(target("environment:e1"), "Unity workspace")
+  // A catalog image's jobs name it by its catalog ID; older ones called it a profile.
+  assert.equal(target("image:ubuntu-gnome"), "Ubuntu 24.04 · GNOME")
   assert.equal(target("profile:ubuntu-gnome"), "Ubuntu 24.04 · GNOME")
   assert.equal(target("profile:retired"), "retired")
   assert.equal(target(null), "")
-  const images = new Map([["i1", "Unity snapshot"]])
-  assert.equal(jobTarget({ resource: "image:i1" }, containers, profiles, images), "Unity snapshot")
-  assert.equal(
-    jobTarget({ resource: "image:new", result: { name: "Imported" } }, containers, profiles),
-    "Imported"
-  )
-  assert.equal(
-    jobTarget({ resource: "image:0123456789ab" }, containers, profiles),
-    "Image 01234567"
-  )
+  assert.equal(target("image:i1"), "Unity snapshot")
+  assert.equal(target("image:new", { name: "Imported" }), "Imported")
+  assert.equal(target("image:0123456789ab"), "Image 01234567")
 })
 
 test("archive jobs count bytes; image downloads keep counting layers", () => {

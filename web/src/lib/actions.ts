@@ -6,7 +6,7 @@ import { formatBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
 import { refreshAll } from "./queries"
 import { navigate } from "./route"
-import type { BuildConfig, ImageRecord, JobStarted } from "./types"
+import type { BuildConfig, ImageItem, JobStarted } from "./types"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
 export async function runJob(path: string, body?: unknown, method?: string) {
@@ -66,7 +66,7 @@ async function copyText(text: string) {
 }
 
 /** Copies a built image's configuration as JSON, or shows it when the browser refuses to copy. */
-export async function exportBuildConfig(image: Pick<ImageRecord, "id" | "name">) {
+export async function exportBuildConfig(image: Pick<ImageItem, "id" | "name">) {
   const text = formatBuildConfig(await api<BuildConfig>(`images/${image.id}/config`))
   if (await copyText(text)) toast.success(`Copied the configuration of ${image.name}.`)
   else openDialog({ kind: "log", title: `${image.name} configuration`, text })
@@ -85,7 +85,7 @@ export async function attempt(action: () => Promise<unknown>) {
  * Downloads an image as a .tar.gz archive. The browser saves the stream itself; the manager
  * records the export as a job, where its progress and any Docker error appear.
  */
-export function exportArchive(image: Pick<ImageRecord, "id" | "name">) {
+export function exportArchive(image: Pick<ImageItem, "id" | "name">) {
   const link = document.createElement("a")
   link.href = archiveUrl(image.id)
   link.download = ""

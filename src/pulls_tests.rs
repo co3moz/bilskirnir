@@ -1,4 +1,4 @@
-//! Pins down how profile downloads are reported: Docker's per-layer messages become one byte
+//! Pins down how catalog image downloads are reported: Docker's per-layer messages become one byte
 //! count that never runs backwards, the registry manifest supplies the total up front, and the
 //! Engine API stream is read correctly however its chunks split the JSON lines.
 use super::*;
@@ -319,8 +319,8 @@ async fn engine_pull_reports_refusals_and_interrupted_streams() {
 #[tokio::test]
 async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference() {
     use std::os::unix::fs::PermissionsExt;
-    let profile = crate::profiles::catalog().remove(0);
-    let reference = profile.reference.clone();
+    let image = crate::catalog::catalog().remove(0);
+    let reference = image.reference.clone();
     let release = format!("{}:1.2.3", reference.rsplit_once(':').unwrap().0);
     // A Docker CLI stand-in that records its arguments and has no manifest to offer. It lists
     // every image except the release tag, which it lists only once `release-tag-here` exists.
@@ -342,7 +342,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     let job = crate::model::Job {
         id: "pull".into(),
-        kind: "profile-pull".into(),
+        kind: "image-pull".into(),
         resource: None,
         status: "running".into(),
         created_at: crate::model::now(),
@@ -354,7 +354,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     app.db.put("job", "pull", &job).unwrap();
 
     let result = app
-        .pull_profile_from(&profile, &release, "pull")
+        .pull_catalog_image_from(&image, &release, "pull")
         .await
         .unwrap();
     assert_eq!(result["reference"], reference);
@@ -378,7 +378,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     // A release tag that was here before the download stays.
     std::fs::remove_file(&calls).unwrap();
     std::fs::write(dir.join("release-tag-here"), "").unwrap();
-    app.pull_profile_from(&profile, &release, "pull")
+    app.pull_catalog_image_from(&image, &release, "pull")
         .await
         .unwrap();
     let after = std::fs::read_to_string(&calls).unwrap();
@@ -390,7 +390,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
 
     // Any other build pulls the catalog reference itself and tags nothing.
     std::fs::remove_file(&calls).unwrap();
-    app.pull_profile_from(&profile, &reference, "pull")
+    app.pull_catalog_image_from(&image, &reference, "pull")
         .await
         .unwrap();
     assert_eq!(

@@ -4,6 +4,7 @@ mod archives;
 mod audio;
 mod auth;
 mod capture;
+mod catalog;
 mod compose;
 mod config;
 mod db;
@@ -18,7 +19,6 @@ mod mcp;
 mod media;
 mod model;
 mod process;
-mod profiles;
 mod pulls;
 mod reconfigure;
 mod recordings;
@@ -58,9 +58,6 @@ fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
-        .route("/api/profiles", get(api::profiles))
-        .route("/api/profiles/{id}/build", post(api::build_profile))
-        .route("/api/profiles/{id}/pull", post(api::pull_profile))
         .route("/api/system", get(api::system))
         .route("/api/containers", get(api::containers).post(api::create))
         .route(
@@ -165,6 +162,8 @@ fn router(app: Arc<App>) -> Router {
                 usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
             )),
         )
+        .route("/api/images/{id}/pull", post(api::pull_catalog))
+        .route("/api/images/{id}/build", post(api::build_catalog))
         .route("/api/images/{id}/archive", get(archives::export))
         .route("/api/images/{id}/config", get(api::image_config))
         .route(

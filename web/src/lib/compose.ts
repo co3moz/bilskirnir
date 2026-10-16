@@ -1,6 +1,6 @@
 import type {
   ContainerSetup,
-  ImageRecord,
+  ImageItem,
   ParameterDisplay,
   ParameterOption,
   ParameterType,
@@ -51,7 +51,7 @@ export const displayOf = (parameter: Pick<ComposeParameter, "type" | "display">)
 
 const hasOptions = (type: ParameterType) => type === "choice" || type === "choices"
 
-type WithCompose = Pick<ImageRecord, "image_id" | "reference" | "compose">
+type WithCompose = Pick<ImageItem, "image_id" | "reference" | "compose">
 
 /**
  * The compose a new container from `value`, an image ID or reference, asks for. The manager

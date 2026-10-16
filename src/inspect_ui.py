@@ -5,7 +5,7 @@ import sys
 try:
     import pyatspi
 except ImportError:
-    print("AT-SPI support is not installed in this desktop image; rebuild the profile image", file=sys.stderr)
+    print("AT-SPI support is not installed in this desktop image; update its catalog image", file=sys.stderr)
     sys.exit(1)
 
 pid_filter, name_filter, max_depth, max_nodes = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])

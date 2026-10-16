@@ -127,7 +127,7 @@ def wait_for(fn, seconds=90):
 def job(response):
     result = wait_for(lambda: (j if (j := api(f"jobs/{response['job_id']}"))["status"] not in ("queued", "running") else None), 180)
     assert result["status"] == "completed", result
-    if result["result"] and "reference" in result["result"] and "profile_id" not in result["result"]:
+    if result["result"] and "reference" in result["result"] and result["result"].get("kind") != "catalog":
         image_refs.append(result["result"]["reference"])
     return result["result"]
 
@@ -173,7 +173,7 @@ def mcp_job(response, success=True):
     jid = response["structuredContent"]["job_id"]
     result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
     assert result["status"] == ("completed" if success else "failed"), result
-    if success and result["result"] and result["result"].get("reference") and "profile_id" not in result["result"]:
+    if success and result["result"] and result["result"].get("reference") and result["result"].get("kind") != "catalog":
         image_refs.append(result["result"]["reference"])
     return result
 
@@ -259,19 +259,23 @@ try:
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
     assert api("system")["connected"]
-    profiles = api("profiles")
-    assert {p["profile"]["session"] for p in profiles} == {"xfce", "gnome"}
-    assert all(p["available"] for p in profiles), profiles
-    xfce = next(p for p in profiles if p["profile"]["session"] == "xfce")
-    gnome = next(p for p in profiles if p["profile"]["session"] == "gnome")
-    # A profile build through the manager must work from its bundled Docker context.
-    assert mcp_job(tool("build_profile", {"profile_id":"ubuntu-xfce"}))["result"]["profile_id"] == "ubuntu-xfce"
-    print("PASS distinct desktop profile catalog and built-in image preparation", flush=True)
-    # A desktop created from a profile the host does not have downloads the published image in
-    # its creation job, which reports byte progress while it runs. Only the profile tag is moved
-    # aside, never the local build; it is restored, and only an image this phase pulled is removed.
-    xfce_ref = xfce["profile"]["reference"]
-    # A release manager downloads the profile published with it and tags that as the reference.
+    catalog = [i for i in api("images") if i["kind"] == "catalog"]
+    assert all(i["available"] for i in catalog), catalog
+    assert {i["desktop"]["session"] for i in catalog} == {"xfce", "gnome"}, catalog
+    # The catalog leads the image list, before any saved image.
+    assert [i["kind"] for i in api("images")[:len(catalog)]] == ["catalog"] * len(catalog)
+    assert [i["id"] for i in tool("list_images")["structuredContent"]["items"] if i["kind"] == "catalog"] == [i["id"] for i in catalog]
+    xfce = next(i for i in catalog if i["desktop"]["session"] == "xfce")
+    gnome = next(i for i in catalog if i["desktop"]["session"] == "gnome")
+    # A catalog image build through the manager must work from its bundled Docker context.
+    assert mcp_job(tool("build_catalog_image", {"image_id":"ubuntu-xfce"}))["result"]["id"] == "ubuntu-xfce"
+    print("PASS distinct catalog images and built-in image preparation", flush=True)
+    # A container created from a catalog image the host does not have downloads the published
+    # image in its creation job, which reports byte progress while it runs. Only the catalog tag
+    # is moved aside, never the local build; it is restored, and only an image this phase pulled
+    # is removed.
+    xfce_ref = xfce["reference"]
+    # A release manager downloads the catalog image published with it and tags that as the reference.
     release = docker("inspect", "--format", '{{index .Config.Labels "io.wsl-desktop.release"}}', manager).decode().strip()
     xfce_source = xfce_ref if release in ("", "<no value>") else f"{xfce_ref.rsplit(':', 1)[0]}:{release}"
     local_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip()
@@ -286,8 +290,9 @@ try:
         docker("image", "tag", xfce_source, source_backup)
         docker("image", "rm", xfce_source)
     try:
-        assert not next(p for p in api("profiles") if p["profile"]["id"] == "ubuntu-xfce")["available"]
-        created = api("containers", {"name": "Lazy profile download", "image": xfce_ref, "gpu": False, "internet": False})
+        missing = next(i for i in api("images") if i["id"] == "ubuntu-xfce")
+        assert not missing["available"] and not missing["downloaded"] and missing["image_id"] is None, missing
+        created = api("containers", {"name": "Lazy catalog download", "image": xfce_ref, "gpu": False, "internet": False})
         samples, deadline = [], time.monotonic() + 1200
         while (state := api(f"jobs/{created['job_id']}"))["status"] in ("queued", "running"):
             assert time.monotonic() < deadline, state["log"]
@@ -317,7 +322,7 @@ try:
         if pulled_xfce and pulled_xfce != local_xfce and pulled_xfce not in known_images:
             image_refs.append(pulled_xfce)
     assert docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip() == local_xfce
-    print(f"PASS missing profile downloads from {xfce_source} on creation with byte progress", flush=True)
+    print(f"PASS missing catalog image downloads from {xfce_source} on creation with byte progress", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
     try:
@@ -326,7 +331,7 @@ try:
         assert error.code == 409
     for target in ["//etc", "/./etc", "/var/run", "/home"]:
         try:
-            api("containers", {"name":"invalid-mount","image":xfce["profile"]["reference"],"mounts":[{"volume":share,"target":target}]})
+            api("containers", {"name":"invalid-mount","image":xfce["reference"],"mounts":[{"volume":share,"target":target}]})
             raise AssertionError(f"unsafe mount accepted: {target}")
         except urllib.error.HTTPError as error:
             assert error.code == 400
@@ -336,7 +341,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
-    build_request = {"name": "offline-script-test", "base_image": xfce["profile"]["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
+    build_request = {"name": "offline-script-test", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
     built = job(api("images/build", build_request))
     # The exported configuration is the request again; lists and job results leave the script out.
     assert built["build"] == {"base_image": build_request["base_image"], "internet": False}, built
@@ -691,7 +696,7 @@ try:
     print("PASS live internet on/off with VNC still reachable", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap = job(api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"}))
-    assert snap["desktop"]["profile"] == "ubuntu-xfce"
+    assert snap["desktop"]["catalog_id"] == "ubuntu-xfce"
     assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
     try:
         api(f"images/{snap['id']}/config"); raise AssertionError("snapshot exported a build configuration")
@@ -745,9 +750,9 @@ try:
     assert moved["compose"] == composed["compose"], moved
     assert api(f"images/{moved['id']}/config") == api(f"images/{built['id']}/config")
     # Names inside an archive never reach Docker: an existing tag keeps pointing at its image. The
-    # target is this run's own copy of the profile tag, so a regression cannot break the profile.
+    # target is this run's own copy of the catalog tag, so a regression cannot break the catalog image.
     guard = f"wsld-archive-guard:{tag}"
-    docker("tag", xfce["profile"]["reference"], guard)
+    docker("tag", xfce["reference"], guard)
     image_refs.append(guard)
     guard_id = json.loads(docker("image", "inspect", guard))[0]["Id"]
     hostile = os.path.join(archive_dir, "hostile.tar.gz")
@@ -768,7 +773,7 @@ try:
     assert not docker("image", "ls", "-q", "--filter", f"label=io.wsl-desktop.test-refused={tag}").strip()
     shutil.rmtree(archive_dir)
     print("PASS snapshot archive export/import keeps metadata and never applies names from an archive", flush=True)
-    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["profile"]["reference"],"internet":False,"script":"set -eu\nprintf SLOW_STARTED\nsleep 20\nprintf SLOW_FINISHED\n"})
+    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\nprintf SLOW_STARTED\nsleep 20\nprintf SLOW_FINISHED\n"})
     wait_for(lambda: "SLOW_STARTED" in api(f"jobs/{slow['job_id']}")["log"])
     started = time.monotonic()
     job(api(f"containers/{clone_id}/action", {"action": "stop"}))
@@ -780,7 +785,7 @@ try:
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
     # Delete preflight must leave the writable layer intact when a network has a foreign endpoint.
-    docker("run","-d","--name",foreign,"--label",f"io.wsl-desktop.test={tag}","--network",f"wsld-{clone_id}-egress","--entrypoint","sleep",xfce["profile"]["reference"],"300")
+    docker("run","-d","--name",foreign,"--label",f"io.wsl-desktop.test={tag}","--network",f"wsld-{clone_id}-egress","--entrypoint","sleep",xfce["reference"],"300")
     deletion = api(f"containers/{clone_id}", method="DELETE")
     failed = wait_for(lambda: (j if (j := api(f"jobs/{deletion['job_id']}"))["status"] not in ("queued","running") else None))
     assert failed["status"] == "failed",failed
@@ -813,7 +818,7 @@ try:
     job(api(f"containers/{clone_id}/retry",{}))
     print("PASS malformed container network does not block reconciliation of others",flush=True)
     print("PASS stop/start persistence and manager replacement/network reconciliation", flush=True)
-    gnome_spec = {"name":"GNOME GPU test","image":gnome["profile"]["reference"],"gpu":True,"internet":False,"memory_mb":3072,"cpus":2,"audio":True,"microphone":True,"resolution":"1280x720"}
+    gnome_spec = {"name":"GNOME GPU test","image":gnome["reference"],"gpu":True,"internet":False,"memory_mb":3072,"cpus":2,"audio":True,"microphone":True,"resolution":"1280x720"}
     gnome_id=job(api("containers",gnome_spec))["container_id"]
     container_ids.append(gnome_id)
     gnome_container=f"wsld-{gnome_id}"
@@ -838,7 +843,7 @@ try:
     # An OCI start failure leaves a discoverable container/intent that retry can repair in place.
     broken_reference=f"bilskirnir/test-broken:{tag}"
     fixture_container=f"wsld-test-image-{tag}"
-    docker("create","--name",fixture_container,"--label",f"io.wsl-desktop.test={tag}",xfce["profile"]["reference"])
+    docker("create","--name",fixture_container,"--label",f"io.wsl-desktop.test={tag}",xfce["reference"])
     docker("commit","--change",'ENTRYPOINT ["/usr/local/bin/desktop-missing-entrypoint"]',fixture_container,broken_reference)
     image_refs.append(broken_reference)
     volume_reference=f"bilskirnir/test-volume:{tag}"
@@ -861,7 +866,7 @@ try:
     with tempfile.TemporaryDirectory() as directory:
         restored=os.path.join(directory,"desktop-entrypoint")
         with open(restored,"wb") as file:
-            file.write(docker("run","--rm","--entrypoint","cat",xfce["profile"]["reference"],"/usr/local/bin/desktop-entrypoint"))
+            file.write(docker("run","--rm","--entrypoint","cat",xfce["reference"],"/usr/local/bin/desktop-entrypoint"))
         os.chmod(restored,0o755)
         docker("cp",restored,f"{repair_container}:/usr/local/bin/desktop-missing-entrypoint")
     job(api(f"containers/{repair_id}/retry",{}));ready(repair_container)
@@ -869,19 +874,19 @@ try:
     assert not next(x for x in api("containers") if x["id"]==repair_id)["last_error"]
     print("PASS failed setup retry repairs existing container without discarding its layer",flush=True)
     # Binary / very long script output cannot abort or exhaust manager log buffers.
-    noisy=api("images/build",{"name":"binary-long-log","base_image":xfce["profile"]["reference"],"internet":False,"script":"python3 -c \"import sys; sys.stdout.buffer.write(bytes([255])+b'x'*300000)\"\n"})
+    noisy=api("images/build",{"name":"binary-long-log","base_image":xfce["reference"],"internet":False,"script":"python3 -c \"import sys; sys.stdout.buffer.write(bytes([255])+b'x'*300000)\"\n"})
     job(noisy)
     assert len(api(f"jobs/{noisy['job_id']}")["log"].encode())<=262144
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{noisy['job_id']}")==b""
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{noisy['job_id']}")
     print("PASS bounded binary build logs and temporary script/tag cleanup",flush=True)
-    bad=api("images/build",{"name":"failed-script","base_image":xfce["profile"]["reference"],"internet":False,"script":"echo EXPECTED_SCRIPT_FAILURE\nexit 17\n"})
+    bad=api("images/build",{"name":"failed-script","base_image":xfce["reference"],"internet":False,"script":"echo EXPECTED_SCRIPT_FAILURE\nexit 17\n"})
     failed=wait_for(lambda: (j if (j := api(f"jobs/{bad['job_id']}"))["status"] not in ("queued","running") else None))
     assert failed["status"]=="failed" and "EXPECTED_SCRIPT_FAILURE" in failed["log"],failed
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{bad['job_id']}")==b""
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)
-    agent_image = mcp_job(tool("build_image", {"name":"agent-build","base_image":xfce["profile"]["reference"],"internet":False,"script":f"# acceptance {tag}\nprintf mcp-built > /opt/mcp-built"}))["result"]
+    agent_image = mcp_job(tool("build_image", {"name":"agent-build","base_image":xfce["reference"],"internet":False,"script":f"# acceptance {tag}\nprintf mcp-built > /opt/mcp-built"}))["result"]
     agent_env = mcp_job(tool("create_container", {"name":"Agent lifecycle","image":agent_image["image_id"],"internet":False,"gpu":False}))["result"]["container_id"]
     container_ids.append(agent_env)
     ready(f"wsld-{agent_env}")
@@ -923,7 +928,7 @@ try:
     print("PASS MCP compose read, replace and removal", flush=True)
     # Settings change after creation: the name and new limits apply to the running container, while
     # audio and removing a limit need a new container that keeps the old one's files.
-    edit = job(api("containers", {"name": "Settings edit", "image": xfce["profile"]["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
+    edit = job(api("containers", {"name": "Settings edit", "image": xfce["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
     container_ids.append(edit)
     edit_container = f"wsld-{edit}"
     ready(edit_container)

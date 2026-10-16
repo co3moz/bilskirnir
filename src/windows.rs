@@ -79,7 +79,7 @@ async fn x11(app: &App, id: &str, command: &[&str]) -> Result<Vec<u8>> {
     app.docker(&args).await.map_err(|e| {
         if format!("{e:#}").contains("executable file not found") {
             anyhow::anyhow!(
-                "Window tools need xdotool and wmctrl in the desktop image; rebuild the profile image or update the installation"
+                "Window tools need xdotool and wmctrl in the desktop image; update its catalog image or the installation"
             )
             .into()
         } else {

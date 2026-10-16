@@ -205,7 +205,7 @@ fn the_compose_comes_from_a_record_of_the_requested_image() {
     let resolved = compose_image(&records, "some-tag:latest", "sha256:other");
     assert_eq!(resolved.unwrap().id, "other");
     assert!(compose_image(&records, "sha256:plain", "sha256:plain").is_none());
-    assert!(compose_image(&records, "ghcr.io/x:1", "sha256:profile").is_none());
+    assert!(compose_image(&records, "ghcr.io/x:1", "sha256:catalog").is_none());
 }
 
 #[test]

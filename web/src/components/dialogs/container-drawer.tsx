@@ -25,8 +25,8 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { date, containerStatus, profileTitle } from "@/lib/format"
-import { useContainers, useProfiles } from "@/lib/queries"
+import { containerStatus, date, desktopTitle } from "@/lib/format"
+import { useContainers, useImages } from "@/lib/queries"
 import { setupLabel } from "@/lib/compose"
 import type { ContainerSetup } from "@/lib/types"
 import { SideDrawer, type DialogProps } from "./side-drawer"
@@ -52,7 +52,7 @@ const setupTone = {
 /** dashboard-01's row viewer for one container: preview, configuration and every action. */
 export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) {
   const item = useContainers().data?.find((entry) => entry.id === id)
-  const profiles = useProfiles().data ?? []
+  const images = useImages().data ?? []
   if (!item)
     return (
       <SideDrawer {...props}>
@@ -72,7 +72,7 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
     <SideDrawer {...props}>
       <DrawerHeader className="gap-1">
         <DrawerTitle>{spec.name}</DrawerTitle>
-        <DrawerDescription>{profileTitle(spec, item.desktop?.title, profiles)}</DrawerDescription>
+        <DrawerDescription>{desktopTitle(spec, item.desktop?.title, images)}</DrawerDescription>
       </DrawerHeader>
       <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
         <ContainerPreview item={item} />

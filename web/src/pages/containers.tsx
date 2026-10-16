@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { openDialog } from "@/lib/dialogs"
 import { needsAttention } from "@/lib/format"
-import { useContainers, useProfiles } from "@/lib/queries"
+import { useContainers, useImages } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
 
 const views = {
@@ -33,7 +33,7 @@ type View = keyof typeof views
 /** Every container as a card with its live preview. */
 export function ContainersPage() {
   const containers = useContainers()
-  const profiles = useProfiles().data ?? []
+  const images = useImages().data ?? []
   const [view, setView] = React.useState<View>("all")
   const [search, setSearch] = React.useState("")
   const all = containers.data ?? []
@@ -65,7 +65,7 @@ export function ContainersPage() {
             </EmptyMedia>
             <EmptyTitle>No containers</EmptyTitle>
             <EmptyDescription>
-              Create a container from a profile; it downloads the first time you use it.
+              Create a container from an image. A catalog image downloads the first time you use it.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -104,7 +104,7 @@ export function ContainersPage() {
             {shown.length ? (
               <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @[100rem]/main:grid-cols-4">
                 {shown.map((item) => (
-                  <ContainerCard key={item.id} item={item} profiles={profiles} />
+                  <ContainerCard key={item.id} item={item} images={images} />
                 ))}
               </div>
             ) : (

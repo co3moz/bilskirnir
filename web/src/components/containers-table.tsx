@@ -29,10 +29,10 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { runJobs } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { containerStatus, needsAttention, profileTitle, shortDate, stateLabels } from "@/lib/format"
-import { useContainers, useProfiles } from "@/lib/queries"
+import { containerStatus, desktopTitle, needsAttention, shortDate, stateLabels } from "@/lib/format"
+import { useContainers, useImages } from "@/lib/queries"
 import { href } from "@/lib/route"
-import type { ContainerItem, ProfileItem } from "@/lib/types"
+import type { ContainerItem, ImageItem } from "@/lib/types"
 
 const column = columnHelper<ContainerItem>()
 
@@ -52,7 +52,7 @@ const labels: Record<string, string> = {
   created: "Created",
 }
 
-function columns(profiles: ProfileItem[]): DataColumn<ContainerItem>[] {
+function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
   return [
     selectColumn<ContainerItem>(),
     column.accessor((item) => item.spec.name, {
@@ -70,7 +70,7 @@ function columns(profiles: ProfileItem[]): DataColumn<ContainerItem>[] {
               {container.spec.name}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {profileTitle(container.spec, container.desktop?.title, profiles)}
+              {desktopTitle(container.spec, container.desktop?.title, images)}
             </span>
           </div>
         )
@@ -171,11 +171,11 @@ function columns(profiles: ProfileItem[]): DataColumn<ContainerItem>[] {
 /** dashboard-01's data table, holding the containers with bulk start and stop. */
 export function ContainersTable() {
   const containers = useContainers()
-  const profiles = useProfiles().data
+  const images = useImages().data
   const [view, setView] = React.useState<View>("all")
   const all = React.useMemo(() => containers.data ?? [], [containers.data])
   const data = React.useMemo(() => all.filter(views[view]), [all, view])
-  const cols = React.useMemo(() => columns(profiles ?? []), [profiles])
+  const cols = React.useMemo(() => columns(images ?? []), [images])
   const table = useDataTable({
     data,
     columns: cols,

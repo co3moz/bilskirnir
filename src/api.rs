@@ -23,41 +23,23 @@ pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
         json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit}),
     )
 }
-pub async fn profiles(State(app): State<Arc<App>>) -> Json<Value> {
-    let results = futures_util::future::join_all(crate::profiles::catalog().into_iter().map(|profile| {
-        let app = app.clone();
-        async move {
-            match app.inspect("image", &profile.reference).await {
-                Ok(info) => {
-                    let desktop = crate::profiles::from_image(&info);
-                    let available = desktop.as_ref().is_some_and(|d| d.profile == profile.id && d.session == profile.session);
-                    json!({"profile": profile, "available": available, "image_id": info["Id"], "error": if available {None} else {Some("Image labels do not match the profile")}})
-                }
-                Err(_) => json!({"profile": profile, "available": false, "image_id": null}),
-            }
-        }
-    })).await;
-    Json(json!(results))
-}
-pub async fn build_profile(
+/// Build a catalog image from the bundled Docker context instead of downloading it.
+pub async fn build_catalog(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let profile = crate::profiles::catalog()
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(missing)?;
-    let resource = format!("profile:{}", profile.id);
+    let image = crate::catalog::find(&id).ok_or_else(missing)?;
+    let resource = format!("image:{}", image.id);
     launch(
         app,
-        "profile-build",
+        "source-build",
         resource,
         move |app, job_id| async move {
             app.append_log(
                 &job_id,
                 &format!(
                     "Building {}. Package installation requires internet access.",
-                    profile.name
+                    image.name
                 ),
             )?;
             app.docker_logged(
@@ -66,35 +48,30 @@ pub async fn build_profile(
                     "build".into(),
                     "--progress=plain".into(),
                     "--target".into(),
-                    profile.build_target.clone(),
+                    image.build_target.clone(),
                     "-t".into(),
-                    profile.reference.clone(),
+                    image.reference.clone(),
                     app.config.desktop_context.to_string_lossy().into_owned(),
                 ],
             )
             .await?;
-            let info = app.inspect("image", &profile.reference).await?;
+            let info = app.inspect("image", &image.reference).await?;
             Ok(
-                json!({"profile_id": profile.id, "reference": profile.reference, "image_id": info["Id"]}),
+                json!({"id": image.id, "kind": "catalog", "reference": image.reference, "image_id": info["Id"]}),
             )
         },
     )
 }
-pub async fn pull_profile(
+/// Download a catalog image, or a newer release of it.
+pub async fn pull_catalog(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let profile = crate::profiles::catalog()
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(missing)?;
-    let resource = format!("profile:{}", profile.id);
-    launch(
-        app,
-        "profile-pull",
-        resource,
-        move |app, job_id| async move { app.pull_profile(&profile, &job_id).await },
-    )
+    let image = crate::catalog::find(&id).ok_or_else(missing)?;
+    let resource = format!("image:{}", image.id);
+    launch(app, "image-pull", resource, move |app, job_id| async move {
+        app.pull_catalog_image(&image, &job_id).await
+    })
 }
 pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
     match app.docker(&["info", "--format", "{{json .}}"]).await {
@@ -393,6 +370,7 @@ pub async fn diagnostics(
         json!({"output":String::from_utf8_lossy(&bytes),"gpu_requested":env.spec.gpu}),
     ))
 }
+/// Every image: the catalog first, then the saved images.
 pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let records = app.db.list::<ImageRecord>("image")?;
     let listed = app
@@ -407,16 +385,24 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
                 .collect()
         })
         .unwrap_or_default();
+    let catalog =
+        futures_util::future::join_all(crate::catalog::catalog().into_iter().map(|image| {
+            let app = app.clone();
+            let docker_listed = listed.is_ok();
+            async move {
+                let inspected = app.inspect("image", &image.reference).await.ok();
+                crate::catalog::listed(&image, inspected.as_ref(), docker_listed)
+            }
+        }))
+        .await;
+    let saved = records.into_iter().map(|r| {
+        let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
+        let mut value = image_summary(&r);
+        value["available"] = json!(available);
+        value
+    });
     Ok(Json(json!(
-        records
-            .into_iter()
-            .map(|r| {
-                let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
-                let mut value = image_summary(&r);
-                value["available"] = json!(available);
-                value
-            })
-            .collect::<Vec<_>>()
+        catalog.into_iter().chain(saved).collect::<Vec<_>>()
     )))
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
@@ -478,7 +464,7 @@ pub async fn register_image(
         kind: "import".into(),
         created_at: now(),
         description: String::new(),
-        desktop: crate::profiles::from_image(&info),
+        desktop: crate::catalog::from_image(&info),
         build: None,
         compose: None,
     };
@@ -521,7 +507,7 @@ pub async fn build(
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         move |app, id| async move {
-            app.ensure_profile_image(&body.base_image, &id).await?;
+            app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
             if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");
@@ -570,7 +556,7 @@ pub async fn build(
                 kind: "build".into(),
                 created_at: now(),
                 description: String::new(),
-                desktop: crate::profiles::from_image(&info),
+                desktop: crate::catalog::from_image(&info),
                 build: Some(BuildConfig {
                     base_image: body.base_image,
                     internet: body.internet,
@@ -637,7 +623,7 @@ pub async fn snapshot(
                 kind: "snapshot".into(),
                 created_at: now(),
                 description: body.description,
-                desktop: crate::profiles::from_image(&info),
+                desktop: crate::catalog::from_image(&info),
                 build: None,
                 compose,
             };

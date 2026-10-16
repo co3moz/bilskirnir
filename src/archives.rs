@@ -9,12 +9,12 @@ mod tar;
 
 use crate::{
     App, auth,
+    catalog::DesktopInfo,
     compose::Compose,
     error::{Error, Result},
     jobs,
     model::{BuildConfig, ImageRecord, image_ref, now},
     process::{self, Overflow},
-    profiles::DesktopInfo,
 };
 use anyhow::{Context, anyhow, bail};
 use axum::{
@@ -497,7 +497,7 @@ impl App {
                 .or_else(|| metadata.as_ref().map(|info| info.description.clone()))
                 .map(|description| clip(&description, 4096))
                 .unwrap_or_default(),
-            desktop: crate::profiles::from_image(&info),
+            desktop: crate::catalog::from_image(&info),
             build: metadata.as_ref().and_then(|info| info.build.clone()),
             compose: metadata.and_then(|info| info.compose),
         };

@@ -18,7 +18,8 @@ export type ContainerSpec = {
   mounts: Mount[]
 }
 
-export type DesktopInfo = { profile: string; title: string; session: string }
+/** What an image's labels say about its desktop; `catalog_id` names the catalog image it derives from. */
+export type DesktopInfo = { catalog_id: string; title: string; session: string }
 
 export type Container = {
   id: string
@@ -93,38 +94,37 @@ export type ContainerItem = Container & {
   status: string | null
 }
 
-export type Profile = {
+/**
+ * An image as `GET images` lists it: the catalog images published with Bilskirnir first, then the
+ * saved ones. `kind` is `catalog`, `build`, `snapshot`, `import` or `archive`.
+ */
+export type ImageItem = {
+  /** A catalog image's catalog ID, such as `ubuntu-xfce`, or a saved image's record ID. */
   id: string
   name: string
-  reference: string
-  session: string
-  description: string
-}
-
-export type ProfileItem = {
-  profile: Profile
-  available: boolean
+  /** Docker's image ID; `null` for a catalog image that is not downloaded. */
   image_id: string | null
-  error?: string | null
-}
-
-export type ImageRecord = {
-  id: string
-  name: string
-  image_id: string
   reference: string
   parent_image_id: string | null
   source_container: string | null
   kind: string
-  created_at: number
+  /** `null` for a catalog image. */
+  created_at: number | null
   description: string
   desktop?: DesktopInfo | null
   /** Recorded by script builds; `GET images/{id}/config` adds the script. */
   build?: Omit<BuildConfig, "name" | "script"> | null
   /** Lists leave out the setup script; `GET images/{id}/compose` returns it. */
   compose?: Omit<Compose, "script"> | null
-  /** `null` when Docker could not list images. */
+  /**
+   * Whether a container can start from it now, `null` when Docker could not list images. A
+   * catalog image that is not downloaded is not available, but downloads when it is used.
+   */
   available?: boolean | null
+  /** Catalog images: whether Docker has the reference, even one whose labels do not match. */
+  downloaded?: boolean
+  /** Catalog images: why a downloaded reference cannot be used. */
+  error?: string | null
 }
 
 /** A build request, which is also what an image's exported configuration holds. */

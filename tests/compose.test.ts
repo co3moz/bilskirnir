@@ -62,7 +62,7 @@ test("the compose comes from a record of the chosen image, as the manager picks 
   const records = [record("plain"), record("unity", unity), record("again", unity)]
   assert.equal(composeFor(records, "sha256:unity"), unity)
   assert.equal(composeFor(records, "bilskirnir/snapshot:again"), unity)
-  // A profile reference or an image without one asks for nothing.
+  // A catalog reference or an image without one asks for nothing.
   assert.equal(composeFor(records, "sha256:plain"), undefined)
   assert.equal(composeFor(records, "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"), undefined)
   assert.equal(composeFor(records, undefined), undefined)

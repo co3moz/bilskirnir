@@ -12,7 +12,7 @@ The **Dashboard** sums up the host: how many containers exist and run, jobs in p
 
 ## Create and connect
 
-Select **New container** and choose a desktop profile, custom image or snapshot. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and volume mounts.
+Select **New container** and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Give it a name and choose the resolution. You can also set CPU and memory limits, GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and volume mounts.
 
 After creation finishes, select **Connect**. The card preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the container's actions menu or its details panel to stop, restart, change settings, inspect or delete it. A desktop's address, such as `#/desktop/<id>`, can be bookmarked.
 
@@ -20,11 +20,11 @@ The GPU option is available only when the installation enables `WSL_GPU` or `NVI
 
 ## Choose XFCE or GNOME
 
-Both profiles are Ubuntu 24.04. XFCE uses fewer resources and is a good starting point for application work. GNOME provides the Ubuntu shell and Yaru theme when you prefer that desktop.
+Both catalog images are Ubuntu 24.04. XFCE uses fewer resources and is a good starting point for application work. GNOME provides the Ubuntu shell and Yaru theme when you prefer that desktop.
 
-The GNOME profile runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
+The GNOME image runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
 
-A profile's image is downloaded the first time you create a desktop or build an image from it. The job panel shows the download's size and progress, and later desktops from that profile start without it. Under **Images**, **Download** on a profile card fetches it ahead of time and **Update** fetches its latest published release. `DESKTOP_IMAGE` sets the default selection. Custom builds and snapshots keep their source desktop's profile information.
+**Images** lists them with the source **Catalog**, above the images you save. A catalog image is downloaded the first time you create a container or build an image from it. The job panel shows the download's size and progress, and later containers from it start without it. On its row, the download button fetches it ahead of time and, once it is here, the update button fetches its latest published release. `DESKTOP_IMAGE` sets the default selection. Script builds and snapshots made from a catalog image appear under it and keep its desktop information.
 
 ## Running graphics applications
 
@@ -58,7 +58,7 @@ GPU-enabled startup checks the renderer and rejects software rendering. If a GPU
 
 Under **Images**, select **Build image**, choose a desktop base and enter a shell script. The script runs as root during the build, which lets you install packages and applications. Enable build internet access if your script needs to download them. The job log shows the script's output and the resulting image.
 
-For example, this installs a couple of tools on either supplied Ubuntu profile:
+For example, this installs a couple of tools on either catalog image:
 
 ```bash
 set -eu
@@ -120,9 +120,9 @@ The container keeps the compose it was created with, so editing the image's comp
 
 ## Move an image to another installation
 
-Under **Images**, the archive button on an image's row (**Export archive**) downloads it as a `.tar.gz` file, with its name, description and desktop profile inside. A script build's configuration travels along, so **Export configuration** still works after the move. Snapshots, script builds and imported images can all be exported. The archive holds every layer of the image, the base desktop included, so expect several gigabytes. Docker prepares the whole image before the download starts to grow; **Jobs** shows the export and any error.
+Under **Images**, the archive button on an image's row (**Export archive**) downloads it as a `.tar.gz` file, with its name, description and desktop information inside. A script build's configuration travels along, so **Export configuration** still works after the move. Snapshots, script builds and imported images can all be exported. The archive holds every layer of the image, the base desktop included, so expect several gigabytes. Docker prepares the whole image before the download starts to grow; **Jobs** shows the export and any error.
 
-On the other installation, select **Import image** and drop the file on the **Archive file** tab. The name and description from the archive fill in, and you can change them. The import is checked while it uploads: it must hold one Bilskirnir desktop image and stay within `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) once unpacked. Tags and image names inside the archive are ignored, so an archive cannot replace a profile or another image. The image appears with the kind **archive** once Docker has loaded it.
+On the other installation, select **Import image** and drop the file on the **Archive file** tab. The name and description from the archive fill in, and you can change them. The import is checked while it uploads: it must hold one Bilskirnir desktop image and stay within `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) once unpacked. Tags and image names inside the archive are ignored, so an archive cannot replace a catalog image or another image. The image appears with the source **Archive** once Docker has loaded it.
 
 A `.tar` saved with `docker save` imports the same way, as long as it holds a desktop image. Volumes are never part of an archive; copy their files separately.
 

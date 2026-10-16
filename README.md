@@ -10,7 +10,7 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 62 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 61 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.
@@ -40,7 +40,7 @@ You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also n
 
 2. Open **Bilskirnir** from the Start menu. The first start asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable agent access and how agents authenticate (a random token by default, your own token or none), then detects the GPU and offers to start Bilskirnir.
 3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `bilskirnir mcp` shows them again.
-4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that profile, and the job panel shows the progress. Select **Connect** once it is running.
+4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 
 WSL stops a distribution shortly after its last window closes; [Keep it running](docs/WSL_PACKAGE.md#keep-it-running) explains how to keep Bilskirnir available. The [WSL package guide](docs/WSL_PACKAGE.md) covers the `bilskirnir` command, updates and removal.
 
