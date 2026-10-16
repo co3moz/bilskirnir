@@ -21,6 +21,20 @@ EXPOSE 5900
 HEALTHCHECK --interval=10s --timeout=4s --start-period=30s CMD /usr/local/bin/desktop-healthcheck
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/desktop-entrypoint"]
 
+# VirtualGL's Chrome workaround for Chromium-family processes only, preloaded by gpu-run.
+FROM ubuntu:24.04 AS chromium-gpu
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY chromium-gpu.c /src/
+RUN mkdir -p /out /tmp/chromium \
+    && gcc -O2 -Wall -Wextra -Werror -shared -fPIC -o /out/chromium-gpu.so /src/chromium-gpu.c \
+    && cp /usr/bin/env /tmp/chromium/chrome && touch /tmp/chromium/icudtl.dat /tmp/chromium/resources.pak \
+    && export LD_PRELOAD=/out/chromium-gpu.so \
+    && /tmp/chromium/chrome | grep -qx VGL_CHROMEHACK=1 \
+    && VGL_CHROMEHACK=0 /tmp/chromium/chrome | grep -qx VGL_CHROMEHACK=0 \
+    && ! /tmp/chromium/chrome /usr/bin/env | grep -q VGL_CHROMEHACK \
+    && ! env | grep -q VGL_CHROMEHACK
+
 FROM common AS scripts
 COPY desktop-entrypoint.sh /usr/local/bin/desktop-entrypoint
 COPY desktop-session.sh /usr/local/bin/desktop-session
@@ -36,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-ter
     && rm -rf /var/lib/apt/lists/*
 FROM xfce-packages AS xfce
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
+COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
 LABEL io.wsl-desktop.profile=ubuntu-xfce io.wsl-desktop.session=xfce \
@@ -55,6 +70,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ubuntu-wallpape
     && rm -rf /var/lib/apt/lists/*
 FROM gnome-packages AS gnome
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
+COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gnome-container.session /usr/share/gnome-session/sessions/wsld-ubuntu.session
 ENV DESKTOP_SESSION=gnome
 LABEL io.wsl-desktop.profile=ubuntu-gnome io.wsl-desktop.session=gnome \

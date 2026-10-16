@@ -707,9 +707,19 @@ try:
     diag = api(f"containers/{env_id}/diagnostics")["output"]
     assert "D3D12 (NVIDIA" in diag, diag
     assert "Default Source: browser-microphone" in diag, diag
-    # gpu-run applies VirtualGL's Chrome workaround to Chromium-family command names only.
-    hack = mcp_job(tool("exec_container", {"container_id":env_id,"script":"mkdir -p /tmp/gr && ln -sf /usr/bin/env /tmp/gr/google-chrome && ln -sf /usr/bin/env /tmp/gr/MyGame\ngpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\nVGL_CHROMEHACK=0 gpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\ngpu-run /tmp/gr/MyGame | grep -c VGL_CHROMEHACK || true\n"}))["log"]
-    assert "VGL_CHROMEHACK=1\n" in hack and "VGL_CHROMEHACK=0\n" in hack and "\n0\n" in hack, hack
+    # A program laid out like a Chromium build turns VirtualGL's Chrome workaround on for itself,
+    # also when the panel starts it; other programs, and those a browser starts, keep the default.
+    chromium = "\n".join([
+        r'd=$(mktemp -d -p "$HOME") && cp /usr/bin/env "$d/chrome" && touch "$d/icudtl.dat" "$d/resources.pak"',
+        r'echo "browser=$(gpu-run "$d/chrome" | grep ^VGL_CHROMEHACK=)"',
+        r'echo "explicit=$(VGL_CHROMEHACK=0 gpu-run "$d/chrome" | grep ^VGL_CHROMEHACK=)"',
+        r'echo "game=$(gpu-run /usr/bin/env | grep -c ^VGL_CHROMEHACK=)"',
+        r'echo "started-by-browser=$(gpu-run "$d/chrome" /usr/bin/env | grep -c ^VGL_CHROMEHACK=)"',
+        r'echo "panel=$(tr "\0" "\n" < /proc/$(pgrep -x xfce4-panel)/environ | grep -c "^LD_PRELOAD=.*/chromium-gpu.so")"',
+        r'rm -rf "$d"', ""])
+    hack = mcp_job(tool("exec_container", {"container_id":env_id,"script":chromium}))["log"]
+    for line in ["browser=VGL_CHROMEHACK=1", "explicit=VGL_CHROMEHACK=0", "game=0", "started-by-browser=0", "panel=1"]:
+        assert line in hack.splitlines(), hack
     print("PASS independent desktop, hardware OpenGL and virtual audio devices", flush=True)
     jpeg = api(f"containers/{env_id}/screenshot", raw=True)
     assert jpeg.startswith(b"\xff\xd8") and len(jpeg) > 1000
@@ -895,6 +905,9 @@ try:
     assert b"GNOME Shell 46" in docker("exec",gnome_container,"gnome-shell","--version")
     assert subprocess.run(["docker","exec",gnome_container,"pgrep","-x","gnome-shell"],capture_output=True).returncode==0
     assert subprocess.run(["docker","exec",gnome_container,"pgrep","-f","^/usr/libexec/gnome-session-failed"],capture_output=True).returncode!=0
+    # A browser GNOME Shell starts gets the Chromium check too.
+    shell_env = docker("exec","--user","desktop",gnome_container,"sh","-c","tr '\\0' '\\n' < /proc/$(pgrep -x gnome-shell)/environ")
+    assert any(line.startswith(b"LD_PRELOAD=") and b"/chromium-gpu.so" in line for line in shell_env.splitlines()), shell_env
     assert api(f"containers/{gnome_id}/screenshot",raw=True).startswith(b"\xff\xd8")
     assert "D3D12 (NVIDIA" in api(f"containers/{gnome_id}/diagnostics")["output"]
     gnome_snapshot=job(api(f"containers/{gnome_id}/snapshot",{"name":"GNOME snapshot"}))
