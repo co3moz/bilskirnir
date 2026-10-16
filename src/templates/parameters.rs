@@ -8,6 +8,7 @@ use std::collections::HashSet;
 const VALUE_LIMIT: usize = 16_384;
 const OPTION_LIMIT: usize = 100;
 const OPTION_VALUE_LIMIT: usize = 1024;
+const DESCRIPTION_LIMIT: usize = 500;
 /// Variables the setup script, its shell or the desktop session rely on.
 const RESERVED: &[&str] = &[
     "CDPATH", "DISPLAY", "ENV", "HOME", "HOSTNAME", "IFS", "LANG", "LOGNAME", "OLDPWD", "PATH",
@@ -89,6 +90,9 @@ pub struct Parameter {
     /// What the create form asks for; the name when empty.
     #[serde(default)]
     pub label: String,
+    /// Help the create form shows with the field, such as where to find the value.
+    #[serde(default)]
+    pub description: String,
     #[serde(default, rename = "type")]
     pub kind: Kind,
     /// How the create form shows it; each type has its own choices and default.
@@ -137,6 +141,11 @@ impl Parameter {
         let name = &self.name;
         if !one_line(&self.label, 100) {
             bail!("A parameter label is one line of at most 100 characters: {name}");
+        }
+        if self.description.chars().count() > DESCRIPTION_LIMIT || self.description.contains('\0') {
+            bail!(
+                "A parameter description is at most {DESCRIPTION_LIMIT} characters without NUL characters: {name}"
+            );
         }
         if let Some(display) = self.display
             && !self.kind.displays().contains(&display)

@@ -22,15 +22,25 @@ const unity: Template = {
     {
       name: "UNITY_EMAIL",
       label: "Unity email",
+      description: "The Unity ID you sign in with.",
       type: "text",
       required: true,
       secret: false,
       default: "",
     },
-    { name: "UNITY_PASSWORD", label: "", type: "text", required: true, secret: true, default: "" },
+    {
+      name: "UNITY_PASSWORD",
+      label: "",
+      description: "",
+      type: "text",
+      required: true,
+      secret: true,
+      default: "",
+    },
     {
       name: "BRANCH",
       label: "Branch",
+      description: "",
       type: "text",
       required: false,
       secret: false,
@@ -92,6 +102,7 @@ test("a template survives the editor unchanged, and a secret loses its default",
   assert.deepEqual(body.parameters[2], {
     name: "TOKEN",
     label: "Branch",
+    description: "",
     type: "text",
     required: false,
     secret: true,
@@ -106,7 +117,15 @@ test("a template survives the editor unchanged, and a secret loses its default",
 test("a pasted template fills in what it leaves out and says what is wrong", () => {
   assert.deepEqual(readTemplate({ script: "true", parameters: [{ name: "A" }] }), {
     parameters: [
-      { name: "A", label: "", type: "text", required: false, secret: false, default: "" },
+      {
+        name: "A",
+        label: "",
+        description: "",
+        type: "text",
+        required: false,
+        secret: false,
+        default: "",
+      },
     ],
     script: "true",
     root: false,
@@ -135,6 +154,7 @@ const typed: TemplateParameter[] = [
   {
     name: "NOTES",
     label: "",
+    description: "",
     type: "text",
     display: "multiline",
     required: false,
@@ -144,6 +164,7 @@ const typed: TemplateParameter[] = [
   {
     name: "THREADS",
     label: "",
+    description: "",
     type: "number",
     display: "slider",
     required: true,
@@ -156,6 +177,7 @@ const typed: TemplateParameter[] = [
   {
     name: "PORT",
     label: "",
+    description: "",
     type: "number",
     required: false,
     secret: false,
@@ -165,6 +187,7 @@ const typed: TemplateParameter[] = [
   {
     name: "ACCEPT",
     label: "",
+    description: "",
     type: "boolean",
     display: "checkbox",
     required: true,
@@ -174,6 +197,7 @@ const typed: TemplateParameter[] = [
   {
     name: "FLAVOR",
     label: "",
+    description: "",
     type: "choice",
     display: "radio",
     required: false,
@@ -185,6 +209,7 @@ const typed: TemplateParameter[] = [
   {
     name: "TOPPINGS",
     label: "",
+    description: "",
     type: "choices",
     required: false,
     secret: false,
@@ -250,6 +275,7 @@ test("a pasted template keeps typed fields and refuses shapes the manager would"
     [{ name: "A", type: "text", display: "slider" }, /cannot be shown/],
     [{ name: "A", type: "choice", options: [{ label: "x" }] }, /parameter A/],
     [{ name: "A", type: "number", min: "1" }, /parameter A/],
+    [{ name: "A", description: 5 }, /parameter A/],
   ]
   for (const [parameter, message] of cases)
     assert.throws(() => readTemplate({ script: "true", parameters: [parameter] }), message)

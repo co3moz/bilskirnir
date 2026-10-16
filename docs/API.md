@@ -167,7 +167,8 @@ A saved image can carry a template: parameters that a new environment from it as
 ```json
 {
   "parameters": [
-    {"name": "UNITY_EMAIL", "label": "Unity email", "required": true},
+    {"name": "UNITY_EMAIL", "label": "Unity email", "description": "The Unity ID you sign in with.",
+     "required": true},
     {"name": "UNITY_PASSWORD", "label": "Unity password", "required": true, "secret": true},
     {"name": "UNITY_EDITOR", "label": "Editor", "type": "choice", "allow_custom": true,
      "options": [{"value": "6000.0.23f1", "label": "Unity 6"}, {"value": "2022.3.50f1", "label": "2022 LTS"}],
@@ -185,12 +186,12 @@ A saved image can carry a template: parameters that a new environment from it as
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `type`, `display`, `required`, `default` and the fields of their type, below. |
+| `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `description`, `type`, `display`, `required`, `default` and the fields of their type, below. |
 | `script` | Required | Bash script of at most 1,000,000 bytes, run with fail-on-error and standard input closed. |
 | `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
 | `timeout_seconds` | `600` | From 1 to 3500 seconds. |
 
-A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the template.
+A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. A `description` of at most 500 characters is shown with the field, such as where to find the value. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the template.
 
 Every value reaches the script as text, so a parameter's `type` decides what text it accepts and how the dashboard asks for it. `default` is written the same way the script receives it.
 

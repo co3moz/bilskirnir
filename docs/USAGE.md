@@ -94,7 +94,7 @@ An image that declares a Docker `VOLUME` needs an explicit named-volume mount fo
 A template makes an image ask for a few values each time a desktop is created from it, such as the account to sign in with, and runs a short setup script with them before the desktop is yours. Under **Images**, select **Edit template**, the template button on the row of a snapshot, script build or imported image. Add a parameter for each value:
 
 - **Name** is the environment variable the script reads, such as `UNITY_EMAIL`.
-- **Label** is what **New environment** asks for.
+- **Label** is what **New environment** asks for. A **Description** appears under the field, for help such as where to find the value.
 - **Type** decides what the field takes: **Text**, a **Number** with an optional minimum, maximum and step, **On or off**, **One choice** from a list of options or **Several choices**. **Shown as** picks the control: a text area for long text, a slider for a number with a range, a checkbox instead of a switch, or radio buttons instead of a menu. **Allow other values** lets one choice also take text that is not an option.
 - **Secret** makes a text field a password field. Its value is masked in job logs, never shown again and cannot have a default.
 - **Required** values must be filled in; an **On or off** value that is required must be turned on, as for accepting a license. The **Default** fills in the field with the same control the form shows.

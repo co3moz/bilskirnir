@@ -92,7 +92,7 @@ function TemplateValues({
             parameter={parameter}
             value={values[parameter.name] ?? parameter.default}
             onChange={(value) => onChange({ ...values, [parameter.name]: value })}
-            showName
+            hints
           />
         ))}
       </div>

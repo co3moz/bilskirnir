@@ -54,6 +54,7 @@ test("a configuration carries the image's template both ways", () => {
       {
         name: "UNITY_EMAIL",
         label: "Email",
+        description: "",
         type: "text" as const,
         required: true,
         secret: false,

@@ -110,6 +110,7 @@ export type ParameterDraft = {
   key: number
   name: string
   label: string
+  description: string
   type: ParameterType
   display: ParameterDisplay
   required: boolean
@@ -136,6 +137,7 @@ export const newParameter = (): ParameterDraft => ({
   key: ++draftKey,
   name: "",
   label: "",
+  description: "",
   type: "text",
   display: "input",
   required: false,
@@ -155,6 +157,7 @@ function parameterDraft(parameter: TemplateParameter): ParameterDraft {
     ...newParameter(),
     name: parameter.name,
     label: parameter.label,
+    description: parameter.description,
     type: parameter.type,
     display: displayOf(parameter),
     required: parameter.required,
@@ -211,6 +214,7 @@ export function draftParameter(draft: ParameterDraft): TemplateParameter {
   return {
     name: draft.name.trim(),
     label: draft.label.trim(),
+    description: draft.description.trim(),
     type: draft.type,
     ...(draft.display !== DISPLAYS[draft.type][0] ? { display: draft.display } : {}),
     required: draft.required,
@@ -276,6 +280,7 @@ function readParameter(value: unknown): TemplateParameter {
   const read: TemplateParameter = {
     name,
     label: text("label"),
+    description: text("description"),
     type,
     ...(display ? { display: display as ParameterDisplay } : {}),
     required: flag("required"),

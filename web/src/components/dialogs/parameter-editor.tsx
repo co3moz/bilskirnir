@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -80,6 +81,15 @@ export function ParameterEditor({
           className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"
         />
       </div>
+      <Textarea
+        aria-label="Description"
+        placeholder="Help shown with the field, such as where to find the value"
+        rows={2}
+        maxLength={500}
+        value={parameter.description}
+        onChange={(event) => set({ description: event.target.value })}
+        className="min-h-0"
+      />
       <div className="grid grid-cols-2 gap-2">
         <Field className="gap-1.5">
           <FieldLabel htmlFor={`${id}-type`} className={small}>

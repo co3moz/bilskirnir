@@ -228,18 +228,20 @@ fn choices_take_their_options_and_other_text_only_when_allowed() {
 #[test]
 fn a_parameter_is_written_back_as_it_was_given() {
     let full = json!({
-        "name": "UNITY_EDITOR", "label": "Editor", "type": "choice", "display": "radio",
+        "name": "UNITY_EDITOR", "label": "Editor", "description": "Pick the version the project uses.
+    Other versions must be installed first.",
+        "type": "choice", "display": "radio",
         "required": true, "secret": false, "default": "6000.0.23f1",
         "options": [{"value": "6000.0.23f1", "label": "Unity 6"}, {"value": "2022.3.50f1", "label": ""}],
         "allow_custom": true
     });
     let parsed: Parameter = serde_json::from_value(full.clone()).unwrap();
     assert_eq!(serde_json::to_value(&parsed).unwrap(), full);
-    // A text parameter stays as small as it was before types existed.
+    // A bare name is a text parameter; the fields of other types are left out.
     let text: Parameter = serde_json::from_value(json!({"name": "A"})).unwrap();
     assert_eq!(
         serde_json::to_value(&text).unwrap(),
-        json!({"name": "A", "label": "", "type": "text", "required": false, "secret": false, "default": ""})
+        json!({"name": "A", "label": "", "description": "", "type": "text", "required": false, "secret": false, "default": ""})
     );
 }
 
@@ -269,4 +271,15 @@ fn the_interface_offers_the_displays_this_module_accepts() {
             "web/src/lib/templates.ts must list {line}"
         );
     }
+}
+
+#[test]
+fn a_description_is_help_of_a_few_sentences() {
+    let with = |description: String| parameter(json!({"description": description})).validate();
+    with("Find it under Unity ID, Account.\nIt is not your login name.".into()).unwrap();
+    with("x".repeat(500)).unwrap();
+    // Characters, not bytes: help text in another script is not cut shorter.
+    with("ğ".repeat(500)).unwrap();
+    assert!(with("x".repeat(501)).is_err());
+    assert!(with("nul\0".into()).is_err());
 }

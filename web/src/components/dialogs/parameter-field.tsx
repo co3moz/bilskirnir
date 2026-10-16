@@ -38,7 +38,7 @@ export function ParameterField({
   onChange,
   label,
   optional,
-  showName,
+  hints,
 }: {
   parameter: TemplateParameter
   value: string
@@ -46,14 +46,17 @@ export function ParameterField({
   /** The field's label; the parameter's own label or name when left out. */
   label?: string
   optional?: boolean
-  /** Show the variable name under a parameter that has a label. */
-  showName?: boolean
+  /** Show the description and, under a parameter that has a label, the variable name. */
+  hints?: boolean
 }) {
   const id = React.useId()
   const title = label ?? (parameter.label || parameter.name)
   const display = displayOf(parameter)
   const required = !optional && parameter.required
-  const name = showName && parameter.label && (
+  const help = hints && parameter.description && (
+    <FieldDescription className="whitespace-pre-line">{parameter.description}</FieldDescription>
+  )
+  const name = hints && parameter.label && (
     <FieldDescription className="font-mono text-xs">{parameter.name}</FieldDescription>
   )
 
@@ -69,6 +72,7 @@ export function ParameterField({
         )}
         <div className="flex flex-col gap-0.5">
           <FieldLabel htmlFor={id}>{title}</FieldLabel>
+          {help}
           {name}
         </div>
       </Field>
@@ -88,6 +92,7 @@ export function ParameterField({
         title={title}
         required={required}
       />
+      {help}
       {name}
     </Field>
   )

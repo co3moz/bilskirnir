@@ -927,6 +927,7 @@ fn template_schema() -> Value {
             "parameters":{"type":"array","maxItems":32,"default":[],"items":schema(json!({
                 "name":{"type":"string","pattern":"^[A-Z][A-Z0-9_]{0,63}$","description":"The environment variable that carries the value to the setup script."},
                 "label":{"type":"string","maxLength":100,"default":"","description":"What the create form asks for."},
+                "description":{"type":"string","maxLength":500,"default":"","description":"Help the create form shows with the field, such as where to find the value."},
                 "type":{"type":"string","enum":["text","number","boolean","choice","choices"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line."},
                 "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes."},
                 "required":{"type":"boolean","default":false,"description":"A required boolean must be true."},

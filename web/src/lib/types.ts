@@ -47,6 +47,8 @@ export type ParameterOption = { value: string; label: string }
 export type TemplateParameter = {
   name: string
   label: string
+  /** Help shown with the field, such as where to find the value. */
+  description: string
   type: ParameterType
   /** The type's first display when left out. */
   display?: ParameterDisplay | null
