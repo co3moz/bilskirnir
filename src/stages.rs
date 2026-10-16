@@ -1,13 +1,14 @@
-//! Named stages of a long job, so the dashboard and agents can tell where a script build is and
-//! how long each part of it took.
+//! Named stages of a long job, so the dashboard and agents can tell where a script build, a
+//! snapshot or a settings change that recreates a container is and how long each part of it took.
 //!
 //! A job that reports stages lists every one of them once its work starts, in order, and each
 //! records when it started and finished, in seconds like the job's own times. Stages only move
 //! forward. One that never started was skipped, and the last one that started in a failed or
 //! interrupted job is where it stopped. A stage has no percentage of its own: the job's `progress`
 //! stays the measured progress of the running stage, which only a base image download has.
-//! BuildKit reports nothing countable while a script runs or while it saves the image layer, so
-//! those stages show only their time.
+//! BuildKit reports nothing countable while a script runs or while it saves the image layer, and
+//! `docker commit` reports nothing while it saves a container layer, so those stages show only
+//! their time.
 use crate::{
     App,
     model::{Job, now},
@@ -23,6 +24,27 @@ pub(crate) const BUILD_STAGES: [(&str, &str); 5] = [
     ("image", "Writing and tagging the image"),
     ("cleanup", "Cleaning up"),
 ];
+
+/// The stages of a snapshot.
+pub(crate) const SNAPSHOT_STAGES: [(&str, &str); 3] = [
+    ("check", "Checking the container"),
+    ("commit", "Committing the container layer"),
+    ("record", "Saving the image record"),
+];
+
+/// The stages of a settings change that recreates the container from a commit of its files. A
+/// stopped container skips `stop`.
+pub(crate) const RECREATE_STAGES: [(&str, &str); 4] = [
+    ("stop", "Stopping the container"),
+    ("commit", "Committing the container layer"),
+    ("create", "Creating the new container"),
+    ("cleanup", "Cleaning up"),
+];
+
+/// Every job's stages. The interface names a stage by its name alone, so a name two jobs share is
+/// the same step with the same words.
+pub(crate) const JOB_STAGES: [&[(&str, &str)]; 3] =
+    [&BUILD_STAGES, &SNAPSHOT_STAGES, &RECREATE_STAGES];
 
 /// A longer line is no stage marker, so it is logged without waiting for its end.
 const LINE_LIMIT: usize = 65_536;
@@ -89,8 +111,9 @@ pub(crate) fn buildkit_stage(line: &str) -> Option<&'static str> {
 }
 
 fn label(name: &str) -> &str {
-    BUILD_STAGES
+    JOB_STAGES
         .iter()
+        .flat_map(|stages| stages.iter())
         .find(|(stage, _)| *stage == name)
         .map_or(name, |(_, label)| label)
 }

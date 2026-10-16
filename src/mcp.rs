@@ -655,7 +655,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise.",
+            "Change an existing container's settings; pass only the fields to change. name, internet and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
@@ -745,7 +745,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "snapshot",
-            "Briefly pause and commit a container's filesystem changes to a new image layer. Mounted volumes, temporary files and running memory are excluded. Returns job_id.",
+            "Briefly pause and commit a container's filesystem changes to a new image layer. Mounted volumes, temporary files and running memory are excluded. Returns job_id; get_job lists the snapshot's stages with their times.",
             json!({"container_id":id,"name":text,"description":{"type":"string","default":""}}),
             &["container_id", "name"],
             false,
@@ -781,7 +781,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result, plus progress while an image downloads and the stages of an image build. Wait for completed, failed or interrupted; a queued job is not finished.",
+            "Read a job's status, bounded log and result, plus progress while an image downloads and the stages of an image build, a snapshot or a settings change that recreates the container. Wait for completed, failed or interrupted; a queued job is not finished.",
             json!({"job_id":text}),
             &["job_id"],
             true,

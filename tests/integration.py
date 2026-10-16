@@ -783,7 +783,14 @@ try:
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
     print("PASS live internet on/off with VNC still reachable", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
-    snap = job(api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"}))
+    snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
+    snap = job(snap_job)
+    # Each stage of the snapshot ran and ended where the next began; the commit has no progress.
+    snap_record = api(f"jobs/{snap_job['job_id']}")
+    snap_stages = snap_record["stages"]
+    assert [stage["name"] for stage in snap_stages if "started_at" in stage] == ["check", "commit", "record"], snap_stages
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(snap_stages, snap_stages[1:])), snap_stages
+    assert "progress" not in snap_record and "Stage 2/3: Committing the container layer\n" in snap_record["log"], snap_record
     assert snap["desktop"]["catalog_id"] == "ubuntu-xfce"
     assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
     try:
@@ -1090,7 +1097,10 @@ try:
     first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
     preview = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048, "dry_run": True})
     assert preview["live"] == ["name", "cpus", "memory_mb"] and preview["restart"] == [], preview
-    job(api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048}))
+    in_place = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048})
+    job(in_place)
+    # Only a change that recreates the container reports stages.
+    assert "stages" not in api(f"jobs/{in_place['job_id']}")
     limits = json.loads(docker("inspect", "--format", "{{json .HostConfig}}", edit_container))
     assert (limits["NanoCpus"], limits["Memory"], limits["MemorySwap"]) == (2 * 10**9, 2048 * 2**20, 4096 * 2**20), limits
     assert docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip() == first_id
@@ -1100,7 +1110,11 @@ try:
     assert preview["live"] == [] and preview["restart"] == ["cpus", "audio"], preview
     applied = mcp_job(tool("update_container", {"container_id": edit, "audio": True, "cpus": None}))
     assert "Open applications close" in applied["log"] and "Its files were kept" in applied["log"], applied["log"]
-    carried = api(f"containers/{edit}")["working_image"]["reference"]
+    # The running desktop was stopped first, so every stage ran, in order.
+    assert [stage["name"] for stage in applied["stages"] if "started_at" in stage] == ["stop", "commit", "create", "cleanup"], applied["stages"]
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(applied["stages"], applied["stages"][1:])), applied["stages"]
+    assert "Stage 2/4: Committing the container layer\n" in applied["log"], applied["log"]
+    carried =api(f"containers/{edit}")["working_image"]["reference"]
     image_refs.append(carried)
     ready(edit_container)
     second = json.loads(docker("inspect", edit_container))[0]
