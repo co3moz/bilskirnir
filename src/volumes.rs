@@ -12,7 +12,7 @@ mod files;
 use crate::{
     App,
     error::{Error, Result, missing},
-    model::{LABEL, volume_name},
+    model::{LABEL, Mount, volume_name},
     process,
 };
 use axum::http::StatusCode;
@@ -163,6 +163,17 @@ pub(crate) fn manager_volume(manager: &Value, name: &str) -> bool {
         .into_iter()
         .flatten()
         .any(|mount| mount["Type"] == "volume" && mount["Name"] == name)
+}
+
+/// Refuse a desktop the manager's own volumes: its data volume holds the database and sessions.
+pub(crate) fn refuse_manager_volumes(manager: &Value, mounts: &[Mount]) -> anyhow::Result<()> {
+    if let Some(mount) = mounts.iter().find(|m| manager_volume(manager, &m.volume)) {
+        anyhow::bail!(
+            "{} is the manager's own volume and cannot be mounted in a desktop",
+            mount.volume
+        );
+    }
+    Ok(())
 }
 
 pub(crate) fn helper_name() -> String {

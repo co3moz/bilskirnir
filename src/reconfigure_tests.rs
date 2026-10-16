@@ -1,6 +1,7 @@
 //! Pins down which settings change in place and which recreate the container, how a partial
-//! request becomes a full set of settings, and that a recreated container gets every setting as
-//! a creation flag, from the commit that carries its files.
+//! request becomes a full set of settings, that a recreated container gets every setting as a
+//! creation flag, from the commit that carries its files, and that a change mounting the
+//! manager's own volume is refused before the desktop stops.
 use super::*;
 
 fn spec() -> ContainerSpec {
@@ -194,4 +195,42 @@ fn volume_settings_leave_the_compose_volumes_alone() {
             .unwrap_err()
             .contains("unity-installs")
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_settings_change_cannot_mount_the_managers_own_volume() {
+    let mut app = crate::tests::app(false);
+    let calls = crate::tests::manager_docker(&mut app);
+    let env = Container {
+        id: "edit".into(),
+        container: "wsld-edit".into(),
+        private_network: "wsld-edit-private".into(),
+        egress_network: "wsld-edit-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(CONTAINERS, "edit", &env).unwrap();
+    let mounts = json!({"mounts": [{"volume": "bilskirnir-data", "target": "/workspace"}]});
+    let error = app
+        .update_container("edit", request(mounts), "settings-job")
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+    );
+    // Refused before the desktop is stopped or the settings are saved.
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\n"
+    );
+    let saved: Container = app.db.get(CONTAINERS, "edit").unwrap();
+    assert_eq!(saved.spec, env.spec);
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }

@@ -155,8 +155,20 @@ impl App {
             self.append_log(job_id, "The settings are unchanged.")?;
             return Ok(result);
         }
+        let mounts = spec.mounts.iter().chain(env.compose_mounts());
+        let mounts = mounts.cloned().collect::<Vec<_>>();
+        // A new container gets the mounts, so check them before the desktop stops.
+        if !changes.restart.is_empty() && !mounts.is_empty() {
+            let manager = self
+                .config
+                .manager
+                .as_deref()
+                .context("MANAGER_CONTAINER is required")?;
+            let manager_info = self.inspect("container", manager).await?;
+            crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
+        }
         // A new container would get an empty volume in place of a missing one.
-        for mount in spec.mounts.iter().chain(env.compose_mounts()) {
+        for mount in &mounts {
             self.inspect("volume", &mount.volume)
                 .await
                 .with_context(|| format!("Volume not found: {}", mount.volume))?;

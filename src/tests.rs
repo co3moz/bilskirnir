@@ -1376,6 +1376,121 @@ async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
     );
 }
 
+/// A Docker CLI stand-in for a manager named `bilskirnir-manager` whose data volume is
+/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, fails everything
+/// else and records its arguments in the returned file.
+#[cfg(unix)]
+pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!(
+        "bilskirnir-docker-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let calls = dir.join("calls");
+    let manager = serde_json::json!([{
+        "Id": "manager",
+        "Config": {"Labels": {"io.wsl-desktop.manager": "true"}},
+        "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
+    }]);
+    let docker = dir.join("docker");
+    std::fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  *) exit 1 ;;\nesac\n",
+            calls = calls.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config = &mut Arc::get_mut(app).unwrap().config;
+    config.docker_bin = docker.display().to_string();
+    config.manager = Some("bilskirnir-manager".into());
+    calls
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn no_desktop_is_created_with_the_managers_own_volume() {
+    let mut app = app(false);
+    let calls = manager_docker(&mut app);
+    let mut spec = spec();
+    spec.mounts.push(model::Mount {
+        volume: "bilskirnir-data".into(),
+        target: "/workspace".into(),
+        readonly: true,
+    });
+    let refused = |error: anyhow::Error| {
+        let message = error.to_string();
+        assert!(
+            message.contains("bilskirnir-data is the manager's own volume"),
+            "{message}"
+        );
+    };
+    // Creation refuses it before the volume or the image is looked at, and saves nothing.
+    refused(
+        app.create_container("refused", spec.clone(), Default::default(), "create-job")
+            .await
+            .unwrap_err(),
+    );
+    assert!(
+        app.db
+            .list::<model::Container>(model::CONTAINERS)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\n"
+    );
+
+    // A record saved before the manager refused it: a reset keeps its container, and a retry
+    // does not recreate the missing one.
+    let env = model::Container {
+        id: "legacy".into(),
+        container: "wsld-legacy".into(),
+        private_network: "wsld-legacy-private".into(),
+        egress_network: "wsld-legacy-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, "legacy", &env).unwrap();
+    std::fs::remove_file(&calls).unwrap();
+    refused(
+        app.reset_container("legacy", "reset-job")
+            .await
+            .unwrap_err(),
+    );
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\n"
+    );
+    std::fs::remove_file(&calls).unwrap();
+    refused(
+        app.retry_container("legacy", "retry-job")
+            .await
+            .unwrap_err(),
+    );
+    let made = std::fs::read_to_string(&calls).unwrap();
+    assert_eq!(
+        made.lines().last(),
+        Some("container inspect bilskirnir-manager"),
+        "{made}"
+    );
+    assert!(
+        !made.contains("network") && !made.contains("create"),
+        "{made}"
+    );
+    let saved: model::Container = app.db.get(model::CONTAINERS, "legacy").unwrap();
+    assert!(saved.last_error.unwrap().contains("manager's own volume"));
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}
+
 #[test]
 fn file_tool_requests_are_validated() {
     let mut spec = spec();
