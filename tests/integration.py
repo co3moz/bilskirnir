@@ -93,6 +93,9 @@ share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
 restored_volume = f"wsld-test-restored-{tag}"
+installs_volume = f"wsld-test-installs-{tag}"
+cache_volume = f"wsld-test-cache-{tag}"
+absent_volume = f"wsld-test-absent-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
@@ -413,7 +416,13 @@ try:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     build_request = {"name": "offline-script-test", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
-    built = job(api("images/build", build_request))
+    build_job = api("images/build", build_request)
+    built = job(build_job)
+    # BuildKit's progress lines start each stage, and each one ends where the next begins.
+    stages = api(f"jobs/{build_job['job_id']}")["stages"]
+    assert [stage["name"] for stage in stages] == ["base", "script", "layer", "image", "cleanup"], stages
+    assert all(stage["started_at"] <= stage["finished_at"] for stage in stages), stages
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(stages, stages[1:])), stages
     # The exported configuration is the request again; lists and job results leave the script out.
     assert built["build"] == {"base_image": build_request["base_image"], "internet": False}, built
     assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
@@ -739,9 +748,19 @@ try:
     diag = api(f"containers/{env_id}/diagnostics")["output"]
     assert "D3D12 (NVIDIA" in diag, diag
     assert "Default Source: browser-microphone" in diag, diag
-    # gpu-run applies VirtualGL's Chrome workaround to Chromium-family command names only.
-    hack = mcp_job(tool("exec_container", {"container_id":env_id,"script":"mkdir -p /tmp/gr && ln -sf /usr/bin/env /tmp/gr/google-chrome && ln -sf /usr/bin/env /tmp/gr/MyGame\ngpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\nVGL_CHROMEHACK=0 gpu-run /tmp/gr/google-chrome | grep VGL_CHROMEHACK\ngpu-run /tmp/gr/MyGame | grep -c VGL_CHROMEHACK || true\n"}))["log"]
-    assert "VGL_CHROMEHACK=1\n" in hack and "VGL_CHROMEHACK=0\n" in hack and "\n0\n" in hack, hack
+    # A program laid out like a Chromium build turns VirtualGL's Chrome workaround on for itself,
+    # also when the panel starts it; other programs, and those a browser starts, keep the default.
+    chromium = "\n".join([
+        r'd=$(mktemp -d -p "$HOME") && cp /usr/bin/env "$d/chrome" && touch "$d/icudtl.dat" "$d/resources.pak"',
+        r'echo "browser=$(gpu-run "$d/chrome" | grep ^VGL_CHROMEHACK=)"',
+        r'echo "explicit=$(VGL_CHROMEHACK=0 gpu-run "$d/chrome" | grep ^VGL_CHROMEHACK=)"',
+        r'echo "game=$(gpu-run /usr/bin/env | grep -c ^VGL_CHROMEHACK=)"',
+        r'echo "started-by-browser=$(gpu-run "$d/chrome" /usr/bin/env | grep -c ^VGL_CHROMEHACK=)"',
+        r'echo "panel=$(tr "\0" "\n" < /proc/$(pgrep -x xfce4-panel)/environ | grep -c "^LD_PRELOAD=.*/chromium-gpu.so")"',
+        r'rm -rf "$d"', ""])
+    hack = mcp_job(tool("exec_container", {"container_id":env_id,"script":chromium}))["log"]
+    for line in ["browser=VGL_CHROMEHACK=1", "explicit=VGL_CHROMEHACK=0", "game=0", "started-by-browser=0", "panel=1"]:
+        assert line in hack.splitlines(), hack
     print("PASS independent desktop, hardware OpenGL and virtual audio devices", flush=True)
     jpeg = api(f"containers/{env_id}/screenshot", raw=True)
     assert jpeg.startswith(b"\xff\xd8") and len(jpeg) > 1000
@@ -796,7 +815,14 @@ try:
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
     print("PASS live internet on/off with VNC still reachable", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
-    snap = job(api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"}))
+    snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
+    snap = job(snap_job)
+    # Each stage of the snapshot ran and ended where the next began; the commit has no progress.
+    snap_record = api(f"jobs/{snap_job['job_id']}")
+    snap_stages = snap_record["stages"]
+    assert [stage["name"] for stage in snap_stages if "started_at" in stage] == ["check", "commit", "record"], snap_stages
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(snap_stages, snap_stages[1:])), snap_stages
+    assert "progress" not in snap_record and "Stage 2/3: Committing the container layer\n" in snap_record["log"], snap_record
     assert snap["desktop"]["catalog_id"] == "ubuntu-xfce"
     assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
     try:
@@ -927,6 +953,9 @@ try:
     assert b"GNOME Shell 46" in docker("exec",gnome_container,"gnome-shell","--version")
     assert subprocess.run(["docker","exec",gnome_container,"pgrep","-x","gnome-shell"],capture_output=True).returncode==0
     assert subprocess.run(["docker","exec",gnome_container,"pgrep","-f","^/usr/libexec/gnome-session-failed"],capture_output=True).returncode!=0
+    # A browser GNOME Shell starts gets the Chromium check too.
+    shell_env = docker("exec","--user","desktop",gnome_container,"sh","-c","tr '\\0' '\\n' < /proc/$(pgrep -x gnome-shell)/environ")
+    assert any(line.startswith(b"LD_PRELOAD=") and b"/chromium-gpu.so" in line for line in shell_env.splitlines()), shell_env
     assert api(f"containers/{gnome_id}/screenshot",raw=True).startswith(b"\xff\xd8")
     assert "D3D12 (NVIDIA" in api(f"containers/{gnome_id}/diagnostics")["output"]
     gnome_snapshot=job(api(f"containers/{gnome_id}/snapshot",{"name":"GNOME snapshot"}))
@@ -984,6 +1013,9 @@ try:
     bad=api("images/build",{"name":"failed-script","base_image":xfce["reference"],"internet":False,"script":"echo EXPECTED_SCRIPT_FAILURE\nexit 17\n"})
     failed=wait_for(lambda: (j if (j := api(f"jobs/{bad['job_id']}"))["status"] not in ("queued","running") else None))
     assert failed["status"]=="failed" and "EXPECTED_SCRIPT_FAILURE" in failed["log"],failed
+    # The script's stage is the last one started, so the panel shows where the build stopped.
+    assert [s["name"] for s in failed["stages"] if "started_at" in s]==["base","script"],failed["stages"]
+    assert "Stage 2/5: Running the setup script\n" in failed["log"],failed["log"]
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{bad['job_id']}")==b""
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)
@@ -1027,6 +1059,67 @@ try:
     assert api(f"images/{moved['id']}/compose") == {"parameters": [], "script": "true", "root": False, "timeout_seconds": 600}
     assert "compose" not in tool("set_image_compose", {"image_id": moved["id"], "compose": None})["structuredContent"]
     print("PASS MCP compose read, replace and removal", flush=True)
+    # A volume parameter mounts the volume chosen for it at its path whenever the container is
+    # created; without one the path stays in the container. Either way the desktop user owns the
+    # folder before the setup script runs, which reads the path and the volume's name.
+    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\n"}
+    for parameters in [[{"name": "UNITY_HOME", "type": "volume"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/tmp/unity"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/opt/../etc"}], [*volume_compose["parameters"], {"name": "UNITY_HOME_VOLUME"}]]:
+        assert refused(f"images/{built['id']}/compose", {**volume_compose, "parameters": parameters}, "PUT") == 400, parameters
+    installs_image = job(api("images/build", {"name": "volume-parameters", "base_image": xfce["reference"], "internet": False, "script": f"# volume parameters {tag}\ntrue\n", "compose": volume_compose}))
+    assert installs_image["compose"]["parameters"] == [{**p, "label": "", "description": "", "required": p.get("required", False), "secret": False, "default": ""} for p in volume_compose["parameters"]], installs_image["compose"]
+    api("volumes", {"name": installs_volume})
+    base = {"image": installs_image["image_id"], "internet": False}
+    # Refused before a job: no volume for a required parameter, a volume also in the volume
+    # settings or chosen twice, and another volume at the parameter's path.
+    for name, parameters, mounts in [("no-volume", {}, []), ("twice", {"UNITY_HOME": installs_volume}, [{"volume": installs_volume, "target": "/srv/unity"}]), ("same-path", {"UNITY_HOME": installs_volume}, [{"volume": share, "target": "/unity-install-location"}]), ("same-volume", {"UNITY_HOME": installs_volume, "UNITY_CACHE": installs_volume}, [])]:
+        assert refused("containers", {**base, "name": name, "parameters": parameters, "mounts": mounts}) == 400, name
+    # Refused by the job: a volume that does not exist is not created, and the manager's own data
+    # volume is never handed to a desktop.
+    for name, chosen, reason in [("absent", absent_volume, "Volume not found"), ("manager", volume, "manager's own volume")]:
+        response = api("containers", {**base, "name": name, "parameters": {"UNITY_HOME": chosen}})
+        failed = wait_for(lambda: (j if (j := api(f"jobs/{response['job_id']}"))["status"] not in ("queued", "running") else None))
+        assert failed["status"] == "failed" and reason in failed["log"], failed
+    assert json.loads(docker("volume", "inspect", absent_volume, check=False) or b"[]") == []
+    assert not [item for item in api("containers") if item["spec"]["name"] in ("absent", "manager")]
+    def volume_mounts(container):
+        return {m["Destination"]: m["Name"] for m in json.loads(docker("inspect", container))[0]["Mounts"] if m["Type"] == "volume"}
+    kept = job(api("containers", {**base, "name": "Volume parameter", "parameters": {"UNITY_HOME": installs_volume}}))["container_id"]
+    container_ids.append(kept)
+    kept_container = f"wsld-{kept}"
+    ready(kept_container)
+    assert docker("exec", kept_container, "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache||1001".encode()
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    assert docker("exec", kept_container, "stat", "-c", "%U", "/unity-install-location", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\ndesktop\n"
+    assert api(f"containers/{kept}")["setup"]["mounts"] == [{"volume": installs_volume, "target": "/unity-install-location", "readonly": False}]
+    # The volume settings cannot put another volume at its path, and a recreation keeps it.
+    assert refused(f"containers/{kept}/settings", {"mounts": [{"volume": share, "target": "/unity-install-location"}]}) == 400
+    job(api(f"containers/{kept}/settings", {"resolution": "1280x720"}))
+    image_refs.append(api(f"containers/{kept}")["working_image"]["reference"])
+    ready(kept_container)
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    # A reset starts from the image again: the volume keeps its files, the folder without a volume
+    # loses them, and the setup runs again.
+    docker("exec", "--user", "desktop", kept_container, "sh", "-c", "printf kept > /unity-install-location/extra && printf layer > /home/desktop/Unity/Cache/extra")
+    job(api(f"containers/{kept}/reset", {}))
+    ready(kept_container)
+    assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
+    assert docker("exec", kept_container, "cat", "/unity-install-location/extra") == b"kept"
+    assert subprocess.run(["docker", "exec", kept_container, "test", "-e", "/home/desktop/Unity/Cache/extra"]).returncode != 0
+    assert docker("exec", kept_container, "cat", "/home/desktop/Unity/Cache/marker") == b"cached"
+    # A volume created for the cache, as the dashboard does inline, and the installs shared with
+    # the first container. Docker makes the folder above the cache, which the desktop user gets.
+    api("volumes", {"name": cache_volume})
+    shared = job(api("containers", {**base, "name": "Shared installs", "parameters": {"UNITY_HOME": installs_volume, "UNITY_CACHE": cache_volume}}))["container_id"]
+    container_ids.append(shared)
+    ready(f"wsld-{shared}")
+    assert volume_mounts(f"wsld-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume}
+    assert docker("exec", f"wsld-{shared}", "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache|{cache_volume}|1001".encode()
+    assert docker("exec", f"wsld-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\n"
+    for eid in [kept, shared]:
+        job(api(f"containers/{eid}", method="DELETE"))
+        container_ids.remove(eid)
+    assert docker("volume", "inspect", installs_volume) and docker("volume", "inspect", cache_volume)
+    print("PASS volume parameters mount the chosen volume, keep it across settings and reset, and give the desktop user its folder", flush=True)
     # Settings change after creation: the name and new limits apply to the running container, while
     # audio and removing a limit need a new container that keeps the old one's files.
     edit = job(api("containers", {"name": "Settings edit", "image": xfce["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
@@ -1036,7 +1129,10 @@ try:
     first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
     preview = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048, "dry_run": True})
     assert preview["live"] == ["name", "cpus", "memory_mb"] and preview["restart"] == [], preview
-    job(api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048}))
+    in_place = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048})
+    job(in_place)
+    # Only a change that recreates the container reports stages.
+    assert "stages" not in api(f"jobs/{in_place['job_id']}")
     limits = json.loads(docker("inspect", "--format", "{{json .HostConfig}}", edit_container))
     assert (limits["NanoCpus"], limits["Memory"], limits["MemorySwap"]) == (2 * 10**9, 2048 * 2**20, 4096 * 2**20), limits
     assert docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip() == first_id
@@ -1046,7 +1142,11 @@ try:
     assert preview["live"] == [] and preview["restart"] == ["cpus", "audio"], preview
     applied = mcp_job(tool("update_container", {"container_id": edit, "audio": True, "cpus": None}))
     assert "Open applications close" in applied["log"] and "Its files were kept" in applied["log"], applied["log"]
-    carried = api(f"containers/{edit}")["working_image"]["reference"]
+    # The running desktop was stopped first, so every stage ran, in order.
+    assert [stage["name"] for stage in applied["stages"] if "started_at" in stage] == ["stop", "commit", "create", "cleanup"], applied["stages"]
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(applied["stages"], applied["stages"][1:])), applied["stages"]
+    assert "Stage 2/4: Committing the container layer\n" in applied["log"], applied["log"]
+    carried =api(f"containers/{edit}")["working_image"]["reference"]
     image_refs.append(carried)
     ready(edit_container)
     second = json.loads(docker("inspect", edit_container))[0]
@@ -1105,5 +1205,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

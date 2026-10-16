@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { openDialog } from "@/lib/dialogs"
 import {
+  currentStage,
   duration,
   jobActive,
   jobName,
@@ -57,9 +58,13 @@ const columns: DataColumn<Row>[] = [
     cell: ({ row }) => {
       const job = row.original
       const percent = job.status === "running" ? jobProgress(job.progress)?.percent : undefined
+      const stage = currentStage(job)
       return (
         <div className="flex items-center gap-2">
           <StatusBadge state={job.status} tone={jobTone(job.status)} />
+          {stage && (
+            <span className="max-w-48 truncate text-xs text-muted-foreground">{stage}</span>
+          )}
           {percent !== undefined && (
             <span className="text-xs text-muted-foreground">{percent}%</span>
           )}

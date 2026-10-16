@@ -170,7 +170,8 @@ pub async fn create(
     if let Some(record) = crate::compose::compose_image(&records, &spec.image, &spec.image)
         && let Some(compose) = &record.compose
     {
-        compose.resolve(&parameters)?;
+        let values = compose.resolve(&parameters)?;
+        crate::compose::check_mounts(&spec.mounts, &compose.mounts(&values))?;
     }
     let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
@@ -507,6 +508,8 @@ pub async fn build(
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         move |app, id| async move {
+            app.plan_stages(&id, &crate::stages::BUILD_STAGES)?;
+            app.begin_stage(&id, "base")?;
             app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
             if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
@@ -540,11 +543,14 @@ pub async fn build(
                 reference.clone(),
                 dir.to_string_lossy().into_owned(),
             ];
+            app.begin_stage(&id, "script")?;
             app.append_log(
                 &id,
                 "Running setup script as root. Mounted volumes are excluded from the image.",
             )?;
-            app.docker_logged(&id, &args).await?;
+            app.docker_build_logged(&id, &args).await?;
+            // Without BuildKit's markers, the layer stage is skipped rather than guessed.
+            app.begin_stage(&id, "image")?;
             let info = app.inspect("image", &reference).await?;
             let rec = ImageRecord {
                 id: id.clone(),
@@ -592,9 +598,12 @@ pub async fn snapshot(
         "snapshot",
         format!("container:{env_id}"),
         move |app, id| async move {
+            app.plan_stages(&id, &crate::stages::SNAPSHOT_STAGES)?;
+            app.begin_stage(&id, "check")?;
             let env = app.container(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
             let container = app.owned(&env).await?;
             let reference = format!("bilskirnir/snapshot:{id}");
+            app.begin_stage(&id, "commit")?;
             app.append_log(&id,"Committing container changes. Volumes, /run, /tmp and running application state are excluded.")?;
             app.docker_logged(
                 &id,
@@ -610,6 +619,7 @@ pub async fn snapshot(
                 ],
             )
             .await?;
+            app.begin_stage(&id, "record")?;
             let info = app.inspect("image", &reference).await?;
             // A container from the snapshot asks for the same parameters again.
             let compose = app.pinned_compose(&env_id);

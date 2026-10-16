@@ -74,7 +74,7 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another container.
 7. Delete a container only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
 
-An accepted job is not a completed operation. `get_job` reports `queued`, `running`, `completed`, `failed` or `interrupted`, with the log and result. While an image downloads, it also reports `progress` with `current` and `total` bytes and `layers_done` of `layers`. Inspect a failed or interrupted job before trying again. A lost connection does not mean a queued operation was cancelled.
+An accepted job is not a completed operation. `get_job` reports `queued`, `running`, `completed`, `failed` or `interrupted`, with the log and result. While an image downloads, it also reports `progress` with `current` and `total` bytes and `layers_done` of `layers`. A `build_image` job lists its `stages` (`base`, `script`, `layer`, `image`, `cleanup`) with `started_at` and `finished_at` seconds, so a long build shows whether the script is still running or Docker is saving the image layer; only the base image download has a `progress`, as described in [the API guide](API.md). A `snapshot` job lists `check`, `commit` and `record`, and an `update_container` job that recreates the container lists `stop`, `commit`, `create` and `cleanup`, with `stop` skipped for a stopped container. Docker reports no progress while it commits the container layer, so `commit` only shows how long it has been running. Inspect a failed or interrupted job before trying again. A lost connection does not mean a queued operation was cancelled.
 
 ## Tools
 
@@ -134,7 +134,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 }
 ```
 
-`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#composes).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes` or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
 
 ## Read and write files
 
@@ -150,7 +150,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 ## Launch and observe applications
 
-`launch_application` starts a program in the background as the desktop user and returns an `application_id`. It takes `command`, optional `args`, `cwd` (default `/home/desktop`), `env` and `name`. Set `gpu=true` to run the program through `gpu-run` for hardware OpenGL; this needs a GPU-enabled container. A Chromium-based browser also needs its own flags, listed under [running graphics applications](USAGE.md#running-graphics-applications), passed in `args`. The call returns after a short check, so a missing program or working directory is reported as `failed` immediately.
+`launch_application` starts a program in the background as the desktop user and returns an `application_id`. It takes `command`, optional `args`, `cwd` (default `/home/desktop`), `env` and `name`. Set `gpu=true` to run the program through `gpu-run` for hardware OpenGL; this needs a GPU-enabled container. A Chromium-based browser needs no flags of its own, as [running graphics applications](USAGE.md#running-graphics-applications) explains. The call returns after a short check, so a missing program or working directory is reported as `failed` immediately.
 
 `get_application` and `list_applications` report `state` (`starting`, `running`, `exited`, `failed` or `unknown`), the process ID, `exit_code` or the terminating `signal`, and the log size. `application_logs` returns the last `tail_bytes` of the combined stdout/stderr log, which keeps about the latest 1 MiB. `stop_application` sends SIGTERM to the application's process group and SIGKILL after `grace_seconds`.
 

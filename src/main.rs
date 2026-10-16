@@ -22,6 +22,7 @@ mod process;
 mod pulls;
 mod reconfigure;
 mod recordings;
+mod stages;
 mod terminal;
 mod uploads;
 mod usage;
@@ -252,6 +253,7 @@ async fn main() -> anyhow::Result<()> {
         if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
             job.finished_at = Some(model::now());
+            job.finish_stages(model::now());
             job.progress = None;
             job.log.push_str("\nService restarted. The Docker operation may have continued; check resources before retrying.\n");
             job.trim_log();

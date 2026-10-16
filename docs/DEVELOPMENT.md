@@ -47,7 +47,7 @@ When a catalog image is missing, its row under **Images** offers a download butt
 | API client, queries and pure helpers | `web/src/lib/` (`api.ts`, `queries.ts`, `format.ts`, `route.ts`) |
 | Languages of the interface | `web/src/lib/i18n.ts`, `web/src/locales/`, `web/src/components/language-menu.tsx`, `tests/i18n.test.ts` |
 | Remote desktop, audio and microphone | `web/src/pages/desktop.tsx`, `web/src/lib/media.ts`, `web/public/audio-worklet.js` |
-| Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh` |
+| Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh`, `desktop/chromium-gpu.c` |
 | Builds, tests and publishing | `scripts/`, `tests/`, `.github/workflows/publish.yml` |
 | WSL distribution package | `wsl/`, `scripts/build-wsl.sh`, `windows/bilskirnir.ps1` |
 

@@ -129,6 +129,7 @@ impl App {
         request: &Map<String, Value>,
     ) -> Result<(ContainerSpec, Changes)> {
         let spec = merged_spec(&env.spec, request)?;
+        crate::compose::check_mounts(&spec.mounts, env.compose_mounts())?;
         // Only a feature being switched on needs the installation's permission; a desktop that
         // already has one keeps it after the installation turns it off, as it did before.
         let mut enabled = spec.clone();
@@ -154,7 +155,8 @@ impl App {
             self.append_log(job_id, "The settings are unchanged.")?;
             return Ok(result);
         }
-        for mount in &spec.mounts {
+        // A new container would get an empty volume in place of a missing one.
+        for mount in spec.mounts.iter().chain(env.compose_mounts()) {
             self.inspect("volume", &mount.volume)
                 .await
                 .with_context(|| format!("Volume not found: {}", mount.volume))?;
@@ -227,10 +229,13 @@ impl App {
                 "{previous} is left from an interrupted settings change; check its files and remove it before changing settings again"
             );
         }
+        self.plan_stages(job_id, &crate::stages::RECREATE_STAGES)?;
         if running {
+            self.begin_stage(job_id, "stop")?;
             self.append_log(job_id, "Stopping the container. Open applications close.")?;
             self.docker(&["stop", "--time", "30", &old_id]).await?;
         }
+        self.begin_stage(job_id, "commit")?;
         self.append_log(
             job_id,
             "Saving the container's files for the new container. Named volumes stay where they are.",
@@ -249,7 +254,8 @@ impl App {
             )
             .await?;
             let image = self.inspect("image", &reference).await?;
-            crate::docker::image_volumes_mounted(&image, &spec)?;
+            let mounts = spec.mounts.iter().chain(env.compose_mounts()).cloned();
+            crate::docker::image_volumes_mounted(&image, &mounts.collect::<Vec<_>>())?;
             self.docker(&["rename", &old_id, &previous]).await?;
             anyhow::Ok(image["Id"].as_str().context("Missing image ID")?.to_owned())
         }
@@ -269,6 +275,7 @@ impl App {
             reference: reference.clone(),
         });
         env.spec = spec;
+        self.begin_stage(job_id, "create")?;
         let replaced = async {
             self.docker_args(&self.container_args(&env)).await?;
             if env.spec.internet {
@@ -304,6 +311,7 @@ impl App {
         env.last_error = None;
         self.db.put(CONTAINERS, &env.id, &env)?;
         self.remove_container_records(&env.id)?;
+        self.begin_stage(job_id, "cleanup")?;
         self.docker(&["rm", "--force", &old_id])
             .await
             .with_context(|| {

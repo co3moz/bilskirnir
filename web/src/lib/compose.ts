@@ -6,6 +6,7 @@ import type {
   ParameterType,
   Compose,
   ComposeParameter,
+  Volume,
 } from "./types"
 import { t } from "./i18n"
 
@@ -24,6 +25,7 @@ export const DISPLAYS: Record<ParameterType, ParameterDisplay[]> = {
   boolean: ["toggle", "checkbox"],
   choice: ["select", "radio"],
   choices: ["checkboxes"],
+  volume: ["select"],
 }
 
 export const typeLabel = (type: ParameterType) => t(`compose.type.${type}`)
@@ -84,6 +86,30 @@ export function toggleChoice(
     .join("\n")
 }
 
+/** The manager's rule for a volume name, as an input pattern and a check. */
+export const VOLUME_NAME = "[a-zA-Z0-9][a-zA-Z0-9_.\\-]+"
+export const volumeNameValid = (name: string) =>
+  name.length <= 128 && new RegExp(`^${VOLUME_NAME}$`).test(name)
+
+/** The volumes a volume parameter offers: every named volume, and its value if that is gone. */
+export function volumeChoices(volumes: Pick<Volume, "Name">[], value: string) {
+  const names = volumes.map((volume) => volume.Name).sort((a, b) => a.localeCompare(b))
+  return value && !names.includes(value) ? [value, ...names] : names
+}
+
+/** A name for a new volume of `parameter`, such as `unity-home` for UNITY_HOME, not yet taken. */
+export function newVolumeName(
+  parameter: Pick<ComposeParameter, "name">,
+  volumes: Pick<Volume, "Name">[]
+) {
+  // Parameter names start with a letter, so the name does too.
+  const base = parameter.name.toLowerCase().replace(/_+/g, "-").replace(/-+$/, "")
+  const taken = new Set(volumes.map((volume) => volume.Name))
+  let name = base.length < 2 ? `${base}-volume` : base
+  for (let number = 2; taken.has(name); number++) name = `${base}-${number}`
+  return name
+}
+
 /** A slider position as the script reads it, with no more decimals than its step has. */
 export function sliderValue(position: number, step?: number | null) {
   const decimals = String(step ?? 1).split(".")[1]?.length ?? 0
@@ -107,6 +133,7 @@ export type ParameterDraft = {
   min: string
   max: string
   step: string
+  path: string
 }
 export type ComposeDraft = {
   parameters: ParameterDraft[]
@@ -134,6 +161,7 @@ export const newParameter = (): ParameterDraft => ({
   min: "",
   max: "",
   step: "",
+  path: "",
 })
 
 const bound = (value?: number | null) => (value === undefined || value === null ? "" : `${value}`)
@@ -154,6 +182,7 @@ function parameterDraft(parameter: ComposeParameter): ParameterDraft {
     min: bound(parameter.min),
     max: bound(parameter.max),
     step: bound(parameter.step),
+    path: parameter.path ?? "",
   }
 }
 
@@ -217,6 +246,7 @@ export function draftParameter(draft: ParameterDraft): ComposeParameter {
       : {}),
     ...(draft.type === "choice" && draft.allow_custom ? { allow_custom: true } : {}),
     ...range,
+    ...(draft.type === "volume" ? { path: draft.path.trim() } : {}),
   }
 }
 
@@ -282,6 +312,7 @@ function readParameter(value: unknown): ComposeParameter {
         }
       : {}),
     ...(flag("allow_custom") ? { allow_custom: true } : {}),
+    ...(text("path") ? { path: text("path") } : {}),
   }
   for (const field of ["min", "max", "step"] as const) {
     const bound = parameter[field]

@@ -5,6 +5,7 @@ import {
   displayOf,
   draftParameter,
   newOption,
+  newVolumeName,
   parameterBody,
   readCompose,
   sliderValue,
@@ -12,6 +13,8 @@ import {
   composeDraft,
   composeFor,
   toggleChoice,
+  volumeChoices,
+  volumeNameValid,
   withOptions,
   withType,
 } from "../web/src/lib/compose"
@@ -217,6 +220,47 @@ const typed: ComposeParameter[] = [
     options: flavors,
   },
 ]
+
+const installs: ComposeParameter = {
+  name: "UNITY_HOME",
+  label: "Unity installs",
+  description: "",
+  type: "volume",
+  required: false,
+  secret: false,
+  default: "unity-installs",
+  path: "/opt/unity",
+}
+
+test("a volume parameter keeps its path through the editor and a pasted configuration", () => {
+  const compose = { ...unity, parameters: [...typed, installs] }
+  assert.deepEqual(composeBody(composeDraft(compose)), compose)
+  assert.deepEqual(readCompose({ script: "true", parameters: [installs] }).parameters, [installs])
+  // Only a volume parameter sends a path, though the draft keeps it while the type changes.
+  const [draft] = composeDraft({ ...unity, parameters: [installs] }).parameters
+  const text = withType(draft, "text")
+  assert.equal("path" in draftParameter(text), false)
+  assert.equal(draftParameter(withType(text, "volume")).path, "/opt/unity")
+  assert.equal(displayOf({ type: "volume" }), "select")
+  assert.throws(
+    () => readCompose({ script: "true", parameters: [{ ...installs, path: 5 }] }),
+    /parameter UNITY_HOME/
+  )
+})
+
+test("a volume parameter offers the volumes there are and names a new one after itself", () => {
+  const volumes = [{ Name: "projects" }, { Name: "Assets" }, { Name: "unity-home" }]
+  assert.deepEqual(volumeChoices(volumes, ""), ["Assets", "projects", "unity-home"])
+  // A value whose volume is gone stays visible, so the form does not silently drop it.
+  assert.deepEqual(volumeChoices([], "unity-installs"), ["unity-installs"])
+  assert.equal(newVolumeName({ name: "UNITY_INSTALLS" }, volumes), "unity-installs")
+  assert.equal(newVolumeName({ name: "UNITY_HOME" }, volumes), "unity-home-2")
+  assert.equal(newVolumeName({ name: "X" }, []), "x-volume")
+  for (const name of ["unity-installs", "x-volume", "unity-home-2"])
+    assert.ok(volumeNameValid(name), name)
+  for (const name of ["", "a", "-unity", "with space", "a/b", "x".repeat(129)])
+    assert.equal(volumeNameValid(name), false, name)
+})
 
 test("every type survives the editor unchanged", () => {
   const compose = { ...unity, parameters: typed }
