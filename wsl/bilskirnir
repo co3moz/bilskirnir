@@ -6,6 +6,9 @@ PORT=${PORT:-8080}
 # The manager the package installs, and where its releases are listed.
 MANAGER_REPOSITORY=ghcr.io/co3moz/bilskirnir
 RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
+# The installation files every manager image bundles under /app/install. The package and each update
+# record their checksums in .shipped.sha256, which tells an update whether a file was edited by hand.
+INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
 
 usage() {
     cat <<'EOF'
@@ -16,7 +19,7 @@ Usage: bilskirnir <command>
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Move the manager to the newest release, pull downloaded desktop images, recreate the manager
+  update    Move the manager and its compose.yml to the newest release, pull downloaded desktop images, recreate the manager
   doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
@@ -100,6 +103,55 @@ update_profiles() {
         fi
     done
 }
+checksum() {
+    sha256sum <"$1" | cut -c1-64
+}
+# Installation files belong to root, so they change through sudo: written beside the old file and
+# renamed over it, so a failed write leaves the old one whole. A file keeps its owner and mode.
+put_file() {
+    local target=$INSTALL/$1 mode=(-m 0644)
+    if [[ -e $target ]]; then
+        mode=(-m "$(stat -c %a "$target")" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
+    fi
+    sudo install -D "${mode[@]}" "$2" "$target.new"
+    sudo mv -f "$target.new" "$target"
+}
+# Settings added in a release reach the manager only through the environment list in its compose.yml,
+# so an update brings the installation files of the manager it runs. A file still as it was installed
+# is replaced. One edited by hand stays when the release brings the same file again; otherwise it is
+# saved as <file>.bak first. .env holds the settings and is never one of them.
+update_install_files() {
+    local image=$1 file new current shipped
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    for file in "${INSTALL_FILES[@]}"; do
+        mkdir -p "$tmp/$(dirname "$file")"
+        if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/$file" >"$tmp/$file" ||
+            [[ ! -s $tmp/$file ]]; then
+            echo "$image has no /app/install/$file; the installation files stay as they are." >&2
+            return 0
+        fi
+    done
+    # Like the package, the example names the manager this installation runs.
+    sed -i "s|^MANAGER_IMAGE=.*|MANAGER_IMAGE=$image|" "$tmp/.env.example"
+    (cd "$tmp" && sha256sum "${INSTALL_FILES[@]}") >"$tmp/.shipped.sha256"
+    for file in "${INSTALL_FILES[@]}"; do
+        new=$(checksum "$tmp/$file")
+        current=""
+        if [[ -e $INSTALL/$file ]]; then current=$(checksum "$INSTALL/$file"); fi
+        shipped=$(awk -v file="$file" '$2 == file { print $1 }' "$INSTALL/.shipped.sha256" 2>/dev/null || true)
+        if [[ $current == "$new" ]]; then
+            continue
+        elif [[ -n $current && $current != "$shipped" ]]; then
+            if [[ $new == "$shipped" ]]; then continue; fi
+            sudo cp -p "$INSTALL/$file" "$INSTALL/$file.bak"
+            echo "$file had changes of your own; they are saved in $INSTALL/$file.bak. Carry over what you still need."
+        fi
+        put_file "$file" "$tmp/$file"
+        echo "Updated $file."
+    done
+    put_file .shipped.sha256 "$tmp/.shipped.sha256"
+}
 case ${1:-help} in
     start)
         require_settings
@@ -137,17 +189,24 @@ case ${1:-help} in
         # to the newest release and never back. Any other MANAGER_IMAGE, such as latest or a digest, was
         # chosen by hand and is pulled again as it is.
         current=$(setting MANAGER_IMAGE)
+        image=$current
         pinned=${current#"$MANAGER_REPOSITORY":}
         if [[ -z $current || ($pinned != "$current" && $pinned =~ ^[0-9]+\.[0-9]+\.[0-9]+$) ]]; then
             version=$(newest_release)
             if [[ -n $current && $(printf '%s\n' "$version" "$pinned" | sort -V | tail -n1) == "$pinned" ]]; then
                 echo "The manager stays on $pinned; the newest release is $version."
             else
-                docker pull "$MANAGER_REPOSITORY:$version"
-                set_setting MANAGER_IMAGE "$MANAGER_REPOSITORY:$version"
-                echo "The manager moves from ${pinned:-latest} to $version."
+                image=$MANAGER_REPOSITORY:$version
             fi
         fi
+        # The installation files come from the manager about to run, so it is pulled first, and the pin
+        # moves only once its image is here.
+        docker pull "$image"
+        if [[ $image != "$current" ]]; then
+            set_setting MANAGER_IMAGE "$image"
+            echo "The manager moves from ${pinned:-latest} to $version."
+        fi
+        update_install_files "$image"
         compose pull
         compose up -d
         update_profiles

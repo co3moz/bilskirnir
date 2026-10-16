@@ -59,13 +59,13 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services and the dashboard address. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Moves the manager to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager and its `compose.yml` to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
-The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env` and `deploy/Caddyfile`. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`. [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
 ## Update
 
@@ -73,7 +73,17 @@ The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-i
 
 A `MANAGER_IMAGE` set by hand to anything other than a release of `ghcr.io/co3moz/bilskirnir`, such as `latest`, which follows `master`, or a digest, is only pulled again. To return to releases, set it to one with `bilskirnir settings`, for example `ghcr.io/co3moz/bilskirnir:1.2.0`, and run `bilskirnir update`.
 
-An update replaces images only. `compose.yml`, `.env.example` and the `bilskirnir` command stay as the package installed them.
+Before it recreates the manager, an update copies the installation files that manager bundles, `compose.yml`, `deploy/Caddyfile` and `.env.example`, into `/opt/bilskirnir`. A setting added in a release reaches the manager only through the `environment:` list in that release's `compose.yml`, so with an older file, setting it in `.env` would do nothing. `.env` is never replaced; compare it with the new `.env.example` to find the settings a release added.
+
+The package and every update record a checksum of each of these files in `/opt/bilskirnir/.shipped.sha256`, so an update can tell whether you edited one:
+
+- A file you have not edited is replaced.
+- A file you edited stays as it is when the release brings the same version of it as before.
+- A file you edited is saved as `<file>.bak`, for example `compose.yml.bak`, when the release brings a new version, and is then replaced; the update names the file it saved. Carry over the changes you still need. The manager starts with the new file right away, so a change such as a different port mapping is missing until you carry it over and run `bilskirnir restart`. An earlier `.bak` is replaced only when you edit the file again.
+
+To keep your own Compose changes out of the way of updates, put them in `/opt/bilskirnir/compose.override.yml` rather than editing `compose.yml`. Compose merges that file into `compose.yml` on its own, and updates never touch it.
+
+The `bilskirnir` command and the rest of the distribution stay as the package installed them.
 
 ## Memory, processors and disk
 
