@@ -67,6 +67,17 @@ jobs:
         run: |
           docker compose --env-file .env.example --profile images config --quiet
           docker compose -f compose.ghcr.yml --env-file .env.example --profile https config --quiet
+      # The tag names the published images and Cargo.toml the version the WSL package installs.
+      - name: Check the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(awk -F'"' '/^version = /{ print $2; exit }' Cargo.toml)
+          if [[ "v$version" != "$TAG" ]]; then
+            echo "::error::Tag $TAG does not match version $version in Cargo.toml"
+            exit 1
+          fi
 
   publish:
     needs: checks
@@ -155,8 +166,10 @@ jobs:
         run: |
           printf '### %s\n\n```text\n%s\n```\n' '${{ matrix.title }}' "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
+  # The package installs the manager published under its tag, so the release appears only once
+  # every image of that tag is published.
   wsl-package:
-    needs: checks
+    needs: [checks, publish]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 45

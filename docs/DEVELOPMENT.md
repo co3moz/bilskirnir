@@ -151,6 +151,8 @@ The workflow uses `GITHUB_TOKEN` with package write access, separate BuildKit ca
 
 `scripts/build-wsl.sh dist/bilskirnir.wsl` builds `wsl/Dockerfile` (Ubuntu 24.04, Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the installation files), exports the container filesystem and compresses it. Test a package with `wsl --install --from-file dist\bilskirnir.wsl --name Bilskirnir-test`, run the first-start setup, then `wsl --unregister Bilskirnir-test`. Release tags attach the package to the GitHub release. Keep the files under `wsl/` in sync with `compose.ghcr.yml` and `.env.example`, which the Dockerfile copies.
 
+The package pins `MANAGER_IMAGE` to the version in `Cargo.toml`, or to `BILSKIRNIR_VERSION` when it is set, so a package built before its tag is published cannot download its manager yet; set `BILSKIRNIR_VERSION` to a published release to test a first start that downloads. The `checks` job refuses a `v*` tag that differs from the version in `Cargo.toml`, and the package job waits until all three images of the tag are published.
+
 ## Keep older installations working
 
 Human-facing names use Bilskirnir. Ownership labels (`io.wsl-desktop.*`), `wsld-*` resource IDs, the session cookie and API request header retain their existing identifiers. Changing them requires a migration, not a branding edit.
