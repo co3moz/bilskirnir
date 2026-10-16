@@ -1,3 +1,4 @@
+import { t } from "./i18n"
 import { fileSize, type UploadRequest } from "./uploads"
 import type { DesktopInfo } from "./types"
 
@@ -88,8 +89,12 @@ function join(chunks: Uint8Array[], length: number) {
 
 export type ImportStatus = "idle" | "uploading" | "checking" | "started" | "failed" | "cancelled"
 
-/** One archive upload; the manager answers with a job once the archive has passed its checks. */
+/**
+ * One archive upload; the manager answers with a job once the archive has passed its checks.
+ * `path` is the import route: `images/import` for an image, `volumes/import` for a volume.
+ */
 export class ArchiveImport {
+  path: string
   createRequest: () => UploadRequest
   onChange: () => void
   onUnauthorized: () => void
@@ -102,14 +107,17 @@ export class ArchiveImport {
   request: UploadRequest | null = null
 
   constructor({
+    path = "images/import",
     createRequest,
     onChange = () => {},
     onUnauthorized = () => {},
   }: {
+    path?: string
     createRequest: () => UploadRequest
     onChange?: () => void
     onUnauthorized?: () => void
   }) {
+    this.path = path
     this.createRequest = createRequest
     this.onChange = onChange
     this.onUnauthorized = onUnauthorized
@@ -123,7 +131,7 @@ export class ArchiveImport {
     this.request?.abort()
   }
   /** Resolves with the job ID, or with an empty string after a failure described by `error`. */
-  async start(file: Blob, details: { name: string; description: string }, limit: number) {
+  async start(file: Blob, details: Record<string, string>, limit: number) {
     if (this.running) return ""
     this.size = file.size
     this.loaded = 0
@@ -132,7 +140,7 @@ export class ArchiveImport {
     this.cancelled = false
     if (file.size > limit) {
       this.status = "failed"
-      this.error = `Archives must be ${fileSize(limit)} or smaller.`
+      this.error = t("archives.tooLarge", { size: fileSize(limit) })
       this.onChange()
       return ""
     }
@@ -150,12 +158,12 @@ export class ArchiveImport {
     }
     return this.jobId
   }
-  send(file: Blob, { name, description }: { name: string; description: string }) {
+  send(file: Blob, details: Record<string, string>) {
     return new Promise<string>((resolve, reject) => {
       const request = this.createRequest()
       this.request = request
-      const query = new URLSearchParams({ size: String(file.size), name, description })
-      request.open("POST", `/api/images/import?${query}`)
+      const query = new URLSearchParams({ size: String(file.size), ...details })
+      request.open("POST", `/api/${this.path}?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
       request.setRequestHeader("X-Wsld-Request", "1")
       request.withCredentials = true
@@ -180,12 +188,12 @@ export class ArchiveImport {
         if (request.status >= 200 && request.status < 300 && result.job_id) resolve(result.job_id)
         else {
           if (request.status === 401) this.onUnauthorized()
-          reject(new Error(result.error || `Import failed (${request.status}).`))
+          reject(new Error(result.error || t("archives.failed", { status: request.status })))
         }
       }
-      request.onerror = () => reject(new Error("Connection lost. Try the import again."))
-      request.ontimeout = () => reject(new Error("The import timed out."))
-      request.onabort = () => reject(new Error("Import cancelled."))
+      request.onerror = () => reject(new Error(t("archives.connectionLost")))
+      request.ontimeout = () => reject(new Error(t("archives.timedOut")))
+      request.onabort = () => reject(new Error(t("archives.cancelled")))
       request.send(file)
     })
   }

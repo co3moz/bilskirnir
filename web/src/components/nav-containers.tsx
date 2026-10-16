@@ -23,6 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { attempt, containerAction } from "@/lib/actions"
+import { t } from "@/lib/i18n"
 import { openDialog } from "@/lib/dialogs"
 import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
@@ -37,18 +38,19 @@ export function NavContainers() {
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Running containers</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("nav.running")}</SidebarGroupLabel>
       <SidebarMenu>
         {running.length === 0 && (
           <SidebarMenuItem>
-            <span className="px-2 text-xs text-sidebar-foreground/60">
-              No container is running.
-            </span>
+            <span className="px-2 text-xs text-sidebar-foreground/60">{t("nav.noneRunning")}</span>
           </SidebarMenuItem>
         )}
         {running.slice(0, SHOWN).map((container) => (
           <SidebarMenuItem key={container.id}>
-            <SidebarMenuButton asChild tooltip={`Connect to ${container.spec.name}`}>
+            <SidebarMenuButton
+              asChild
+              tooltip={t("containers.connectTo", { name: container.spec.name })}
+            >
               <a href={href({ page: "desktop", id: container.id })}>
                 <RiComputerLine />
                 <span>{container.spec.name}</span>
@@ -58,7 +60,9 @@ export function NavContainers() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover className="rounded-sm data-[state=open]:bg-accent">
                   <RiMoreLine />
-                  <span className="sr-only">{container.spec.name} actions</span>
+                  <span className="sr-only">
+                    {t("containers.actionsOf", { name: container.spec.name })}
+                  </span>
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -69,7 +73,7 @@ export function NavContainers() {
                 <DropdownMenuItem asChild>
                   <a href={href({ page: "desktop", id: container.id })}>
                     <RiComputerLine />
-                    Connect
+                    {t("containers.connect")}
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -79,7 +83,7 @@ export function NavContainers() {
                   }}
                 >
                   <RiUploadLine />
-                  Upload files
+                  {t("uploads.title")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
@@ -88,7 +92,7 @@ export function NavContainers() {
                   }}
                 >
                   <RiInformationLine />
-                  Details
+                  {t("containers.details")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -96,7 +100,7 @@ export function NavContainers() {
                   onSelect={() => attempt(() => containerAction(container.id, "stop"))}
                 >
                   <RiStopCircleLine />
-                  Stop
+                  {t("containers.stop")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -107,7 +111,7 @@ export function NavContainers() {
             <SidebarMenuButton asChild className="text-sidebar-foreground/70">
               <a href={href({ page: "containers" })} onClick={close}>
                 <RiMoreLine className="text-sidebar-foreground/70" />
-                <span>{running.length - SHOWN} more</span>
+                <span>{t("nav.more", { count: running.length - SHOWN })}</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

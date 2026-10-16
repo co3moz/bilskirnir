@@ -13,6 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { openDialog } from "@/lib/dialogs"
 import { jobActive } from "@/lib/format"
+import { plural, t } from "@/lib/i18n"
 import { useJobs } from "@/lib/queries"
 import { href, type Page } from "@/lib/route"
 
@@ -35,7 +36,7 @@ export function NavMain({
         <SidebarMenu>
           <SidebarMenuItem className="flex items-center gap-2">
             <SidebarMenuButton
-              tooltip="New container"
+              tooltip={t("containers.new")}
               onClick={() => {
                 close()
                 openDialog({ kind: "create" })
@@ -43,7 +44,7 @@ export function NavMain({
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
             >
               <RiAddCircleLine />
-              <span>New container</span>
+              <span>{t("containers.new")}</span>
             </SidebarMenuButton>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -57,10 +58,10 @@ export function NavMain({
                   }}
                 >
                   <RiHammerLine />
-                  <span className="sr-only">Build image</span>
+                  <span className="sr-only">{t("images.build")}</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">Build image</TooltipContent>
+              <TooltipContent side="right">{t("images.build")}</TooltipContent>
             </Tooltip>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -74,7 +75,12 @@ export function NavMain({
                 </a>
               </SidebarMenuButton>
               {item.page === "jobs" && pending > 0 && (
-                <SidebarMenuBadge aria-label={`${pending} jobs in progress`}>
+                <SidebarMenuBadge
+                  aria-label={plural(pending, {
+                    one: "jobs.inProgress.one",
+                    other: "jobs.inProgress.other",
+                  })}
+                >
                   {pending}
                 </SidebarMenuBadge>
               )}

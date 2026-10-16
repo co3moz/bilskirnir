@@ -17,12 +17,13 @@ import { openDialog } from "@/lib/dialogs"
 import {
   duration,
   jobActive,
-  jobNames,
+  jobName,
   jobProgress,
   jobTarget,
   jobTone,
   shortDate,
 } from "@/lib/format"
+import { t } from "@/lib/i18n"
 import { useContainers, useImages, useJobs } from "@/lib/queries"
 import type { Job } from "@/lib/types"
 
@@ -30,9 +31,9 @@ type Row = Job & { target: string }
 const column = columnHelper<Row>()
 
 const columns: DataColumn<Row>[] = [
-  column.accessor((job) => jobNames[job.kind] ?? job.kind, {
+  column.accessor((job) => jobName(job.kind), {
     id: "action",
-    header: "Action",
+    header: () => t("jobs.column.action"),
     cell: ({ row, getValue }) => (
       <Button
         variant="link"
@@ -44,15 +45,15 @@ const columns: DataColumn<Row>[] = [
     ),
   }),
   column.accessor("target", {
-    header: "Target",
+    header: () => t("jobs.column.target"),
     cell: ({ getValue }) => (
       <span className="block max-w-56 truncate text-xs text-muted-foreground">
-        {getValue() || "None"}
+        {getValue() || t("common.none")}
       </span>
     ),
   }),
   column.accessor("status", {
-    header: "Status",
+    header: () => t("table.status"),
     cell: ({ row }) => {
       const job = row.original
       const percent = job.status === "running" ? jobProgress(job.progress)?.percent : undefined
@@ -67,7 +68,7 @@ const columns: DataColumn<Row>[] = [
     },
   }),
   column.accessor("created_at", {
-    header: ({ column }) => <SortHeader column={column}>Started</SortHeader>,
+    header: ({ column }) => <SortHeader column={column}>{t("jobs.column.started")}</SortHeader>,
     cell: ({ row }) => (
       <span className="text-xs whitespace-nowrap text-muted-foreground">
         {shortDate(row.original.created_at)}
@@ -76,12 +77,12 @@ const columns: DataColumn<Row>[] = [
   }),
   column.display({
     id: "duration",
-    header: "Duration",
+    header: () => t("jobs.column.duration"),
     cell: ({ row }) => {
       const { created_at, finished_at } = row.original
       return (
         <span className="text-xs text-muted-foreground tabular-nums">
-          {finished_at ? duration(finished_at - created_at) : "In progress"}
+          {finished_at ? duration(finished_at - created_at) : t("jobs.view.active")}
         </span>
       )
     },
@@ -95,7 +96,7 @@ const columns: DataColumn<Row>[] = [
           size="sm"
           onClick={() => openDialog({ kind: "job", id: row.original.id })}
         >
-          View log
+          {t("jobs.viewLog")}
         </Button>
       </div>
     ),
@@ -143,9 +144,17 @@ export function JobsPage() {
             value={view}
             onChange={change}
             views={[
-              { value: "all", label: "All jobs" },
-              { value: "active", label: "In progress", count: all.filter(views.active).length },
-              { value: "failed", label: "Failed", count: all.filter(views.failed).length },
+              { value: "all", label: t("jobs.view.all") },
+              {
+                value: "active",
+                label: t("jobs.view.active"),
+                count: all.filter(views.active).length,
+              },
+              {
+                value: "failed",
+                label: t("state.failed"),
+                count: all.filter(views.failed).length,
+              },
             ]}
           />
         </div>
@@ -155,7 +164,7 @@ export function JobsPage() {
         >
           <DataTableView
             table={table}
-            empty={jobs.isPending ? "Loading jobs…" : "No jobs in this view."}
+            empty={jobs.isPending ? t("jobs.loading") : t("jobs.noneInView")}
           />
           <DataTablePagination table={table} />
         </TabsContent>

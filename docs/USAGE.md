@@ -6,7 +6,9 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Volumes** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme and signs out.
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Volumes** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
+
+The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
 The **Dashboard** sums up the host: how many containers exist and run, jobs in progress and today's failures, and the processors and memory Docker reports with the limits running containers use. Below it, a chart shows finished and failed jobs per day, and a table lists every container with tabs for running, stopped and those that need attention. Select several rows to start or stop them together. Select a name to open its details panel. **Containers** shows the same containers as cards with a live preview.
 
@@ -131,6 +133,10 @@ A `.tar` saved with `docker save` imports the same way, as long as it holds a de
 Create a named volume under **Volumes**, then mount it when creating a container. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths and read-only mounts over the desktop's home or configuration are rejected.
 
 The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
+
+**Export archive** on a volume's row downloads its files as a `.tar.gz`, and **Import volume** unpacks such an archive, or a `.tar`, into a new volume of the name you choose, for a backup or a move to another installation. An import never replaces an existing volume, and its files belong to the desktop user. **Jobs** shows both transfers.
+
+**Browse files** on a volume's row, or its name, opens its files without starting a container. Open a folder to look inside, a text file of up to 512 KiB to read and change it, and use the row menu to download, rename or delete. **New folder** and **Upload** add to the open folder; files dropped on the list upload too. Everything runs as the desktop user, so a file that user may not change is refused. A new, empty volume is given to the desktop user on its first change, so files can be added at its root.
 
 Mounting the same writable volume in two containers gives both access to the same files. Taking a snapshot does not copy that volume. Deleting a container preserves named volumes and saved images; unsaved changes left only in the container are lost.
 

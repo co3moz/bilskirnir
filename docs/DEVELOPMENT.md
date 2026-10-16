@@ -41,9 +41,11 @@ When a catalog image is missing, its row under **Images** offers a download butt
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/src/lib/uploads.ts` |
+| Volume files through a helper container | `src/volumes.rs`, `src/volumes/`, `src/volume_claim.py`, `web/src/components/dialogs/volume-browser.tsx`, `web/src/lib/volume-files.ts` |
 | Dashboard layout, pages and dialogs | `web/src/App.tsx`, `web/src/pages/`, `web/src/components/`, `web/src/components/dialogs/` |
 | shadcn/ui components and theme | `web/src/components/ui/`, `web/src/index.css`, `components.json` |
 | API client, queries and pure helpers | `web/src/lib/` (`api.ts`, `queries.ts`, `format.ts`, `route.ts`) |
+| Languages of the interface | `web/src/lib/i18n.ts`, `web/src/locales/`, `web/src/components/language-menu.tsx`, `tests/i18n.test.ts` |
 | Remote desktop, audio and microphone | `web/src/pages/desktop.tsx`, `web/src/lib/media.ts`, `web/public/audio-worklet.js` |
 | Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh` |
 | Builds, tests and publishing | `scripts/`, `tests/`, `.github/workflows/publish.yml` |
@@ -66,6 +68,14 @@ bun run dev
 
 Open `http://localhost:5173`. Set `BILSKIRNIR_URL` when the manager does not listen on `http://127.0.0.1:8080`.
 
+### Translate the interface
+
+Every visible string in `web/src` goes through `t()` from `web/src/lib/i18n.ts` with a key from `web/src/locales/en.ts`, the English catalog that the other languages follow: `de.ts`, `fr.ts`, `es.ts` and `tr.ts`. A key names where its text appears, `{name}` marks a value the code fills in, and a pair of keys ending in `.one` and `.other` holds the plural forms that `plural()` picks with the language's own rules. `rich()` fills placeholders with elements, such as a path in `<code>`, so each language keeps its own word order around them. Dates, numbers and lists follow the language through `formatDate`, `formatNumber` and `formatList`.
+
+To add or change text, edit `en.ts` and give every other catalog the same key in the same change. The catalogs are typed against `en.ts`, so a missing or misspelled key fails `bun run build`, and `tests/i18n.test.ts` fails when a translation drops a placeholder, a plural form is missing its pair or a message uses a long dash. Call `t()` while rendering or handling an event, never at module scope: a change of language renders the interface again, which only reaches text looked up then.
+
+The language is the browser's first one that has a catalog, English otherwise, until someone picks one in the account menu or on the sign-in page; that choice is kept in `localStorage`. To add a language, add its catalog, register it in `catalogs`, `localeNames` and `regions` in `i18n.ts`, and the tests check it like the others. Text that the manager returns, such as API errors and job logs, stays English.
+
 ## How the containers connect
 
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
@@ -83,6 +93,8 @@ The database records immutable image IDs so later tag changes do not change an e
 Standard Docker CLI operations have a 120-second timeout; image builds and commits have a one-hour timeout. Job logs retain their last 256 KiB, and the job list returns the latest 100 entries without loading their full logs.
 
 Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Destinations must remain within Downloads or writable mounted volumes. The receiver rejects symlink traversal and writes completed files atomically. Preserve these constraints when changing the upload path.
+
+A volume's files are reached through a helper container started from the manager's own image with the volume at `/volume`, the same Python helpers as a running desktop, `--network none`, `--read-only`, `--cap-drop ALL` and `no-new-privileges`. Reads run as 1001:1001 on a read-only mount. Writes start as root with only `CHOWN`, `SETUID` and `SETGID` so `volume_claim.py` can give an empty, root-owned volume to the desktop user, then switch to 1001:1001 before running anything. A volume archive is written by tar as root on a read-only mount with only `DAC_READ_SEARCH` added, and an import creates a new volume and unpacks into it as 1001:1001 after the manager has gunzipped the upload against `IMAGE_ARCHIVE_MAX_MB`. Keep the Docker socket and host paths out of the helper, and keep the manager's own volumes refused.
 
 ## Add a catalog image
 

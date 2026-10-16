@@ -4,14 +4,16 @@ import { api } from "./api"
 import { archiveUrl } from "./archives"
 import { formatBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
+import { t } from "./i18n"
 import { refreshAll } from "./queries"
 import { navigate } from "./route"
 import type { BuildConfig, ImageItem, JobStarted } from "./types"
+import { volumeArchiveUrl } from "./volume-files"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
 export async function runJob(path: string, body?: unknown, method?: string) {
   const result = await api<JobStarted>(path, body, method)
-  toast.success("Job queued.")
+  toast.success(t("jobs.queued"))
   void refreshAll()
   openDialog({ kind: "job", id: result.job_id })
   return result
@@ -68,7 +70,7 @@ async function copyText(text: string) {
 /** Copies a built image's configuration as JSON, or shows it when the browser refuses to copy. */
 export async function exportBuildConfig(image: Pick<ImageItem, "id" | "name">) {
   const text = formatBuildConfig(await api<BuildConfig>(`images/${image.id}/config`))
-  if (await copyText(text)) toast.success(`Copied the configuration of ${image.name}.`)
+  if (await copyText(text)) toast.success(t("images.configCopied", { name: image.name }))
   else openDialog({ kind: "log", title: `${image.name} configuration`, text })
 }
 
@@ -79,6 +81,20 @@ export async function attempt(action: () => Promise<unknown>) {
   } catch (error) {
     toast.error((error as Error).message)
   }
+}
+
+/** Downloads a volume's files as a .tar.gz archive, recorded as a job like an image export. */
+export function exportVolume(name: string) {
+  const link = document.createElement("a")
+  link.href = volumeArchiveUrl(name)
+  link.download = ""
+  document.body.append(link)
+  link.click()
+  link.remove()
+  toast.success(t("volumes.exporting", { name }), {
+    action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
+  })
+  setTimeout(() => void refreshAll(), 1000)
 }
 
 /**
@@ -92,9 +108,9 @@ export function exportArchive(image: Pick<ImageItem, "id" | "name">) {
   document.body.append(link)
   link.click()
   link.remove()
-  toast.success(`Exporting ${image.name}.`, {
-    description: "Docker prepares the image before the download grows. Jobs shows its progress.",
-    action: { label: "Jobs", onClick: () => navigate({ page: "jobs" }) },
+  toast.success(t("images.exporting", { name: image.name }), {
+    description: t("images.exportingDetail"),
+    action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
   })
   setTimeout(() => void refreshAll(), 1000)
 }

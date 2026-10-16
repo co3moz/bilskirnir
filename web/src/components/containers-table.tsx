@@ -29,7 +29,8 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { runJobs } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { containerStatus, desktopTitle, needsAttention, shortDate, stateLabels } from "@/lib/format"
+import { containerStatus, desktopTitle, needsAttention, shortDate, stateLabel } from "@/lib/format"
+import { formatNumber, t } from "@/lib/i18n"
 import { useContainers, useImages } from "@/lib/queries"
 import { href } from "@/lib/route"
 import type { ContainerItem, ImageItem } from "@/lib/types"
@@ -44,20 +45,20 @@ const views = {
 } satisfies Record<string, (item: ContainerItem) => boolean>
 type View = keyof typeof views
 
-const labels: Record<string, string> = {
-  status: "Status",
-  resources: "Resources",
-  devices: "Devices",
-  internet: "Internet",
-  created: "Created",
-}
+const columnLabels = (): Record<string, string> => ({
+  status: t("table.status"),
+  resources: t("table.resources"),
+  devices: t("table.devices"),
+  internet: t("spec.internet"),
+  created: t("table.created"),
+})
 
 function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
   return [
     selectColumn<ContainerItem>(),
     column.accessor((item) => item.spec.name, {
       id: "name",
-      header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
+      header: ({ column }) => <SortHeader column={column}>{t("table.name")}</SortHeader>,
       cell: ({ row }) => {
         const container = row.original
         return (
@@ -77,9 +78,9 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
       },
       enableHiding: false,
     }),
-    column.accessor((item) => stateLabels[containerStatus(item).key] ?? item.state, {
+    column.accessor((item) => stateLabel(containerStatus(item).key), {
       id: "status",
-      header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
+      header: ({ column }) => <SortHeader column={column}>{t("table.status")}</SortHeader>,
       cell: ({ row }) => {
         const status = containerStatus(row.original)
         return <StatusBadge state={status.key} tone={status.tone} />
@@ -87,17 +88,22 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
     }),
     column.display({
       id: "resources",
-      header: "Resources",
+      header: () => t("table.resources"),
       cell: ({ row }) => {
         const { spec } = row.original
         return (
           <div className="flex flex-col text-xs">
             <span>
-              {spec.gpu ? "GPU · " : ""}
-              {spec.cpus ? `${spec.cpus} CPU` : "Unlimited CPU"}
+              {spec.gpu ? `${t("spec.gpu")} · ` : ""}
+              {spec.cpus
+                ? t("spec.cpus", { count: formatNumber(spec.cpus) })
+                : t("spec.unlimitedCpu")}
             </span>
             <span className="text-muted-foreground">
-              {spec.memory_mb ? `${spec.memory_mb} MB` : "Unlimited RAM"} · {spec.resolution}
+              {spec.memory_mb
+                ? t("spec.memory", { count: formatNumber(spec.memory_mb) })
+                : t("spec.unlimitedMemory")}{" "}
+              · {spec.resolution}
             </span>
           </div>
         )
@@ -105,15 +111,16 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
     }),
     column.display({
       id: "devices",
-      header: "Devices",
+      header: () => t("table.devices"),
       cell: ({ row }) => {
         const { spec } = row.original
         const devices = [
-          spec.audio && { icon: <RiVolumeUpLine />, label: "Audio" },
-          spec.microphone && { icon: <RiMicLine />, label: "Microphone" },
-          spec.gamepad && { icon: <RiGamepadLine />, label: "Gamepad" },
+          spec.audio && { icon: <RiVolumeUpLine />, label: t("spec.audio") },
+          spec.microphone && { icon: <RiMicLine />, label: t("spec.microphone") },
+          spec.gamepad && { icon: <RiGamepadLine />, label: t("spec.gamepad") },
         ].filter((device) => !!device)
-        if (!devices.length) return <span className="text-xs text-muted-foreground">None</span>
+        if (!devices.length)
+          return <span className="text-xs text-muted-foreground">{t("common.none")}</span>
         return (
           <div className="flex gap-2 text-muted-foreground [&_svg]:size-4">
             {devices.map((device) => (
@@ -132,12 +139,12 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
     }),
     column.display({
       id: "internet",
-      header: "Internet",
+      header: () => t("spec.internet"),
       cell: ({ row }) => <InternetSwitch item={row.original} />,
     }),
     column.accessor((item) => item.created_at, {
       id: "created",
-      header: ({ column }) => <SortHeader column={column}>Created</SortHeader>,
+      header: ({ column }) => <SortHeader column={column}>{t("table.created")}</SortHeader>,
       cell: ({ row }) => (
         <span className="text-xs whitespace-nowrap text-muted-foreground">
           {shortDate(row.original.created_at)}
@@ -154,11 +161,13 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
                 <Button variant="ghost" size="icon" className="size-8" asChild>
                   <a href={href({ page: "desktop", id: row.original.id })}>
                     <RiComputerLine />
-                    <span className="sr-only">Connect to {row.original.spec.name}</span>
+                    <span className="sr-only">
+                      {t("containers.connectTo", { name: row.original.spec.name })}
+                    </span>
                   </a>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Connect</TooltipContent>
+              <TooltipContent>{t("containers.connect")}</TooltipContent>
             </Tooltip>
           )}
           <ContainerMenu item={row.original} />
@@ -215,10 +224,14 @@ export function ContainersTable() {
             table.setPageIndex(0)
           }}
           views={[
-            { value: "all", label: "All containers" },
-            { value: "running", label: "Running", count: count("running") },
-            { value: "stopped", label: "Stopped", count: count("stopped") },
-            { value: "attention", label: "Needs attention", count: count("attention") },
+            { value: "all", label: t("containers.view.all") },
+            { value: "running", label: t("state.running"), count: count("running") },
+            { value: "stopped", label: t("state.exited"), count: count("stopped") },
+            {
+              value: "attention",
+              label: t("containers.view.attention"),
+              count: count("attention"),
+            },
           ]}
         />
         <div className="flex items-center gap-2">
@@ -231,7 +244,7 @@ export function ContainersTable() {
                 onClick={() => bulk(startable, "start")}
               >
                 <RiPlayCircleLine data-icon="inline-start" />
-                Start {startable.length || ""}
+                {t("containers.start")} {startable.length || ""}
               </Button>
               <Button
                 variant="outline"
@@ -240,22 +253,22 @@ export function ContainersTable() {
                 onClick={() => bulk(stoppable, "stop")}
               >
                 <RiStopCircleLine data-icon="inline-start" />
-                Stop {stoppable.length || ""}
+                {t("containers.stop")} {stoppable.length || ""}
               </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => table.resetRowSelection()}
-                aria-label="Clear selection"
+                aria-label={t("table.clearSelection")}
               >
                 <RiCloseLine />
               </Button>
             </>
           )}
-          <ColumnsMenu table={table} labels={labels} />
+          <ColumnsMenu table={table} labels={columnLabels()} />
           <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "create" })}>
             <RiAddLine data-icon="inline-start" />
-            <span className="hidden lg:inline">New container</span>
+            <span className="hidden lg:inline">{t("containers.new")}</span>
           </Button>
         </div>
       </div>
@@ -264,10 +277,10 @@ export function ContainersTable() {
           table={table}
           empty={
             containers.isPending
-              ? "Loading containers…"
+              ? t("containers.loading")
               : all.length
-                ? "No containers in this view."
-                : "No containers yet."
+                ? t("containers.noneInView")
+                : t("containers.noneYet")
           }
         />
         <DataTablePagination table={table} selectable />

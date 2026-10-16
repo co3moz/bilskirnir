@@ -1,3 +1,5 @@
+import { t } from "./i18n"
+
 let unauthorized = () => {}
 
 /** Called once a request learns that the session ended, so the app can show the sign-in page. */
@@ -20,11 +22,11 @@ export async function api<T = unknown>(
   })
   if (response.status === 401 && path !== "login") {
     unauthorized()
-    throw new Error("Session expired. Sign in again.")
+    throw new Error(t("session.expired"))
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
-    throw new Error(data.error || `Request failed (${response.status})`)
+    throw new Error(data.error || t("api.failed", { status: response.status }))
   }
   return (response.status === 204 ? null : await response.json()) as T
 }

@@ -90,6 +90,16 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
+| POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
+| POST | `/api/volumes/{name}/files/read` | Read a bounded file slice as text or base64. |
+| POST | `/api/volumes/{name}/files/write` | Write text or base64 file data atomically. |
+| POST | `/api/volumes/{name}/files/mkdir` | Create a folder. |
+| POST | `/api/volumes/{name}/files/move` | Rename or move within the volume. |
+| POST | `/api/volumes/{name}/files/delete` | Delete a file, symlink or folder. |
+| GET | `/api/volumes/{name}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
+| POST | `/api/volumes/{name}/files` | Stream a binary upload. |
+| GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
+| POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and `size` into a new volume; returns a job. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -261,6 +271,25 @@ curl --cookie bilskirnir.cookies \
 ```
 
 Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB` and restricted to Downloads or a writable mounted volume. They return the saved path and byte count.
+
+## Volume files
+
+The `/api/volumes/{name}/files/...` routes work on a named volume without a container that mounts it, with the same request bodies and limits as a container's [file routes](#files). Paths are absolute within the volume: `/` is its root, which can be listed and written into but not deleted or moved. `mkdir` takes `{"path":"/project/assets"}` and returns 409 when the name exists. Uploads take `destination`, `name`, `size` and optional `replace` as query parameters, as a container's do.
+
+Each request starts a short-lived helper container from the manager's own image, so it needs `MANAGER_CONTAINER`. The helper mounts only that volume, has no network, a read-only root and no capabilities beyond the ones the operation needs, never gets the Docker socket and is removed when the request ends. Files are read and written as the desktop user, UID/GID 1001, so the permissions a desktop would meet apply: a `403` names a file that user may not change. Docker creates a volume's root owned by root; a write to a volume that is still empty first gives its root to the desktop user, as mounting it over a desktop folder would. A volume that holds files keeps its owners.
+
+A missing volume returns 404 instead of being created. The manager's own volumes, such as its data volume, are refused with 403. Writes to one volume run one at a time; reads do not wait for them.
+
+## Volume archives
+
+`GET /api/volumes/{name}/archive` streams a volume's files as an ordinary gzip-compressed tar, so other tools read it too. A helper container reads the volume as root on a read-only mount, with only the capability to read every file, so files the desktop user may not read are included; numeric owners and permissions are recorded. The transfer is a `volume-export` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent. A file that changes while it is read is archived as it was read and noted in the job log.
+
+```bash
+curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
+  http://localhost:8080/api/volumes/unity-projects/archive
+```
+
+`POST /api/volumes/import?name=NEW_VOLUME&size=BYTES` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if unpacking fails, the new volume is removed again.
 
 ## Image archives
 

@@ -24,6 +24,7 @@ import {
 import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { needsRetry } from "@/lib/format"
+import { t } from "@/lib/i18n"
 import type { ContainerItem } from "@/lib/types"
 
 /** Every action on one container, as the old details dialog offered them. */
@@ -39,67 +40,76 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
           size="icon"
         >
           <RiMore2Line />
-          <span className="sr-only">{spec.name} actions</span>
+          <span className="sr-only">{t("containers.actionsOf", { name: spec.name })}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onSelect={() => openDialog({ kind: "details", id })}>
           <RiInformationLine />
-          Details
+          {t("containers.details")}
         </DropdownMenuItem>
         {needsRetry(item) && (
           <DropdownMenuItem onSelect={() => attempt(() => retrySetup(id))}>
             <RiResetLeftLine />
-            Retry setup
+            {t("job.retry")}
           </DropdownMenuItem>
         )}
         {!running && (
           <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "start"))}>
             <RiPlayCircleLine />
-            Start
+            {t("containers.start")}
           </DropdownMenuItem>
         )}
         {running && (
           <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "stop"))}>
             <RiStopCircleLine />
-            Stop
+            {t("containers.stop")}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "restart"))}>
           <RiRestartLine />
-          Restart
+          {t("containers.restart")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "upload", id })}>
           <RiUploadLine />
-          Upload files
+          {t("uploads.title")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", id })}>
           <RiSettings3Line />
-          Settings
+          {t("containers.settings")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "snapshot", id })}>
           <RiCameraLine />
-          Snapshot
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => attempt(() => showLog(`${spec.name} logs`, `containers/${id}/logs`))}
-        >
-          <RiFileTextLine />
-          Logs
+          {t("containers.snapshot")}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
-            attempt(() => showLog(`${spec.name} diagnostics`, `containers/${id}/diagnostics`))
+            attempt(() =>
+              showLog(t("containers.logsOf", { name: spec.name }), `containers/${id}/logs`)
+            )
+          }
+        >
+          <RiFileTextLine />
+          {t("containers.logs")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            attempt(() =>
+              showLog(
+                t("containers.diagnosticsOf", { name: spec.name }),
+                `containers/${id}/diagnostics`
+              )
+            )
           }
         >
           <RiStethoscopeLine />
-          Diagnostics
+          {t("containers.diagnostics")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => openDialog({ kind: "delete", id })}>
           <RiDeleteBinLine />
-          Delete container
+          {t("job.delete")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
