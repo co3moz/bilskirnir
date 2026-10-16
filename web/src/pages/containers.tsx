@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { openDialog } from "@/lib/dialogs"
 import { needsAttention } from "@/lib/format"
+import { t } from "@/lib/i18n"
 import { useContainers, useImages } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
 
@@ -63,15 +64,13 @@ export function ContainersPage() {
             <EmptyMedia variant="icon">
               <RiComputerLine />
             </EmptyMedia>
-            <EmptyTitle>No containers</EmptyTitle>
-            <EmptyDescription>
-              Create a container from an image. A catalog image downloads the first time you use it.
-            </EmptyDescription>
+            <EmptyTitle>{t("containers.none")}</EmptyTitle>
+            <EmptyDescription>{t("containers.noneHint")}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={() => openDialog({ kind: "create" })}>
               <RiAddLine data-icon="inline-start" />
-              New container
+              {t("containers.new")}
             </Button>
           </EmptyContent>
         </Empty>
@@ -82,18 +81,22 @@ export function ContainersPage() {
               value={view}
               onChange={(value) => setView(value as View)}
               views={[
-                { value: "all", label: "All" },
-                { value: "running", label: "Running", count: count("running") },
-                { value: "stopped", label: "Stopped", count: count("stopped") },
-                { value: "attention", label: "Needs attention", count: count("attention") },
+                { value: "all", label: t("common.all") },
+                { value: "running", label: t("state.running"), count: count("running") },
+                { value: "stopped", label: t("state.exited"), count: count("stopped") },
+                {
+                  value: "attention",
+                  label: t("containers.view.attention"),
+                  count: count("attention"),
+                },
               ]}
             />
             <div className="relative">
               <RiSearchLine className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                aria-label="Filter containers"
-                placeholder="Filter by name"
+                aria-label={t("containers.filter")}
+                placeholder={t("containers.filterPlaceholder")}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 className="h-8 w-48 pl-8 sm:w-56"
@@ -109,7 +112,7 @@ export function ContainersPage() {
               </div>
             ) : (
               <p className="px-4 py-12 text-center text-sm text-muted-foreground lg:px-6">
-                No containers in this view.
+                {t("containers.noneInView")}
               </p>
             )}
           </TabsContent>

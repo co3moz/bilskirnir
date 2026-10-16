@@ -27,21 +27,30 @@ import {
 } from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { jobActivity } from "@/lib/format"
+import { formatDate, plural, t } from "@/lib/i18n"
 import { useJobs } from "@/lib/queries"
 
-const chartConfig = {
-  completed: { label: "Completed", color: "var(--primary)" },
-  failed: { label: "Failed or interrupted", color: "var(--destructive)" },
-} satisfies ChartConfig
+const chartConfig = () =>
+  ({
+    completed: { label: t("state.completed"), color: "var(--primary)" },
+    failed: { label: t("chart.failed"), color: "var(--destructive)" },
+  }) satisfies ChartConfig
 
-const ranges = [
-  { value: "90", label: "Last 3 months" },
-  { value: "30", label: "Last 30 days" },
-  { value: "7", label: "Last 7 days" },
+const ranges = () => [
+  { value: "90", label: t("chart.range.90") },
+  { value: "30", label: t("chart.range.30") },
+  { value: "7", label: t("chart.range.7") },
 ]
 
+// The range as it reads inside the summary sentence.
+const during = {
+  90: "chart.during.90",
+  30: "chart.during.30",
+  7: "chart.during.7",
+} as const
+
 const day = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  formatDate(new Date(`${value}T00:00:00`).getTime() / 1000, { month: "short", day: "numeric" })
 
 /** Finished jobs per day: how busy the manager has been and whether operations succeed. */
 export function ChartAreaInteractive() {
@@ -51,16 +60,20 @@ export function ChartAreaInteractive() {
   const days = isMobile ? 7 : Number(range)
   const data = React.useMemo(() => jobActivity(jobs ?? [], days), [jobs, days])
   const total = data.reduce((sum, point) => sum + point.completed + point.failed, 0)
-  const selected = ranges.find((item) => item.value === String(days))?.label ?? "Last 7 days"
+  const options = ranges()
+  const selected = options.find((item) => item.value === String(days))?.label ?? options[2].label
 
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Job activity</CardTitle>
+        <CardTitle>{t("chart.title")}</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/card:block">
-            {total} finished {total === 1 ? "job" : "jobs"}, {selected.toLowerCase()}, from the
-            latest 100
+            {plural(
+              total,
+              { one: "chart.summary.one", other: "chart.summary.other" },
+              { range: t(during[days as keyof typeof during] ?? "chart.during.7") }
+            )}
           </span>
           <span className="@[540px]/card:hidden">{selected}</span>
         </CardDescription>
@@ -72,7 +85,7 @@ export function ChartAreaInteractive() {
             variant="outline"
             className="hidden *:data-[slot=toggle-group-item]:px-4! @[767px]/card:flex"
           >
-            {ranges.map((item) => (
+            {options.map((item) => (
               <ToggleGroupItem key={item.value} value={item.value}>
                 {item.label}
               </ToggleGroupItem>
@@ -82,12 +95,12 @@ export function ChartAreaInteractive() {
             <SelectTrigger
               className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
               size="sm"
-              aria-label="Time range"
+              aria-label={t("chart.timeRange")}
             >
-              <SelectValue placeholder="Last 30 days" />
+              <SelectValue placeholder={options[1].label} />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              {ranges.map((item) => (
+              {options.map((item) => (
                 <SelectItem key={item.value} value={item.value} className="rounded-lg">
                   {item.label}
                 </SelectItem>
@@ -97,7 +110,7 @@ export function ChartAreaInteractive() {
         </CardAction>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
+        <ChartContainer config={chartConfig()} className="aspect-auto h-[250px] w-full">
           <AreaChart data={data} margin={{ left: 0, right: 8 }}>
             <defs>
               <linearGradient id="fillCompleted" x1="0" y1="0" x2="0" y2="1">

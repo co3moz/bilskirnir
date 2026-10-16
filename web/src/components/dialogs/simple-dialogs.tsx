@@ -41,6 +41,7 @@ import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
+import { formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings } from "@/lib/queries"
 import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
 import { useSubmit } from "./container-dialogs"
@@ -64,7 +65,7 @@ export function Footer({
       {children}
       <DialogClose asChild>
         <Button type="button" variant="outline">
-          Cancel
+          {t("common.cancel")}
         </Button>
       </DialogClose>
       <Button type="submit" disabled={busy || disabled}>
@@ -89,15 +90,16 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
           onSubmit={submit(() => runJob(`containers/${id}/snapshot`, { name, description }))}
         >
           <DialogHeader>
-            <DialogTitle>Create snapshot</DialogTitle>
+            <DialogTitle>{t("snapshot.title")}</DialogTitle>
             <DialogDescription>
-              Saves the files of {item?.spec.name ?? "this container"} as an image you can start new
-              containers from.
+              {item
+                ? t("snapshot.descriptionOf", { name: item.spec.name })
+                : t("snapshot.description")}
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
+              <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
               <Input
                 id={`${field}-name`}
                 required
@@ -108,7 +110,7 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor={`${field}-description`}>Description</FieldLabel>
+              <FieldLabel htmlFor={`${field}-description`}>{t("common.description")}</FieldLabel>
               <Textarea
                 id={`${field}-description`}
                 rows={3}
@@ -116,13 +118,11 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
               />
-              <FieldDescription>
-                Briefly pauses the container. Volumes and running application state are excluded.
-              </FieldDescription>
+              <FieldDescription>{t("snapshot.hint")}</FieldDescription>
             </Field>
             <FieldError>{error}</FieldError>
           </FieldGroup>
-          <Footer busy={busy} label="Create snapshot" />
+          <Footer busy={busy} label={t("snapshot.title")} />
         </form>
       </DialogContent>
     </Dialog>
@@ -140,17 +140,17 @@ export function DeleteDialog({ id, ...props }: DialogProps & { id: string }) {
           onSubmit={submit(() => runJob(`containers/${id}`, undefined, "DELETE"))}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {item?.spec.name ?? "container"}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The container and its unsaved changes are deleted. Volumes and snapshots are kept.
-            </AlertDialogDescription>
+            <AlertDialogTitle>
+              {item ? t("delete.titleOf", { name: item.spec.name }) : t("delete.title")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("delete.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <FieldError>{error}</FieldError>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t("common.cancel")}</AlertDialogCancel>
             <Button type="submit" variant="destructive" disabled={busy}>
               {busy && <Spinner data-icon="inline-start" />}
-              Delete
+              {t("common.delete")}
             </Button>
           </AlertDialogFooter>
         </form>
@@ -211,27 +211,25 @@ export function BuildImageDialog(props: DialogProps) {
             )}
           >
             <DialogHeader>
-              <DialogTitle>Build image</DialogTitle>
-              <DialogDescription>
-                Runs a setup script on top of an image and saves the result as a new image.
-              </DialogDescription>
+              <DialogTitle>{t("images.build")}</DialogTitle>
+              <DialogDescription>{t("build.description")}</DialogDescription>
             </DialogHeader>
             <FieldGroup>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
+                  <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
                   <Input
                     id={`${field}-name`}
                     required
                     maxLength={100}
-                    placeholder="Unity tools"
+                    placeholder={t("build.namePlaceholder")}
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     autoFocus
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor={`${field}-base`}>Base image</FieldLabel>
+                  <FieldLabel htmlFor={`${field}-base`}>{t("build.base")}</FieldLabel>
                   <Select
                     value={chosen ?? ""}
                     onValueChange={(value) => {
@@ -240,7 +238,7 @@ export function BuildImageDialog(props: DialogProps) {
                     }}
                   >
                     <SelectTrigger id={`${field}-base`} className="w-full">
-                      <SelectValue placeholder="Build an image first" />
+                      <SelectValue placeholder={t("build.noBase")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -251,7 +249,7 @@ export function BuildImageDialog(props: DialogProps) {
                             disabled={choice.disabled}
                           >
                             {choice.label}
-                            {choice.disabled ? " · unavailable" : ""}
+                            {choice.disabled ? ` · ${t("images.unavailable")}` : ""}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -263,24 +261,26 @@ export function BuildImageDialog(props: DialogProps) {
                 <Alert>
                   <RiAlertLine className="text-warning" />
                   <AlertDescription>
-                    The configuration builds on{" "}
-                    <code className="font-mono break-all">{missingBase}</code>, which is not
-                    available here. Choose a base image.
+                    {rich("build.missingBase", {
+                      image: <code className="font-mono break-all">{missingBase}</code>,
+                    })}
                   </AlertDescription>
                 </Alert>
               )}
               <Tabs defaultValue="build">
                 <TabsList>
-                  <TabsTrigger value="build">Build script</TabsTrigger>
+                  <TabsTrigger value="build">{t("build.script")}</TabsTrigger>
                   <TabsTrigger value="compose">
-                    Compose
-                    {compose?.parameters.length ? ` · ${compose.parameters.length}` : ""}
+                    {t("compose.name")}
+                    {compose?.parameters.length
+                      ? ` · ${formatNumber(compose.parameters.length)}`
+                      : ""}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="build">
                   <FieldGroup>
                     <Field>
-                      <FieldLabel htmlFor={`${field}-script`}>Setup script</FieldLabel>
+                      <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
                       <Textarea
                         id={`${field}-script`}
                         rows={12}
@@ -290,7 +290,7 @@ export function BuildImageDialog(props: DialogProps) {
                         onChange={(event) => setScript(event.target.value)}
                         className="font-mono text-xs"
                       />
-                      <FieldDescription>Runs as root during the build.</FieldDescription>
+                      <FieldDescription>{t("build.scriptHint")}</FieldDescription>
                     </Field>
                     <Field orientation="horizontal">
                       <Switch
@@ -298,7 +298,7 @@ export function BuildImageDialog(props: DialogProps) {
                         checked={internet}
                         onCheckedChange={setInternet}
                       />
-                      <FieldLabel htmlFor={`${field}-internet`}>Internet during build</FieldLabel>
+                      <FieldLabel htmlFor={`${field}-internet`}>{t("build.internet")}</FieldLabel>
                     </Field>
                   </FieldGroup>
                 </TabsContent>
@@ -315,21 +315,18 @@ export function BuildImageDialog(props: DialogProps) {
                         className="self-start text-destructive"
                         onClick={() => setCompose(null)}
                       >
-                        Remove compose
+                        {t("compose.remove")}
                       </Button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-start gap-3 py-2">
-                      <p className="text-sm text-muted-foreground">
-                        A compose asks for values, such as an account, when a container is created
-                        from the image, and runs a setup script with them once the desktop is ready.
-                      </p>
+                      <p className="text-sm text-muted-foreground">{t("compose.about")}</p>
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => setCompose(composeDraft())}
                       >
-                        Add compose
+                        {t("compose.add")}
                       </Button>
                     </div>
                   )}
@@ -337,7 +334,7 @@ export function BuildImageDialog(props: DialogProps) {
               </Tabs>
               <FieldError>{error}</FieldError>
             </FieldGroup>
-            <Footer busy={busy} label="Build image" disabled={!chosen}>
+            <Footer busy={busy} label={t("images.build")} disabled={!chosen}>
               <Button
                 type="button"
                 variant="outline"
@@ -345,7 +342,7 @@ export function BuildImageDialog(props: DialogProps) {
                 onClick={() => setImporting(true)}
               >
                 <RiClipboardLine data-icon="inline-start" />
-                Import configuration
+                {t("build.importConfig")}
               </Button>
             </Footer>
           </form>
@@ -379,15 +376,12 @@ function ImportConfiguration({
       }}
     >
       <DialogHeader>
-        <DialogTitle>Import configuration</DialogTitle>
-        <DialogDescription>
-          Paste the JSON that Export copied from a built image. It fills in the name, base image,
-          script, internet setting and compose, which you can still change before building.
-        </DialogDescription>
+        <DialogTitle>{t("build.importConfig")}</DialogTitle>
+        <DialogDescription>{t("build.importConfigHint")}</DialogDescription>
       </DialogHeader>
       <FieldGroup>
         <Field data-invalid={!!error}>
-          <FieldLabel htmlFor={`${field}-config`}>Configuration</FieldLabel>
+          <FieldLabel htmlFor={`${field}-config`}>{t("build.config")}</FieldLabel>
           <Textarea
             id={`${field}-config`}
             rows={12}
@@ -408,9 +402,9 @@ function ImportConfiguration({
       </FieldGroup>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onBack}>
-          Back
+          {t("common.back")}
         </Button>
-        <Button type="submit">Load</Button>
+        <Button type="submit">{t("build.load")}</Button>
       </DialogFooter>
     </form>
   )
@@ -428,25 +422,22 @@ export function VolumeDialog(props: DialogProps) {
           onSubmit={submit(async () => {
             await api("volumes", { name })
             closeDialog()
-            toast.success(`Created volume ${name}.`)
+            toast.success(t("volumes.created", { name }))
             void refreshAll()
           })}
         >
           <DialogHeader>
-            <DialogTitle>New volume</DialogTitle>
-            <DialogDescription>
-              A named Docker volume you can mount into containers. Its files outlive the containers
-              and are not part of snapshots.
-            </DialogDescription>
+            <DialogTitle>{t("volumes.new")}</DialogTitle>
+            <DialogDescription>{t("volumes.newHint")}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
+              <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
               <Input
                 id={`${field}-name`}
                 required
                 pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]+"
-                title="Letters, digits, dots, dashes and underscores, starting with a letter or digit"
+                title={t("volumes.namePattern")}
                 placeholder="unity-projects"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -456,7 +447,7 @@ export function VolumeDialog(props: DialogProps) {
             </Field>
             <FieldError>{error}</FieldError>
           </FieldGroup>
-          <Footer busy={busy} label="Create" />
+          <Footer busy={busy} label={t("common.create")} />
         </form>
       </DialogContent>
     </Dialog>

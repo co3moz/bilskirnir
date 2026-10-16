@@ -1,5 +1,6 @@
 // Paths and entries of a volume's files, as the volume browser shows them. A path is absolute
 // within the volume, `/` being its root.
+import { t } from "./i18n"
 
 /** One entry of `POST volumes/{name}/files/list`. */
 export type VolumeEntry = {
@@ -41,12 +42,12 @@ export function pathCrumbs(path: string) {
 
 /** Why a new file or folder name cannot be used, or an empty string. */
 export function entryNameError(name: string) {
-  if (!name) return "Enter a name."
-  if (name === "." || name === "..") return "Choose another name."
-  if (name.includes("/") || name.includes("\\")) return "Enter a name without slashes."
+  if (!name) return t("files.name.empty")
+  if (name === "." || name === "..") return t("files.name.dots")
+  if (name.includes("/") || name.includes("\\")) return t("files.name.slashes")
   if ([...name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
-    return "Enter a name without control characters."
-  if (new TextEncoder().encode(name).length > 255) return "Use at most 255 bytes."
+    return t("files.name.control")
+  if (new TextEncoder().encode(name).length > 255) return t("files.name.long")
   return ""
 }
 

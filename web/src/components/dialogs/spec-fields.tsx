@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { t } from "@/lib/i18n"
 import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
 
 const RESOLUTIONS = ["1920x1080", "1600x900", "1280x720", "2560x1440", "3840x2160"]
@@ -70,14 +71,8 @@ export function specBody(draft: SpecDraft) {
   }
 }
 
-const flagCopy: Record<Flag, { label: string; description: string }> = {
-  gpu: { label: "GPU", description: "Hardware rendering on the host GPU." },
-  internet: { label: "Internet", description: "Outbound network access." },
-  sudo: { label: "Sudo", description: "Administrator rights for the desktop user." },
-  audio: { label: "Audio", description: "Desktop sound in the browser." },
-  microphone: { label: "Microphone", description: "The browser microphone, inside the desktop." },
-  gamepad: { label: "Gamepad", description: "A virtual controller device." },
-}
+const flagLabel = (flag: Flag) => t(`spec.flag.${flag}`)
+const flagDescription = (flag: Flag) => t(`spec.flag.${flag}.description`)
 
 /**
  * The settings shared by the create and settings dialogs. `spec` is the container being changed, if
@@ -126,7 +121,7 @@ export function SpecFields({
     <FieldGroup>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor={`${id}-resolution`}>Resolution</FieldLabel>
+          <FieldLabel htmlFor={`${id}-resolution`}>{t("spec.resolution")}</FieldLabel>
           <Select value={draft.resolution} onValueChange={(resolution) => set({ resolution })}>
             <SelectTrigger id={`${id}-resolution`} className="w-full">
               <SelectValue />
@@ -143,7 +138,7 @@ export function SpecFields({
           </Select>
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${id}-shm`}>Shared memory (MB)</FieldLabel>
+          <FieldLabel htmlFor={`${id}-shm`}>{t("spec.sharedMemory")}</FieldLabel>
           <Input
             id={`${id}-shm`}
             type="number"
@@ -154,31 +149,31 @@ export function SpecFields({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${id}-cpus`}>CPU limit</FieldLabel>
+          <FieldLabel htmlFor={`${id}-cpus`}>{t("spec.cpuLimit")}</FieldLabel>
           <Input
             id={`${id}-cpus`}
             type="number"
             min={0.1}
             step={0.1}
-            placeholder="Unlimited"
+            placeholder={t("spec.unlimited")}
             value={draft.cpus}
             onChange={(event) => set({ cpus: event.target.value })}
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${id}-memory`}>Memory limit (MB)</FieldLabel>
+          <FieldLabel htmlFor={`${id}-memory`}>{t("spec.memoryLimit")}</FieldLabel>
           <Input
             id={`${id}-memory`}
             type="number"
             min={256}
-            placeholder="Unlimited"
+            placeholder={t("spec.unlimited")}
             value={draft.memory_mb}
             onChange={(event) => set({ memory_mb: event.target.value })}
           />
         </Field>
       </div>
       <FieldSet>
-        <FieldLegend variant="label">Features</FieldLegend>
+        <FieldLegend variant="label">{t("spec.features")}</FieldLegend>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {FLAGS.map((flag) => {
             const disabled = !enabled[flag] && !spec?.[flag]
@@ -186,9 +181,9 @@ export function SpecFields({
               <FieldLabel key={flag} htmlFor={`${id}-${flag}`}>
                 <Field orientation="horizontal" data-disabled={disabled}>
                   <FieldContent>
-                    <span className="font-medium">{flagCopy[flag].label}</span>
+                    <span className="font-medium">{flagLabel(flag)}</span>
                     <FieldDescription className="text-xs">
-                      {disabled ? "Turned off for this installation." : flagCopy[flag].description}
+                      {disabled ? t("spec.turnedOff") : flagDescription(flag)}
                     </FieldDescription>
                   </FieldContent>
                   <Switch
@@ -206,7 +201,7 @@ export function SpecFields({
       <FieldSet>
         <div className="flex items-center justify-between">
           <FieldLegend variant="label" className="mb-0">
-            Volumes
+            {t("nav.volumes")}
           </FieldLegend>
           <Button
             type="button"
@@ -214,7 +209,7 @@ export function SpecFields({
             size="sm"
             onClick={() => {
               if (!volumes.length) {
-                toast.error("Create a volume first.")
+                toast.error(t("spec.volumeFirst"))
                 return
               }
               set({
@@ -226,7 +221,7 @@ export function SpecFields({
             }}
           >
             <RiAddLine data-icon="inline-start" />
-            Mount
+            {t("spec.mount")}
           </Button>
         </div>
         {draft.mounts.map((mount) => {
@@ -241,7 +236,7 @@ export function SpecFields({
                 value={mount.volume}
                 onValueChange={(volume) => setMount(mount.key, { volume })}
               >
-                <SelectTrigger aria-label="Volume" className="w-full">
+                <SelectTrigger aria-label={t("spec.volume")} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -255,7 +250,7 @@ export function SpecFields({
                 </SelectContent>
               </Select>
               <Input
-                aria-label="Mount path"
+                aria-label={t("spec.mountPath")}
                 placeholder="/workspace/project"
                 required
                 value={mount.target}
@@ -267,13 +262,13 @@ export function SpecFields({
                   checked={mount.readonly}
                   onCheckedChange={(value) => setMount(mount.key, { readonly: !!value })}
                 />
-                Read-only
+                {t("spec.readOnly")}
               </Label>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Remove mount"
+                aria-label={t("spec.removeMount")}
                 onClick={() =>
                   set({ mounts: draft.mounts.filter((item) => item.key !== mount.key) })
                 }
@@ -283,9 +278,7 @@ export function SpecFields({
             </div>
           )
         })}
-        <FieldDescription className="text-xs">
-          Mounted volumes are excluded from snapshots.
-        </FieldDescription>
+        <FieldDescription className="text-xs">{t("spec.mountsHint")}</FieldDescription>
       </FieldSet>
     </FieldGroup>
   )

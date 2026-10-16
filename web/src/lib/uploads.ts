@@ -1,22 +1,19 @@
+import { formatNumber, t } from "./i18n"
+
+const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
+
 export const fileSize = (bytes: number) =>
   bytes < 1024
-    ? `${bytes} B`
+    ? `${formatNumber(bytes)} B`
     : bytes < 1024 ** 2
-      ? `${(bytes / 1024).toFixed(1)} KiB`
+      ? `${formatNumber(bytes / 1024, oneDecimal)} KiB`
       : bytes < 1024 ** 3
-        ? `${(bytes / 1024 ** 2).toFixed(1)} MiB`
-        : `${(bytes / 1024 ** 3).toFixed(1)} GiB`
+        ? `${formatNumber(bytes / 1024 ** 2, oneDecimal)} MiB`
+        : `${formatNumber(bytes / 1024 ** 3, oneDecimal)} GiB`
 
 export type UploadStatus = "queued" | "uploading" | "saving" | "completed" | "failed" | "cancelled"
 
-export const uploadStatuses: Record<UploadStatus, string> = {
-  queued: "Ready",
-  uploading: "Uploading",
-  saving: "Saving",
-  completed: "Uploaded",
-  failed: "Failed",
-  cancelled: "Cancelled",
-}
+export const uploadStatus = (status: UploadStatus) => t(`uploads.status.${status}`)
 
 export type UploadItem = {
   file: Blob
@@ -78,10 +75,10 @@ export class FileUploads {
   }
   select(files: ArrayLike<UploadFile> | Iterable<UploadFile>, limit: number) {
     const list = Array.from(files)
-    if (this.running) throw new Error("Wait for the current upload or cancel it first.")
-    if (list.length > 100) throw new Error("Select up to 100 files at a time.")
+    if (this.running) throw new Error(t("uploads.busy"))
+    if (list.length > 100) throw new Error(t("uploads.tooMany"))
     if (list.some((file) => file.size > limit))
-      throw new Error(`Files must be ${fileSize(limit)} or smaller.`)
+      throw new Error(t("uploads.tooLarge", { size: fileSize(limit) }))
     this.items = list.map((file) => ({
       file,
       name: file.name,
@@ -166,12 +163,12 @@ export class FileUploads {
             this.cancelled = true
             this.onUnauthorized()
           }
-          reject(new Error(result.error || `Upload failed (${request.status}).`))
+          reject(new Error(result.error || t("uploads.failed", { status: request.status })))
         }
       }
-      request.onerror = () => reject(new Error("Connection lost. Retry the file."))
-      request.ontimeout = () => reject(new Error("Upload timed out."))
-      request.onabort = () => reject(new Error("Upload cancelled."))
+      request.onerror = () => reject(new Error(t("uploads.connectionLost")))
+      request.ontimeout = () => reject(new Error(t("uploads.timedOut")))
+      request.onabort = () => reject(new Error(t("uploads.cancelled")))
       request.send(item.file)
     })
   }

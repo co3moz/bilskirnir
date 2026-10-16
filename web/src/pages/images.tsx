@@ -27,14 +27,17 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { attempt, exportArchive, exportBuildConfig, runJob } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { imageKinds, imageSource, imageStatus, imageTree, shortDate } from "@/lib/format"
+import { imageKind, imageSource, imageStatus, imageTree, shortDate } from "@/lib/format"
+import { formatList, t } from "@/lib/i18n"
 import { useImages } from "@/lib/queries"
 import type { ImageItem } from "@/lib/types"
 
 /** What a compose asks for, in a few words. */
 function composeSummary(compose: NonNullable<ImageItem["compose"]>) {
   const names = compose.parameters.map((parameter) => parameter.name)
-  return names.length ? `Asks for ${names.join(", ")}` : "Runs a setup script"
+  return names.length
+    ? t("images.compose.asksFor", { names: formatList(names) })
+    : t("images.compose.script")
 }
 
 /** Fetches a catalog image ahead of its first use, a newer release of it, or builds it here. */
@@ -55,13 +58,17 @@ function CatalogActions({ image }: { image: ImageItem }) {
             size="icon-sm"
             disabled={busy}
             onClick={job("pull")}
-            aria-label={`${downloaded ? "Update" : "Download"} ${image.name}`}
+            aria-label={
+              downloaded
+                ? t("images.updateOf", { name: image.name })
+                : t("images.downloadOf", { name: image.name })
+            }
           >
             {downloaded ? <RiRefreshLine /> : <RiDownloadLine />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {downloaded ? "Download the latest published release" : "Download it now"}
+          {downloaded ? t("images.updateHint") : t("images.downloadHint")}
         </TooltipContent>
       </Tooltip>
       {!downloaded && (
@@ -72,12 +79,12 @@ function CatalogActions({ image }: { image: ImageItem }) {
               size="icon-sm"
               disabled={busy}
               onClick={job("build")}
-              aria-label={`Build ${image.name} from source`}
+              aria-label={t("images.buildOf", { name: image.name })}
             >
               <RiHammerLine />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Build from the bundled Docker context</TooltipContent>
+          <TooltipContent>{t("images.buildHint")}</TooltipContent>
         </Tooltip>
       )}
     </>
@@ -96,12 +103,12 @@ function SavedActions({ image }: { image: ImageItem }) {
               variant="outline"
               size="icon-sm"
               onClick={() => attempt(() => exportBuildConfig(image))}
-              aria-label={`Export the configuration of ${image.name}`}
+              aria-label={t("images.exportConfigOf", { name: image.name })}
             >
               <RiFileCopyLine />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Export configuration as JSON</TooltipContent>
+          <TooltipContent>{t("images.exportConfig")}</TooltipContent>
         </Tooltip>
       )}
       <Tooltip>
@@ -110,13 +117,17 @@ function SavedActions({ image }: { image: ImageItem }) {
             variant="outline"
             size="icon-sm"
             onClick={() => openDialog({ kind: "compose", id: image.id })}
-            aria-label={`${image.compose ? "Edit" : "Add"} the compose of ${image.name}`}
+            aria-label={
+              image.compose
+                ? t("images.compose.editOf", { name: image.name })
+                : t("images.compose.addOf", { name: image.name })
+            }
           >
             <RiListSettingsLine />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {image.compose ? "Edit compose" : "Add a compose: values asked for on creation"}
+          {image.compose ? t("compose.edit") : t("images.compose.addHint")}
         </TooltipContent>
       </Tooltip>
       {/* Any saved image moves as an archive, the base desktop included. */}
@@ -127,12 +138,12 @@ function SavedActions({ image }: { image: ImageItem }) {
             size="icon-sm"
             disabled={image.available === false}
             onClick={() => exportArchive(image)}
-            aria-label={`Export ${image.name} as an archive`}
+            aria-label={t("archives.exportOf", { name: image.name })}
           >
             <RiArchive2Line />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Export archive (.tar.gz)</TooltipContent>
+        <TooltipContent>{t("archives.export")}</TooltipContent>
       </Tooltip>
     </>
   )
@@ -143,7 +154,7 @@ const column = columnHelper<Row>()
 
 const columns: DataColumn<Row>[] = [
   column.accessor("name", {
-    header: "Name",
+    header: () => t("table.name"),
     cell: ({ row }) => {
       const image = row.original
       const Icon =
@@ -175,15 +186,15 @@ const columns: DataColumn<Row>[] = [
     },
   }),
   column.accessor("kind", {
-    header: "Source",
+    header: () => t("images.source"),
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         <Badge variant="outline" className="border-violet/40 text-violet">
-          {imageKinds[row.original.kind] ?? row.original.kind}
+          {imageKind(row.original.kind)}
         </Badge>
         {row.original.compose && (
           <Badge variant="outline" title={composeSummary(row.original.compose)}>
-            Compose
+            {t("compose.name")}
           </Badge>
         )}
       </div>
@@ -191,7 +202,7 @@ const columns: DataColumn<Row>[] = [
   }),
   column.display({
     id: "status",
-    header: "Status",
+    header: () => t("table.status"),
     cell: ({ row }) => {
       const status = imageStatus(row.original)
       return (
@@ -203,16 +214,17 @@ const columns: DataColumn<Row>[] = [
   }),
   column.display({
     id: "desktop",
-    header: "Desktop",
+    header: () => t("nav.desktop"),
     // A desktop title wraps when the row actions need the room.
     cell: ({ row }) => (
       <span className="block min-w-28 text-xs whitespace-normal text-muted-foreground">
-        {row.original.desktop?.title ?? (row.original.kind === "catalog" ? "" : "Unknown")}
+        {row.original.desktop?.title ??
+          (row.original.kind === "catalog" ? "" : t("common.unknown"))}
       </span>
     ),
   }),
   column.accessor("created_at", {
-    header: "Created",
+    header: () => t("table.created"),
     cell: ({ row }) =>
       row.original.created_at !== null && (
         <span className="text-xs whitespace-nowrap text-muted-foreground">
@@ -234,11 +246,11 @@ const columns: DataColumn<Row>[] = [
             variant="outline"
             size="sm"
             disabled={unusable}
-            title={unusable ? (image.error ?? "Image no longer available") : undefined}
+            title={unusable ? (image.error ?? t("images.gone")) : undefined}
             onClick={() => openDialog({ kind: "create", image: imageSource(image) })}
           >
             <RiAddLine data-icon="inline-start" />
-            Create container
+            {t("job.create")}
           </Button>
         </div>
       )
@@ -255,21 +267,21 @@ export function ImagesPage() {
   return (
     <PageBody>
       <DockerAlert />
-      <SectionHeading
-        title="Image library"
-        description="Catalog images download the first time you use them. A child image starts from its parent's files."
-      >
+      <SectionHeading title={t("images.title")} description={t("images.description")}>
         <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "import" })}>
           <RiImportLine data-icon="inline-start" />
-          Import image
+          {t("job.image-import")}
         </Button>
         <Button size="sm" onClick={() => openDialog({ kind: "build" })}>
           <RiHammerLine data-icon="inline-start" />
-          Build image
+          {t("images.build")}
         </Button>
       </SectionHeading>
       <div className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
-        <DataTableView table={table} empty={images.isPending ? "Loading images…" : "No images."} />
+        <DataTableView
+          table={table}
+          empty={images.isPending ? t("images.loading") : t("images.none")}
+        />
         <DataTablePagination table={table} />
       </div>
     </PageBody>

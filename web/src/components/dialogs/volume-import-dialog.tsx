@@ -21,6 +21,7 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
 import { ArchiveImport } from "@/lib/archives"
 import { closeDialog, openDialog } from "@/lib/dialogs"
+import { t } from "@/lib/i18n"
 import { refreshAll, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
 import { VOLUME_NAME, volumeArchiveName } from "@/lib/volume-files"
@@ -54,7 +55,7 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
     const [chosen] = files
     if (!chosen || upload.running) return
     if (files.length > 1) {
-      setError("Choose one archive at a time.")
+      setError(t("archives.single"))
       return
     }
     setFile(chosen)
@@ -66,15 +67,15 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!file) {
-      setError("Choose an archive first.")
+      setError(t("archives.choose"))
       return
     }
     setError("")
     const job = await upload.start(file, { name: name.trim() }, limit)
     if (!job) return
     closeDialog()
-    toast.success(`Importing ${name.trim()}.`, {
-      description: "The archive arrived. Its last files are being written.",
+    toast.success(t("archives.importing", { name: name.trim() }), {
+      description: t("volumes.import.arrived"),
     })
     void refreshAll()
     openDialog({ kind: "job", id: job })
@@ -83,17 +84,15 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
   const running = upload.running
   const status =
     upload.status === "checking"
-      ? "Writing the last files…"
-      : `${fileSize(upload.loaded)} of ${fileSize(upload.size)} uploaded`
+      ? t("volumes.import.writing")
+      : t("archives.uploaded", { current: fileSize(upload.loaded), total: fileSize(upload.size) })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Import volume</DialogTitle>
-            <DialogDescription>
-              Unpacks an archive exported from a volume into a new one.
-            </DialogDescription>
+            <DialogTitle>{t("job.volume-import")}</DialogTitle>
+            <DialogDescription>{t("volumes.import.description")}</DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-4">
             <button
@@ -114,9 +113,9 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
                 </>
               ) : (
                 <>
-                  <strong className="font-medium">Drop an archive here or choose a file</strong>
+                  <strong className="font-medium">{t("archives.drop")}</strong>
                   <span className="text-xs text-muted-foreground">
-                    .tar.gz or .tar · up to {fileSize(limit)} unpacked
+                    {t("archives.limit", { size: fileSize(limit) })}
                   </span>
                 </>
               )}
@@ -132,30 +131,28 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
               }}
             />
             <Field>
-              <FieldLabel htmlFor={`${field}-name`}>Volume name</FieldLabel>
+              <FieldLabel htmlFor={`${field}-name`}>{t("volumes.import.name")}</FieldLabel>
               <Input
                 id={`${field}-name`}
                 required
                 pattern={VOLUME_NAME.source}
-                title="Letters, digits, dots, dashes and underscores, starting with a letter or digit"
+                title={t("volumes.namePattern")}
                 placeholder="unity-projects"
                 disabled={running}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 className="font-mono"
               />
-              <FieldDescription>
-                A new volume; an existing one is never replaced. Files belong to the desktop user.
-              </FieldDescription>
+              <FieldDescription>{t("volumes.import.hint")}</FieldDescription>
             </Field>
             {upload.status !== "idle" && upload.status !== "started" && upload.size > 0 && (
               <div role="status" aria-live="polite" className="flex flex-col gap-1.5">
                 <Progress
                   value={(upload.loaded * 100) / Math.max(upload.size, 1)}
-                  aria-label="Archive upload progress"
+                  aria-label={t("archives.progress")}
                 />
                 <span className="text-xs text-muted-foreground">
-                  {upload.status === "cancelled" ? "Cancelled" : status}
+                  {upload.status === "cancelled" ? t("uploads.status.cancelled") : status}
                 </span>
               </div>
             )}
@@ -164,18 +161,18 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
           <DialogFooter>
             {running ? (
               <Button type="button" variant="outline" onClick={() => upload.cancel()}>
-                Cancel import
+                {t("archives.cancel")}
               </Button>
             ) : (
               <DialogClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </DialogClose>
             )}
             <Button type="submit" disabled={running || !file}>
               {running && <Spinner data-icon="inline-start" />}
-              Import
+              {t("common.import")}
             </Button>
           </DialogFooter>
         </form>

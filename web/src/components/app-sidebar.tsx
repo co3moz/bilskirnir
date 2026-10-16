@@ -22,15 +22,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { t } from "@/lib/i18n"
 import { href, type Page } from "@/lib/route"
 
-export const pageTitles: Record<Page, string> = {
-  dashboard: "Dashboard",
-  containers: "Containers",
-  images: "Images",
-  volumes: "Volumes",
-  jobs: "Jobs",
-}
+export const pageTitle = (page: Page) => t(`nav.${page}`)
 
 const navMain = [
   { page: "dashboard", icon: <RiDashboardLine /> },
@@ -41,10 +36,10 @@ const navMain = [
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
 const repository = "https://github.com/co3moz/bilskirnir"
-const navSecondary = [
-  { title: "Documentation", url: `${repository}#readme`, icon: <RiBookOpenLine /> },
+const navSecondary = () => [
+  { title: t("nav.documentation"), url: `${repository}#readme`, icon: <RiBookOpenLine /> },
   {
-    title: "Agent access (MCP)",
+    title: t("nav.mcp"),
     url: `${repository}/blob/master/docs/MCP.md`,
     icon: <RiPlugLine />,
   },
@@ -71,10 +66,10 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain
           active={page}
-          items={navMain.map((item) => ({ ...item, title: pageTitles[item.page] }))}
+          items={navMain.map((item) => ({ ...item, title: pageTitle(item.page) }))}
         />
         <NavContainers />
-        <NavSecondary items={navSecondary} className="mt-auto" />
+        <NavSecondary items={navSecondary()} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

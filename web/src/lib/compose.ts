@@ -7,6 +7,7 @@ import type {
   Compose,
   ComposeParameter,
 } from "./types"
+import { t } from "./i18n"
 
 /** The manager's rule for a parameter name, as an input pattern. */
 export const PARAMETER_NAME = "[A-Z][A-Z0-9_]{0,63}"
@@ -25,24 +26,9 @@ export const DISPLAYS: Record<ParameterType, ParameterDisplay[]> = {
   choices: ["checkboxes"],
 }
 
-export const TYPE_LABELS: Record<ParameterType, string> = {
-  text: "Text",
-  number: "Number",
-  boolean: "On or off",
-  choice: "One choice",
-  choices: "Several choices",
-}
+export const typeLabel = (type: ParameterType) => t(`compose.type.${type}`)
 
-export const DISPLAY_LABELS: Record<ParameterDisplay, string> = {
-  input: "Field",
-  multiline: "Text area",
-  slider: "Slider",
-  toggle: "Switch",
-  checkbox: "Checkbox",
-  select: "Menu",
-  radio: "Radio buttons",
-  checkboxes: "Checkboxes",
-}
+export const displayLabel = (display: ParameterDisplay) => t(`compose.display.${display}`)
 
 export const displayOf = (parameter: Pick<ComposeParameter, "type" | "display">) =>
   parameter.display && DISPLAYS[parameter.type].includes(parameter.display)
@@ -258,8 +244,8 @@ const TYPES = Object.keys(DISPLAYS) as ParameterType[]
 function readParameter(value: unknown): ComposeParameter {
   const parameter = (value ?? {}) as Record<string, unknown>
   const { name } = parameter
-  if (typeof name !== "string" || !name) throw new Error("Every parameter needs a name.")
-  const wrong = () => new Error(`The parameter ${name} is not shaped like a compose parameter.`)
+  if (typeof name !== "string" || !name) throw new Error(t("compose.read.noName"))
+  const wrong = () => new Error(t("compose.read.shape", { name }))
   const text = (key: string) => {
     const field = parameter[key] ?? ""
     if (typeof field !== "string") throw wrong()
@@ -271,10 +257,10 @@ function readParameter(value: unknown): ComposeParameter {
     return field
   }
   const type = (parameter.type ?? "text") as ParameterType
-  if (!TYPES.includes(type)) throw new Error(`The parameter ${name} has an unknown type.`)
+  if (!TYPES.includes(type)) throw new Error(t("compose.read.type", { name }))
   const display = parameter.display ?? undefined
   if (display !== undefined && !DISPLAYS[type].includes(display as ParameterDisplay))
-    throw new Error(`The parameter ${name} cannot be shown that way.`)
+    throw new Error(t("compose.read.display", { name }))
   const options = parameter.options ?? []
   if (!Array.isArray(options)) throw wrong()
   const read: ComposeParameter = {
@@ -309,28 +295,19 @@ function readParameter(value: unknown): ComposeParameter {
 /** A pasted configuration's compose, or the reason it cannot be one. */
 export function readCompose(value: unknown): Compose {
   if (typeof value !== "object" || value === null || Array.isArray(value))
-    throw new Error("The compose must be a JSON object.")
+    throw new Error(t("compose.read.object"))
   const {
     parameters = [],
     script,
     root = false,
     timeout_seconds = 600,
   } = value as Record<string, unknown>
-  if (typeof script !== "string" || !script.trim())
-    throw new Error("The compose has no setup script.")
-  if (!Array.isArray(parameters)) throw new Error("The compose's parameters must be a list.")
-  if (typeof root !== "boolean")
-    throw new Error("The compose's root setting must be true or false.")
-  if (typeof timeout_seconds !== "number")
-    throw new Error("The compose's timeout must be a number of seconds.")
+  if (typeof script !== "string" || !script.trim()) throw new Error(t("compose.read.script"))
+  if (!Array.isArray(parameters)) throw new Error(t("compose.read.parameters"))
+  if (typeof root !== "boolean") throw new Error(t("compose.read.root"))
+  if (typeof timeout_seconds !== "number") throw new Error(t("compose.read.timeout"))
   return { parameters: parameters.map(readParameter), script, root, timeout_seconds }
 }
 
-const setupCopy: Record<ContainerSetup["status"], string> = {
-  pending: "Waits for the desktop",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-}
-
-export const setupLabel = (setup: Pick<ContainerSetup, "status">) => setupCopy[setup.status]
+export const setupLabel = (setup: Pick<ContainerSetup, "status">) =>
+  t(`compose.setup.${setup.status}`)

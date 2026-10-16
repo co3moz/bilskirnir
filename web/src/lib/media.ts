@@ -1,3 +1,5 @@
+import { t } from "./i18n"
+
 type Channel = "output" | "input"
 
 export type MediaState = {
@@ -107,7 +109,7 @@ export class DesktopMedia {
       const ctx = this.deps.createContext()
       s.ctx = ctx
       s.contextPromise = (async () => {
-        if (ctx.sampleRate !== 48000) throw new Error("This browser does not support 48 kHz audio.")
+        if (ctx.sampleRate !== 48000) throw new Error(t("media.sampleRate"))
         await ctx.audioWorklet.addModule("/audio-worklet.js")
         if (s.closed || s.ctx !== ctx) return null
         await ctx.resume()
@@ -136,7 +138,7 @@ export class DesktopMedia {
     socket.onerror = () => {
       if (current())
         this.deps.onError?.(
-          `${channel === "output" ? "Audio" : "Microphone"} connection failed. Check the container logs.`
+          channel === "output" ? t("media.audioFailed") : t("media.microphoneFailed")
         )
     }
     socket.onclose = () => {
@@ -206,7 +208,7 @@ export class DesktopMedia {
     let stream: MediaStream | undefined
     let resource: Resource | undefined
     try {
-      if (!this.deps.getUserMedia) throw new Error("Microphone access requires HTTPS or localhost.")
+      if (!this.deps.getUserMedia) throw new Error(t("media.microphoneHttps"))
       const ctx = await this.context(s)
       if (!ctx || !this.valid(s, "input", epoch)) return
       stream = await this.deps.getUserMedia({

@@ -8,6 +8,7 @@ import {
   RiSunLine,
 } from "@remixicon/react"
 
+import { LanguageMenu } from "@/components/language-menu"
 import { useTheme, type Theme } from "@/components/theme-provider"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/sidebar"
 import { attempt } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
+import { t } from "@/lib/i18n"
 import { useSession, useSystem } from "@/lib/queries"
 
 function Identity({ auth, detail }: { auth: boolean; detail: string }) {
@@ -44,7 +46,9 @@ function Identity({ auth, detail }: { auth: boolean; detail: string }) {
         </AvatarFallback>
       </Avatar>
       <div className="grid flex-1 text-left text-sm leading-tight">
-        <span className="truncate font-medium">{auth ? "Administrator" : "Local access"}</span>
+        <span className="truncate font-medium">
+          {auth ? t("account.administrator") : t("account.local")}
+        </span>
         <span className="truncate text-xs text-muted-foreground">{detail}</span>
       </div>
     </>
@@ -59,8 +63,8 @@ export function NavUser() {
   const docker = system?.connected
     ? `Docker ${system.version ?? ""}`.trim()
     : system
-      ? "Docker unavailable"
-      : "Checking Docker…"
+      ? t("state.unavailable")
+      : t("docker.checking")
 
   return (
     <SidebarMenu>
@@ -83,28 +87,35 @@ export function NavUser() {
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Identity auth={auth} detail={auth ? "Signed in" : "Sign-in is turned off"} />
+                <Identity
+                  auth={auth}
+                  detail={auth ? t("account.signedIn") : t("account.signInOff")}
+                />
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs text-muted-foreground">Theme</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              {t("account.theme")}
+            </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={theme}
               onValueChange={(value) => setTheme(value as Theme)}
             >
               <DropdownMenuRadioItem value="dark">
                 <RiMoonLine />
-                Dark
+                {t("account.dark")}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="light">
                 <RiSunLine />
-                Light
+                {t("account.light")}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">
                 <RiComputerLine />
-                System
+                {t("account.system")}
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <LanguageMenu />
             {auth && (
               <>
                 <DropdownMenuSeparator />
@@ -118,7 +129,7 @@ export function NavUser() {
                     }
                   >
                     <RiLogoutBoxRLine />
-                    Sign out
+                    {t("account.signOut")}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </>

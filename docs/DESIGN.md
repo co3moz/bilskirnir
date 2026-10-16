@@ -10,7 +10,7 @@ A user should be able to see which containers are running, open one, and underst
 
 Use familiar names: **Dashboard**, **Containers**, **Images**, **Volumes** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
 
-Keep visible copy in English. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
+Write visible copy in English in `web/src/locales/en.ts`, and give the same key a translation in every other catalog there; see [Translate the interface](DEVELOPMENT.md#translate-the-interface). Write each language as natural interface text of its own rather than word for word, keep placeholders where the sentence needs them, and keep labels short enough for a button in every language. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
 
 ## Layout
 

@@ -16,18 +16,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  DISPLAY_LABELS,
+  displayLabel,
   DISPLAYS,
   draftParameter,
   newOption,
   PARAMETER_NAME,
-  TYPE_LABELS,
+  typeLabel,
   withOptions,
   withType,
   type OptionDraft,
   type ParameterDraft,
 } from "@/lib/compose"
 import type { ParameterDisplay, ParameterType } from "@/lib/types"
+import { formatNumber, t } from "@/lib/i18n"
 import { ParameterField } from "./parameter-field"
 
 const TYPES = Object.keys(DISPLAYS) as ParameterType[]
@@ -52,12 +53,12 @@ export function ParameterEditor({
     <div className="flex flex-col gap-3 rounded-xl border p-3">
       <div className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <Input
-          aria-label="Variable name"
+          aria-label={t("parameter.name")}
           placeholder="UNITY_EMAIL"
           required
           maxLength={64}
           pattern={PARAMETER_NAME}
-          title="Capital letters, digits and underscores, starting with a letter"
+          title={t("parameter.namePattern")}
           value={parameter.name}
           onChange={(event) => set({ name: event.target.value.toUpperCase() })}
           className="font-mono"
@@ -66,15 +67,19 @@ export function ParameterEditor({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={`Remove ${parameter.name || "parameter"}`}
+          aria-label={
+            parameter.name
+              ? t("parameter.removeOf", { name: parameter.name })
+              : t("parameter.remove")
+          }
           className="sm:col-start-3"
           onClick={onRemove}
         >
           <RiCloseLine />
         </Button>
         <Input
-          aria-label="Label"
-          placeholder="Unity email"
+          aria-label={t("parameter.label")}
+          placeholder={t("parameter.labelPlaceholder")}
           maxLength={100}
           value={parameter.label}
           onChange={(event) => set({ label: event.target.value })}
@@ -82,8 +87,8 @@ export function ParameterEditor({
         />
       </div>
       <Textarea
-        aria-label="Description"
-        placeholder="Help shown with the field, such as where to find the value"
+        aria-label={t("common.description")}
+        placeholder={t("parameter.descriptionPlaceholder")}
         rows={2}
         maxLength={500}
         value={parameter.description}
@@ -93,7 +98,7 @@ export function ParameterEditor({
       <div className="grid grid-cols-2 gap-2">
         <Field className="gap-1.5">
           <FieldLabel htmlFor={`${id}-type`} className={small}>
-            Type
+            {t("parameter.type")}
           </FieldLabel>
           <Select
             value={parameter.type}
@@ -106,7 +111,7 @@ export function ParameterEditor({
               <SelectGroup>
                 {TYPES.map((type) => (
                   <SelectItem key={type} value={type}>
-                    {TYPE_LABELS[type]}
+                    {typeLabel(type)}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -115,7 +120,7 @@ export function ParameterEditor({
         </Field>
         <Field className="gap-1.5">
           <FieldLabel htmlFor={`${id}-display`} className={small}>
-            Shown as
+            {t("parameter.display")}
           </FieldLabel>
           <Select
             value={parameter.display}
@@ -129,7 +134,7 @@ export function ParameterEditor({
               <SelectGroup>
                 {displays.map((display) => (
                   <SelectItem key={display} value={display}>
-                    {DISPLAY_LABELS[display]}
+                    {displayLabel(display)}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -142,7 +147,7 @@ export function ParameterEditor({
           {(["min", "max", "step"] as const).map((field) => (
             <Field key={field} className="gap-1.5">
               <FieldLabel htmlFor={`${id}-${field}`} className={small}>
-                {{ min: "Minimum", max: "Maximum", step: "Step" }[field]}
+                {t(`parameter.${field}`)}
               </FieldLabel>
               <Input
                 id={`${id}-${field}`}
@@ -150,7 +155,7 @@ export function ParameterEditor({
                 step="any"
                 min={field === "step" ? 0 : undefined}
                 required={parameter.display === "slider" && field !== "step"}
-                placeholder={field === "step" ? "Any" : "None"}
+                placeholder={field === "step" ? t("parameter.any") : t("common.none")}
                 value={parameter[field]}
                 onChange={(event) => set({ [field]: event.target.value })}
               />
@@ -167,16 +172,16 @@ export function ParameterEditor({
       {parameter.secret ? (
         <Field className="gap-1.5">
           <FieldLabel htmlFor={`${id}-default`} className={small}>
-            Default
+            {t("parameter.default")}
           </FieldLabel>
-          <Input id={`${id}-default`} disabled placeholder="Secrets have no default" />
+          <Input id={`${id}-default`} disabled placeholder={t("parameter.noSecretDefault")} />
         </Field>
       ) : (
         // A new type or display starts the preview over, with nothing typed as another value.
         <ParameterField
           key={`${parameter.type}-${parameter.display}`}
           parameter={draftParameter(parameter)}
-          label={parameter.type === "boolean" ? "On by default" : "Default"}
+          label={parameter.type === "boolean" ? t("parameter.onByDefault") : t("parameter.default")}
           optional
           value={parameter.default}
           onChange={(value) => set({ default: value })}
@@ -188,7 +193,7 @@ export function ParameterEditor({
             checked={parameter.required}
             onCheckedChange={(value) => set({ required: value === true })}
           />
-          {parameter.type === "boolean" ? "Must be turned on" : "Required"}
+          {parameter.type === "boolean" ? t("parameter.mustBeOn") : t("parameter.required")}
         </Label>
         {parameter.type === "text" && (
           <Label className="flex items-center gap-2 text-xs font-normal">
@@ -196,7 +201,7 @@ export function ParameterEditor({
               checked={parameter.secret}
               onCheckedChange={(value) => set({ secret: value === true })}
             />
-            Secret
+            {t("compose.secret")}
           </Label>
         )}
         {parameter.type === "choice" && (
@@ -205,7 +210,7 @@ export function ParameterEditor({
               checked={parameter.allow_custom}
               onCheckedChange={(value) => set({ allow_custom: value === true })}
             />
-            Allow other values
+            {t("parameter.allowCustom")}
           </Label>
         )}
       </div>
@@ -225,7 +230,7 @@ function OptionsEditor({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className={small}>Options</span>
+        <span className={small}>{t("parameter.options")}</span>
         <Button
           type="button"
           variant="outline"
@@ -234,14 +239,14 @@ function OptionsEditor({
           onClick={() => onChange([...options, newOption()])}
         >
           <RiAddLine data-icon="inline-start" />
-          Option
+          {t("parameter.option")}
         </Button>
       </div>
       {options.map((option, index) => (
         <div key={option.key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
           <Input
-            aria-label={`Option ${index + 1} value`}
-            placeholder="Value"
+            aria-label={t("parameter.optionValue", { number: formatNumber(index + 1) })}
+            placeholder={t("parameter.value")}
             required
             maxLength={1024}
             value={option.value}
@@ -249,8 +254,8 @@ function OptionsEditor({
             className="font-mono"
           />
           <Input
-            aria-label={`Option ${index + 1} label`}
-            placeholder="Label"
+            aria-label={t("parameter.optionLabel", { number: formatNumber(index + 1) })}
+            placeholder={t("parameter.label")}
             maxLength={100}
             value={option.label}
             onChange={(event) => setOption(option.key, { label: event.target.value })}
@@ -259,7 +264,9 @@ function OptionsEditor({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={`Remove option ${option.value || index + 1}`}
+            aria-label={t("parameter.removeOption", {
+              option: option.value || formatNumber(index + 1),
+            })}
             disabled={options.length === 1}
             onClick={() => onChange(options.filter((item) => item.key !== option.key))}
           >

@@ -1,15 +1,20 @@
+import { formatDate, formatList, formatNumber, getLocale, has, plural, t } from "./i18n"
 import { fileSize } from "./uploads"
 import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } from "./types"
 
 export const LEGACY_IMAGE = "wsl-desktop/ubuntu:24.04"
-const LEGACY_TITLE = "Ubuntu 24.04 · Lightweight XFCE (legacy)"
+const legacyTitle = () => t("images.legacyTitle")
 export const DESKTOP_HOME = "/home/desktop/Downloads"
 
+const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
+
 export const memory = (bytes?: number | null) =>
-  bytes ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : "Unknown"
-export const date = (seconds: number) => new Date(seconds * 1000).toLocaleString("en-US")
+  bytes
+    ? t("units.gigabytes", { value: formatNumber(bytes / 1024 ** 3, oneDecimal) })
+    : t("common.unknown")
+export const date = (seconds: number) => formatDate(seconds)
 export const shortDate = (seconds: number) =>
-  new Date(seconds * 1000).toLocaleString("en-US", {
+  formatDate(seconds, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -17,53 +22,34 @@ export const shortDate = (seconds: number) =>
   })
 
 export function duration(seconds: number) {
-  if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+  if (seconds < 60) return t("duration.seconds", { seconds: Math.max(0, Math.round(seconds)) })
+  if (seconds < 3600)
+    return t("duration.minutes", {
+      minutes: Math.floor(seconds / 60),
+      seconds: Math.round(seconds % 60),
+    })
+  return t("duration.hours", {
+    hours: Math.floor(seconds / 3600),
+    minutes: Math.floor((seconds % 3600) / 60),
+  })
 }
 
-export const stateLabels: Record<string, string> = {
-  running: "Running",
-  exited: "Stopped",
-  created: "Starting",
-  missing: "Missing",
-  unavailable: "Docker unavailable",
-  restarting: "Restarting",
-  paused: "Paused",
-  dead: "Stopped",
-  queued: "Queued",
-  completed: "Completed",
-  failed: "Failed",
-  interrupted: "Interrupted",
-  ready: "Ready",
-  not_ready: "Not downloaded",
-  unusable: "Not usable",
-  unknown: "Unknown",
-  unhealthy: "Desktop error",
-  setting_up: "Setting up",
-  setup_failed: "Setup failed",
+/** A container, image or job state in words; an unknown one as Docker named it. */
+export function stateLabel(state: string) {
+  const key = `state.${state}`
+  return has(key) ? t(key) : state
 }
 
-export const jobNames: Record<string, string> = {
-  create: "Create container",
-  retry: "Retry setup",
-  start: "Start",
-  stop: "Stop",
-  restart: "Restart",
-  delete: "Delete container",
-  internet: "Internet",
-  build: "Build image",
-  "image-pull": "Download image",
-  "source-build": "Build from source",
-  // The kinds these jobs had before catalog images were listed with the others.
-  "profile-pull": "Download image",
-  "profile-build": "Build from source",
-  snapshot: "Snapshot",
-  exec: "Run script",
-  reset: "Reset container",
-  settings: "Change settings",
-  "image-export": "Export archive",
-  "image-import": "Import archive",
+// The kinds these jobs had before catalog images were listed with the others.
+const renamedJobs: Record<string, string> = {
+  "profile-pull": "image-pull",
+  "profile-build": "source-build",
+}
+
+/** The name of a job kind; one this release does not know as the manager recorded it. */
+export function jobName(kind: string) {
+  const key = `job.${renamedJobs[kind] ?? kind}`
+  return has(key) ? t(key) : kind
 }
 
 export type Tone = "success" | "warning" | "danger" | "muted" | "info"
@@ -122,10 +108,11 @@ export function jobTarget(
   const reported = job.result?.name as string | undefined
   // Jobs from before environments were called containers name them `environment:<id>`.
   if ((kind === "container" || kind === "environment") && id)
-    return containers.get(id) ?? reported ?? `Container ${id.slice(0, 8)}`
+    return containers.get(id) ?? reported ?? t("jobs.target.container", { id: id.slice(0, 8) })
   // Downloads recorded before catalog images were listed with the others name `profile:<id>`.
   if (kind === "profile" && id) return images.get(id) ?? id
-  if (kind === "image" && id) return images.get(id) ?? reported ?? `Image ${id.slice(0, 8)}`
+  if (kind === "image" && id)
+    return images.get(id) ?? reported ?? t("jobs.target.image", { id: id.slice(0, 8) })
   return job.resource
 }
 
@@ -138,17 +125,14 @@ export function desktopTitle(
   return (
     title ||
     images.find((image) => image.kind === "catalog" && image.reference === spec.image)?.name ||
-    (spec.image === LEGACY_IMAGE ? LEGACY_TITLE : "Custom desktop")
+    (spec.image === LEGACY_IMAGE ? legacyTitle() : t("containers.customDesktop"))
   )
 }
 
 /** Where an image came from, as the image list names it. */
-export const imageKinds: Record<string, string> = {
-  catalog: "Catalog",
-  build: "Build",
-  snapshot: "Snapshot",
-  import: "Import",
-  archive: "Archive",
+export function imageKind(kind: string) {
+  const key = `images.kind.${kind}`
+  return has(key) ? t(key) : kind
 }
 
 /** Whether an image can start a container now, and the color family for it. */
@@ -173,18 +157,20 @@ export const imageSource = (image: Pick<ImageItem, "kind" | "reference" | "image
 
 export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.log?.trim()) return job.log
-  if (job.status === "queued") return "Waiting to start…"
-  if (job.status === "running") return "Operation in progress…"
+  if (job.status === "queued") return t("jobs.log.queued")
+  if (job.status === "running") return t("jobs.log.running")
   if (job.status === "completed") {
     if (job.result?.deleted) {
       const name = job.result.name as string | undefined
-      return `${name ? `Deleted "${name}".` : "Container deleted."}${job.result.volumes_preserved ? " Named volumes were preserved." : ""}${job.result.images_preserved ? " Saved images were preserved." : ""}`
+      return [
+        name ? t("jobs.log.deletedNamed", { name }) : t("jobs.log.deleted"),
+        ...(job.result.volumes_preserved ? [t("jobs.log.volumesPreserved")] : []),
+        ...(job.result.images_preserved ? [t("jobs.log.imagesPreserved")] : []),
+      ].join(" ")
     }
-    return "Operation completed successfully. No detailed log was recorded."
+    return t("jobs.log.completed")
   }
-  return job.status === "failed"
-    ? "Operation failed. No detailed log was recorded."
-    : "Operation interrupted. No detailed log was recorded."
+  return job.status === "failed" ? t("jobs.log.failed") : t("jobs.log.interrupted")
 }
 
 export type DownloadSummary = { text: string; value?: number; max?: number; percent?: number }
@@ -193,19 +179,24 @@ export type DownloadSummary = { text: string; value?: number; max?: number; perc
 export function downloadProgress(progress?: DownloadProgress | null): DownloadSummary | null {
   if (!progress) return null
   const { current = 0, total = null, layers = 0, layers_done: done = 0 } = progress
-  if (!layers) return { text: "Preparing download…" }
-  const counted = `${done} of ${layers} layers`
-  if (!total)
-    return {
-      text: `${total === 0 ? "Checking layers" : `${fileSize(current)} downloaded`} · ${counted}`,
-    }
+  if (!layers) return { text: t("progress.preparing") }
+  const counted = plural(
+    layers,
+    { one: "progress.layers.one", other: "progress.layers.other" },
+    { done: formatNumber(done) }
+  )
+  if (!total) {
+    const so =
+      total === 0 ? t("progress.checking") : t("progress.downloaded", { size: fileSize(current) })
+    return { text: `${so} · ${counted}` }
+  }
   if (current >= total && done < layers)
-    return { value: 1, max: 1, percent: 100, text: `Extracting · ${counted}` }
+    return { value: 1, max: 1, percent: 100, text: `${t("progress.extracting")} · ${counted}` }
   return {
     value: current,
     max: total,
     percent: Math.floor((current * 100) / total),
-    text: `${fileSize(current)} of ${fileSize(total)} · ${counted}`,
+    text: `${t("progress.partOf", { current: fileSize(current), total: fileSize(total) })} · ${counted}`,
   }
 }
 
@@ -214,13 +205,17 @@ export function jobProgress(progress?: DownloadProgress | null): DownloadSummary
   if (!progress?.transfer) return downloadProgress(progress)
   const { current = 0, total = null } = progress
   if (progress.transfer === "export")
-    return { text: current ? `${fileSize(current)} exported` : "Docker is preparing the image…" }
-  if (!total) return { text: `${fileSize(current)} received` }
+    return {
+      text: current
+        ? t("progress.exported", { size: fileSize(current) })
+        : t("progress.preparingImage"),
+    }
+  if (!total) return { text: t("progress.received", { size: fileSize(current) }) }
   return {
     value: current,
     max: total,
     percent: Math.floor((current * 100) / total),
-    text: `${fileSize(current)} of ${fileSize(total)} received`,
+    text: t("progress.receivedOf", { current: fileSize(current), total: fileSize(total) }),
   }
 }
 
@@ -242,13 +237,16 @@ export function imageChoices(
   for (const image of catalog)
     choices.set(image.reference, {
       value: image.reference,
-      label: image.available || image.error ? image.name : `${image.name} · downloads first`,
+      label:
+        image.available || image.error
+          ? image.name
+          : `${image.name} · ${t("images.downloadsFirst")}`,
       disabled: !image.available && !!image.error,
     })
   if (defaultImage && !choices.has(defaultImage))
     choices.set(defaultImage, {
       value: defaultImage,
-      label: defaultImage === LEGACY_IMAGE ? LEGACY_TITLE : defaultImage,
+      label: defaultImage === LEGACY_IMAGE ? legacyTitle() : defaultImage,
       disabled: false,
     })
   for (const image of images) {
@@ -301,27 +299,22 @@ export function imageTree<T extends TreeRecord>(records: T[]): (T & { depth: num
   return result
 }
 
-// The names the settings dialog uses for settings that need a new container.
-const restartNames: Record<string, string> = {
-  resolution: "resolution",
-  gpu: "GPU",
-  audio: "audio",
-  microphone: "microphone",
-  sudo: "sudo",
-  gamepad: "gamepad",
-  shm_mb: "shared memory",
-  mounts: "volumes",
-  cpus: "removing the CPU limit",
-  memory_mb: "removing the memory limit",
-}
+/** What the settings dialog says before a change that recreates the container. */
 export function restartNotice(fields: string[], running: boolean) {
-  const names = fields.map((field) => restartNames[field] || field)
-  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]
-  const subject = list.charAt(0).toUpperCase() + list.slice(1)
-  const effect = running
-    ? "it restarts and open applications close"
-    : "it stays stopped until you start it"
-  return `${subject} ${names.length > 1 ? "recreate" : "recreates"} the container: ${effect}. Its files are kept.`
+  const names = fields.map((field) => {
+    const key = `restart.field.${field}`
+    return has(key) ? t(key) : field
+  })
+  const list = formatList(names)
+  const subject = list.charAt(0).toLocaleUpperCase(getLocale()) + list.slice(1)
+  return plural(
+    names.length,
+    { one: "restart.notice.one", other: "restart.notice.other" },
+    {
+      subject,
+      effect: running ? t("restart.effect.running") : t("restart.effect.stopped"),
+    }
+  )
 }
 
 /** Writable places an upload can go: Downloads unless a read-only volume covers it, and writable volumes. */
@@ -345,7 +338,7 @@ export function subfolderError(folder: string) {
       folder.includes("\\") ||
       folder.split("/").some((part) => !part || part === "." || part === ".."))
   )
-    return "Enter a relative subfolder without . or .. segments."
+    return t("uploads.subfolderError")
   return ""
 }
 

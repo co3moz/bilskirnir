@@ -1,6 +1,8 @@
 import * as React from "react"
 import { toast } from "sonner"
 
+import { t } from "@/lib/i18n"
+
 const hasFiles = (event: React.DragEvent) => event.dataTransfer?.types.includes("Files")
 
 /** Files dropped from the operating system; a dropped folder is refused, as uploads take files. */
@@ -32,7 +34,7 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
       event.stopPropagation()
       setOver(false)
       const files = droppedFiles(event)
-      if (!files) toast.error("Choose files instead of a folder.")
+      if (!files) toast.error(t("uploads.folderDropped"))
       else onFiles(files)
     },
   }

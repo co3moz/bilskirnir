@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { attempt, exportVolume } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
+import { rich, t } from "@/lib/i18n"
 import { useContainers, useVolumes } from "@/lib/queries"
 import type { Volume } from "@/lib/types"
 
@@ -32,7 +33,7 @@ const column = columnHelper<Row>()
 
 const columns: DataColumn<Row>[] = [
   column.accessor("Name", {
-    header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
+    header: ({ column }) => <SortHeader column={column}>{t("table.name")}</SortHeader>,
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <RiDatabase2Line className="size-4 shrink-0 text-primary" aria-hidden />
@@ -53,7 +54,7 @@ const columns: DataColumn<Row>[] = [
   }),
   column.display({
     id: "users",
-    header: "Mounted in",
+    header: () => t("volumes.mountedIn"),
     cell: ({ row }) =>
       row.original.users.length ? (
         <ul className="flex flex-col gap-0.5 text-xs">
@@ -67,18 +68,19 @@ const columns: DataColumn<Row>[] = [
                 {user.name}
               </button>{" "}
               <span className="text-muted-foreground">
-                at <code className="font-mono">{user.target}</code>
-                {user.readonly ? " (read-only)" : ""}
+                {rich(user.readonly ? "volumes.mountedAtReadOnly" : "volumes.mountedAt", {
+                  target: <code className="font-mono">{user.target}</code>,
+                })}
               </span>
             </li>
           ))}
         </ul>
       ) : (
-        <span className="text-xs text-muted-foreground">Not mounted</span>
+        <span className="text-xs text-muted-foreground">{t("volumes.notMounted")}</span>
       ),
   }),
-  column.accessor("Driver", { header: "Driver" }),
-  column.accessor("Scope", { header: "Scope" }),
+  column.accessor("Driver", { header: () => t("volumes.driver") }),
+  column.accessor("Scope", { header: () => t("volumes.scope") }),
   column.display({
     id: "actions",
     cell: ({ row }) => (
@@ -89,12 +91,12 @@ const columns: DataColumn<Row>[] = [
               variant="outline"
               size="icon-sm"
               onClick={() => attempt(async () => exportVolume(row.original.Name))}
-              aria-label={`Export ${row.original.Name} as an archive`}
+              aria-label={t("archives.exportOf", { name: row.original.Name })}
             >
               <RiArchive2Line />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Export archive (.tar.gz)</TooltipContent>
+          <TooltipContent>{t("archives.export")}</TooltipContent>
         </Tooltip>
         <Button
           variant="outline"
@@ -102,7 +104,7 @@ const columns: DataColumn<Row>[] = [
           onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
         >
           <RiFolderOpenLine data-icon="inline-start" />
-          Browse files
+          {t("volumes.browse")}
         </Button>
       </div>
     ),
@@ -139,23 +141,20 @@ export function VolumesPage() {
   return (
     <PageBody>
       <DockerAlert />
-      <SectionHeading
-        title="Named volumes"
-        description="Files that outlive containers. Volumes are excluded from snapshots; browse one to read or change its files."
-      >
+      <SectionHeading title={t("volumes.title")} description={t("volumes.description")}>
         <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "volume-import" })}>
           <RiImportLine data-icon="inline-start" />
-          Import volume
+          {t("job.volume-import")}
         </Button>
         <Button size="sm" onClick={() => openDialog({ kind: "volume" })}>
           <RiAddLine data-icon="inline-start" />
-          New volume
+          {t("volumes.new")}
         </Button>
       </SectionHeading>
       <div className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
         <DataTableView
           table={table}
-          empty={volumes.isPending ? "Loading volumes…" : "No volumes."}
+          empty={volumes.isPending ? t("volumes.loading") : t("volumes.none")}
         />
         <DataTablePagination table={table} />
       </div>

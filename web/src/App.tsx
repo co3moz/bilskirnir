@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
-import { AppSidebar, pageTitles } from "@/components/app-sidebar"
+import { AppSidebar, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
 import { closeDialog, openDialog } from "@/lib/dialogs"
+import { t, useLocale } from "@/lib/i18n"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
 import { DashboardPage } from "@/pages/dashboard"
@@ -47,7 +48,7 @@ function ConnectionFailed({ message }: { message: string }) {
         <EmptyMedia variant="icon">
           <RiAlertLine />
         </EmptyMedia>
-        <EmptyTitle>Connection failed</EmptyTitle>
+        <EmptyTitle>{t("app.connectionFailed")}</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -72,12 +73,12 @@ function Shell({ page }: { page: Page }) {
     >
       <AppSidebar variant="inset" page={page} />
       <SidebarInset>
-        <SiteHeader title={pageTitles[page]}>
+        <SiteHeader title={pageTitle(page)}>
           {page === "containers" && (
             <Button size="sm" onClick={() => openDialog({ kind: "create" })}>
               <RiAddLine data-icon="inline-start" />
-              <span className="hidden sm:inline">New container</span>
-              <span className="sr-only sm:hidden">New container</span>
+              <span className="hidden sm:inline">{t("containers.new")}</span>
+              <span className="sr-only sm:hidden">{t("containers.new")}</span>
             </Button>
           )}
         </SiteHeader>
@@ -90,14 +91,14 @@ function Shell({ page }: { page: Page }) {
 function Authenticated() {
   const route = useRoute()
   const settings = useSettings()
+  const locale = useLocale()
   const key = href(route)
 
   // A dialog belongs to the page it was opened on.
   React.useEffect(() => closeDialog(), [key])
   React.useEffect(() => {
-    document.title =
-      route.page === "desktop" ? "Desktop · Bilskirnir" : `${pageTitles[route.page]} · Bilskirnir`
-  }, [route.page])
+    document.title = `${route.page === "desktop" ? t("nav.desktop") : pageTitle(route.page)} · Bilskirnir`
+  }, [route.page, locale])
 
   if (settings.isPending) return <Loading />
   if (settings.error) return <ConnectionFailed message={settings.error.message} />
@@ -127,7 +128,7 @@ function useDropGuard() {
     const drop = (event: DragEvent) => {
       if (!files(event)) return
       event.preventDefault()
-      toast.error("Drop files on a container card or its desktop.")
+      toast.error(t("uploads.dropHere"))
     }
     document.addEventListener("dragover", over)
     document.addEventListener("drop", drop)

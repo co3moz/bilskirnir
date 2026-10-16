@@ -5,7 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { LanguageSelect } from "@/components/language-menu"
 import { api } from "@/lib/api"
+import { t } from "@/lib/i18n"
 import { queryClient, signedIn } from "@/lib/queries"
 
 export function LoginPage() {
@@ -41,14 +43,14 @@ export function LoginPage() {
         </a>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Sign in</CardTitle>
-            <CardDescription>Use the administrator account of this installation.</CardDescription>
+            <CardTitle className="text-xl">{t("login.title")}</CardTitle>
+            <CardDescription>{t("login.description")}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit}>
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor={`${id}-username`}>Username</FieldLabel>
+                  <FieldLabel htmlFor={`${id}-username`}>{t("login.username")}</FieldLabel>
                   <Input
                     id={`${id}-username`}
                     autoComplete="username"
@@ -59,7 +61,7 @@ export function LoginPage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor={`${id}-password`}>Password</FieldLabel>
+                  <FieldLabel htmlFor={`${id}-password`}>{t("login.password")}</FieldLabel>
                   <Input
                     id={`${id}-password`}
                     type="password"
@@ -72,12 +74,13 @@ export function LoginPage() {
                 <FieldError>{error}</FieldError>
                 <Button type="submit" disabled={busy}>
                   {busy && <Spinner data-icon="inline-start" />}
-                  Sign in
+                  {t("login.submit")}
                 </Button>
               </FieldGroup>
             </form>
           </CardContent>
         </Card>
+        <LanguageSelect className="self-center" />
       </div>
     </main>
   )

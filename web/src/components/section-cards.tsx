@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { jobActive, jobNames, limitTotals, memory, needsAttention, stateLabels } from "@/lib/format"
+import { jobActive, jobName, limitTotals, memory, needsAttention, stateLabel } from "@/lib/format"
+import { formatNumber, plural, t } from "@/lib/i18n"
 import { useContainers, useJobs, useSettings, useSystem } from "@/lib/queries"
 
 function Metric({
@@ -66,66 +67,80 @@ export function SectionCards() {
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
       <Metric
-        label="Containers"
+        label={t("nav.containers")}
         value={containers?.length}
         badge={
           <Badge variant="outline">
             <RiComputerLine />
-            {running} running
+            {t("dashboard.running", { count: formatNumber(running) })}
           </Badge>
         }
         line={
           attention
-            ? `${attention} ${attention === 1 ? "needs" : "need"} attention`
-            : `${stopped} stopped`
+            ? plural(attention, {
+                one: "dashboard.attention.one",
+                other: "dashboard.attention.other",
+              })
+            : t("dashboard.stopped", { count: formatNumber(stopped) })
         }
-        hint="Containers managed on this host"
+        hint={t("dashboard.containersHint")}
       />
       <Metric
-        label="Jobs in progress"
+        label={t("dashboard.jobsInProgress")}
         value={jobs ? active : undefined}
         badge={
           <Badge variant="outline" className={failedToday ? "text-destructive" : undefined}>
             <RiPulseLine />
-            {failedToday ? `${failedToday} failed today` : "No failures today"}
+            {failedToday
+              ? t("dashboard.failedToday", { count: formatNumber(failedToday) })
+              : t("dashboard.noFailures")}
           </Badge>
         }
         line={
           latest
-            ? `Last: ${jobNames[latest.kind] ?? latest.kind} · ${stateLabels[latest.status] ?? latest.status}`
-            : "No jobs yet"
+            ? t("dashboard.lastJob", {
+                job: jobName(latest.kind),
+                state: stateLabel(latest.status),
+              })
+            : t("dashboard.noJobs")
         }
-        hint="From the latest 100 jobs"
+        hint={t("dashboard.jobsHint")}
       />
       <Metric
-        label="Processors"
-        value={system ? (known ? system.cpus : "Unknown") : undefined}
+        label={t("dashboard.processors")}
+        value={system ? (known ? system.cpus : t("common.unknown")) : undefined}
         badge={
           <Badge variant="outline">
             <RiCpuLine />
-            {settings?.gpu_enabled ? "GPU ready" : "CPU only"}
+            {settings?.gpu_enabled ? t("dashboard.gpuReady") : t("dashboard.cpuOnly")}
           </Badge>
         }
         line={
-          limits.cpus ? `${limits.cpus} CPUs under container limits` : "No container CPU limits"
+          limits.cpus
+            ? t("dashboard.cpuLimits", { count: formatNumber(limits.cpus) })
+            : t("dashboard.noCpuLimits")
         }
-        hint={known ? `Docker ${system?.version ?? ""}` : (system?.error ?? "Docker host")}
+        hint={
+          known ? `Docker ${system?.version ?? ""}` : (system?.error ?? t("dashboard.dockerHost"))
+        }
       />
       <Metric
-        label="Memory"
+        label={t("dashboard.memory")}
         value={system ? memory(system.memory_bytes) : undefined}
         badge={
           <Badge variant="outline">
             <RiRam2Line />
-            {known ? `${system?.containers ?? 0} containers` : "Unavailable"}
+            {known
+              ? t("dashboard.dockerContainers", { count: formatNumber(system?.containers ?? 0) })
+              : t("dashboard.unavailable")}
           </Badge>
         }
         line={
           limits.memoryMb
-            ? `${memory(limits.memoryMb * 1024 ** 2)} under container limits`
-            : "No container memory limits"
+            ? t("dashboard.memoryLimits", { size: memory(limits.memoryMb * 1024 ** 2) })
+            : t("dashboard.noMemoryLimits")
         }
-        hint="Host memory reported by Docker"
+        hint={t("dashboard.memoryHint")}
       />
     </div>
   )

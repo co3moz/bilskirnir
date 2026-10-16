@@ -1,0 +1,4 @@
+import { en, type Messages } from "./en"
+
+// Not translated yet: the English catalog stands in.
+export const tr: Messages = { ...en }

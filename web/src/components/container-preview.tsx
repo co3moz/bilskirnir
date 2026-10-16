@@ -3,6 +3,7 @@ import { RiComputerLine } from "@remixicon/react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
+import { t } from "@/lib/i18n"
 import { useContainers } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
 
@@ -25,7 +26,7 @@ export function ContainerPreview({ item, className }: { item: ContainerItem; cla
     >
       <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
         <RiComputerLine className="size-6 opacity-60" />
-        {running ? "Loading preview" : "Container stopped"}
+        {running ? t("containers.loadingPreview") : t("containers.stopped")}
       </div>
       {shown && (
         <img
