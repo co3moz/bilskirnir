@@ -898,17 +898,19 @@ try:
     tagged = json.loads(docker("image", "inspect", loaded["reference"]))[0]
     assert tagged["RepoTags"] == [loaded["reference"]] and tagged["Config"]["Labels"]["io.wsl-desktop.test"] == tag, tagged["RepoTags"]
     # An archive without a desktop image is refused before Docker may register anything.
-    refused = os.path.join(archive_dir, "refused.tar.gz")
-    synthetic_archive(refused, {"io.wsl-desktop.test-refused": tag}, [f"wsld-archive-refused:{tag}"])
+    refused_archive = os.path.join(archive_dir, "refused.tar.gz")
+    synthetic_archive(refused_archive, {"io.wsl-desktop.test-refused": tag}, [f"wsld-archive-refused:{tag}"])
     try:
-        import_archive(refused)
+        import_archive(refused_archive)
         raise AssertionError("an archive without a desktop image was accepted")
     except urllib.error.HTTPError as error:
         assert error.code == 400 and "desktop image" in json.loads(error.read())["error"]
     assert not docker("image", "ls", "-q", "--filter", f"label=io.wsl-desktop.test-refused={tag}").strip()
     shutil.rmtree(archive_dir)
     print("PASS snapshot archive export/import keeps metadata and never applies names from an archive", flush=True)
-    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\nprintf SLOW_STARTED\nsleep 20\nprintf SLOW_FINISHED\n"})
+    # BuildKit holds a line without its newline until the step ends, so the marker needs one to
+    # reach the job log while the script still sleeps.
+    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\necho SLOW_STARTED\nsleep 20\necho SLOW_FINISHED\n"})
     wait_for(lambda: "SLOW_STARTED" in api(f"jobs/{slow['job_id']}")["log"])
     started = time.monotonic()
     job(api(f"containers/{clone_id}/action", {"action": "stop"}))
