@@ -1,6 +1,7 @@
 import * as React from "react"
 import { RiComputerLine, RiAddLine } from "@remixicon/react"
 
+import { JobStages } from "@/components/job-stages"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -59,6 +60,8 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
   const job = useJob(id)
   const data = job.data
   const progress = data?.status === "running" ? jobProgress(data.progress) : null
+  // A job with stages, such as a script build, shows its progress under the running stage.
+  const staged = data?.stages?.length ? data : null
   const result = data?.result as
     { reference?: string; image_id?: string; container_id?: string } | null | undefined
 
@@ -80,7 +83,8 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
         </DrawerDescription>
       </DrawerHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 text-sm">
-        {progress && (
+        {staged && <JobStages job={staged} progress={progress} />}
+        {progress && !staged && (
           <div role="status" className="flex flex-col gap-2">
             {progress.max !== undefined && (
               <Progress

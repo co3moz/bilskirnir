@@ -595,6 +595,20 @@ impl App {
         args: &[String],
         input: Option<Vec<u8>>,
     ) -> Result<()> {
+        self.run_logged(id, args, input, false).await
+    }
+    /// A script build's `docker build`: its output is logged a whole line at a time, and a line
+    /// that begins a build stage starts it.
+    pub async fn docker_build_logged(&self, id: &str, args: &[String]) -> Result<()> {
+        self.run_logged(id, args, None, true).await
+    }
+    async fn run_logged(
+        &self,
+        id: &str,
+        args: &[String],
+        input: Option<Vec<u8>>,
+        staged: bool,
+    ) -> Result<()> {
         let mut child = self
             .command(args)
             .stdin(if input.is_some() {
@@ -629,10 +643,22 @@ impl App {
                 crate::process::TextDecoder::default(),
             );
             let (mut buf_a, mut buf_b) = ([0; 8192], [0; 8192]);
+            let mut lines = staged.then(<[crate::stages::Lines; 2]>::default);
+            let mut log = |stream: usize, text: String, end: bool| match &mut lines {
+                Some(lines) => {
+                    let mut whole = lines[stream].push(&text);
+                    if end {
+                        whole.push_str(&lines[stream].finish());
+                    }
+                    self.log_build_output(id, &whole)
+                }
+                None if text.is_empty() => Ok(()),
+                None => self.append_log(id, &text),
+            };
             while !a || !b {
                 tokio::select! {
-                    n = out.read(&mut buf_a), if !a => { let n=n?; a=n==0; let text=if a {dec_a.finish()} else {dec_a.push(&buf_a[..n])}; if !text.is_empty() { self.append_log(id,&text)?; } },
-                    n = err.read(&mut buf_b), if !b => { let n=n?; b=n==0; let text=if b {dec_b.finish()} else {dec_b.push(&buf_b[..n])}; if !text.is_empty() { self.append_log(id,&text)?; } },
+                    n = out.read(&mut buf_a), if !a => { let n=n?; a=n==0; let text=if a {dec_a.finish()} else {dec_a.push(&buf_a[..n])}; log(0,text,a)?; },
+                    n = err.read(&mut buf_b), if !b => { let n=n?; b=n==0; let text=if b {dec_b.finish()} else {dec_b.push(&buf_b[..n])}; log(1,text,b)?; },
                 }
             }
             let status = child.wait().await?;

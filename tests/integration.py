@@ -414,7 +414,13 @@ try:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     build_request = {"name": "offline-script-test", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
-    built = job(api("images/build", build_request))
+    build_job = api("images/build", build_request)
+    built = job(build_job)
+    # BuildKit's progress lines start each stage, and each one ends where the next begins.
+    stages = api(f"jobs/{build_job['job_id']}")["stages"]
+    assert [stage["name"] for stage in stages] == ["base", "script", "layer", "image", "cleanup"], stages
+    assert all(stage["started_at"] <= stage["finished_at"] for stage in stages), stages
+    assert all(a["finished_at"] == b["started_at"] for a, b in zip(stages, stages[1:])), stages
     # The exported configuration is the request again; lists and job results leave the script out.
     assert built["build"] == {"base_image": build_request["base_image"], "internet": False}, built
     assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
@@ -968,6 +974,9 @@ try:
     bad=api("images/build",{"name":"failed-script","base_image":xfce["reference"],"internet":False,"script":"echo EXPECTED_SCRIPT_FAILURE\nexit 17\n"})
     failed=wait_for(lambda: (j if (j := api(f"jobs/{bad['job_id']}"))["status"] not in ("queued","running") else None))
     assert failed["status"]=="failed" and "EXPECTED_SCRIPT_FAILURE" in failed["log"],failed
+    # The script's stage is the last one started, so the panel shows where the build stopped.
+    assert [s["name"] for s in failed["stages"] if "started_at" in s]==["base","script"],failed["stages"]
+    assert "Stage 2/5: Running the setup script\n" in failed["log"],failed["log"]
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{bad['job_id']}")==b""
     assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)

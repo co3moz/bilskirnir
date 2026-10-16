@@ -62,6 +62,7 @@ where
         log: String::new(),
         result: None,
         progress: None,
+        stages: Vec::new(),
     };
     app.db.put("job", &id, &job)?;
     let lock = exclusive.then(|| app.resource_lock(&resource));
@@ -90,13 +91,19 @@ where
                 .await;
         let result = result.unwrap_or_else(|_| Err(anyhow::anyhow!("Job ended unexpectedly")));
         // Includes failures during context preparation and panics; cleanup cannot depend on the script succeeding.
-        if job.kind == "build"
-            && let Err(e) = app.cleanup_build(&task_id).await
-        {
-            let _ = app.append_log(&task_id, &format!("Build cleanup: {e:#}"));
+        if job.kind == "build" {
+            // A failed build's last stage stays the one it failed in.
+            if result.is_ok() {
+                let _ = app.begin_stage(&task_id, "cleanup");
+            }
+            if let Err(e) = app.cleanup_build(&task_id).await {
+                let _ = app.append_log(&task_id, &format!("Build cleanup: {e:#}"));
+            }
         }
         job = app.db.get("job", &task_id).unwrap_or(job);
-        job.finished_at = Some(now());
+        let finished = now();
+        job.finished_at = Some(finished);
+        job.finish_stages(finished);
         job.progress = None;
         let reported = match result {
             Ok(value) => {

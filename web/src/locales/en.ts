@@ -174,6 +174,18 @@ export const en = {
   "progress.received": "{size} received",
   "progress.receivedOf": "{current} of {total} received",
 
+  "stage.base": "Preparing the base image",
+  "stage.script": "Running the setup script",
+  "stage.layer": "Saving the image layer",
+  "stage.image": "Writing and tagging the image",
+  "stage.cleanup": "Cleaning up",
+  "stages.title": "Stages",
+  "stages.total": "Total",
+  "stages.pending": "Not started",
+  "stages.skipped": "Skipped",
+  "stages.layerHint":
+    "Docker reports no progress while it saves the layer. A large change can take several minutes.",
+
   "restart.field.resolution": "resolution",
   "restart.field.gpu": "GPU",
   "restart.field.audio": "audio",

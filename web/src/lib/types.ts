@@ -161,6 +161,13 @@ export type DownloadProgress = {
   transfer?: "export" | "import"
 }
 
+/** A named part of a job, such as a script build's layer save; times are the manager's seconds. */
+export type JobStage = {
+  name: string
+  started_at?: number | null
+  finished_at?: number | null
+}
+
 export type Job = {
   id: string
   kind: string
@@ -171,6 +178,8 @@ export type Job = {
   log: string
   result?: Record<string, unknown> | null
   progress?: DownloadProgress | null
+  /** Every stage of a job that reports them, in order; one that has not started has no times. */
+  stages?: JobStage[]
 }
 
 export type Settings = {

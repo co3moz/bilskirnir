@@ -219,6 +219,52 @@ export function jobProgress(progress?: DownloadProgress | null): DownloadSummary
   }
 }
 
+/** A stage of a job in words; one this release does not know as the manager named it. */
+export function stageLabel(name: string) {
+  const key = `stage.${name}`
+  return has(key) ? t(key) : name
+}
+
+export type StageState = "done" | "running" | "failed" | "pending" | "skipped"
+export type StageRow = { name: string; label: string; state: StageState; seconds: number | null }
+
+/**
+ * A job's stages as the job panel lists them, with the time each took and the whole run's. Stages
+ * only move forward, so one that did not start before the last started one was skipped, and the
+ * last started stage of a failed or interrupted job is where it stopped. A running stage counts
+ * up to `now`, in seconds like the manager's times.
+ */
+export function jobStages(job: Pick<Job, "status" | "stages" | "finished_at">, now: number) {
+  const stages = job.stages ?? []
+  const active = jobActive(job)
+  const stopped = job.status === "failed" || job.status === "interrupted"
+  const end = active ? now : (job.finished_at ?? now)
+  let last = -1
+  stages.forEach((stage, index) => {
+    if (stage.started_at != null) last = index
+  })
+  const rows = stages.map(({ name, started_at, finished_at }, index): StageRow => {
+    const label = stageLabel(name)
+    if (started_at == null) {
+      const skipped = index < last || job.status === "completed"
+      return { name, label, state: skipped ? "skipped" : "pending", seconds: null }
+    }
+    const seconds = Math.max(0, (finished_at ?? end) - started_at)
+    if (index === last && (stopped || (!active && finished_at == null)))
+      return { name, label, state: "failed", seconds }
+    return { name, label, state: finished_at == null ? "running" : "done", seconds }
+  })
+  const first = stages.find((stage) => stage.started_at != null)?.started_at
+  return { rows, total: first == null ? null : Math.max(0, end - first) }
+}
+
+/** The stage a running job is in, in words, or nothing for a job without stages. */
+export function currentStage(job: Pick<Job, "status" | "stages">) {
+  if (job.status !== "running") return undefined
+  const stage = job.stages?.findLast((stage) => stage.started_at != null)
+  return stage && stageLabel(stage.name)
+}
+
 export type ImageChoice = { value: string; label: string; disabled: boolean }
 
 type Choosable = Pick<
