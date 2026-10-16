@@ -1,6 +1,8 @@
 //! Pins down how a script build reports where it is: stages only move forward and close the one
 //! before them, BuildKit's own progress lines start the layer and image stages while the script's
-//! output never does, and the log names each stage on a line of its own.
+//! output never does, and the log names each stage on a line of its own. A snapshot and a settings
+//! change that recreates its container report their own stages the same way, and a stage name
+//! means one step in every job.
 use super::*;
 use crate::model::Job;
 
@@ -186,13 +188,8 @@ fn build_output_names_each_stage_on_its_own_log_line() {
     }
     app.log_build_output("build", &lines.finish()).unwrap();
     let job: Job = app.db.get("job", "build").unwrap();
-    let names = job
-        .stages
-        .iter()
-        .map(|stage| (stage.name.as_str(), stage.started_at.is_some()))
-        .collect::<Vec<_>>();
     assert_eq!(
-        names,
+        begun(&job),
         [
             ("base", true),
             ("script", true),
@@ -228,9 +225,9 @@ fn build_output_names_each_stage_on_its_own_log_line() {
 /// The dashboard names each stage from its catalog and the guides list them, so a stage added here
 /// without a name there would show as its bare identifier.
 #[test]
-fn every_build_stage_is_named_in_the_interface_and_documented() {
+fn every_job_stage_is_named_in_the_interface_and_documented() {
     let catalog = include_str!("../web/src/locales/en.ts");
-    for (name, _) in BUILD_STAGES {
+    for (name, _) in JOB_STAGES.iter().flat_map(|stages| stages.iter()) {
         assert!(
             catalog.contains(&format!("\"stage.{name}\":")),
             "web/src/locales/en.ts must name the stage {name}"
@@ -247,23 +244,44 @@ fn every_build_stage_is_named_in_the_interface_and_documented() {
     }
 }
 
+/// The interface has one label per stage name, so a name shared by two jobs must be the same
+/// step in both, and a job cannot list a stage twice.
+#[test]
+fn a_stage_name_means_one_step_in_every_job() {
+    let mut labels = std::collections::HashMap::new();
+    for stages in JOB_STAGES {
+        let mut names = std::collections::HashSet::new();
+        for (name, line) in stages {
+            assert!(names.insert(name), "{name} is listed twice in one job");
+            let first = *labels.entry(name).or_insert(line);
+            assert_eq!(first, line, "{name} has two labels");
+        }
+    }
+    assert_eq!(label("commit"), "Committing the container layer");
+    assert_eq!(label("unknown"), "unknown");
+}
+
+fn begun(job: &Job) -> Vec<(&str, bool)> {
+    job.stages
+        .iter()
+        .map(|stage| (stage.name.as_str(), stage.started_at.is_some()))
+        .collect()
+}
+
+/// A manager whose Docker CLI is a shell script in a new directory, which it enters before
+/// `commands` run with the CLI's arguments.
 #[cfg(unix)]
-#[tokio::test]
-async fn a_build_job_reports_its_stages_and_where_it_failed() {
+fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!(
         "bilskirnir-stages-{}",
         uuid::Uuid::new_v4().simple()
     ));
     std::fs::create_dir_all(&dir).unwrap();
-    // A Docker CLI stand-in: images are desktop images, and a build writes the prepared output.
     let docker = dir.join("docker");
     std::fs::write(
         &docker,
-        format!(
-            "#!/bin/sh\ncd '{dir}'\ncase \"$1\" in\n  build) cat build-output >&2; exit $(cat build-status) ;;\nesac\ncase \"$1 $2\" in\n  'image inspect') echo '[{{\"Id\":\"sha256:feed\",\"Config\":{{\"Labels\":{{\"io.wsl-desktop.desktop\":\"true\"}}}}}}]' ;;\nesac\n",
-            dir = dir.display()
-        ),
+        format!("#!/bin/sh\ncd '{}'\n{commands}", dir.display()),
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -271,6 +289,59 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.data = dir.join("data");
+    (app, dir)
+}
+
+#[cfg(unix)]
+async fn finished(app: &App, started: axum::Json<serde_json::Value>) -> Job {
+    let id = started.0["job_id"].as_str().unwrap();
+    loop {
+        let job: Job = app.db.get("job", id).unwrap();
+        if job.finished_at.is_some() {
+            return job;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+}
+
+/// The container `e` as the manager records it, running in Docker as `wsld-e`.
+#[cfg(unix)]
+fn container(app: &App) {
+    let env = crate::model::Container {
+        id: "e".into(),
+        container: "wsld-e".into(),
+        private_network: "wsld-e-private".into(),
+        egress_network: "wsld-e-egress".into(),
+        source_image_id: "sha256:desktop".into(),
+        created_at: 1,
+        spec: serde_json::from_value(
+            serde_json::json!({"name": "Work", "image": "example/desktop:1"}),
+        )
+        .unwrap(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(crate::model::CONTAINERS, "e", &env).unwrap();
+}
+
+#[cfg(unix)]
+const CONTAINER_JSON: &str = r#"{"Id":"c0ffee","Config":{"Labels":{"io.wsl-desktop.managed":"true","io.wsl-desktop.environment":"e"}},"State":{"Running":RUNNING}}"#;
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_build_job_reports_its_stages_and_where_it_failed() {
+    // Images are desktop images, and a build writes the prepared output.
+    let (app, dir) = fake_docker(
+        r#"case "$1" in
+  build) cat build-output >&2; exit $(cat build-status) ;;
+esac
+case "$1 $2" in
+  'image inspect') echo '[{"Id":"sha256:feed","Config":{"Labels":{"io.wsl-desktop.desktop":"true"}}}]' ;;
+esac
+"#,
+    );
     let run = |output: &str, status: u8| {
         std::fs::write(dir.join("build-output"), output).unwrap();
         std::fs::write(dir.join("build-status"), status.to_string()).unwrap();
@@ -286,14 +357,7 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
             let started = crate::api::build(axum::extract::State(app.clone()), axum::Json(body))
                 .await
                 .unwrap();
-            let id = started.0["job_id"].as_str().unwrap().to_owned();
-            loop {
-                let job: Job = app.db.get("job", &id).unwrap();
-                if job.finished_at.is_some() {
-                    break job;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
+            finished(&app, started).await
         }
     };
 
@@ -315,11 +379,7 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
     .await;
     assert_eq!(failed.status, "failed");
     assert_eq!(
-        failed
-            .stages
-            .iter()
-            .map(|stage| (stage.name.as_str(), stage.started_at.is_some()))
-            .collect::<Vec<_>>(),
+        begun(&failed),
         [
             ("base", true),
             ("script", true),
@@ -330,5 +390,206 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
     );
     assert!(failed.stages[1].finished_at.is_some());
     assert!(!dir.join("data/builds").join(&failed.id).exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_snapshot_reports_its_stages_and_where_it_failed() {
+    let (app, dir) = fake_docker(
+        r#"case "$1 $2" in
+  'container inspect') printf '[%s]' "$(cat container.json)" ;;
+  'image inspect') echo '[{"Id":"sha256:snap","Config":{"Labels":{}}}]' ;;
+esac
+case "$1" in
+  commit) exit $(cat commit-status) ;;
+esac
+"#,
+    );
+    container(&app);
+    std::fs::write(
+        dir.join("container.json"),
+        CONTAINER_JSON.replace("RUNNING", "true"),
+    )
+    .unwrap();
+    let run = |status: u8| {
+        std::fs::write(dir.join("commit-status"), status.to_string()).unwrap();
+        let app = app.clone();
+        async move {
+            let body = crate::api::Snapshot {
+                name: "Staged".into(),
+                description: String::new(),
+            };
+            let started = crate::api::snapshot(
+                axum::extract::State(app.clone()),
+                axum::extract::Path("e".into()),
+                axum::Json(body),
+            )
+            .await
+            .unwrap();
+            finished(&app, started).await
+        }
+    };
+
+    let saved = run(0).await;
+    assert_eq!(saved.status, "completed", "{}", saved.log);
+    assert_eq!(
+        begun(&saved),
+        [("check", true), ("commit", true), ("record", true)]
+    );
+    // Each stage ends where the next begins, and the last one with the job.
+    assert_eq!(saved.stages[0].finished_at, saved.stages[1].started_at);
+    assert_eq!(saved.stages[1].finished_at, saved.stages[2].started_at);
+    assert_eq!(saved.stages[2].finished_at, saved.finished_at);
+    let log = saved.log.lines().collect::<Vec<_>>();
+    assert_eq!(log[0], "Stage 1/3: Checking the container");
+    assert_eq!(log[1], "Stage 2/3: Committing the container layer");
+    assert!(
+        log[2].starts_with("Committing container changes."),
+        "{log:?}"
+    );
+    assert!(saved.log.contains("Stage 3/3: Saving the image record\n"));
+
+    // A commit Docker refused is where the snapshot stopped, and no image record follows it.
+    let failed = run(1).await;
+    assert_eq!(failed.status, "failed");
+    assert_eq!(
+        begun(&failed),
+        [("check", true), ("commit", true), ("record", false)]
+    );
+    assert_eq!(failed.stages[1].finished_at, failed.finished_at);
+    assert!(
+        app.db
+            .get::<crate::model::ImageRecord>("image", &failed.id)
+            .is_err()
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_recreating_settings_change_reports_its_stages_and_where_it_failed() {
+    // Only the container itself exists, so the name kept for its predecessor is free.
+    let (app, dir) = fake_docker(
+        r#"echo "$*" >> calls
+case "$1 $2 $3" in
+  'container inspect wsld-e') printf '[%s]' "$(cat container.json)"; exit ;;
+  'container inspect '*) exit 1 ;;
+  'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
+esac
+case "$1" in
+  create) exit $(cat create-status) ;;
+esac
+"#,
+    );
+    container(&app);
+    let run = |resolution: &'static str, running: bool, status: u8| {
+        std::fs::write(
+            dir.join("container.json"),
+            CONTAINER_JSON.replace("RUNNING", &running.to_string()),
+        )
+        .unwrap();
+        std::fs::write(dir.join("create-status"), status.to_string()).unwrap();
+        std::fs::write(dir.join("calls"), "").unwrap();
+        let app = app.clone();
+        async move {
+            let started = crate::api::update_settings(
+                axum::extract::State(app.clone()),
+                axum::extract::Path("e".into()),
+                axum::Json(serde_json::json!({"resolution": resolution})),
+            )
+            .await
+            .unwrap();
+            finished(&app, started).await
+        }
+    };
+    let calls = || std::fs::read_to_string(dir.join("calls")).unwrap();
+
+    let recreated = run("1280x720", true, 0).await;
+    assert_eq!(recreated.status, "completed", "{}", recreated.log);
+    assert_eq!(
+        begun(&recreated),
+        [
+            ("stop", true),
+            ("commit", true),
+            ("create", true),
+            ("cleanup", true)
+        ]
+    );
+    for pair in recreated.stages.windows(2) {
+        assert_eq!(
+            pair[0].finished_at, pair[1].started_at,
+            "{:?}",
+            recreated.stages
+        );
+    }
+    assert_eq!(recreated.stages[3].finished_at, recreated.finished_at);
+    let log = recreated.log.lines().collect::<Vec<_>>();
+    assert_eq!(log[0], "Stage 1/4: Stopping the container");
+    assert_eq!(log[1], "Stopping the container. Open applications close.");
+    assert!(
+        recreated
+            .log
+            .contains("Stage 2/4: Committing the container layer\n")
+    );
+    assert!(
+        recreated
+            .log
+            .contains("Stage 3/4: Creating the new container\n")
+    );
+    assert!(recreated.log.contains("Stage 4/4: Cleaning up\n"));
+
+    // A stopped container has nothing to stop, so that stage is skipped.
+    let stopped = run("1600x900", false, 0).await;
+    assert_eq!(stopped.status, "completed", "{}", stopped.log);
+    assert_eq!(
+        begun(&stopped),
+        [
+            ("stop", false),
+            ("commit", true),
+            ("create", true),
+            ("cleanup", true)
+        ]
+    );
+    assert!(
+        !calls().lines().any(|call| call.starts_with("stop ")),
+        "{}",
+        calls()
+    );
+    assert!(
+        stopped
+            .log
+            .starts_with("Stage 2/4: Committing the container layer\n")
+    );
+
+    // A new container Docker refused is where the change stopped; the previous one is back.
+    let failed = run("1024x768", true, 1).await;
+    assert_eq!(failed.status, "failed");
+    assert_eq!(
+        begun(&failed),
+        [
+            ("stop", true),
+            ("commit", true),
+            ("create", true),
+            ("cleanup", false)
+        ]
+    );
+    assert_eq!(failed.stages[2].finished_at, failed.finished_at);
+    assert!(calls().contains("rename c0ffee wsld-e\n"), "{}", calls());
+
+    // A change that applies in place lists no stages.
+    let live = finished(
+        &app,
+        crate::api::update_settings(
+            axum::extract::State(app.clone()),
+            axum::extract::Path("e".into()),
+            axum::Json(serde_json::json!({"name": "Renamed"})),
+        )
+        .await
+        .unwrap(),
+    )
+    .await;
+    assert_eq!(live.status, "completed", "{}", live.log);
+    assert!(live.stages.is_empty());
     std::fs::remove_dir_all(&dir).unwrap();
 }

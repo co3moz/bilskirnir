@@ -64,15 +64,39 @@ test("a job without stages lists none", () => {
   })
 })
 
-// The manager names the stages of a script build; each needs words in the interface, and words
-// for a stage the manager no longer reports are left over.
+test("a settings change of a stopped container skips stopping it while it commits", () => {
+  const stages: JobStage[] = [
+    { name: "stop" },
+    { name: "commit", started_at: 100 },
+    { name: "create" },
+    { name: "cleanup" },
+  ]
+  assert.deepEqual(states("running", stages, null, 160), [
+    ["skipped", null],
+    ["running", 60],
+    ["pending", null],
+    ["pending", null],
+  ])
+  assert.equal(currentStage({ status: "running", stages }), "Committing the container layer")
+})
+
+// The manager names the stages of every job that reports them; each needs words in the
+// interface, the same words its log uses, and words for a stage the manager no longer reports
+// are left over.
 test("the interface names exactly the stages the manager reports", () => {
   const source = readFileSync(new URL("../src/stages.rs", import.meta.url), "utf8")
-  const list = /BUILD_STAGES[^=]*=\s*\[([\s\S]*?)\];/.exec(source)?.[1]
-  assert.ok(list, "src/stages.rs must declare BUILD_STAGES")
-  const reported = [...list.matchAll(/\("(\w+)",/g)].map((match) => match[1])
-  const named = Object.keys(en)
-    .filter((key) => key.startsWith("stage."))
-    .map((key) => key.slice("stage.".length))
-  assert.deepEqual(named, reported)
+  const list = (name: string) => {
+    const items = new RegExp(String.raw`const ${name}\b[^=]*=\s*\[([\s\S]*?)\];`).exec(source)?.[1]
+    assert.ok(items, `src/stages.rs must declare ${name}`)
+    return items
+  }
+  const reported = new Map<string, string>()
+  for (const [, job] of list("JOB_STAGES").matchAll(/&(\w+)/g))
+    for (const [, name, line] of list(job).matchAll(/\("(\w+)",\s*"([^"]*)"\)/g))
+      reported.set(name, line)
+  assert.ok(reported.has("base") && reported.has("commit"), [...reported.keys()].join())
+  const named = Object.entries(en)
+    .filter(([key]) => key.startsWith("stage."))
+    .map(([key, text]) => [key.slice("stage.".length), text])
+  assert.deepEqual(named.sort(), [...reported].sort())
 })

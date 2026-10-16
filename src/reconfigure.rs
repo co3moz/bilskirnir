@@ -227,10 +227,13 @@ impl App {
                 "{previous} is left from an interrupted settings change; check its files and remove it before changing settings again"
             );
         }
+        self.plan_stages(job_id, &crate::stages::RECREATE_STAGES)?;
         if running {
+            self.begin_stage(job_id, "stop")?;
             self.append_log(job_id, "Stopping the container. Open applications close.")?;
             self.docker(&["stop", "--time", "30", &old_id]).await?;
         }
+        self.begin_stage(job_id, "commit")?;
         self.append_log(
             job_id,
             "Saving the container's files for the new container. Named volumes stay where they are.",
@@ -269,6 +272,7 @@ impl App {
             reference: reference.clone(),
         });
         env.spec = spec;
+        self.begin_stage(job_id, "create")?;
         let replaced = async {
             self.docker_args(&self.container_args(&env)).await?;
             if env.spec.internet {
@@ -304,6 +308,7 @@ impl App {
         env.last_error = None;
         self.db.put(CONTAINERS, &env.id, &env)?;
         self.remove_container_records(&env.id)?;
+        self.begin_stage(job_id, "cleanup")?;
         self.docker(&["rm", "--force", &old_id])
             .await
             .with_context(|| {

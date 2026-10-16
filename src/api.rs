@@ -597,9 +597,12 @@ pub async fn snapshot(
         "snapshot",
         format!("container:{env_id}"),
         move |app, id| async move {
+            app.plan_stages(&id, &crate::stages::SNAPSHOT_STAGES)?;
+            app.begin_stage(&id, "check")?;
             let env = app.container(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
             let container = app.owned(&env).await?;
             let reference = format!("bilskirnir/snapshot:{id}");
+            app.begin_stage(&id, "commit")?;
             app.append_log(&id,"Committing container changes. Volumes, /run, /tmp and running application state are excluded.")?;
             app.docker_logged(
                 &id,
@@ -615,6 +618,7 @@ pub async fn snapshot(
                 ],
             )
             .await?;
+            app.begin_stage(&id, "record")?;
             let info = app.inspect("image", &reference).await?;
             // A container from the snapshot asks for the same parameters again.
             let compose = app.pinned_compose(&env_id);

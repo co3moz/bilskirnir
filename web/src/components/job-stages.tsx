@@ -21,6 +21,9 @@ const icons: Record<StageState, React.ReactNode> = {
   skipped: <RiIndeterminateCircleLine className="text-muted-foreground" />,
 }
 
+/** Stages in which Docker saves a layer and reports nothing until it is done. */
+const layerStages = new Set(["layer", "commit"])
+
 const stateText = (state: StageState) =>
   ({
     done: t("state.completed"),
@@ -96,7 +99,7 @@ export function JobStages({
                   <p className="text-xs text-muted-foreground">{progress.text}</p>
                 </div>
               )}
-              {row.state === "running" && !progress && row.name === "layer" && (
+              {row.state === "running" && !progress && layerStages.has(row.name) && (
                 <p className="pl-6 text-xs text-muted-foreground">{t("stages.layerHint")}</p>
               )}
             </li>
