@@ -45,10 +45,12 @@ COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
 # A package installs the manager release it was built for, however many newer ones exist by then;
 # `bilskirnir update` moves an installation forward. The first start copies this file to .env.
+# The checksums let an update tell installation files edited by hand from the ones shipped here.
 ARG BILSKIRNIR_VERSION
 RUN test -n "$BILSKIRNIR_VERSION" \
     && sed -i "s|^MANAGER_IMAGE=.*|MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:$BILSKIRNIR_VERSION|" /opt/bilskirnir/.env.example \
-    && grep -qFx "MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:$BILSKIRNIR_VERSION" /opt/bilskirnir/.env.example
+    && grep -qFx "MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:$BILSKIRNIR_VERSION" /opt/bilskirnir/.env.example \
+    && cd /opt/bilskirnir && sha256sum compose.yml deploy/Caddyfile .env.example > .shipped.sha256
 RUN dockerd --validate --config-file /etc/docker/daemon.json \
     && systemctl enable bilskirnir-firewall.service \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id

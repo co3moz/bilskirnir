@@ -1,13 +1,18 @@
-"""The WSL package's `bilskirnir update`: which manager release it moves an installation to, and
-which desktop images it refreshes for that manager.
+"""The WSL package's `bilskirnir update`: which manager release it moves an installation to, which
+desktop images it refreshes for that manager, and how it brings the installation files of that
+release without losing edits made by hand.
 
 The script runs against a temporary installation directory with stand-ins for docker, curl,
-sudo and systemctl on PATH, each recording its arguments.
+sudo and systemctl on PATH, each recording its arguments. `docker run` serves the manager
+image's files from a directory standing for its root filesystem.
 """
 
+import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -15,12 +20,14 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "wsl/bilskirnir"
 REPOSITORY = "ghcr.io/co3moz/bilskirnir"
+FILES = ("compose.yml", "deploy/Caddyfile", ".env.example")
 
 STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
 case "$(basename "$0") $*" in
     "curl "*) [[ -n ${RELEASE:-} ]] || exit 22; printf '{\\n  "url": "x",\\n  "tag_name": "%s",\\n  "name": "%s"\\n}\\n' "$RELEASE" "$RELEASE" ;;
     "docker pull "*) exit "${PULL_STATUS:-0}" ;;
+    "docker run "*) exec cat "$IMAGE_ROOT${*: -1}" ;;
     "docker compose exec "*) printf '[{"reference": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}]\\n' ;;
     "docker compose ps "*) echo manager-container ;;
     "docker inspect "*) printf '%s\\n' "${RELEASE_LABEL-<no value>}" ;;
@@ -30,6 +37,11 @@ case "$(basename "$0") $*" in
 esac
 exit 0
 """
+
+
+def shipped(files):
+    """The checksum file the package writes with sha256sum."""
+    return "".join(f"{hashlib.sha256(content.encode()).hexdigest()}  {name}\n" for name, content in files.items())
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
@@ -49,7 +61,37 @@ class UpdateTest(unittest.TestCase):
             (bin_dir / name).write_text(STUB)
             (bin_dir / name).chmod(0o755)
         self.calls = self.dir / "calls"
-        self.env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "CALLS": str(self.calls)}
+        self.image = self.dir / "image"
+        self.env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "CALLS": str(self.calls),
+            "IMAGE_ROOT": str(self.image),
+        }
+        # The installation as the 0.2.0 package left it, and the files the newer manager bundles.
+        self.old = {
+            "compose.yml": "services:\n  manager:\n    environment:\n      AUTH_MODE: x\n",
+            "deploy/Caddyfile": "https://{$DESKTOP_HOST} {\n}\n",
+            ".env.example": f"PORT=8080\nMANAGER_IMAGE={REPOSITORY}:0.2.0\n",
+        }
+        self.write_files(self.install, self.old)
+        (self.install / "compose.yml").chmod(0o640)
+        (self.install / ".shipped.sha256").write_text(shipped(self.old))
+        self.new = {
+            "compose.yml": "services:\n  manager:\n    environment:\n      AUTH_MODE: x\n      NEW_SETTING: y\n",
+            "deploy/Caddyfile": self.old["deploy/Caddyfile"],
+            ".env.example": f"PORT=8080\nMANAGER_IMAGE={REPOSITORY}:latest\nNEW_SETTING=y\n",
+        }
+        self.write_files(self.image / "app/install", self.new)
+
+    @staticmethod
+    def write_files(directory, files):
+        for name, content in files.items():
+            (directory / name).parent.mkdir(parents=True, exist_ok=True)
+            (directory / name).write_text(content)
+
+    def installed(self, name):
+        return (self.install / name).read_text()
 
     def update(self, env_file, release="v0.3.0", pull_status=0, **stubs):
         (self.install / ".env").write_text(env_file)
@@ -72,7 +114,7 @@ class UpdateTest(unittest.TestCase):
         result, env_file, calls = self.update(before)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(env_file, before)
-        self.assertNotIn(f"docker pull {REPOSITORY}:0.3.0", calls)
+        self.assertNotIn("moves", result.stdout)
         self.assertIn("docker compose up -d", calls)
 
     def test_a_release_newer_than_the_newest_one_is_never_moved_back(self):
@@ -80,7 +122,8 @@ class UpdateTest(unittest.TestCase):
         result, env_file, calls = self.update(before, release="v0.9.1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(env_file, before)
-        self.assertFalse(any(call.startswith("docker pull ghcr.io/co3moz/bilskirnir:") for call in calls))
+        self.assertNotIn(f"docker pull {REPOSITORY}:0.9.1", calls)
+        self.assertIn(f" {REPOSITORY}:0.10.0 /app/install/compose.yml", next(c for c in calls if c.startswith("docker run ")))
 
     def test_an_image_chosen_by_hand_is_only_pulled_again(self):
         for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/bilskirnir:0.1.0"):
@@ -107,6 +150,8 @@ class UpdateTest(unittest.TestCase):
                 result, env_file, calls = self.update(before, release=release, pull_status=pull_status)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(env_file, before)
+                self.assertFalse(any(call.startswith("docker run ") for call in calls))
+                self.assertEqual(self.installed("compose.yml"), self.old["compose.yml"])
                 self.assertNotIn("docker compose up -d", calls)
 
     def test_downloaded_desktops_follow_the_release_of_the_manager(self):
@@ -131,6 +176,75 @@ class UpdateTest(unittest.TestCase):
                 self.assertIn(f"docker pull {desktop}:24.04", calls)
                 self.assertFalse(any(call.startswith("docker tag ") for call in calls))
 
+
+    def test_the_installation_files_come_from_the_new_manager_before_it_starts(self):
+        result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+        self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+        self.assertEqual(self.installed("deploy/Caddyfile"), self.new["deploy/Caddyfile"])
+        # Like the package's, the example names the release the installation runs.
+        example = f"PORT=8080\nMANAGER_IMAGE={REPOSITORY}:0.3.0\nNEW_SETTING=y\n"
+        self.assertEqual(self.installed(".env.example"), example)
+        self.assertEqual(self.installed(".shipped.sha256"), shipped({**self.new, ".env.example": example}))
+        self.assertEqual(stat.S_IMODE((self.install / "compose.yml").stat().st_mode), 0o640)
+        self.assertEqual([p.name for p in self.install.rglob("*") if p.suffix in (".bak", ".new")], [])
+        copies = [i for i, call in enumerate(calls) if call.startswith("docker run ")]
+        self.assertEqual(len(copies), len(FILES))
+        for i in copies:
+            self.assertIn(f" {REPOSITORY}:0.3.0 /app/install/", calls[i])
+        self.assertLess(calls.index(f"docker pull {REPOSITORY}:0.3.0"), copies[0])
+        self.assertLess(copies[-1], calls.index("docker compose pull"))
+        self.assertIn("Updated compose.yml.", result.stdout)
+        self.assertNotIn("Updated deploy/Caddyfile.", result.stdout)
+
+    def test_a_file_edited_by_hand_is_saved_before_a_new_release_replaces_it(self):
+        edited = self.old["compose.yml"] + '    ports: ["0.0.0.0:9000:8080"]\n'
+        (self.install / "compose.yml").write_text(edited)
+        result, _, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+        self.assertEqual(self.installed("compose.yml.bak"), edited)
+        self.assertEqual(stat.S_IMODE((self.install / "compose.yml.bak").stat().st_mode), 0o640)
+        self.assertIn("compose.yml.bak", result.stdout)
+        # The next release finds the file as the update left it, replaces it and keeps the saved copy.
+        newer = self.new["compose.yml"] + "      NEWER_SETTING: z\n"
+        (self.image / "app/install/compose.yml").write_text(newer)
+        result, _, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n", release="v0.4.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.installed("compose.yml"), newer)
+        self.assertEqual(self.installed("compose.yml.bak"), edited)
+        self.assertNotIn(".bak", result.stdout)
+
+    def test_a_file_edited_by_hand_stays_when_the_release_brings_the_same_file(self):
+        edited = self.old["deploy/Caddyfile"].replace("{\n}", "{\n    tls internal\n}")
+        (self.install / "deploy/Caddyfile").write_text(edited)
+        result, _, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.installed("deploy/Caddyfile"), edited)
+        self.assertFalse((self.install / "deploy/Caddyfile.bak").exists())
+        self.assertNotIn("Caddyfile", result.stdout)
+        self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+
+    def test_without_checksums_a_differing_file_is_saved_first(self):
+        (self.install / ".shipped.sha256").unlink()
+        result, _, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+        self.assertEqual(self.installed("compose.yml.bak"), self.old["compose.yml"])
+        self.assertFalse((self.install / "deploy/Caddyfile.bak").exists())
+        self.assertTrue((self.install / ".shipped.sha256").exists())
+
+    def test_a_manager_without_installation_files_leaves_them_as_they_are(self):
+        (self.image / "app/install/deploy/Caddyfile").unlink()
+        result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+        for name, content in self.old.items():
+            self.assertEqual(self.installed(name), content)
+        self.assertEqual(self.installed(".shipped.sha256"), shipped(self.old))
+        self.assertIn("/app/install/deploy/Caddyfile", result.stderr)
+        self.assertIn("docker compose up -d", calls)
 
 # sudoedit as root: the editor works on a copy, which is written back over the original. Like sudo,
 # it falls back to a default of its own, vi here, when none of the editor variables is set.
@@ -197,6 +311,24 @@ class PackageTest(unittest.TestCase):
         # The manager image is built from the same argument the Rust build reads for its desktops.
         self.assertIn('LABEL io.wsl-desktop.release="${BILSKIRNIR_RELEASE}"', (ROOT / "Dockerfile").read_text())
         self.assertIn('"io.wsl-desktop.release"', CLI.read_text())
+
+    def test_the_package_and_the_manager_bundle_the_files_an_update_copies(self):
+        # An update copies these from /app/install in the manager image over the package's copies, and
+        # compares them with the checksums the package records.
+        match = re.search(r"^INSTALL_FILES=\((.*)\)$", CLI.read_text(), re.M)
+        self.assertIsNotNone(match)
+        self.assertEqual(tuple(match.group(1).split()), FILES)
+        manager = (ROOT / "Dockerfile").read_text()
+        package = (ROOT / "wsl/Dockerfile").read_text()
+
+        def source(dockerfile, target):
+            copy = re.search(rf"^COPY (?:--chmod=\d+ )?(\S+) {re.escape(target)}$", dockerfile, re.M)
+            self.assertIsNotNone(copy, target)
+            return copy.group(1)
+
+        for name in FILES:
+            self.assertEqual(source(manager, f"/app/install/{name}"), source(package, f"/opt/bilskirnir/{name}"))
+        self.assertIn(f"sha256sum {' '.join(FILES)} > .shipped.sha256", package)
 
 
 if __name__ == "__main__":
