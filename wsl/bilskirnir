@@ -9,6 +9,16 @@ RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
 # The installation files every manager image bundles under /app/install. The package and each update
 # record their checksums in .shipped.sha256, which tells an update whether a file was edited by hand.
 INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
+# Every manager image bundles this command as well, and an update installs it from a newer release; see
+# update_cli. The package build and that update fill in the release the command came with, and
+# NEEDS_PACKAGE is the lowest package level it works on. An older command reads both lines from a newer
+# one before it installs it, so they keep this form.
+CLI=/usr/local/bin/bilskirnir
+CLI_VERSION=
+NEEDS_PACKAGE=1
+# The package records the level of its own files here, such as the firewall watcher and its unit. A
+# package without the file is level 1.
+PACKAGE_LEVEL=/usr/lib/wsl/package-level
 
 usage() {
     cat <<'EOF'
@@ -19,7 +29,7 @@ Usage: bilskirnir <command>
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Move the manager and its compose.yml to the newest release, pull downloaded desktop images, recreate the manager
+  update    Move the manager, its compose.yml and this command to the newest release, pull downloaded desktop images, recreate the manager
   doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
@@ -107,14 +117,55 @@ checksum() {
     sha256sum <"$1" | cut -c1-64
 }
 # Installation files belong to root, so they change through sudo: written beside the old file and
-# renamed over it, so a failed write leaves the old one whole. A file keeps its owner and mode.
+# renamed over it, so a failed write leaves the old one whole and a running command keeps reading the
+# file it started from. A file keeps its owner, and its mode unless a third argument names one.
 put_file() {
-    local target=$INSTALL/$1 mode=(-m 0644)
+    local target=$1 mode=(-m "${3:-0644}")
     if [[ -e $target ]]; then
-        mode=(-m "$(stat -c %a "$target")" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
+        mode=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
     fi
     sudo install -D "${mode[@]}" "$2" "$target.new"
     sudo mv -f "$target.new" "$target"
+}
+# The command comes only from releases, like the package's own, and never from a MANAGER_IMAGE chosen
+# by hand. That manager already runs with the Docker socket, but as a container the next change of
+# MANAGER_IMAGE replaces, while a command it installed would stay and keep running with sudo. A release
+# replaces the command when it is newer than this one, never older, and only when this package has the
+# level of files the new command needs. The new command then runs the whole update again, so the rest
+# of it follows the new release's rules. Each replacement records a newer release, which the new
+# command finds equal to its own, so the update ends.
+update_cli() {
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":} new=$tmp/bilskirnir needs level
+    if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "MANAGER_IMAGE is not a release, so the bilskirnir command stays as it is."
+        return 0
+    fi
+    if [[ $CLI_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ &&
+        $(printf '%s\n' "$release" "$CLI_VERSION" | sort -V | tail -n1) == "$CLI_VERSION" ]]; then
+        return 0
+    fi
+    if ! docker run --rm --network none --entrypoint cat "$image" /app/install/bilskirnir >"$new" 2>/dev/null ||
+        [[ ! -s $new ]]; then
+        echo "$image has no bilskirnir command; this one stays as it is." >&2
+        return 0
+    fi
+    needs=$(sed -n 's/^NEEDS_PACKAGE=\([0-9][0-9]*\)$/\1/p' "$new" | head -n1)
+    sed -i "s|^CLI_VERSION=.*|CLI_VERSION=$release|" "$new"
+    if [[ -z $needs ]] || ! grep -qFx "CLI_VERSION=$release" "$new" || ! bash -n "$new" 2>/dev/null; then
+        echo "The bilskirnir command in $image is incomplete; this one stays as it is." >&2
+        return 0
+    fi
+    level=$(cat "$PACKAGE_LEVEL" 2>/dev/null || true)
+    if ! [[ $level =~ ^[0-9]+$ ]]; then level=1; fi
+    if ((10#$needs > 10#$level)); then
+        echo "The bilskirnir command of $release needs a newer WSL package (level $needs, this one has $level), so this one stays as it is."
+        return 0
+    fi
+    put_file "$CLI" "$new" 0755
+    echo "The bilskirnir command moves from ${CLI_VERSION:-an earlier version} to $release; the update continues with it."
+    # exec skips the EXIT trap.
+    rm -rf "$tmp"
+    exec "$CLI" update
 }
 # Settings added in a release reach the manager only through the environment list in its compose.yml,
 # so an update brings the installation files of the manager it runs. A file still as it was installed
@@ -122,8 +173,6 @@ put_file() {
 # saved as <file>.bak first. .env holds the settings and is never one of them.
 update_install_files() {
     local image=$1 file new current shipped
-    tmp=$(mktemp -d)
-    trap 'rm -rf "$tmp"' EXIT
     for file in "${INSTALL_FILES[@]}"; do
         mkdir -p "$tmp/$(dirname "$file")"
         if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/$file" >"$tmp/$file" ||
@@ -147,10 +196,10 @@ update_install_files() {
             sudo cp -p "$INSTALL/$file" "$INSTALL/$file.bak"
             echo "$file had changes of your own; they are saved in $INSTALL/$file.bak. Carry over what you still need."
         fi
-        put_file "$file" "$tmp/$file"
+        put_file "$INSTALL/$file" "$tmp/$file"
         echo "Updated $file."
     done
-    put_file .shipped.sha256 "$tmp/.shipped.sha256"
+    put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
 case ${1:-help} in
     start)
@@ -199,13 +248,16 @@ case ${1:-help} in
                 image=$MANAGER_REPOSITORY:$version
             fi
         fi
-        # The installation files come from the manager about to run, so it is pulled first, and the pin
-        # moves only once its image is here.
+        # The installation files and the command come from the manager about to run, so it is pulled
+        # first, and the pin moves only once its image is here.
         docker pull "$image"
         if [[ $image != "$current" ]]; then
             set_setting MANAGER_IMAGE "$image"
             echo "The manager moves from ${pinned:-latest} to $version."
         fi
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        update_cli "$image"
         update_install_files "$image"
         compose pull
         compose up -d

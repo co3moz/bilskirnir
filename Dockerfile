@@ -30,6 +30,7 @@ COPY scripts/mcp_bridge.py /app/mcp_bridge.py
 COPY compose.ghcr.yml /app/install/compose.yml
 COPY .env.example /app/install/.env.example
 COPY deploy/Caddyfile /app/install/deploy/Caddyfile
+COPY wsl/bilskirnir /app/install/bilskirnir
 COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
 ENV DATA_DIR=/data WEB_DIR=/app/web DESKTOP_CONTEXT=/app/desktop LISTEN_ADDR=0.0.0.0:8080
 WORKDIR /app

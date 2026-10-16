@@ -59,7 +59,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services and the dashboard address. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Moves the manager and its `compose.yml` to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the desktop profiles already downloaded, then recreates the manager. |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
@@ -83,7 +83,28 @@ The package and every update record a checksum of each of these files in `/opt/b
 
 To keep your own Compose changes out of the way of updates, put them in `/opt/bilskirnir/compose.override.yml` rather than editing `compose.yml`. Compose merges that file into `compose.yml` on its own, and updates never touch it.
 
-The `bilskirnir` command and the rest of the distribution stay as the package installed them.
+### The bilskirnir command
+
+The manager image also bundles the `bilskirnir` command of its release, so fixes to `update`, `doctor` or `mcp` reach an installation without a new package. Before it copies the installation files, an update replaces `/usr/local/bin/bilskirnir` with the command of the release it moves to, but only when all of these hold:
+
+- `MANAGER_IMAGE` is a release of `ghcr.io/co3moz/bilskirnir`, as the package sets it. A manager you chose by hand, such as `latest`, a digest or a fork, already runs with access to Docker, but as a container that the next change of `MANAGER_IMAGE` replaces. A command it brought would stay after you switch back, and would keep running as you with passwordless `sudo`. With such a manager, the update says the command stays as it is.
+- The release is newer than the one the command came with. The command never moves back, not even when you set an older manager by hand.
+- The distribution has the package files the new command relies on. The package records the level of its own files, such as the firewall watcher, in `/usr/lib/wsl/package-level`, and every command names the level it needs. When a release needs a newer package, the update says so, keeps the command and updates everything else. Only a newer package brings that command, and installing one replaces the distribution together with its Docker data, see [Remove](#remove).
+- The new command is complete: it names the level it needs and passes a syntax check.
+
+The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it.
+
+The command of the 0.3.0 package and of earlier ones cannot update itself, and those packages set `MANAGER_IMAGE` to `latest`. Install the command of a newer release once by hand, replacing `1.2.0` with it:
+
+```bash
+docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:1.2.0 /app/install/bilskirnir > /tmp/bilskirnir
+```
+
+```bash
+sudo install -m 0755 /tmp/bilskirnir /usr/local/bin/bilskirnir
+```
+
+Then set `MANAGER_IMAGE` to that release, as described above, and run `bilskirnir update`. From then on, updates bring the command.
 
 ## Memory, processors and disk
 

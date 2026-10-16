@@ -153,6 +153,8 @@ The workflow uses `GITHUB_TOKEN` with package write access, separate BuildKit ca
 
 The package pins `MANAGER_IMAGE` to the version in `Cargo.toml`, or to `BILSKIRNIR_VERSION` when it is set, so a package built before its tag is published cannot download its manager yet; set `BILSKIRNIR_VERSION` to a published release to test a first start that downloads. The `checks` job refuses a `v*` tag that differs from the version in `Cargo.toml`, and the package job waits until all three images of the tag are published.
 
+The manager image bundles `wsl/bilskirnir` under `/app/install`, and `bilskirnir update` installs it from a newer release, so a change to the command reaches installed distributions with the next release. The command already installed decides from two lines of the new one, `CLI_VERSION=`, which the package build and the update fill in, and `NEEDS_PACKAGE=`, so both keep their form. `wsl/Dockerfile` records the level of the package's own files in `/usr/lib/wsl/package-level`. When the command starts relying on a package file that older packages lack or have in another form, raise that level and `NEEDS_PACKAGE` together; installations from older packages then keep their command until they install a newer package, so prefer a command that copes with the older files.
+
 ## Keep older installations working
 
 Human-facing names use Bilskirnir. Ownership labels (`io.wsl-desktop.*`), `wsld-*` resource IDs, the session cookie and API request header retain their existing identifiers. Changing them requires a migration, not a branding edit.
