@@ -1,6 +1,7 @@
 """The WSL package's `bilskirnir update`: which manager release it moves an installation to, which
-desktop images it refreshes for that manager, and how it brings the installation files of that
-release without losing edits made by hand.
+desktop images it refreshes for that manager, how it brings the installation files of that release
+without losing edits made by hand, and when it replaces the command itself with the one that
+release bundles.
 
 The script runs against a temporary installation directory with stand-ins for docker, curl,
 sudo and systemctl on PATH, each recording its arguments. `docker run` serves the manager
@@ -44,6 +45,18 @@ def shipped(files):
     return "".join(f"{hashlib.sha256(content.encode()).hexdigest()}  {name}\n" for name, content in files.items())
 
 
+def copy_source(dockerfile, target):
+    """The source of the COPY that puts a file at target, or None."""
+    copy = re.search(rf"^COPY (?:--chmod=\d+ )?(\S+) {re.escape(target)}$", dockerfile, re.M)
+    return copy and copy.group(1)
+
+
+def package_level():
+    """The level wsl/Dockerfile records for the package's own files, and where."""
+    match = re.search(r"printf '(\d+)\\n' > (\S+)", (ROOT / "wsl/Dockerfile").read_text())
+    return match and (int(match.group(1)), match.group(2))
+
+
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class UpdateTest(unittest.TestCase):
     def setUp(self):
@@ -51,10 +64,20 @@ class UpdateTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        script = CLI.read_text()
-        self.assertEqual(script.count("\nINSTALL=/opt/bilskirnir\n"), 1)
         self.cli = self.dir / "bilskirnir"
-        self.cli.write_text(script.replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.level = self.dir / "package-level"
+        self.script = CLI.read_text()
+        for line, replacement in (
+            ("INSTALL=/opt/bilskirnir", f"INSTALL={self.install}"),
+            ("CLI=/usr/local/bin/bilskirnir", f"CLI={self.cli}"),
+            ("PACKAGE_LEVEL=/usr/lib/wsl/package-level", f"PACKAGE_LEVEL={self.level}"),
+        ):
+            self.assertEqual(self.script.count(f"\n{line}\n"), 1, line)
+            self.script = self.script.replace(f"\n{line}\n", f"\n{replacement}\n")
+        # The command and the package level as the package of the installed release left them.
+        self.cli.write_text(self.command("0.2.0"))
+        self.cli.chmod(0o755)
+        self.level.write_text(f"{package_level()[0]}\n")
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
         for name in ("docker", "curl", "sudo", "systemctl"):
@@ -62,11 +85,14 @@ class UpdateTest(unittest.TestCase):
             (bin_dir / name).chmod(0o755)
         self.calls = self.dir / "calls"
         self.image = self.dir / "image"
+        self.tmp = self.dir / "tmp"
+        self.tmp.mkdir()
         self.env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "CALLS": str(self.calls),
             "IMAGE_ROOT": str(self.image),
+            "TMPDIR": str(self.tmp),
         }
         # The installation as the 0.2.0 package left it, and the files the newer manager bundles.
         self.old = {
@@ -92,6 +118,19 @@ class UpdateTest(unittest.TestCase):
 
     def installed(self, name):
         return (self.install / name).read_text()
+
+    def command(self, version="", marker=None):
+        """This command with the test's paths, recording its release as the package and an update do, or
+        none, as the manager image bundles it. A marker makes it record each run in the call list."""
+        script = self.script.replace("\nCLI_VERSION=\n", f"\nCLI_VERSION={version}\n")
+        if marker:
+            self.assertEqual(script.count("\nset -euo pipefail\n"), 1)
+            script = script.replace("\nset -euo pipefail\n", f"\nset -euo pipefail\nprintf '%s\\n' \"{marker} $*\" >> \"$CALLS\"\n")
+        return script
+
+    def bundle(self, script):
+        """Puts a command into the manager image."""
+        (self.image / "app/install/bilskirnir").write_text(script)
 
     def update(self, env_file, release="v0.3.0", pull_status=0, **stubs):
         (self.install / ".env").write_text(env_file)
@@ -123,10 +162,15 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(env_file, before)
         self.assertNotIn(f"docker pull {REPOSITORY}:0.9.1", calls)
-        self.assertIn(f" {REPOSITORY}:0.10.0 /app/install/compose.yml", next(c for c in calls if c.startswith("docker run ")))
+        self.assertIn(f"docker run --rm --network none --entrypoint cat {REPOSITORY}:0.10.0 /app/install/compose.yml", calls)
 
     def test_an_image_chosen_by_hand_is_only_pulled_again(self):
-        for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/bilskirnir:0.1.0"):
+        # Even a command that records no release of its own stays, though the manager bundles a newer one.
+        installed = self.command()
+        self.cli.write_text(installed)
+        self.bundle(self.command(marker="new command"))
+        # The last one names a Docker Hub image that only looks like a release.
+        for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/bilskirnir:0.1.0", "0.9.0"):
             with self.subTest(image=image):
                 self.calls.unlink(missing_ok=True)
                 before = f"MANAGER_IMAGE={image}\n"
@@ -136,6 +180,9 @@ class UpdateTest(unittest.TestCase):
                 self.assertFalse(any(call.startswith("curl ") for call in calls))
                 self.assertIn("docker compose pull", calls)
                 self.assertIn("docker compose up -d", calls)
+                self.assertEqual(self.cli.read_text(), installed)
+                self.assertFalse(any(call.endswith("/app/install/bilskirnir") for call in calls))
+                self.assertIn("command stays as it is", result.stdout)
 
     def test_a_missing_image_setting_is_pinned_to_the_newest_release(self):
         result, env_file, _ = self.update("AUTH_MODE=none\n")
@@ -189,7 +236,8 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(self.installed(".shipped.sha256"), shipped({**self.new, ".env.example": example}))
         self.assertEqual(stat.S_IMODE((self.install / "compose.yml").stat().st_mode), 0o640)
         self.assertEqual([p.name for p in self.install.rglob("*") if p.suffix in (".bak", ".new")], [])
-        copies = [i for i, call in enumerate(calls) if call.startswith("docker run ")]
+        self.assertEqual(list(self.tmp.iterdir()), [])
+        copies = [i for i, call in enumerate(calls) if call.startswith("docker run ") and not call.endswith("/bilskirnir")]
         self.assertEqual(len(copies), len(FILES))
         for i in copies:
             self.assertIn(f" {REPOSITORY}:0.3.0 /app/install/", calls[i])
@@ -245,6 +293,97 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(self.installed(".shipped.sha256"), shipped(self.old))
         self.assertIn("/app/install/deploy/Caddyfile", result.stderr)
         self.assertIn("docker compose up -d", calls)
+
+    def test_a_newer_release_replaces_the_command_and_the_update_continues_with_it(self):
+        bundled = self.command(marker="new command")
+        self.bundle(bundled)
+        # The new command gets the mode a command needs, whatever the old one had.
+        self.cli.chmod(0o775)
+        result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n", DOWNLOADED="1", RELEASE_LABEL="0.3.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cli.read_text(), bundled.replace("\nCLI_VERSION=\n", "\nCLI_VERSION=0.3.0\n"))
+        self.assertEqual(stat.S_IMODE(self.cli.stat().st_mode), 0o755)
+        self.assertIn("command moves from 0.2.0 to 0.3.0", result.stdout)
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+        # The new command runs the whole update again, after the manager it came from is pulled and
+        # pinned: it copies the installation files by its own rules, finds itself current, recreates
+        # the manager once and refreshes the desktops for it.
+        restart = calls.index("new command update")
+        self.assertLess(calls.index(f"docker pull {REPOSITORY}:0.3.0"), restart)
+        self.assertFalse(any(call.startswith("docker compose ") for call in calls[:restart]))
+        self.assertFalse(any("/app/install/compose.yml" in call for call in calls[:restart]))
+        self.assertEqual(sum(call.endswith("/app/install/bilskirnir") for call in calls), 1)
+        self.assertEqual(calls.count("docker compose up -d"), 1)
+        desktop = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce"
+        self.assertEqual(calls.count(f"docker tag {desktop}:0.3.0 {desktop}:24.04"), 1)
+        self.assertLess(restart, calls.index(f"docker tag {desktop}:0.3.0 {desktop}:24.04"))
+        self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+        self.assertEqual(list(self.tmp.iterdir()), [])
+        self.assertEqual(sorted(p.name for p in self.dir.glob("bilskirnir*")), ["bilskirnir"])
+
+    def test_the_command_never_moves_to_the_same_or_an_older_release(self):
+        self.bundle(self.command(marker="new command"))
+        for version in ("0.3.0", "0.10.0"):
+            with self.subTest(version=version):
+                self.calls.unlink(missing_ok=True)
+                installed = self.command(version)
+                self.cli.write_text(installed)
+                result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+                self.assertEqual(self.cli.read_text(), installed)
+                self.assertFalse(any(call.endswith("/app/install/bilskirnir") for call in calls))
+                self.assertNotIn("new command update", calls)
+                self.assertIn("docker compose up -d", calls)
+
+    def test_a_command_is_installed_only_on_a_package_with_the_level_it_needs(self):
+        installed = self.cli.read_text()
+        # The level the package recorded, if any, and the one the bundled command names.
+        for level, needs, replaced in (
+            (None, 1, True),
+            (None, 2, False),
+            ("2", 2, True),
+            ("2", 3, False),
+            ("unreadable", 2, False),
+        ):
+            with self.subTest(level=level, needs=needs):
+                self.calls.unlink(missing_ok=True)
+                self.cli.write_text(installed)
+                self.level.unlink(missing_ok=True)
+                if level:
+                    self.level.write_text(f"{level}\n")
+                bundled = re.sub(r"^NEEDS_PACKAGE=\d+$", f"NEEDS_PACKAGE={needs}", self.command(marker="new command"), flags=re.M)
+                self.bundle(bundled)
+                result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual("new command update" in calls, replaced)
+                self.assertEqual(self.cli.read_text() == installed, not replaced)
+                if not replaced:
+                    self.assertIn("needs a newer WSL package", result.stdout)
+                # The update finishes either way, with the command the installation has afterwards.
+                self.assertEqual(calls.count("docker compose up -d"), 1)
+                self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
+
+    def test_an_incomplete_command_is_not_installed(self):
+        complete = self.command(marker="new command")
+        installed = self.cli.read_text()
+        for name, bundled in (
+            ("empty", ""),
+            ("cut off", complete[: complete.index("\ncase ${1:-help} in\n")] + "\ncase x in\n"),
+            ("no package level", re.sub(r"^NEEDS_PACKAGE=.*\n", "", complete, flags=re.M)),
+            ("no version line", complete.replace("\nCLI_VERSION=\n", "\n")),
+        ):
+            with self.subTest(name):
+                self.calls.unlink(missing_ok=True)
+                self.bundle(bundled)
+                result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.cli.read_text(), installed)
+                self.assertNotIn("new command update", calls)
+                self.assertIn("bilskirnir command", result.stderr)
+                self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+                self.assertIn("docker compose up -d", calls)
+
 
 # sudoedit as root: the editor works on a copy, which is written back over the original. Like sudo,
 # it falls back to a default of its own, vi here, when none of the editor variables is set.
@@ -320,15 +459,28 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(tuple(match.group(1).split()), FILES)
         manager = (ROOT / "Dockerfile").read_text()
         package = (ROOT / "wsl/Dockerfile").read_text()
-
-        def source(dockerfile, target):
-            copy = re.search(rf"^COPY (?:--chmod=\d+ )?(\S+) {re.escape(target)}$", dockerfile, re.M)
-            self.assertIsNotNone(copy, target)
-            return copy.group(1)
-
         for name in FILES:
-            self.assertEqual(source(manager, f"/app/install/{name}"), source(package, f"/opt/bilskirnir/{name}"))
+            source = copy_source(manager, f"/app/install/{name}")
+            self.assertIsNotNone(source, name)
+            self.assertEqual(source, copy_source(package, f"/opt/bilskirnir/{name}"))
         self.assertIn(f"sha256sum {' '.join(FILES)} > .shipped.sha256", package)
+
+    def test_the_manager_bundles_the_command_the_package_installs(self):
+        script = CLI.read_text()
+        target = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
+        self.assertEqual(copy_source((ROOT / "wsl/Dockerfile").read_text(), target), "wsl/bilskirnir")
+        self.assertEqual(copy_source((ROOT / "Dockerfile").read_text(), "/app/install/bilskirnir"), "wsl/bilskirnir")
+        # Commands already installed read these two lines from a newer one before they install it, and
+        # the package records its release in the first. Without one, any release counts as newer.
+        self.assertEqual(re.findall(r"^CLI_VERSION=.*$", script, re.M), ["CLI_VERSION="])
+        self.assertIn("CLI_VERSION=$BILSKIRNIR_VERSION", (ROOT / "wsl/Dockerfile").read_text())
+        needs = re.findall(r"^NEEDS_PACKAGE=(\d+)$", script, re.M)
+        self.assertEqual(len(needs), 1)
+        # A package runs the command it ships, so it has at least the level that command needs.
+        level = package_level()
+        self.assertIsNotNone(level)
+        self.assertEqual(f"PACKAGE_LEVEL={level[1]}", re.search(r"^PACKAGE_LEVEL=.*$", script, re.M).group(0))
+        self.assertLessEqual(int(needs[0]), level[0])
 
 
 if __name__ == "__main__":
