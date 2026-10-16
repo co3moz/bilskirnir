@@ -234,3 +234,47 @@ async fn a_settings_change_cannot_mount_the_managers_own_volume() {
     assert_eq!(saved.spec, env.spec);
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_volume() {
+    let mut app = crate::tests::app(false);
+    let calls = crate::tests::manager_docker(&mut app);
+    // A compose volume parameter that named the data volume before creation refused it.
+    let setup: crate::compose::Setup = serde_json::from_value(json!({
+        "status": "completed", "image": "img", "parameters": {"DATA": "/opt/data"},
+        "secrets": [],
+        "mounts": [{"volume": "bilskirnir-data", "target": "/opt/data", "readonly": false}],
+    }))
+    .unwrap();
+    let env = Container {
+        id: "composed".into(),
+        container: "wsld-composed".into(),
+        private_network: "wsld-composed-private".into(),
+        egress_network: "wsld-composed-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: Some(setup),
+    };
+    app.db.put(CONTAINERS, "composed", &env).unwrap();
+    // Shared memory is fixed at creation, so the change recreates the container.
+    let error = app
+        .update_container("composed", request(json!({"shm_mb": 1024})), "settings-job")
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\n"
+    );
+    let saved: Container = app.db.get(CONTAINERS, "composed").unwrap();
+    assert_eq!(saved.spec, env.spec);
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}

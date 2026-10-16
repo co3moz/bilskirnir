@@ -1377,8 +1377,9 @@ async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
 }
 
 /// A Docker CLI stand-in for a manager named `bilskirnir-manager` whose data volume is
-/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, fails everything
-/// else and records its arguments in the returned file.
+/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, lists that volume
+/// and `project` as `GET /api/volumes` asks for them, fails everything else and records its
+/// arguments in the returned file.
 #[cfg(unix)]
 pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -1397,8 +1398,10 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  *) exit 1 ;;\nesac\n",
-            calls = calls.display()
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  *) exit 1 ;;\nesac\n",
+            calls = calls.display(),
+            data = serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
+            project = serde_json::json!({"Name": "project", "Driver": "local"}),
         ),
     )
     .unwrap();
@@ -1488,6 +1491,69 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     );
     let saved: model::Container = app.db.get(model::CONTAINERS, "legacy").unwrap();
     assert!(saved.last_error.unwrap().contains("manager's own volume"));
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() {
+    let mut app = app(false);
+    let calls = manager_docker(&mut app);
+    // A container whose compose volume parameter named the data volume before creation refused
+    // it: neither a reset nor a retry builds a desktop with it again.
+    let setup: crate::compose::Setup = serde_json::from_value(serde_json::json!({
+        "status": "completed", "image": "img", "parameters": {"DATA": "/opt/data"},
+        "secrets": [],
+        "mounts": [{"volume": "bilskirnir-data", "target": "/opt/data", "readonly": false}],
+    }))
+    .unwrap();
+    let env = model::Container {
+        id: "composed".into(),
+        container: "wsld-composed".into(),
+        private_network: "wsld-composed-private".into(),
+        egress_network: "wsld-composed-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: Some(setup),
+    };
+    app.db.put(model::CONTAINERS, "composed", &env).unwrap();
+    let refused = |error: anyhow::Error| {
+        let message = error.to_string();
+        assert!(
+            message.contains("bilskirnir-data is the manager's own volume"),
+            "{message}"
+        );
+    };
+    refused(
+        app.reset_container("composed", "reset-job")
+            .await
+            .unwrap_err(),
+    );
+    // Refused before the old container is removed.
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\n"
+    );
+    std::fs::remove_file(&calls).unwrap();
+    refused(
+        app.retry_container("composed", "retry-job")
+            .await
+            .unwrap_err(),
+    );
+    let made = std::fs::read_to_string(&calls).unwrap();
+    assert_eq!(
+        made.lines().last(),
+        Some("container inspect bilskirnir-manager"),
+        "{made}"
+    );
+    assert!(
+        !made.contains("network") && !made.contains("create"),
+        "{made}"
+    );
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
 

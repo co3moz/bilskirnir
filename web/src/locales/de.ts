@@ -240,6 +240,9 @@ export const de: Messages = {
   "volumes.mountedAtReadOnly": "unter {target} (schreibgeschützt)",
   "volumes.mountedByCompose": "unter {target}, für die Compose-Einrichtung gewählt",
   "volumes.notMounted": "Nicht eingehängt",
+  "volumes.manager": "Manager-Daten",
+  "volumes.managerHint":
+    "Die eigene Datenbank und die Sitzungen von Bilskirnir. Es kann nicht geöffnet, exportiert oder eingehängt werden.",
   "volumes.driver": "Treiber",
   "volumes.scope": "Geltungsbereich",
   "volumes.browse": "Dateien durchsuchen",

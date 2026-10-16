@@ -33,6 +33,7 @@ import {
 import { rich, t } from "@/lib/i18n"
 import { queryClient, useVolumes } from "@/lib/queries"
 import type { ComposeParameter } from "@/lib/types"
+import { mountableVolumes } from "@/lib/volume-files"
 
 // Values never contain NUL, so these cannot collide with an option or a volume.
 const NONE = "\u0000none"
@@ -128,8 +129,8 @@ export function ParameterField({
 }
 
 /**
- * A named volume for the parameter's path: an existing one, one created here, or none, which
- * leaves the path inside the container.
+ * A named volume for the parameter's path: an existing one other than the manager's own, one
+ * created here, or none, which leaves the path inside the container.
  */
 function VolumeControl({
   parameter,
@@ -190,7 +191,7 @@ function VolumeControl({
         <SelectContent>
           <SelectGroup>
             {!required && <SelectItem value={NONE}>{t("parameter.volume.none")}</SelectItem>}
-            {volumeChoices(volumes, value).map((volume) => (
+            {volumeChoices(mountableVolumes(volumes), value).map((volume) => (
               <SelectItem key={volume} value={volume} className="font-mono">
                 {volume}
               </SelectItem>

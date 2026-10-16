@@ -39,6 +39,7 @@ import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
+import { mountableVolumes } from "@/lib/volume-files"
 
 const RESOLUTIONS = ["1920x1080", "1600x900", "1280x720", "2560x1440", "3840x2160"]
 const FLAGS = ["gpu", "internet", "sudo", "audio", "microphone", "gamepad"] as const
@@ -283,7 +284,7 @@ export function SpecFields({
                 />
               </Field>
             </div>
-            <Mounts draft={draft} set={set} volumes={volumes} />
+            <Mounts draft={draft} set={set} volumes={mountableVolumes(volumes)} />
           </FieldGroup>
         </div>
       </div>
@@ -291,7 +292,10 @@ export function SpecFields({
   )
 }
 
-/** The volumes mounted into the container, each with its path and access. */
+/**
+ * The volumes mounted into the container, each with its path and access. `volumes` are the ones a
+ * container may mount.
+ */
 function Mounts({
   draft,
   set,
@@ -335,6 +339,7 @@ function Mounts({
       </div>
       {draft.mounts.map((mount) => {
         const names = volumes.map((volume) => volume.Name)
+        // A container's existing mount stays visible, so it can be removed or changed.
         if (!names.includes(mount.volume)) names.push(mount.volume)
         return (
           <div
