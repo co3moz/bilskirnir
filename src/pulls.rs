@@ -165,7 +165,7 @@ pub(crate) fn manifest_sizes(output: &Value) -> HashMap<String, u64> {
 }
 
 /// Percent-encode a query value; Go reads `+` in a query as a space.
-fn query_value(value: &str) -> String {
+pub(crate) fn query_value(value: &str) -> String {
     value
         .bytes()
         .map(|byte| match byte {
@@ -264,11 +264,11 @@ fn message_line(line: &[u8], on_message: &mut impl FnMut(Value) -> Result<()>) -
 }
 
 #[cfg(unix)]
-async fn connect(path: &Path) -> std::io::Result<tokio::net::UnixStream> {
+pub(crate) async fn connect(path: &Path) -> std::io::Result<tokio::net::UnixStream> {
     tokio::net::UnixStream::connect(path).await
 }
 #[cfg(not(unix))]
-async fn connect(_: &Path) -> std::io::Result<tokio::io::DuplexStream> {
+pub(crate) async fn connect(_: &Path) -> std::io::Result<tokio::io::DuplexStream> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "the Engine socket needs a Unix host",

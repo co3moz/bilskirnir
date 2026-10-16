@@ -81,6 +81,13 @@
   --success: #1d7f60;
   --warning: #96660f;
   --violet: #6152c4;
+  /* Containers in the usage charts, in this order; validated for color vision deficiency. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-other: oklch(0.556 0 0);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -120,6 +127,12 @@
   --success: #a9dfcd;
   --warning: #e3c88f;
   --violet: #aaa0ed;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-other: oklch(0.708 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.922 0 0);

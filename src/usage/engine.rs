@@ -1,0 +1,168 @@
+//! The Engine API requests the collector makes: which managed containers run, and the stats
+//! stream of each. Both go over the socket pulls use, one connection per request.
+use crate::model::{Container, LABEL};
+use anyhow::{Context, Result, bail};
+use http_body_util::BodyExt;
+use hyper::body::Bytes;
+use serde_json::Value;
+use std::{collections::BTreeMap, time::Duration};
+use tokio::io::{AsyncRead, AsyncWrite};
+
+/// A list of every container on a busy host stays far below this.
+const LIST_LIMIT: usize = 8 << 20;
+/// One stats message is a few kilobytes; a longer line is not one.
+const LINE_LIMIT: usize = 1 << 20;
+
+/// The running containers that carry the managed label.
+pub(crate) fn list_path() -> String {
+    let filters = format!(r#"{{"label":["{LABEL}=true"],"status":["running"]}}"#);
+    format!(
+        "/containers/json?filters={}",
+        crate::pulls::query_value(&filters)
+    )
+}
+
+/// The stats stream of a container, by the ID Docker listed it under.
+pub(crate) fn stats_path(docker_id: &str) -> Option<String> {
+    (docker_id.len() == 64 && docker_id.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| format!("/containers/{docker_id}/stats?stream=true"))
+}
+
+/// A running container this manager owns.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Running {
+    pub docker_id: String,
+    pub gpu: bool,
+}
+
+/// The records whose container Docker lists as running, by record ID. A container counts only
+/// when both its name and its owner label match the record, as [`crate::App::owned`] requires.
+pub(crate) fn running(records: &[Container], listed: &Value) -> BTreeMap<String, Running> {
+    let mut found = BTreeMap::new();
+    for container in listed.as_array().into_iter().flatten() {
+        let Some(docker_id) = container["Id"].as_str() else {
+            continue;
+        };
+        let owner = container["Labels"]["io.wsl-desktop.environment"].as_str();
+        let Some(record) = records
+            .iter()
+            .find(|record| Some(record.id.as_str()) == owner)
+        else {
+            continue;
+        };
+        let named = container["Names"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .any(|name| name.trim_start_matches('/') == record.container);
+        if named && container["Labels"][LABEL] == "true" && stats_path(docker_id).is_some() {
+            found.insert(
+                record.id.clone(),
+                Running {
+                    docker_id: docker_id.to_owned(),
+                    gpu: record.spec.gpu,
+                },
+            );
+        }
+    }
+    found
+}
+
+/// Stops a task when dropped, such as the connection under a response nobody reads any more.
+pub(crate) struct Abort(pub tokio::task::JoinHandle<()>);
+impl Drop for Abort {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+async fn request<S>(io: S, path: &str) -> Result<(hyper::Response<hyper::body::Incoming>, Abort)>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let (mut sender, connection) =
+        hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(io))
+            .await
+            .context("Docker API handshake failed")?;
+    // Errors on the connection reach the body, so the task's own result is not needed.
+    let connection = Abort(tokio::spawn(async move {
+        let _ = connection.await;
+    }));
+    let request = hyper::Request::get(path)
+        .header(hyper::header::HOST, "docker")
+        .body(http_body_util::Empty::<Bytes>::new())?;
+    let response = sender
+        .send_request(request)
+        .await
+        .context("Docker API request failed")?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = http_body_util::Limited::new(response.into_body(), 65_536)
+            .collect()
+            .await
+            .map(|body| body.to_bytes())
+            .unwrap_or_default();
+        let message = serde_json::from_slice::<Value>(&body)
+            .ok()
+            .and_then(|value| value["message"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| String::from_utf8_lossy(&body).trim().to_owned());
+        bail!("Docker: {message} ({status})");
+    }
+    Ok((response, connection))
+}
+
+/// One JSON response.
+pub(crate) async fn get<S>(io: S, path: &str) -> Result<Value>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let (response, _connection) = request(io, path).await?;
+    let body = http_body_util::Limited::new(response.into_body(), LIST_LIMIT)
+        .collect()
+        .await
+        .map_err(|error| anyhow::anyhow!("The Docker API response was interrupted: {error}"))?
+        .to_bytes();
+    serde_json::from_slice(&body).context("Docker sent an unreadable response")
+}
+
+/// Pass on each line of a streamed response until it ends, or until it sends nothing for `idle`.
+pub(crate) async fn stream<S>(
+    io: S,
+    path: &str,
+    idle: Duration,
+    mut on_line: impl FnMut(&[u8]),
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let (mut response, _connection) = request(io, path).await?;
+    let mut pending = Vec::new();
+    while let Some(frame) = tokio::time::timeout(idle, response.body_mut().frame())
+        .await
+        .context("Docker stopped sending stats")?
+    {
+        let Ok(data) = frame
+            .context("The Docker API response was interrupted")?
+            .into_data()
+        else {
+            continue;
+        };
+        pending.extend_from_slice(&data);
+        while let Some(end) = pending.iter().position(|byte| *byte == b'\n') {
+            let line: Vec<u8> = pending.drain(..=end).collect();
+            let line = line.trim_ascii();
+            if !line.is_empty() {
+                on_line(line);
+            }
+        }
+        if pending.len() > LINE_LIMIT {
+            bail!("Docker sent an oversized stats message");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "engine_tests.rs"]
+mod tests;

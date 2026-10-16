@@ -31,6 +31,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials. |
 | GET | `/api/system` | Docker connection and host summary. |
+| GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
 | POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. |
 | GET | `/api/containers/{id}` | One container's configuration, state and health. |
@@ -43,6 +44,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/containers/{id}/snapshot` | Save filesystem changes as an image; returns a job. |
 | GET | `/api/containers/{id}/logs` | Bounded container log output. |
 | GET | `/api/containers/{id}/diagnostics` | Desktop and graphics diagnostics. |
+| GET | `/api/containers/{id}/usage` | One container's [resource usage](#resource-usage) samples; accepts `since`. |
 | GET | `/api/containers/{id}/screenshot` | JPEG at desktop resolution; accepts `max_width`, `region` and `window_id`. |
 | POST | `/api/containers/{id}/input` | Mouse/keyboard actions through VNC. |
 | POST | `/api/containers/{id}/act-and-observe` | Input actions followed by a screenshot, as JSON. |
@@ -397,6 +399,31 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 `POST .../gamepad` with `{"actions":[{"type":"button","button":"a"},{"type":"axis","axis":"left_x","value":0.5},{"type":"wait","milliseconds":100},{"type":"reset"}]}` drives a virtual Xbox-style controller in a container created with `gamepad:true`. The device is created on first use as `/dev/input/eventN` inside the desktop and keeps button and axis state between requests until `reset` or a desktop restart. Buttons: a, b, x, y, lb, rb, back, start, guide, ls, rs. Axes: left_x, left_y, right_x, right_y (-1 to 1), left_trigger, right_trigger (0 to 1), dpad_x, dpad_y (-1, 0, 1). SDL applications that use udev can set `SDL_JOYSTICK_DISABLE_UDEV=1` to scan `/dev/input` directly.
 
 `GET .../windows` lists visible windows with `window_id`, `title`, `pid`, `x`, `y`, `width`, `height` and `active`. `POST .../windows/{window_id}/focus` activates a window, and `POST .../windows/{window_id}/geometry` with `x`,`y` and/or `width`,`height` moves or resizes it and returns the resulting geometry. Window IDs are hexadecimal X11 IDs such as `0x3a00007`. The window routes, window screenshots and relative pointer movement need `xdotool` and `wmctrl` in the desktop image.
+
+## Resource usage
+
+The manager follows the Docker stats stream of every running container and keeps one sample a second for the last 30 minutes. The history lives in memory only: a manager restart starts it over, a stopped container keeps its samples until they are 30 minutes old, and a deleted container's history goes with it. It needs the Docker Engine socket; when `DOCKER_HOST` names a TCP address instead, there is no history.
+
+`GET /api/usage` returns:
+
+- `available` and `error`: whether Docker's running containers can be read right now. The samples already taken stay while it cannot.
+- `interval_ms` (1000) and `window_ms` (1800000).
+- `cursor`: the stamp of the newest sample. Pass it back as `since` to receive only the samples stamped after it; two requests in a row miss nothing.
+- `containers`: each container that has samples, with `id`, `name`, `cpu_limit` (its CPU limit, or `null`), `memory_limit` (bytes, the host's memory when it has no limit), `online_cpus` (the host CPUs it sees) and `samples`. A container stays listed with an empty `samples` while nothing new arrived, so a client can drop the ones that are no longer listed.
+- `gpu`: the host's GPU, below.
+
+Each sample has `t`, the Unix time in milliseconds when it was stored, and:
+
+| Field | Meaning |
+| --- | --- |
+| `cpu` | CPU cores in use: the CPU % of `docker stats` divided by 100. It is measured against the host's CPUs, not the container's limit, so a container limited to two CPUs reads at most 2. |
+| `memory` | Bytes in use without the page cache, as `docker stats` counts them. |
+| `disk_read`, `disk_write` | Bytes per second through the container's block I/O counters. The desktop's tmpfs folders and shared memory are not disk I/O. |
+| `net_rx`, `net_tx` | Bytes per second received and sent on all of the container's networks. |
+
+`gpu.state` is `sampling`, `idle` while no GPU container runs, `unavailable` with a `reason`, or `disabled` when the installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false). Each of `gpu.devices` has `index`, `name`, `memory_total` and samples of `t`, `utilization` (percent) and `memory` (bytes); a figure the driver does not report is `null`. These are the whole GPU's figures, which `scope: "host"` says: WSL gives Linux a paravirtual GPU whose driver reports neither processes nor containers, and Windows applications count too. They come from `nvidia-smi`, so only NVIDIA GPUs report them. While a GPU container runs, the manager runs it in a helper container from its own image that gets the GPU device, no network, no capabilities and a read-only root, and ends with the manager.
+
+`GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started.
 
 ## Limits and results
 
