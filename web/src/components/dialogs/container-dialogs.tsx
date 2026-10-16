@@ -256,6 +256,8 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
               settings={settings}
               volumes={volumes}
               spec={spec}
+              // These settings are what this dialog is for, so they start in view.
+              advancedOpen
             />
           </div>
           {/* Outside the scrolling fields, next to the button whose label it changes. */}
