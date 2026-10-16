@@ -33,9 +33,10 @@ Bilskirnir serves one administrator on a local machine or LAN.
 
 You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also need a Windows GPU driver with WSL support.
 
-1. Download `bilskirnir.wsl` from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest) and install it:
+1. Download `bilskirnir.wsl` from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest) and install it. In PowerShell, the first line downloads it into the current folder:
 
    ```powershell
+   curl.exe -fLo bilskirnir.wsl https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.wsl
    wsl --install --from-file .\bilskirnir.wsl
    ```
 
