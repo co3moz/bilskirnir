@@ -622,7 +622,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A volume parameter takes the name of an existing named volume (list_volumes, create_volume), or an empty string for none."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},

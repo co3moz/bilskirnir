@@ -127,7 +127,7 @@ A `.tar` saved with `docker save` imports the same way, as long as it holds a de
 
 ## Keep files in volumes
 
-Create a named volume under **Volumes**, then mount it when creating a container. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths, read-only mounts over the desktop's home or configuration and the manager's own data volume, which holds its database, are rejected. **Volumes** labels that volume **Manager data** and offers no file browsing or export for it, and the volume choices of a mount leave it out.
+Create a named volume under **Volumes**, then mount it when creating a container. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths, read-only mounts over the desktop's home or configuration and the manager's own data volume, which holds its database, are rejected. **Volumes** labels that volume **Manager data** and offers no file browsing or export for it, and the volume choices of a mount or of a compose's volume parameter leave it out.
 
 The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
 
