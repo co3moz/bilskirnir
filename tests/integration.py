@@ -91,6 +91,7 @@ manager = f"wsld-test-{tag}"
 volume = f"wsld-test-data-{tag}"
 share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
+files_volume = f"wsld-test-files-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
@@ -325,6 +326,44 @@ try:
     print(f"PASS missing catalog image downloads from {xfce_source} on creation with byte progress", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
+    # A volume's files are reachable without a container, as the desktop user.
+    def refused(path, body=None, method=None):
+        try:
+            api(path, body, method)
+        except urllib.error.HTTPError as error:
+            return error.code
+        raise AssertionError(f"{path} was accepted")
+    api("volumes", {"name": files_volume})
+    files = f"volumes/{files_volume}/files"
+    assert api(f"{files}/list", {"path": "/"})["items"] == []
+    api(f"{files}/mkdir", {"path": "/notes"})
+    assert refused(f"{files}/mkdir", {"path": "/notes"}) == 409
+    api(f"{files}/write", {"path": "/notes/hello.txt", "data": "Hello volume\n"})
+    assert refused(f"{files}/write", {"path": "/notes/hello.txt", "data": "again"}) == 409
+    assert api(f"{files}/read", {"path": "/notes/hello.txt"})["data"] == "Hello volume\n"
+    owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={files_volume},dst=/v,readonly", "--entrypoint", "stat", "bilskirnir/manager:local", "-c", "%u:%g", "/v", "/v/notes", "/v/notes/hello.txt").decode().split()
+    assert owners == ["1001:1001"] * 3, owners
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{files}?" + urllib.parse.urlencode({"destination": "/notes", "name": "blob.bin", "size": 3}), data=b"\x00\x01\x02", method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+    with client.open(request, timeout=130) as response:
+        assert json.loads(response.read())["path"] == "/notes/blob.bin"
+    with client.open(f"http://127.0.0.1:{port}/api/{files}/download?" + urllib.parse.urlencode({"path": "/notes/blob.bin"}), timeout=130) as response:
+        assert response.read() == b"\x00\x01\x02"
+    api(f"{files}/move", {"source": "/notes/hello.txt", "destination": "/notes/renamed.txt"})
+    listed = api(f"{files}/list", {"path": "/notes"})
+    assert listed["path"] == "/notes" and sorted(i["name"] for i in listed["items"]) == ["blob.bin", "renamed.txt"], listed
+    assert refused(f"{files}/delete", {"path": "/notes"}) == 400
+    api(f"{files}/delete", {"path": "/notes", "recursive": True})
+    assert api(f"{files}/list", {"path": "/"})["items"] == []
+    assert refused(f"{files}/delete", {"path": "/", "recursive": True}) == 400
+    # The volume's root cannot be escaped, a missing volume is not created and the manager's
+    # own data volume stays closed.
+    assert refused(f"{files}/list", {"path": "/../etc"}) == 400
+    missing = f"wsld-test-missing-{tag}"
+    assert refused(f"volumes/{missing}/files/list", {"path": "/"}) == 404
+    assert json.loads(docker("volume", "inspect", missing, check=False) or b"[]") == []
+    assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
+    assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
+    print("PASS volume files are read and changed as the desktop user through a removed helper", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
     except urllib.error.HTTPError as error:
@@ -1001,5 +1040,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

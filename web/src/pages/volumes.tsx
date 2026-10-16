@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiDatabase2Line, RiAddLine } from "@remixicon/react"
+import { RiDatabase2Line, RiAddLine, RiFolderOpenLine } from "@remixicon/react"
 
 import {
   columnHelper,
@@ -28,7 +28,13 @@ const columns: DataColumn<Row>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <RiDatabase2Line className="size-4 shrink-0 text-primary" aria-hidden />
-        <code className="font-mono text-xs">{row.original.Name}</code>
+        <button
+          type="button"
+          className="font-mono text-xs hover:underline"
+          onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
+        >
+          {row.original.Name}
+        </button>
         {row.original.Labels?.split(",").includes(MANAGED) && (
           <Badge variant="outline" className="text-muted-foreground">
             Bilskirnir
@@ -65,6 +71,21 @@ const columns: DataColumn<Row>[] = [
   }),
   column.accessor("Driver", { header: "Driver" }),
   column.accessor("Scope", { header: "Scope" }),
+  column.display({
+    id: "actions",
+    cell: ({ row }) => (
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
+        >
+          <RiFolderOpenLine data-icon="inline-start" />
+          Browse files
+        </Button>
+      </div>
+    ),
+  }),
 ]
 
 export function VolumesPage() {
@@ -99,7 +120,7 @@ export function VolumesPage() {
       <DockerAlert />
       <SectionHeading
         title="Named volumes"
-        description="Files that outlive containers. Volumes are excluded from snapshots."
+        description="Files that outlive containers. Volumes are excluded from snapshots; browse one to read or change its files."
       >
         <Button size="sm" onClick={() => openDialog({ kind: "volume" })}>
           <RiAddLine data-icon="inline-start" />

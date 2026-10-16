@@ -9,6 +9,7 @@ import { ImportImageDialog } from "./import-dialog"
 import { BuildImageDialog, DeleteDialog, SnapshotDialog, VolumeDialog } from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
 import { UploadDialog } from "./upload-dialog"
+import { VolumeBrowser } from "./volume-browser"
 
 /** Renders the one open dialog; see lib/dialogs.ts. */
 export function DialogHost() {
@@ -41,6 +42,8 @@ function render(dialog: Dialog, open: boolean) {
       return <ImportImageDialog {...props} />
     case "volume":
       return <VolumeDialog {...props} />
+    case "volume-files":
+      return <VolumeBrowser {...props} name={dialog.name} />
     case "job":
       return <JobDrawer {...props} id={dialog.id} />
     case "log":

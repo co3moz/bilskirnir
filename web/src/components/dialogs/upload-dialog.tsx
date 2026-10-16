@@ -27,17 +27,8 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
 import { subfolderError, uploadLocations } from "@/lib/format"
 import { useContainers, useSettings } from "@/lib/queries"
-import { FileUploads, fileSize, type UploadStatus } from "@/lib/uploads"
+import { FileUploads, fileSize, uploadStatuses } from "@/lib/uploads"
 import type { DialogProps } from "./side-drawer"
-
-const statuses: Record<UploadStatus, string> = {
-  queued: "Ready",
-  uploading: "Uploading",
-  saving: "Saving",
-  completed: "Uploaded",
-  failed: "Failed",
-  cancelled: "Cancelled",
-}
 
 /** The upload queue, rendered again whenever it reports progress. */
 function useUploads() {
@@ -100,7 +91,7 @@ export function UploadDialog({
     setError(problem)
     if (problem) return
     void uploads.start({
-      containerId: id,
+      target: `containers/${encodeURIComponent(id)}`,
       destination: folder ? `${destination}/${folder}` : destination,
       replace,
     })
@@ -202,7 +193,7 @@ export function UploadDialog({
                     <div className="flex items-baseline justify-between gap-2 text-sm">
                       <strong className="truncate font-medium">{entry.name}</strong>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {fileSize(entry.size)} · {statuses[entry.status]}
+                        {fileSize(entry.size)} · {uploadStatuses[entry.status]}
                       </span>
                     </div>
                     <Progress

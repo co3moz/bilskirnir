@@ -1,4 +1,4 @@
-"""List, move or delete files as the desktop user without following symlinks in paths."""
+"""List, move, delete or create files as the desktop user without following symlinks in paths."""
 import json
 import os
 import stat
@@ -106,6 +106,20 @@ def delete_file(path, recursive):
         os.close(descriptor)
 
 
+def make_directory(path):
+    parent, name = os.path.split(path)
+    descriptor = open_dir(parent)
+    try:
+        try:
+            os.mkdir(name, 0o755, dir_fd=descriptor)
+        except FileExistsError:
+            print("CONFLICT: Something with this name already exists.", file=sys.stderr)
+            sys.exit(17)
+        return {"path": path, "created": True}
+    finally:
+        os.close(descriptor)
+
+
 command, *arguments = sys.argv[1:]
 try:
     if command == "list":
@@ -114,6 +128,8 @@ try:
         print(json.dumps(move_file(arguments[0], arguments[1], arguments[2] == "true")))
     elif command == "delete":
         print(json.dumps(delete_file(arguments[0], arguments[1] == "true")))
+    elif command == "mkdir":
+        print(json.dumps(make_directory(arguments[0])))
     else:
         sys.exit(2)
 except SystemExit:

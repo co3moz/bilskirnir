@@ -37,7 +37,8 @@ fn within(path: &str, root: &str) -> bool {
             .is_some_and(|suffix| suffix.starts_with('/'))
 }
 
-pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> anyhow::Result<()> {
+/// A file name an upload may create: one path component without control characters.
+pub(crate) fn file_name(name: &str) -> anyhow::Result<()> {
     if name.is_empty()
         || name.len() > 255
         || name == "."
@@ -47,6 +48,11 @@ pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> a
     {
         anyhow::bail!("Invalid file name");
     }
+    Ok(())
+}
+
+pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> anyhow::Result<()> {
+    file_name(name)?;
     if !destination.starts_with('/')
         || destination.len() > 4096
         || destination.contains('\\')

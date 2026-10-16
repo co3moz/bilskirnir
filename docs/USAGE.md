@@ -132,6 +132,8 @@ Create a named volume under **Volumes**, then mount it when creating a container
 
 The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
 
+**Browse files** on a volume's row, or its name, opens its files without starting a container. Open a folder to look inside, a text file of up to 512 KiB to read and change it, and use the row menu to download, rename or delete. **New folder** and **Upload** add to the open folder; files dropped on the list upload too. Everything runs as the desktop user, so a file that user may not change is refused. A new, empty volume is given to the desktop user on its first change, so files can be added at its root.
+
 Mounting the same writable volume in two containers gives both access to the same files. Taking a snapshot does not copy that volume. Deleting a container preserves named volumes and saved images; unsaved changes left only in the container are lost.
 
 ## Upload files from the browser

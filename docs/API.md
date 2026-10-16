@@ -90,6 +90,14 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
+| POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
+| POST | `/api/volumes/{name}/files/read` | Read a bounded file slice as text or base64. |
+| POST | `/api/volumes/{name}/files/write` | Write text or base64 file data atomically. |
+| POST | `/api/volumes/{name}/files/mkdir` | Create a folder. |
+| POST | `/api/volumes/{name}/files/move` | Rename or move within the volume. |
+| POST | `/api/volumes/{name}/files/delete` | Delete a file, symlink or folder. |
+| GET | `/api/volumes/{name}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
+| POST | `/api/volumes/{name}/files` | Stream a binary upload. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -261,6 +269,14 @@ curl --cookie bilskirnir.cookies \
 ```
 
 Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB` and restricted to Downloads or a writable mounted volume. They return the saved path and byte count.
+
+## Volume files
+
+The `/api/volumes/{name}/files/...` routes work on a named volume without a container that mounts it, with the same request bodies and limits as a container's [file routes](#files). Paths are absolute within the volume: `/` is its root, which can be listed and written into but not deleted or moved. `mkdir` takes `{"path":"/project/assets"}` and returns 409 when the name exists. Uploads take `destination`, `name`, `size` and optional `replace` as query parameters, as a container's do.
+
+Each request starts a short-lived helper container from the manager's own image, so it needs `MANAGER_CONTAINER`. The helper mounts only that volume, has no network, a read-only root and no capabilities beyond the ones the operation needs, never gets the Docker socket and is removed when the request ends. Files are read and written as the desktop user, UID/GID 1001, so the permissions a desktop would meet apply: a `403` names a file that user may not change. Docker creates a volume's root owned by root; a write to a volume that is still empty first gives its root to the desktop user, as mounting it over a desktop folder would. A volume that holds files keeps its owners.
+
+A missing volume returns 404 instead of being created. The manager's own volumes, such as its data volume, are refused with 403. Writes to one volume run one at a time; reads do not wait for them.
 
 ## Image archives
 

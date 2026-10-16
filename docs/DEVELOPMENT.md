@@ -41,6 +41,7 @@ When a catalog image is missing, its row under **Images** offers a download butt
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/src/lib/uploads.ts` |
+| Volume files through a helper container | `src/volumes.rs`, `src/volumes/`, `src/volume_claim.py`, `web/src/components/dialogs/volume-browser.tsx`, `web/src/lib/volume-files.ts` |
 | Dashboard layout, pages and dialogs | `web/src/App.tsx`, `web/src/pages/`, `web/src/components/`, `web/src/components/dialogs/` |
 | shadcn/ui components and theme | `web/src/components/ui/`, `web/src/index.css`, `components.json` |
 | API client, queries and pure helpers | `web/src/lib/` (`api.ts`, `queries.ts`, `format.ts`, `route.ts`) |
@@ -83,6 +84,8 @@ The database records immutable image IDs so later tag changes do not change an e
 Standard Docker CLI operations have a 120-second timeout; image builds and commits have a one-hour timeout. Job logs retain their last 256 KiB, and the job list returns the latest 100 entries without loading their full logs.
 
 Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Destinations must remain within Downloads or writable mounted volumes. The receiver rejects symlink traversal and writes completed files atomically. Preserve these constraints when changing the upload path.
+
+A volume's files are reached through a helper container started from the manager's own image with the volume at `/volume`, the same Python helpers as a running desktop, `--network none`, `--read-only`, `--cap-drop ALL` and `no-new-privileges`. Reads run as 1001:1001 on a read-only mount. Writes start as root with only `CHOWN`, `SETUID` and `SETGID` so `volume_claim.py` can give an empty, root-owned volume to the desktop user, then switch to 1001:1001 before running anything. Keep the Docker socket and host paths out of the helper, and keep the manager's own volumes refused.
 
 ## Add a catalog image
 

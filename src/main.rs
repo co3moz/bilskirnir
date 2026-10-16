@@ -24,6 +24,7 @@ mod reconfigure;
 mod recordings;
 mod terminal;
 mod uploads;
+mod volumes;
 mod waits;
 mod windows;
 
@@ -171,6 +172,22 @@ fn router(app: Arc<App>) -> Router {
             get(compose::get).put(compose::set).delete(compose::remove),
         )
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
+        .route("/api/volumes/{name}/files/list", post(volumes::list))
+        .route("/api/volumes/{name}/files/read", post(volumes::read))
+        .route("/api/volumes/{name}/files/write", post(volumes::write))
+        .route(
+            "/api/volumes/{name}/files/mkdir",
+            post(volumes::make_directory),
+        )
+        .route("/api/volumes/{name}/files/move", post(volumes::move_))
+        .route("/api/volumes/{name}/files/delete", post(volumes::delete))
+        .route("/api/volumes/{name}/files/download", get(volumes::download))
+        .route(
+            "/api/volumes/{name}/files",
+            post(volumes::upload).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                app.config.upload_limit as usize,
+            )),
+        )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
