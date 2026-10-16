@@ -74,6 +74,12 @@ test("a configuration carries the image's compose both ways", () => {
     "compose",
   ])
   assert.deepEqual(parseBuildConfig(text), { ...config, compose })
+  // A configuration copied while composes were templates still brings it along.
+  const older = text.replace('"compose":', '"template":')
+  assert.deepEqual(parseBuildConfig(older), {
+    ...config,
+    compose,
+  })
   // Without one, the copy stays the plain build request.
   assert.equal("compose" in JSON.parse(formatBuildConfig(config)), false)
   assert.throws(

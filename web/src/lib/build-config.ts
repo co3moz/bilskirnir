@@ -23,7 +23,10 @@ export function parseBuildConfig(text: string): ImportedBuild {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error("The configuration must be a JSON object.")
-  const { name, base_image, internet, script, compose } = value as Record<string, unknown>
+  const fields = value as Record<string, unknown>
+  const { name, base_image, internet, script } = fields
+  // Configurations exported before templates were called composes name it `template`.
+  const compose = fields.compose ?? fields.template
   if (typeof script !== "string" || !script.trim())
     throw new Error("The configuration has no setup script.")
   const config: ImportedBuild = { script }
