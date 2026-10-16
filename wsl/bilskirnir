@@ -246,7 +246,10 @@ EOF
         ;;
     settings)
         require_settings
-        "${EDITOR:-nano}" "$INSTALL/.env"
+        # .env belongs to root and the docker group may only read it, so the editor cannot save it
+        # directly. sudoedit opens a copy in the user's editor and writes it back with the file's owner
+        # and mode; it picks SUDO_EDITOR, VISUAL or EDITOR, and nano when none is set.
+        SUDO_EDITOR=${SUDO_EDITOR:-${VISUAL:-${EDITOR:-nano}}} sudo --edit "$INSTALL/.env"
         echo "Run 'bilskirnir restart' to apply the settings."
         ;;
     help|-h|--help)
