@@ -308,7 +308,7 @@ export function DesktopPage({ id }: { id: string }) {
         )}
       </div>
       <Dialog open={clipboard !== null} onOpenChange={(open) => !open && setClipboard(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("desktop.clipboard")}</DialogTitle>
             <DialogDescription>{t("desktop.clipboardHint")}</DialogDescription>
@@ -319,6 +319,7 @@ export function DesktopPage({ id }: { id: string }) {
             placeholder={t("desktop.clipboardPlaceholder")}
             value={clipboard ?? ""}
             onChange={(event) => setClipboard(event.target.value)}
+            className="max-h-[500px] overflow-y-auto"
           />
           <DialogFooter>
             <Button

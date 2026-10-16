@@ -194,12 +194,13 @@ export function BuildImageDialog(props: DialogProps) {
 
   return (
     <Dialog {...props}>
-      <DialogContent className="sm:max-w-2xl">
+      {/* The dialog stays inside the window: its body scrolls and the buttons stay in view. */}
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl">
         {importing ? (
           <ImportConfiguration onLoad={load} onBack={() => setImporting(false)} />
         ) : (
           <form
-            className="flex flex-col gap-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={submit(() =>
               runJob("images/build", {
                 name,
@@ -214,7 +215,7 @@ export function BuildImageDialog(props: DialogProps) {
               <DialogTitle>{t("images.build")}</DialogTitle>
               <DialogDescription>{t("build.description")}</DialogDescription>
             </DialogHeader>
-            <FieldGroup>
+            <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
@@ -288,7 +289,7 @@ export function BuildImageDialog(props: DialogProps) {
                         spellCheck={false}
                         value={script}
                         onChange={(event) => setScript(event.target.value)}
-                        className="font-mono text-xs"
+                        className="max-h-[500px] overflow-y-auto font-mono text-xs"
                       />
                       <FieldDescription>{t("build.scriptHint")}</FieldDescription>
                     </Field>
@@ -302,10 +303,7 @@ export function BuildImageDialog(props: DialogProps) {
                     </Field>
                   </FieldGroup>
                 </TabsContent>
-                <TabsContent
-                  value="compose"
-                  className="-mx-4 max-h-[40vh] overflow-y-auto px-4 py-1 sm:max-h-[min(30rem,55vh)]"
-                >
+                <TabsContent value="compose">
                   {compose ? (
                     <div className="flex flex-col gap-4">
                       <ComposeFields draft={compose} onChange={setCompose} />
@@ -365,7 +363,7 @@ function ImportConfiguration({
   const field = React.useId()
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex min-h-0 flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         try {
@@ -379,7 +377,7 @@ function ImportConfiguration({
         <DialogTitle>{t("build.importConfig")}</DialogTitle>
         <DialogDescription>{t("build.importConfigHint")}</DialogDescription>
       </DialogHeader>
-      <FieldGroup>
+      <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
         <Field data-invalid={!!error}>
           <FieldLabel htmlFor={`${field}-config`}>{t("build.config")}</FieldLabel>
           <Textarea
@@ -394,7 +392,7 @@ function ImportConfiguration({
               setError(undefined)
             }}
             aria-invalid={!!error}
-            className="font-mono text-xs"
+            className="max-h-[500px] overflow-y-auto font-mono text-xs"
             autoFocus
           />
           <FieldError>{error}</FieldError>

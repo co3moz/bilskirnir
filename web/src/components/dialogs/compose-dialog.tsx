@@ -95,7 +95,7 @@ export function ComposeFields({
           spellCheck={false}
           value={draft.script}
           onChange={(event) => set({ script: event.target.value })}
-          className="font-mono text-xs"
+          className="max-h-[500px] overflow-y-auto font-mono text-xs"
         />
         <FieldDescription>{t("compose.scriptHint")}</FieldDescription>
       </Field>

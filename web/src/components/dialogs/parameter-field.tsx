@@ -250,7 +250,7 @@ function Control({
         autoComplete="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="font-mono text-xs"
+        className="max-h-[500px] overflow-y-auto font-mono text-xs"
       />
     )
   return (
