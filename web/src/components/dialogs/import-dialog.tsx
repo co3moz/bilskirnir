@@ -23,6 +23,7 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { api, sessionExpired } from "@/lib/api"
 import { ArchiveImport, archiveName, readArchiveInfo, type ArchiveInfo } from "@/lib/archives"
 import { closeDialog, openDialog } from "@/lib/dialogs"
+import { t } from "@/lib/i18n"
 import { refreshAll, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
 import { useSubmit } from "./container-dialogs"
@@ -31,10 +32,7 @@ import type { DialogProps } from "./side-drawer"
 
 type Tab = "archive" | "docker"
 
-const descriptions: Record<Tab, string> = {
-  archive: "Loads an archive exported from Bilskirnir, or saved with docker save, into Docker.",
-  docker: "Registers a desktop-compatible image that is already on this Docker host.",
-}
+const description = (tab: Tab) => t(`import.${tab}.description`)
 
 /** The upload, rendered again whenever it reports progress. */
 function useArchiveImport() {
@@ -70,7 +68,7 @@ function ArchiveForm({ open }: { open: boolean }) {
     const [chosen] = files
     if (!chosen || upload.running) return
     if (files.length > 1) {
-      setError("Choose one archive at a time.")
+      setError(t("archives.single"))
       return
     }
     setFile(chosen)
@@ -85,15 +83,15 @@ function ArchiveForm({ open }: { open: boolean }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!file) {
-      setError("Choose an archive first.")
+      setError(t("archives.choose"))
       return
     }
     setError("")
     const job = await upload.start(file, { name: name.trim(), description }, limit)
     if (!job) return
     closeDialog()
-    toast.success(`Importing ${name.trim()}.`, {
-      description: "The archive arrived. Docker is loading the image.",
+    toast.success(t("archives.importing", { name: name.trim() }), {
+      description: t("import.archive.arrived"),
     })
     void refreshAll()
     openDialog({ kind: "job", id: job })
@@ -102,8 +100,8 @@ function ArchiveForm({ open }: { open: boolean }) {
   const running = upload.running
   const status =
     upload.status === "checking"
-      ? "Checking the archive…"
-      : `${fileSize(upload.loaded)} of ${fileSize(upload.size)} uploaded`
+      ? t("import.archive.checking")
+      : t("archives.uploaded", { current: fileSize(upload.loaded), total: fileSize(upload.size) })
   return (
     <form className="flex flex-col gap-4" onSubmit={submit}>
       <FieldGroup className="gap-4">
@@ -129,9 +127,9 @@ function ArchiveForm({ open }: { open: boolean }) {
             </>
           ) : (
             <>
-              <strong className="font-medium">Drop an archive here or choose a file</strong>
+              <strong className="font-medium">{t("archives.drop")}</strong>
               <span className="text-xs text-muted-foreground">
-                .tar.gz or .tar · up to {fileSize(limit)} unpacked
+                {t("archives.limit", { size: fileSize(limit) })}
               </span>
             </>
           )}
@@ -147,7 +145,7 @@ function ArchiveForm({ open }: { open: boolean }) {
           }}
         />
         <Field>
-          <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
+          <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
           <Input
             id={`${field}-name`}
             required
@@ -158,7 +156,7 @@ function ArchiveForm({ open }: { open: boolean }) {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${field}-description`}>Description</FieldLabel>
+          <FieldLabel htmlFor={`${field}-description`}>{t("common.description")}</FieldLabel>
           <Textarea
             id={`${field}-description`}
             rows={2}
@@ -167,18 +165,16 @@ function ArchiveForm({ open }: { open: boolean }) {
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
-          <FieldDescription>
-            Names and tags inside the archive are ignored; the image is saved under a new name.
-          </FieldDescription>
+          <FieldDescription>{t("import.archive.names")}</FieldDescription>
         </Field>
         {upload.status !== "idle" && upload.status !== "started" && upload.size > 0 && (
           <div role="status" aria-live="polite" className="flex flex-col gap-1.5">
             <Progress
               value={(upload.loaded * 100) / Math.max(upload.size, 1)}
-              aria-label="Archive upload progress"
+              aria-label={t("archives.progress")}
             />
             <span className="text-xs text-muted-foreground">
-              {upload.status === "cancelled" ? "Cancelled" : status}
+              {upload.status === "cancelled" ? t("uploads.status.cancelled") : status}
             </span>
           </div>
         )}
@@ -187,18 +183,18 @@ function ArchiveForm({ open }: { open: boolean }) {
       <DialogFooter>
         {running ? (
           <Button type="button" variant="outline" onClick={() => upload.cancel()}>
-            Cancel import
+            {t("archives.cancel")}
           </Button>
         ) : (
           <DialogClose asChild>
             <Button type="button" variant="outline">
-              Cancel
+              {t("common.cancel")}
             </Button>
           </DialogClose>
         )}
         <Button type="submit" disabled={running || !file}>
           {running && <Spinner data-icon="inline-start" />}
-          {running ? "Importing…" : "Import"}
+          {running ? t("archives.importingNow") : t("common.import")}
         </Button>
       </DialogFooter>
     </form>
@@ -216,13 +212,13 @@ function DockerImageForm() {
       onSubmit={submit(async () => {
         await api("images", { name, reference })
         closeDialog()
-        toast.success(`Imported ${name}.`)
+        toast.success(t("import.docker.imported", { name }))
         void refreshAll()
       })}
     >
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor={`${field}-name`}>Name</FieldLabel>
+          <FieldLabel htmlFor={`${field}-name`}>{t("table.name")}</FieldLabel>
           <Input
             id={`${field}-name`}
             required
@@ -231,7 +227,7 @@ function DockerImageForm() {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${field}-reference`}>Image reference</FieldLabel>
+          <FieldLabel htmlFor={`${field}-reference`}>{t("import.docker.reference")}</FieldLabel>
           <Input
             id={`${field}-reference`}
             required
@@ -243,7 +239,7 @@ function DockerImageForm() {
         </Field>
         <FieldError>{error}</FieldError>
       </FieldGroup>
-      <Footer busy={busy} label="Import" />
+      <Footer busy={busy} label={t("common.import")} />
     </form>
   )
 }
@@ -255,13 +251,13 @@ export function ImportImageDialog(props: DialogProps) {
     <Dialog {...props}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Import image</DialogTitle>
-          <DialogDescription>{descriptions[tab]}</DialogDescription>
+          <DialogTitle>{t("job.image-import")}</DialogTitle>
+          <DialogDescription>{description(tab)}</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="gap-4">
           <TabsList className="w-full">
-            <TabsTrigger value="archive">Archive file</TabsTrigger>
-            <TabsTrigger value="docker">Docker image</TabsTrigger>
+            <TabsTrigger value="archive">{t("import.archive.tab")}</TabsTrigger>
+            <TabsTrigger value="docker">{t("import.docker.tab")}</TabsTrigger>
           </TabsList>
           {/* Both stay mounted, so switching tabs keeps a running upload and the typed fields. */}
           <TabsContent value="archive" forceMount className="data-[state=inactive]:hidden">

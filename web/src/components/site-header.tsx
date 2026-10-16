@@ -1,5 +1,6 @@
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { t } from "@/lib/i18n"
 import { useSystem } from "@/lib/queries"
 
 function DockerStatus() {
@@ -14,7 +15,7 @@ function DockerStatus() {
         aria-hidden
         className={`size-2 rounded-full ${system.connected ? "bg-success" : "bg-destructive"}`}
       />
-      {system.connected ? `Docker ${system.version ?? ""}`.trim() : "Docker unavailable"}
+      {system.connected ? `Docker ${system.version ?? ""}`.trim() : t("state.unavailable")}
     </span>
   )
 }

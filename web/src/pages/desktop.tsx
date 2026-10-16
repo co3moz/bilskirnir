@@ -40,6 +40,7 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { attempt, containerAction } from "@/lib/actions"
 import { wsUrl } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
+import { t } from "@/lib/i18n"
 import { DesktopMedia, type MediaState } from "@/lib/media"
 import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
@@ -51,12 +52,7 @@ type RFB = NoVNC
 const RFB: typeof NoVNC = (NoVNC as unknown as { default?: typeof NoVNC }).default ?? NoVNC
 
 type Connection = "connecting" | "connected" | "disconnected" | "failed"
-const connectionText: Record<Connection, string> = {
-  connecting: "Connecting…",
-  connected: "Connected",
-  disconnected: "Disconnected",
-  failed: "Connection failed",
-}
+const connectionText = (connection: Connection) => t(`desktop.connection.${connection}`)
 
 /** A compact toolbar button: an icon with its label on wide screens and a tooltip on narrow ones. */
 function ToolButton({
@@ -169,7 +165,7 @@ export function DesktopPage({ id }: { id: string }) {
     return () => document.removeEventListener("fullscreenchange", update)
   }, [])
 
-  const name = item?.spec.name ?? "Desktop"
+  const name = item?.spec.name ?? t("nav.desktop")
   const spec = item?.spec
 
   return (
@@ -178,8 +174,8 @@ export function DesktopPage({ id }: { id: string }) {
         <Button variant="ghost" size="sm" asChild>
           <a href={href({ page: "containers" })}>
             <RiArrowLeftLine data-icon="inline-start" />
-            <span className="hidden md:inline">Containers</span>
-            <span className="sr-only md:hidden">Back to containers</span>
+            <span className="hidden md:inline">{t("nav.containers")}</span>
+            <span className="sr-only md:hidden">{t("desktop.back")}</span>
           </a>
         </Button>
         <Separator
@@ -203,25 +199,31 @@ export function DesktopPage({ id }: { id: string }) {
                     : "bg-muted-foreground"
               )}
             />
-            <span className="hidden sm:inline">{connectionText[connection]}</span>
+            <span className="hidden sm:inline">{connectionText(connection)}</span>
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
           {running && (
             <>
               <ToolButton
-                label="Upload files"
+                label={t("uploads.title")}
                 icon={<RiUploadLine />}
                 onClick={() => openDialog({ kind: "upload", id })}
               />
               <ToolButton
-                label="Clipboard"
+                label={t("desktop.clipboard")}
                 icon={<RiClipboardLine />}
                 onClick={() => setClipboard(remoteClipboard)}
               />
               {spec?.audio && (
                 <ToolButton
-                  label={audio.output ? "Mute" : audio.outputPending ? "Starting audio…" : "Audio"}
+                  label={
+                    audio.output
+                      ? t("desktop.mute")
+                      : audio.outputPending
+                        ? t("desktop.startingAudio")
+                        : t("spec.audio")
+                  }
                   icon={
                     audio.output ? (
                       <RiVolumeUpLine className="text-primary" />
@@ -237,10 +239,10 @@ export function DesktopPage({ id }: { id: string }) {
                 <ToolButton
                   label={
                     audio.input
-                      ? "Disable mic"
+                      ? t("desktop.micOff")
                       : audio.inputPending
-                        ? "Waiting for permission…"
-                        : "Microphone"
+                        ? t("desktop.micPermission")
+                        : t("spec.microphone")
                   }
                   icon={audio.input ? <RiMicLine className="text-primary" /> : <RiMicOffLine />}
                   aria-pressed={audio.input}
@@ -248,14 +250,14 @@ export function DesktopPage({ id }: { id: string }) {
                 />
               )}
               <ToolButton
-                label="Reconnect"
+                label={t("desktop.reconnect")}
                 icon={<RiRestartLine />}
                 onClick={() => setGeneration((value) => value + 1)}
               />
             </>
           )}
           <ToolButton
-            label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            label={fullscreen ? t("desktop.exitFullscreen") : t("desktop.fullscreen")}
             icon={fullscreen ? <RiFullscreenExitLine /> : <RiFullscreenLine />}
             onClick={() =>
               attempt(() =>
@@ -281,12 +283,12 @@ export function DesktopPage({ id }: { id: string }) {
             <EmptyHeader>
               <EmptyTitle className="text-base">
                 {containers.isPending
-                  ? "Loading container…"
+                  ? t("desktop.loading")
                   : item
-                    ? `${name} is not running`
-                    : "This container no longer exists"}
+                    ? t("desktop.notRunning", { name })
+                    : t("containers.gone")}
               </EmptyTitle>
-              {item && <EmptyDescription>Start it to connect to its desktop.</EmptyDescription>}
+              {item && <EmptyDescription>{t("desktop.startToConnect")}</EmptyDescription>}
             </EmptyHeader>
             <EmptyContent>
               {containers.isPending ? (
@@ -294,11 +296,11 @@ export function DesktopPage({ id }: { id: string }) {
               ) : item ? (
                 <Button onClick={() => attempt(() => containerAction(id, "start"))}>
                   <RiPlayCircleLine data-icon="inline-start" />
-                  Start
+                  {t("containers.start")}
                 </Button>
               ) : (
                 <Button variant="outline" asChild>
-                  <a href={href({ page: "containers" })}>Back to containers</a>
+                  <a href={href({ page: "containers" })}>{t("desktop.back")}</a>
                 </Button>
               )}
             </EmptyContent>
@@ -308,16 +310,13 @@ export function DesktopPage({ id }: { id: string }) {
       <Dialog open={clipboard !== null} onOpenChange={(open) => !open && setClipboard(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Clipboard</DialogTitle>
-            <DialogDescription>
-              The desktop&apos;s clipboard appears here. Edit or paste text, then send it to the
-              desktop.
-            </DialogDescription>
+            <DialogTitle>{t("desktop.clipboard")}</DialogTitle>
+            <DialogDescription>{t("desktop.clipboardHint")}</DialogDescription>
           </DialogHeader>
           <Textarea
             rows={8}
-            aria-label="Clipboard text"
-            placeholder="Paste text or read the desktop clipboard."
+            aria-label={t("desktop.clipboardText")}
+            placeholder={t("desktop.clipboardPlaceholder")}
             value={clipboard ?? ""}
             onChange={(event) => setClipboard(event.target.value)}
           />
@@ -328,7 +327,7 @@ export function DesktopPage({ id }: { id: string }) {
                 setClipboard(null)
               }}
             >
-              Send to desktop
+              {t("desktop.send")}
             </Button>
           </DialogFooter>
         </DialogContent>

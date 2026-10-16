@@ -27,7 +27,8 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
 import { subfolderError, uploadLocations } from "@/lib/format"
 import { useContainers, useSettings } from "@/lib/queries"
-import { FileUploads, fileSize, uploadStatuses } from "@/lib/uploads"
+import { formatNumber, t } from "@/lib/i18n"
+import { FileUploads, fileSize, uploadStatus } from "@/lib/uploads"
 import type { DialogProps } from "./side-drawer"
 
 /** The upload queue, rendered again whenever it reports progress. */
@@ -107,22 +108,18 @@ export function UploadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Upload files</DialogTitle>
+          <DialogTitle>{t("uploads.title")}</DialogTitle>
           <DialogDescription>{item?.spec.name}</DialogDescription>
         </DialogHeader>
         {!item || item.state !== "running" ? (
-          <p className="text-sm text-muted-foreground">
-            Start the container before uploading files.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("uploads.notRunning")}</p>
         ) : !locations.length ? (
-          <p className="text-sm text-muted-foreground">
-            No writable upload destinations are available.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("uploads.noDestination")}</p>
         ) : (
           <FieldGroup className="gap-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor={`${field}-destination`}>Destination</FieldLabel>
+                <FieldLabel htmlFor={`${field}-destination`}>{t("uploads.destination")}</FieldLabel>
                 <Select value={destination} onValueChange={setDestination} disabled={running}>
                   <SelectTrigger id={`${field}-destination`} className="w-full">
                     <SelectValue />
@@ -139,10 +136,10 @@ export function UploadDialog({
                 </Select>
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${field}-subfolder`}>Subfolder</FieldLabel>
+                <FieldLabel htmlFor={`${field}-subfolder`}>{t("uploads.subfolder")}</FieldLabel>
                 <Input
                   id={`${field}-subfolder`}
-                  placeholder="Optional"
+                  placeholder={t("common.optional")}
                   autoComplete="off"
                   disabled={running}
                   value={subfolder}
@@ -158,7 +155,7 @@ export function UploadDialog({
                 onCheckedChange={(value) => setReplace(!!value)}
               />
               <FieldLabel htmlFor={`${field}-replace`} className="font-normal">
-                Replace existing files
+                {t("uploads.replace")}
               </FieldLabel>
             </Field>
             <button
@@ -173,8 +170,10 @@ export function UploadDialog({
               )}
             >
               <RiUploadLine className="mb-1 size-5 text-muted-foreground" />
-              <strong className="font-medium">Drop files here or choose files</strong>
-              <span className="text-xs text-muted-foreground">{fileSize(limit)} per file</span>
+              <strong className="font-medium">{t("uploads.drop")}</strong>
+              <span className="text-xs text-muted-foreground">
+                {t("uploads.perFile", { size: fileSize(limit) })}
+              </span>
             </button>
             <input
               ref={input}
@@ -193,12 +192,12 @@ export function UploadDialog({
                     <div className="flex items-baseline justify-between gap-2 text-sm">
                       <strong className="truncate font-medium">{entry.name}</strong>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {fileSize(entry.size)} · {uploadStatuses[entry.status]}
+                        {fileSize(entry.size)} · {uploadStatus(entry.status)}
                       </span>
                     </div>
                     <Progress
                       value={(entry.loaded * 100) / Math.max(entry.size, 1)}
-                      aria-label={`${entry.name} upload progress`}
+                      aria-label={t("uploads.progressOf", { name: entry.name })}
                     />
                     {entry.error && <p className="text-xs text-destructive">{entry.error}</p>}
                     {entry.path && (
@@ -211,22 +210,25 @@ export function UploadDialog({
               </ul>
             )}
             <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
-              {items.length ? `${completed} of ${items.length} files uploaded` : ""}
+              {items.length
+                ? t("uploads.done", {
+                    completed: formatNumber(completed),
+                    total: formatNumber(items.length),
+                  })
+                : ""}
             </p>
-            <FieldDescription className="text-xs">
-              Volume files are excluded from snapshots. Completed files are kept when you cancel.
-            </FieldDescription>
+            <FieldDescription className="text-xs">{t("uploads.hint")}</FieldDescription>
             <FieldError>{error}</FieldError>
           </FieldGroup>
         )}
         <DialogFooter>
           {running && (
             <Button variant="outline" onClick={() => uploads.cancel()}>
-              Cancel upload
+              {t("uploads.cancel")}
             </Button>
           )}
           <Button disabled={running || !unfinished || !locations.length} onClick={start}>
-            {running ? "Uploading…" : retry ? "Retry remaining files" : "Upload files"}
+            {running ? t("uploads.uploading") : retry ? t("uploads.retry") : t("uploads.title")}
           </Button>
         </DialogFooter>
       </DialogContent>

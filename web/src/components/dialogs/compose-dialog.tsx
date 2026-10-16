@@ -37,6 +37,7 @@ import {
 import type { Compose } from "@/lib/types"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
+import { t } from "@/lib/i18n"
 import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
 
@@ -60,7 +61,7 @@ export function ComposeFields({
       <FieldSet>
         <div className="flex items-center justify-between">
           <FieldLegend variant="label" className="mb-0">
-            Parameters
+            {t("compose.parameters")}
           </FieldLegend>
           <Button
             type="button"
@@ -70,12 +71,10 @@ export function ComposeFields({
             onClick={() => set({ parameters: [...draft.parameters, newParameter()] })}
           >
             <RiAddLine data-icon="inline-start" />
-            Parameter
+            {t("compose.parameter")}
           </Button>
         </div>
-        <FieldDescription className="text-xs">
-          New containers ask for these. Each one reaches the script as an environment variable.
-        </FieldDescription>
+        <FieldDescription className="text-xs">{t("compose.parametersHint")}</FieldDescription>
         {draft.parameters.map((parameter) => (
           <ParameterEditor
             key={parameter.key}
@@ -88,7 +87,7 @@ export function ComposeFields({
         ))}
       </FieldSet>
       <Field>
-        <FieldLabel htmlFor={`${id}-script`}>Setup script</FieldLabel>
+        <FieldLabel htmlFor={`${id}-script`}>{t("compose.script")}</FieldLabel>
         <Textarea
           id={`${id}-script`}
           rows={9}
@@ -98,10 +97,7 @@ export function ComposeFields({
           onChange={(event) => set({ script: event.target.value })}
           className="font-mono text-xs"
         />
-        <FieldDescription>
-          Runs once the new desktop is ready, and again after a reset. Secret values are masked in
-          the job log.
-        </FieldDescription>
+        <FieldDescription>{t("compose.scriptHint")}</FieldDescription>
       </Field>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field orientation="horizontal">
@@ -110,10 +106,10 @@ export function ComposeFields({
             checked={draft.root}
             onCheckedChange={(root) => set({ root })}
           />
-          <FieldLabel htmlFor={`${id}-root`}>Run as root</FieldLabel>
+          <FieldLabel htmlFor={`${id}-root`}>{t("compose.root")}</FieldLabel>
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${id}-timeout`}>Time limit (seconds)</FieldLabel>
+          <FieldLabel htmlFor={`${id}-timeout`}>{t("compose.timeout")}</FieldLabel>
           <Input
             id={`${id}-timeout`}
             type="number"
@@ -149,7 +145,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     else if (current) await api(`images/${id}/compose`, composeBody(current), "PUT")
     else return
     closeDialog()
-    toast.success(remove ? "Removed the compose." : `Saved the compose of ${image?.name}.`)
+    toast.success(remove ? t("compose.removed") : t("compose.saved", { name: image?.name ?? "" }))
     void refreshAll()
   }
 
@@ -165,10 +161,9 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>{exists ? "Edit compose" : "Add compose"}</DialogTitle>
+            <DialogTitle>{exists ? t("compose.edit") : t("compose.add")}</DialogTitle>
             <DialogDescription>
-              What a new container from {image?.name ?? "this image"} asks for, and the script that
-              receives it.
+              {image ? t("compose.descriptionOf", { name: image.name }) : t("compose.description")}
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-4 flex max-h-[min(36rem,60vh)] flex-col gap-5 overflow-y-auto px-4 py-1">
@@ -176,9 +171,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
               <>
                 <ComposeFields draft={current} onChange={setDraft} />
                 {exists && (
-                  <FieldDescription className="text-xs">
-                    Containers created earlier keep the compose they were created with.
-                  </FieldDescription>
+                  <FieldDescription className="text-xs">{t("compose.pinned")}</FieldDescription>
                 )}
               </>
             ) : saved.isError ? (
@@ -188,7 +181,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
             )}
           </div>
           <FieldError>{error}</FieldError>
-          <Footer busy={busy} label="Save compose" disabled={!current}>
+          <Footer busy={busy} label={t("compose.save")} disabled={!current}>
             {exists && (
               <Button
                 type="submit"
@@ -198,7 +191,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
                 className="text-destructive sm:mr-auto"
                 disabled={busy}
               >
-                Remove compose
+                {t("compose.remove")}
               </Button>
             )}
           </Footer>

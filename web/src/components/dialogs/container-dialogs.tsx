@@ -36,6 +36,7 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
+import { t } from "@/lib/i18n"
 import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { parameterBody, composeFor } from "@/lib/compose"
 import type { ImageItem, SettingsPreview } from "@/lib/types"
@@ -75,16 +76,11 @@ function ComposeValues({
   onChange: (values: Record<string, string>) => void
 }) {
   if (!compose.parameters.length)
-    return (
-      <FieldDescription>The image runs a setup script once the desktop is ready.</FieldDescription>
-    )
+    return <FieldDescription>{t("compose.runsScript")}</FieldDescription>
   return (
     <FieldSet>
-      <FieldLegend variant="label">Compose</FieldLegend>
-      <FieldDescription className="text-xs">
-        The image's setup script receives these once the desktop is ready. Secret values are not
-        shown again.
-      </FieldDescription>
+      <FieldLegend variant="label">{t("compose.name")}</FieldLegend>
+      <FieldDescription className="text-xs">{t("compose.valuesHint")}</FieldDescription>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {compose.parameters.map((parameter) => (
           <ParameterField
@@ -130,31 +126,28 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
           )}
         >
           <DialogHeader>
-            <DialogTitle>New container</DialogTitle>
-            <DialogDescription>
-              A container from any image. A catalog image that is not downloaded yet downloads
-              first.
-            </DialogDescription>
+            <DialogTitle>{t("containers.new")}</DialogTitle>
+            <DialogDescription>{t("create.description")}</DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`${id}-name`}>Name</FieldLabel>
+                <FieldLabel htmlFor={`${id}-name`}>{t("table.name")}</FieldLabel>
                 <Input
                   id={`${id}-name`}
                   required
                   maxLength={100}
-                  placeholder="Unity workspace"
+                  placeholder={t("create.namePlaceholder")}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   autoFocus
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${id}-image`}>Image or snapshot</FieldLabel>
+                <FieldLabel htmlFor={`${id}-image`}>{t("create.image")}</FieldLabel>
                 <Select value={chosen ?? ""} onValueChange={setSelected}>
                   <SelectTrigger id={`${id}-image`} className="w-full">
-                    <SelectValue placeholder="Build an image first" />
+                    <SelectValue placeholder={t("build.noBase")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
@@ -165,7 +158,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
                           disabled={choice.disabled}
                         >
                           {choice.label}
-                          {choice.disabled ? " · unavailable" : ""}
+                          {choice.disabled ? ` · ${t("images.unavailable")}` : ""}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -181,12 +174,12 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
-                Cancel
+                {t("common.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy || !chosen}>
               {busy && <Spinner data-icon="inline-start" />}
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </form>
@@ -223,7 +216,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
       })
       if (!preview.live.length && !preview.restart.length) {
         closeDialog()
-        toast("No settings changed.")
+        toast(t("settings.unchanged"))
         return
       }
       if (preview.restart.length) {
@@ -240,15 +233,12 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
       <DialogContent className="sm:max-w-2xl">
         <form className="flex flex-col gap-4" onSubmit={submit(save)}>
           <DialogHeader>
-            <DialogTitle>Container settings</DialogTitle>
-            <DialogDescription>
-              Name, internet and resource limits apply to the running container. Other changes need
-              a new container; its files are kept.
-            </DialogDescription>
+            <DialogTitle>{t("settings.title")}</DialogTitle>
+            <DialogDescription>{t("settings.description")}</DialogDescription>
           </DialogHeader>
           <div className={scrollBody}>
             <Field>
-              <FieldLabel htmlFor={`${formId}-name`}>Name</FieldLabel>
+              <FieldLabel htmlFor={`${formId}-name`}>{t("table.name")}</FieldLabel>
               <Input
                 id={`${formId}-name`}
                 required
@@ -279,12 +269,12 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
-                Cancel
+                {t("common.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
               {busy && <Spinner data-icon="inline-start" />}
-              {notice && running ? "Save and restart" : "Save"}
+              {notice && running ? t("settings.saveRestart") : t("common.save")}
             </Button>
           </DialogFooter>
         </form>

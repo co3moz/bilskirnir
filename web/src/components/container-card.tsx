@@ -33,6 +33,7 @@ import { useFileDrop } from "@/hooks/use-file-drop"
 import { attempt, containerAction, retrySetup, setInternet } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, desktopTitle, needsRetry } from "@/lib/format"
+import { formatNumber, t } from "@/lib/i18n"
 import { href } from "@/lib/route"
 import type { ContainerItem, ContainerSpec, ImageItem } from "@/lib/types"
 
@@ -42,30 +43,32 @@ export function SpecBadges({ spec, className }: { spec: ContainerSpec; className
     <div className={cn("flex flex-wrap gap-1.5", className)}>
       <Badge variant="outline" className="text-muted-foreground">
         <RiCpuLine />
-        {spec.gpu ? "GPU" : "CPU only"}
+        {spec.gpu ? t("spec.gpu") : t("dashboard.cpuOnly")}
       </Badge>
       <Badge variant="outline" className="text-muted-foreground">
-        {spec.cpus ? `${spec.cpus} CPU` : "Unlimited CPU"}
+        {spec.cpus ? t("spec.cpus", { count: formatNumber(spec.cpus) }) : t("spec.unlimitedCpu")}
       </Badge>
       <Badge variant="outline" className="text-muted-foreground">
-        {spec.memory_mb ? `${spec.memory_mb} MB` : "Unlimited RAM"}
+        {spec.memory_mb
+          ? t("spec.memory", { count: formatNumber(spec.memory_mb) })
+          : t("spec.unlimitedMemory")}
       </Badge>
       {spec.audio && (
         <Badge variant="outline" className="text-muted-foreground">
           <RiVolumeUpLine />
-          Audio
+          {t("spec.audio")}
         </Badge>
       )}
       {spec.microphone && (
         <Badge variant="outline" className="text-muted-foreground">
           <RiMicLine />
-          Microphone
+          {t("spec.microphone")}
         </Badge>
       )}
       {spec.gamepad && (
         <Badge variant="outline" className="text-muted-foreground">
           <RiGamepadLine />
-          Gamepad
+          {t("spec.gamepad")}
         </Badge>
       )}
     </div>
@@ -86,7 +89,7 @@ export function PrimaryAction({ item, className }: { item: ContainerItem; classN
       <Button asChild className={className}>
         <a href={href({ page: "desktop", id })}>
           <RiComputerLine data-icon="inline-start" />
-          Connect
+          {t("containers.connect")}
         </a>
       </Button>
     )
@@ -99,7 +102,7 @@ export function PrimaryAction({ item, className }: { item: ContainerItem; classN
         onClick={run(() => retrySetup(id))}
       >
         <RiResetLeftLine data-icon="inline-start" />
-        Retry setup
+        {t("job.retry")}
       </Button>
     )
   return (
@@ -110,7 +113,7 @@ export function PrimaryAction({ item, className }: { item: ContainerItem; classN
       onClick={run(() => containerAction(id, "start"))}
     >
       <RiPlayCircleLine data-icon="inline-start" />
-      Start
+      {t("containers.start")}
     </Button>
   )
 }
@@ -122,7 +125,7 @@ export function InternetSwitch({ item, id }: { item: ContainerItem; id?: string 
       id={id}
       checked={item.spec.internet}
       disabled={busy}
-      aria-label={`${item.spec.name} internet access`}
+      aria-label={t("containers.internetOf", { name: item.spec.name })}
       onCheckedChange={async (enabled) => {
         setBusy(true)
         await attempt(() => setInternet(item.id, enabled))
@@ -171,7 +174,7 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
         <SpecBadges spec={spec} />
         <div className="flex items-center justify-between">
           <Label htmlFor={switchId} className="text-muted-foreground">
-            Internet
+            {t("spec.internet")}
           </Label>
           <InternetSwitch item={item} id={switchId} />
         </div>
@@ -191,15 +194,13 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
                 size="icon"
                 disabled={!running}
                 onClick={() => openDialog({ kind: "upload", id })}
-                aria-label={`Upload files to ${spec.name}`}
+                aria-label={t("uploads.to", { name: spec.name })}
               >
                 <RiUploadLine />
               </Button>
             </span>
           </TooltipTrigger>
-          <TooltipContent>
-            {running ? "Upload files" : "Start the container to upload files"}
-          </TooltipContent>
+          <TooltipContent>{running ? t("uploads.title") : t("uploads.startFirst")}</TooltipContent>
         </Tooltip>
         <ContainerMenu item={item} />
       </CardFooter>

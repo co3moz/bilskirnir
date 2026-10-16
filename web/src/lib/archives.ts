@@ -1,3 +1,4 @@
+import { t } from "./i18n"
 import { fileSize, type UploadRequest } from "./uploads"
 import type { DesktopInfo } from "./types"
 
@@ -139,7 +140,7 @@ export class ArchiveImport {
     this.cancelled = false
     if (file.size > limit) {
       this.status = "failed"
-      this.error = `Archives must be ${fileSize(limit)} or smaller.`
+      this.error = t("archives.tooLarge", { size: fileSize(limit) })
       this.onChange()
       return ""
     }
@@ -187,12 +188,12 @@ export class ArchiveImport {
         if (request.status >= 200 && request.status < 300 && result.job_id) resolve(result.job_id)
         else {
           if (request.status === 401) this.onUnauthorized()
-          reject(new Error(result.error || `Import failed (${request.status}).`))
+          reject(new Error(result.error || t("archives.failed", { status: request.status })))
         }
       }
-      request.onerror = () => reject(new Error("Connection lost. Try the import again."))
-      request.ontimeout = () => reject(new Error("The import timed out."))
-      request.onabort = () => reject(new Error("Import cancelled."))
+      request.onerror = () => reject(new Error(t("archives.connectionLost")))
+      request.ontimeout = () => reject(new Error(t("archives.timedOut")))
+      request.onabort = () => reject(new Error(t("archives.cancelled")))
       request.send(file)
     })
   }

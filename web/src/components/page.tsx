@@ -1,6 +1,7 @@
 import { RiAlertLine } from "@remixicon/react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { t } from "@/lib/i18n"
 import { useSystem } from "@/lib/queries"
 
 /** The content column of dashboard-01, sized by its `@container/main` queries. */
@@ -42,10 +43,8 @@ export function DockerAlert() {
     <div className="px-4 lg:px-6">
       <Alert variant="destructive">
         <RiAlertLine />
-        <AlertTitle>Cannot connect to Docker</AlertTitle>
-        <AlertDescription>
-          {system.error || "Check that the Docker daemon is running."}
-        </AlertDescription>
+        <AlertTitle>{t("docker.unreachable")}</AlertTitle>
+        <AlertDescription>{system.error || t("docker.checkDaemon")}</AlertDescription>
       </Alert>
     </div>
   )

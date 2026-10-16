@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { displayOf, pickedChoices, sliderValue, toggleChoice } from "@/lib/compose"
+import { t } from "@/lib/i18n"
 import type { ComposeParameter } from "@/lib/types"
 
 // Values never contain NUL, so these cannot collide with an option.
@@ -135,7 +136,7 @@ function Control({
             onValueChange={([position]) => onChange(sliderValue(position, step))}
           />
           <span className="min-w-14 text-right font-mono text-xs text-muted-foreground tabular-nums">
-            {value === "" ? "Not set" : value}
+            {value === "" ? t("parameter.notSet") : value}
           </span>
         </div>
       )
@@ -182,8 +183,8 @@ function Control({
     }
     const otherInput = custom && (
       <Input
-        aria-label={`${title}, other value`}
-        placeholder="Other value"
+        aria-label={t("parameter.otherOf", { name: title })}
+        placeholder={t("parameter.otherValue")}
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -199,7 +200,7 @@ function Control({
             value={selected}
             onValueChange={pick}
           >
-            {!required && <RadioChoice value={NONE} label="None" />}
+            {!required && <RadioChoice value={NONE} label={t("common.none")} />}
             {options.map((option) => (
               <RadioChoice
                 key={option.value}
@@ -207,7 +208,9 @@ function Control({
                 label={option.label || option.value}
               />
             ))}
-            {parameter.allow_custom && <RadioChoice value={OTHER} label="Other" />}
+            {parameter.allow_custom && (
+              <RadioChoice value={OTHER} label={t("parameter.otherChoice")} />
+            )}
           </RadioGroup>
           {otherInput}
         </>
@@ -216,17 +219,19 @@ function Control({
       <>
         <Select required={required} value={selected} onValueChange={pick}>
           <SelectTrigger id={id} className="w-full">
-            <SelectValue placeholder="Choose…" />
+            <SelectValue placeholder={t("parameter.choose")} />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              {!required && <SelectItem value={NONE}>None</SelectItem>}
+              {!required && <SelectItem value={NONE}>{t("common.none")}</SelectItem>}
               {options.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label || option.value}
                 </SelectItem>
               ))}
-              {parameter.allow_custom && <SelectItem value={OTHER}>Other…</SelectItem>}
+              {parameter.allow_custom && (
+                <SelectItem value={OTHER}>{t("parameter.otherEllipsis")}</SelectItem>
+              )}
             </SelectGroup>
           </SelectContent>
         </Select>

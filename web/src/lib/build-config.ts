@@ -1,4 +1,5 @@
 import { readCompose } from "./compose"
+import { t } from "./i18n"
 import type { BuildConfig } from "./types"
 
 /** A pasted configuration: the script is required, the other fields keep the form's value. */
@@ -19,29 +20,27 @@ export function parseBuildConfig(text: string): ImportedBuild {
   try {
     value = JSON.parse(text)
   } catch {
-    throw new Error("The configuration is not valid JSON.")
+    throw new Error(t("build.config.json"))
   }
   if (typeof value !== "object" || value === null || Array.isArray(value))
-    throw new Error("The configuration must be a JSON object.")
+    throw new Error(t("build.config.object"))
   const fields = value as Record<string, unknown>
   const { name, base_image, internet, script } = fields
   // Configurations exported before templates were called composes name it `template`.
   const compose = fields.compose ?? fields.template
-  if (typeof script !== "string" || !script.trim())
-    throw new Error("The configuration has no setup script.")
+  if (typeof script !== "string" || !script.trim()) throw new Error(t("build.config.script"))
   const config: ImportedBuild = { script }
   if (name !== undefined) {
-    if (typeof name !== "string") throw new Error("The name must be text.")
-    if ([...name].length > 100) throw new Error("The name must be at most 100 characters.")
+    if (typeof name !== "string") throw new Error(t("build.config.nameText"))
+    if ([...name].length > 100) throw new Error(t("build.config.nameLong"))
     config.name = name
   }
   if (base_image !== undefined) {
-    if (typeof base_image !== "string" || !base_image)
-      throw new Error("The base image must be an image reference.")
+    if (typeof base_image !== "string" || !base_image) throw new Error(t("build.config.base"))
     config.base_image = base_image
   }
   if (internet !== undefined) {
-    if (typeof internet !== "boolean") throw new Error("Internet must be true or false.")
+    if (typeof internet !== "boolean") throw new Error(t("build.config.internet"))
     config.internet = internet
   }
   if (compose !== undefined && compose !== null) config.compose = readCompose(compose)

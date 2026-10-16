@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator"
 import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, date, desktopTitle } from "@/lib/format"
+import { formatNumber, rich, t } from "@/lib/i18n"
 import { useContainers, useImages } from "@/lib/queries"
 import { setupLabel } from "@/lib/compose"
 import type { ContainerSetup } from "@/lib/types"
@@ -40,7 +41,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   )
 }
 
-const yes = (value: boolean) => (value ? "On" : "Off")
+const yes = (value: boolean) => (value ? t("common.on") : t("common.off"))
 
 const setupTone = {
   pending: "warning",
@@ -57,8 +58,8 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
     return (
       <SideDrawer {...props}>
         <DrawerHeader>
-          <DrawerTitle>Container</DrawerTitle>
-          <DrawerDescription>This container no longer exists.</DrawerDescription>
+          <DrawerTitle>{t("containers.container")}</DrawerTitle>
+          <DrawerDescription>{t("containers.gone")}</DrawerDescription>
         </DrawerHeader>
       </SideDrawer>
     )
@@ -82,18 +83,18 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
         </div>
         {item.last_error && (
           <Alert variant="destructive">
-            <AlertTitle>Setup did not finish</AlertTitle>
+            <AlertTitle>{t("containers.setupUnfinished")}</AlertTitle>
             <AlertDescription>{item.last_error}</AlertDescription>
           </Alert>
         )}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={() => openDialog({ kind: "settings", id })}>
             <RiSettings3Line data-icon="inline-start" />
-            Settings
+            {t("containers.settings")}
           </Button>
           <Button variant="outline" onClick={() => openDialog({ kind: "snapshot", id })}>
             <RiCameraLine data-icon="inline-start" />
-            Snapshot
+            {t("containers.snapshot")}
           </Button>
           <Button
             variant="outline"
@@ -101,83 +102,94 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
             onClick={() => openDialog({ kind: "upload", id })}
           >
             <RiUploadLine data-icon="inline-start" />
-            Upload files
+            {t("uploads.title")}
           </Button>
           <Button variant="outline" onClick={() => attempt(() => containerAction(id, "restart"))}>
             <RiRestartLine data-icon="inline-start" />
-            Restart
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => attempt(() => showLog(`${spec.name} logs`, `containers/${id}/logs`))}
-          >
-            <RiFileTextLine data-icon="inline-start" />
-            Logs
+            {t("containers.restart")}
           </Button>
           <Button
             variant="outline"
             onClick={() =>
-              attempt(() => showLog(`${spec.name} diagnostics`, `containers/${id}/diagnostics`))
+              attempt(() =>
+                showLog(t("containers.logsOf", { name: spec.name }), `containers/${id}/logs`)
+              )
+            }
+          >
+            <RiFileTextLine data-icon="inline-start" />
+            {t("containers.logs")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              attempt(() =>
+                showLog(
+                  t("containers.diagnosticsOf", { name: spec.name }),
+                  `containers/${id}/diagnostics`
+                )
+              )
             }
           >
             <RiStethoscopeLine data-icon="inline-start" />
-            Diagnostics
+            {t("containers.diagnostics")}
           </Button>
           {running && (
             <Button variant="outline" onClick={() => attempt(() => containerAction(id, "stop"))}>
               <RiStopCircleLine data-icon="inline-start" />
-              Stop
+              {t("containers.stop")}
             </Button>
           )}
           <Button variant="destructive" onClick={() => openDialog({ kind: "delete", id })}>
             <RiDeleteBinLine data-icon="inline-start" />
-            Delete
+            {t("common.delete")}
           </Button>
         </div>
         <SpecBadges spec={spec} />
         <Separator />
         <dl className="grid grid-cols-2 gap-4">
-          <Fact label="Resolution">{spec.resolution}</Fact>
-          <Fact label="Shared memory">{spec.shm_mb} MB</Fact>
-          <Fact label="Internet">{yes(spec.internet)}</Fact>
-          <Fact label="Sudo">{yes(spec.sudo)}</Fact>
-          <Fact label="Created">{date(item.created_at)}</Fact>
-          <Fact label="Docker name">
+          <Fact label={t("spec.resolution")}>{spec.resolution}</Fact>
+          <Fact label={t("containers.sharedMemory")}>
+            {t("spec.memory", { count: formatNumber(spec.shm_mb) })}
+          </Fact>
+          <Fact label={t("spec.internet")}>{yes(spec.internet)}</Fact>
+          <Fact label={t("spec.flag.sudo")}>{yes(spec.sudo)}</Fact>
+          <Fact label={t("table.created")}>{date(item.created_at)}</Fact>
+          <Fact label={t("containers.dockerName")}>
             <code className="font-mono text-xs">{item.container}</code>
           </Fact>
           <div className="col-span-2">
-            <Fact label="Image">
+            <Fact label={t("containers.image")}>
               <code className="font-mono text-xs">{spec.image}</code>
             </Fact>
           </div>
         </dl>
         <Separator />
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs text-muted-foreground">Volumes</h3>
+          <h3 className="text-xs text-muted-foreground">{t("nav.volumes")}</h3>
           {spec.mounts.length ? (
             <ul className="flex flex-col gap-1">
               {spec.mounts.map((mount) => (
-                <li key={mount.target} className="flex flex-wrap items-center gap-x-2 text-xs">
+                <li key={mount.target} className="flex flex-wrap items-center gap-x-1 text-xs">
                   <code className="font-mono">{mount.volume}</code>
-                  <span className="text-muted-foreground">at</span>
-                  <code className="font-mono">{mount.target}</code>
-                  {mount.readonly && <span className="text-muted-foreground">(read-only)</span>}
+                  <span className="text-muted-foreground">
+                    {rich(mount.readonly ? "volumes.mountedAtReadOnly" : "volumes.mountedAt", {
+                      target: <code className="font-mono text-foreground">{mount.target}</code>,
+                    })}
+                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted-foreground">No volumes mounted.</p>
+            <p className="text-xs text-muted-foreground">{t("containers.noMounts")}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            Mounted volumes are excluded from snapshots.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("spec.mountsHint")}</p>
         </div>
         {setup && setupStatus && (
           <>
             <Separator />
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs text-muted-foreground">Compose setup</h3>
+                <h3 className="text-xs text-muted-foreground">{t("compose.setup")}</h3>
                 <StatusBadge
                   state={setupStatus}
                   tone={setupTone[setupStatus]}
@@ -190,13 +202,15 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
                     <Fact key={name} label={name}>
                       {/* Several choices arrive one per line. */}
                       <span className="whitespace-pre-wrap">
-                        {value || <span className="text-muted-foreground">Empty</span>}
+                        {value || (
+                          <span className="text-muted-foreground">{t("compose.empty")}</span>
+                        )}
                       </span>
                     </Fact>
                   ))}
                   {setup.secrets.map((name) => (
                     <Fact key={name} label={name}>
-                      <span className="text-muted-foreground">Secret</span>
+                      <span className="text-muted-foreground">{t("compose.secret")}</span>
                     </Fact>
                   ))}
                 </dl>
@@ -208,7 +222,7 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
                   onClick={() => attempt(() => retrySetup(id))}
                 >
                   <RiResetLeftLine data-icon="inline-start" />
-                  Retry setup
+                  {t("job.retry")}
                 </Button>
               )}
             </div>
@@ -218,7 +232,7 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
       <DrawerFooter>
         <PrimaryAction item={item} />
         <DrawerClose asChild>
-          <Button variant="outline">Done</Button>
+          <Button variant="outline">{t("common.done")}</Button>
         </DrawerClose>
       </DrawerFooter>
     </SideDrawer>

@@ -8,7 +8,7 @@ import {
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
-import { stateLabels, type Tone } from "@/lib/format"
+import { stateLabel, type Tone } from "@/lib/format"
 
 const icons: Record<Tone, React.ReactNode> = {
   success: <RiCheckboxCircleFill className="text-success" />,
@@ -33,7 +33,7 @@ export function StatusBadge({
   return (
     <Badge variant="outline" className={cn("px-1.5 text-muted-foreground", className)}>
       {icons[tone]}
-      {label ?? stateLabels[state] ?? state}
+      {label ?? stateLabel(state)}
     </Badge>
   )
 }

@@ -55,6 +55,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { formatNumber, plural, t } from "@/lib/i18n"
 
 // Declare the features the tables use; anything not registered is tree-shaken out of the bundle.
 export const features = tableFeatures({
@@ -116,7 +117,7 @@ export function selectColumn<T extends RowData>(): DataColumn<T> {
             (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label={t("table.selectAll")}
         />
       </div>
     ),
@@ -125,7 +126,7 @@ export function selectColumn<T extends RowData>(): DataColumn<T> {
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label={t("table.selectRow")}
         />
       </div>
     ),
@@ -176,7 +177,7 @@ export function ColumnsMenu<T extends RowData>({
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
           <RiLayoutColumnLine data-icon="inline-start" />
-          <span className="hidden lg:inline">Columns</span>
+          <span className="hidden lg:inline">{t("table.columns")}</span>
           <RiArrowDownSLine data-icon="inline-end" />
         </Button>
       </DropdownMenuTrigger>
@@ -261,13 +262,16 @@ export function DataTablePagination<T extends RowData>({
     <div className="flex items-center justify-between px-4">
       <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
         {selectable
-          ? `${table.getSelectedRowModel().rows.length} of ${table.getRowCount()} row(s) selected.`
-          : `${table.getRowCount()} ${table.getRowCount() === 1 ? "row" : "rows"}`}
+          ? t("table.selected", {
+              selected: formatNumber(table.getSelectedRowModel().rows.length),
+              total: formatNumber(table.getRowCount()),
+            })
+          : plural(table.getRowCount(), { one: "table.rows.one", other: "table.rows.other" })}
       </div>
       <div className="flex w-full items-center gap-8 lg:w-fit">
         <div className="hidden items-center gap-2 lg:flex">
           <Label htmlFor={`${id}-rows`} className="text-sm font-medium">
-            Rows per page
+            {t("table.rowsPerPage")}
           </Label>
           <Select value={`${pageSize}`} onValueChange={(value) => table.setPageSize(Number(value))}>
             <SelectTrigger size="sm" className="w-20" id={`${id}-rows`}>
@@ -285,8 +289,10 @@ export function DataTablePagination<T extends RowData>({
           </Select>
         </div>
         <div className="flex w-fit items-center justify-center text-sm font-medium">
-          Page {Math.min(pageIndex + 1, Math.max(table.getPageCount(), 1))} of{" "}
-          {Math.max(table.getPageCount(), 1)}
+          {t("table.page", {
+            page: formatNumber(Math.min(pageIndex + 1, Math.max(table.getPageCount(), 1))),
+            pages: formatNumber(Math.max(table.getPageCount(), 1)),
+          })}
         </div>
         <div className="ml-auto flex items-center gap-2 lg:ml-0">
           <Button
@@ -295,7 +301,7 @@ export function DataTablePagination<T extends RowData>({
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
           >
-            <span className="sr-only">Go to first page</span>
+            <span className="sr-only">{t("table.first")}</span>
             <RiArrowLeftDoubleLine />
           </Button>
           <Button
@@ -305,7 +311,7 @@ export function DataTablePagination<T extends RowData>({
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            <span className="sr-only">Go to previous page</span>
+            <span className="sr-only">{t("table.previous")}</span>
             <RiArrowLeftSLine />
           </Button>
           <Button
@@ -315,7 +321,7 @@ export function DataTablePagination<T extends RowData>({
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            <span className="sr-only">Go to next page</span>
+            <span className="sr-only">{t("table.next")}</span>
             <RiArrowRightSLine />
           </Button>
           <Button
@@ -325,7 +331,7 @@ export function DataTablePagination<T extends RowData>({
             onClick={() => table.setPageIndex(table.getPageCount() - 1)}
             disabled={!table.getCanNextPage()}
           >
-            <span className="sr-only">Go to last page</span>
+            <span className="sr-only">{t("table.last")}</span>
             <RiArrowRightDoubleLine />
           </Button>
         </div>
@@ -351,11 +357,11 @@ export function ViewTabs({
   return (
     <>
       <Label htmlFor={id} className="sr-only">
-        View
+        {t("table.view")}
       </Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm" id={id}>
-          <SelectValue placeholder="Select a view" />
+          <SelectValue placeholder={t("table.selectView")} />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>

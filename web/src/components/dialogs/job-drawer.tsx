@@ -13,7 +13,8 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { closeDialog, openDialog } from "@/lib/dialogs"
-import { date, jobLogText, jobNames, jobProgress, jobTone } from "@/lib/format"
+import { date, jobLogText, jobName, jobProgress, jobTone } from "@/lib/format"
+import { t } from "@/lib/i18n"
 import { useJob } from "@/lib/queries"
 import { navigate } from "@/lib/route"
 import { SideDrawer, type DialogProps } from "./side-drawer"
@@ -64,7 +65,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
   return (
     <SideDrawer {...props} wide>
       <DrawerHeader className="gap-1">
-        <DrawerTitle>{data ? (jobNames[data.kind] ?? data.kind) : "Job log"}</DrawerTitle>
+        <DrawerTitle>{data ? jobName(data.kind) : t("jobs.log")}</DrawerTitle>
         <DrawerDescription asChild>
           <div className="flex flex-wrap items-center gap-2">
             {data ? (
@@ -85,7 +86,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
               <Progress
                 value={(progress.value! * 100) / progress.max}
                 aria-label={
-                  data?.progress?.transfer ? "Archive progress" : "Image download progress"
+                  data?.progress?.transfer ? t("jobs.archiveProgress") : t("jobs.downloadProgress")
                 }
               />
             )}
@@ -107,7 +108,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
         {result?.image_id && result.reference && (
           <Button onClick={() => openDialog({ kind: "create", image: result.image_id })}>
             <RiAddLine data-icon="inline-start" />
-            Create container
+            {t("job.create")}
           </Button>
         )}
         {result?.container_id && (
@@ -119,11 +120,11 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
             }}
           >
             <RiComputerLine data-icon="inline-start" />
-            View containers
+            {t("jobs.viewContainers")}
           </Button>
         )}
         <DrawerClose asChild>
-          <Button variant="outline">Done</Button>
+          <Button variant="outline">{t("common.done")}</Button>
         </DrawerClose>
       </DrawerFooter>
     </SideDrawer>

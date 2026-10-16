@@ -40,8 +40,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { api, sessionExpired } from "@/lib/api"
 import { shortDate } from "@/lib/format"
+import { formatNumber, rich, t } from "@/lib/i18n"
 import { queryClient, useSettings } from "@/lib/queries"
-import { FileUploads, fileSize, uploadStatuses } from "@/lib/uploads"
+import { FileUploads, fileSize, uploadStatus } from "@/lib/uploads"
 import {
   EDIT_LIMIT,
   entryNameError,
@@ -135,10 +136,10 @@ function NameForm({
           className="font-mono"
         />
         <Button type="submit" disabled={busy}>
-          Save
+          {t("common.save")}
         </Button>
         <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
       <FieldError>{error}</FieldError>
@@ -207,7 +208,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
     }
     if (entry.type !== "file") return
     if (entry.size > EDIT_LIMIT) {
-      toast.info(`${entry.name} is larger than ${fileSize(EDIT_LIMIT)}; downloading it instead.`)
+      toast.info(t("files.tooLarge", { name: entry.name, size: fileSize(EDIT_LIMIT) }))
       download(name, target)
       return
     }
@@ -228,10 +229,13 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
 
   const save = () =>
     editing &&
-    run(async () => {
-      await api(`${base}/files/write`, { path: editing.path, data: editing.text, replace: true })
-      setEditing({ ...editing, saved: editing.text })
-    }, `Saved ${editing.path}.`)
+    run(
+      async () => {
+        await api(`${base}/files/write`, { path: editing.path, data: editing.text, replace: true })
+        setEditing({ ...editing, saved: editing.text })
+      },
+      t("files.saved", { path: editing.path })
+    )
 
   const entries = sortEntries(listing.data?.items ?? [])
   const changed = !!editing && editing.text !== editing.saved
@@ -242,11 +246,9 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Files in <code className="font-mono">{name}</code>
+            {rich("files.title", { volume: <code className="font-mono">{name}</code> })}
           </DialogTitle>
-          <DialogDescription>
-            Files are read and written as the desktop user (UID 1001), as in a container.
-          </DialogDescription>
+          <DialogDescription>{t("files.description")}</DialogDescription>
         </DialogHeader>
         {editing ? (
           <div className="flex min-w-0 flex-col gap-3">
@@ -254,7 +256,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="Back to the folder"
+                aria-label={t("files.backToFolder")}
                 onClick={() => (changed ? setDiscarding(true) : setEditing(null))}
               >
                 <RiArrowLeftLine />
@@ -263,7 +265,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             </div>
             {discarding && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 p-3 text-sm">
-                <span>Discard the unsaved changes?</span>
+                <span>{t("files.discardQuestion")}</span>
                 <div className="flex gap-2">
                   <Button
                     variant="destructive"
@@ -273,16 +275,16 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                       setEditing(null)
                     }}
                   >
-                    Discard
+                    {t("files.discard")}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setDiscarding(false)}>
-                    Keep editing
+                    {t("files.keepEditing")}
                   </Button>
                 </div>
               </div>
             )}
             <Textarea
-              aria-label={`Contents of ${editing.path}`}
+              aria-label={t("files.contentsOf", { path: editing.path })}
               value={editing.text}
               spellCheck={false}
               onChange={(event) => setEditing({ ...editing, text: event.target.value })}
@@ -296,10 +298,10 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                 disabled={busy || changed}
               >
                 <RiDownloadLine data-icon="inline-start" />
-                Download
+                {t("files.download")}
               </Button>
               <Button onClick={save} disabled={busy || !changed}>
-                {busy ? "Saving…" : "Save"}
+                {busy ? t("files.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </div>
@@ -312,7 +314,10 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             )}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center text-sm">
+              <nav
+                aria-label={t("files.folder")}
+                className="flex min-w-0 flex-wrap items-center text-sm"
+              >
                 {pathCrumbs(path).map((crumb, index, all) => (
                   <React.Fragment key={crumb.path}>
                     {index > 1 && <span className="px-1 text-muted-foreground">/</span>}
@@ -341,11 +346,11 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                   onClick={() => setPending({ kind: "folder" })}
                 >
                   <RiFolderAddLine data-icon="inline-start" />
-                  New folder
+                  {t("files.newFolder")}
                 </Button>
                 <Button size="sm" disabled={uploads.running} onClick={() => input.current?.click()}>
                   <RiUploadLine data-icon="inline-start" />
-                  Upload
+                  {t("files.upload")}
                 </Button>
                 <input
                   ref={input}
@@ -361,21 +366,21 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             </div>
             {pending?.kind === "folder" && (
               <NameForm
-                label="Folder name"
+                label={t("files.folderName")}
                 initial=""
                 busy={busy}
                 onCancel={() => setPending(null)}
                 onSubmit={(folder) =>
                   run(
                     () => api(`${base}/files/mkdir`, { path: joinPath(path, folder) }),
-                    `Created ${folder}.`
+                    t("files.created", { name: folder })
                   )
                 }
               />
             )}
             {pending?.kind === "rename" && (
               <NameForm
-                label={`New name for ${pending.entry.name}`}
+                label={t("files.newName", { name: pending.entry.name })}
                 initial={pending.entry.name}
                 busy={busy}
                 onCancel={() => setPending(null)}
@@ -386,7 +391,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                         source: joinPath(path, pending.entry.name),
                         destination: joinPath(path, renamed),
                       }),
-                    `Renamed ${pending.entry.name} to ${renamed}.`
+                    t("files.renamed", { name: pending.entry.name, renamed })
                   )
                 }
               />
@@ -394,8 +399,12 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             {pending?.kind === "delete" && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 p-3 text-sm">
                 <span>
-                  Delete <strong className="font-medium">{pending.entry.name}</strong>
-                  {pending.entry.type === "directory" ? " and everything in it" : ""}?
+                  {rich(
+                    pending.entry.type === "directory"
+                      ? "files.deleteFolderQuestion"
+                      : "files.deleteQuestion",
+                    { name: <strong className="font-medium">{pending.entry.name}</strong> }
+                  )}
                 </span>
                 <div className="flex gap-2">
                   <Button
@@ -409,11 +418,11 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                             path: joinPath(path, pending.entry.name),
                             recursive: pending.entry.type === "directory",
                           }),
-                        `Deleted ${pending.entry.name}.`
+                        t("files.deleted", { name: pending.entry.name })
                       )
                     }
                   >
-                    Delete
+                    {t("common.delete")}
                   </Button>
                   <Button
                     variant="outline"
@@ -421,7 +430,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                     disabled={busy}
                     onClick={() => setPending(null)}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                 </div>
               </div>
@@ -457,7 +466,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                         onClick={() => void openEntry(entry)}
                         title={
                           entry.type === "file" && entry.size <= EDIT_LIMIT
-                            ? "Open as text"
+                            ? t("files.openAsText")
                             : undefined
                         }
                       >
@@ -482,7 +491,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                             variant="ghost"
                             size="icon-sm"
                             disabled={busy}
-                            aria-label={`${entry.name} actions`}
+                            aria-label={t("containers.actionsOf", { name: entry.name })}
                           >
                             <RiMoreLine />
                           </Button>
@@ -493,12 +502,12 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                               onSelect={() => download(name, joinPath(path, entry.name))}
                             >
                               <RiDownloadLine />
-                              Download
+                              {t("files.download")}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onSelect={() => setPending({ kind: "rename", entry })}>
                             <RiPencilLine />
-                            Rename
+                            {t("files.rename")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -506,7 +515,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                             onSelect={() => setPending({ kind: "delete", entry })}
                           >
                             <RiDeleteBinLine />
-                            Delete
+                            {t("common.delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -514,8 +523,8 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                   ))}
                   {!entries.length && (
                     <li className="px-3 py-8 text-center text-sm text-muted-foreground">
-                      {path === "/" ? "This volume is empty." : "This folder is empty."} Drop files
-                      here to upload them.
+                      {path === "/" ? t("files.volumeEmpty") : t("files.folderEmpty")}{" "}
+                      {t("files.dropToUpload")}
                     </li>
                   )}
                 </ul>
@@ -523,7 +532,10 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             </div>
             {listing.data?.truncated && (
               <p className="text-xs text-muted-foreground">
-                Showing {listing.data.items.length} of {listing.data.total} entries.
+                {t("files.truncated", {
+                  shown: formatNumber(listing.data.items.length),
+                  total: formatNumber(listing.data.total),
+                })}
               </p>
             )}
             {queue.length > 0 && (
@@ -533,12 +545,12 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                     <div className="flex items-baseline justify-between gap-2 text-xs">
                       <span className="truncate font-mono">{entry.name}</span>
                       <span className="shrink-0 text-muted-foreground">
-                        {entry.error || `${fileSize(entry.size)} · ${uploadStatuses[entry.status]}`}
+                        {entry.error || `${fileSize(entry.size)} · ${uploadStatus(entry.status)}`}
                       </span>
                     </div>
                     <Progress
                       value={(entry.loaded * 100) / Math.max(entry.size, 1)}
-                      aria-label={`${entry.name} upload progress`}
+                      aria-label={t("uploads.progressOf", { name: entry.name })}
                     />
                   </li>
                 ))}

@@ -18,6 +18,7 @@ The name is a nod to Thor.
 - **Composes** that ask for values such as an account when a container is created, and run a setup script with them.
 - **Volumes** that keep your files after a container is deleted.
 - **Drag and drop uploads** into a container.
+- **An interface in English, German, French, Spanish and Turkish**, following the browser's language.
 
 Both supplied desktops use Ubuntu 24.04:
 
