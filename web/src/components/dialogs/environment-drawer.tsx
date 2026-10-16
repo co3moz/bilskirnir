@@ -193,7 +193,10 @@ export function EnvironmentDrawer({ id, ...props }: DialogProps & { id: string }
                 <dl className="grid grid-cols-2 gap-4">
                   {Object.entries(setup.parameters).map(([name, value]) => (
                     <Fact key={name} label={name}>
-                      {value || <span className="text-muted-foreground">Empty</span>}
+                      {/* Several choices arrive one per line. */}
+                      <span className="whitespace-pre-wrap">
+                        {value || <span className="text-muted-foreground">Empty</span>}
+                      </span>
                     </Fact>
                   ))}
                   {setup.secrets.map((name) => (

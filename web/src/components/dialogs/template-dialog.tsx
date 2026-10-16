@@ -1,10 +1,9 @@
 import * as React from "react"
-import { RiAddLine, RiCloseLine } from "@remixicon/react"
+import { RiAddLine } from "@remixicon/react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -22,7 +21,6 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -31,7 +29,6 @@ import { closeDialog } from "@/lib/dialogs"
 import { refreshAll, useImages } from "@/lib/queries"
 import {
   newParameter,
-  PARAMETER_NAME,
   templateBody,
   templateDraft,
   type ParameterDraft,
@@ -40,6 +37,7 @@ import {
 import type { Template } from "@/lib/types"
 import { useSubmit } from "./environment-dialogs"
 import type { DialogProps } from "./side-drawer"
+import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
 
 /** The template editor shared by Build image and Edit template. */
@@ -52,11 +50,9 @@ export function TemplateFields({
 }) {
   const id = React.useId()
   const set = (patch: Partial<TemplateDraft>) => onChange({ ...draft, ...patch })
-  const setParameter = (key: number, patch: Partial<ParameterDraft>) =>
+  const setParameter = (key: number, next: ParameterDraft) =>
     set({
-      parameters: draft.parameters.map((parameter) =>
-        parameter.key === key ? { ...parameter, ...patch } : parameter
-      ),
+      parameters: draft.parameters.map((parameter) => (parameter.key === key ? next : parameter)),
     })
 
   return (
@@ -81,68 +77,14 @@ export function TemplateFields({
           New environments ask for these. Each one reaches the script as an environment variable.
         </FieldDescription>
         {draft.parameters.map((parameter) => (
-          <div
+          <ParameterEditor
             key={parameter.key}
-            className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto]"
-          >
-            <Input
-              aria-label="Variable name"
-              placeholder="UNITY_EMAIL"
-              required
-              maxLength={64}
-              pattern={PARAMETER_NAME}
-              title="Capital letters, digits and underscores, starting with a letter"
-              value={parameter.name}
-              onChange={(event) =>
-                setParameter(parameter.key, { name: event.target.value.toUpperCase() })
-              }
-              className="font-mono"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove ${parameter.name || "parameter"}`}
-              className="sm:col-start-3"
-              onClick={() =>
-                set({ parameters: draft.parameters.filter((item) => item.key !== parameter.key) })
-              }
-            >
-              <RiCloseLine />
-            </Button>
-            <Input
-              aria-label="Label"
-              placeholder="Unity email"
-              maxLength={100}
-              value={parameter.label}
-              onChange={(event) => setParameter(parameter.key, { label: event.target.value })}
-              className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"
-            />
-            <Input
-              aria-label="Default value"
-              placeholder={parameter.secret ? "Secrets have no default" : "No default"}
-              disabled={parameter.secret}
-              value={parameter.secret ? "" : parameter.default}
-              onChange={(event) => setParameter(parameter.key, { default: event.target.value })}
-              className="col-span-2 sm:col-span-1"
-            />
-            <div className="col-span-2 flex flex-wrap items-center gap-4 sm:col-span-1">
-              <Label className="flex items-center gap-2 text-xs font-normal">
-                <Checkbox
-                  checked={parameter.required}
-                  onCheckedChange={(value) => setParameter(parameter.key, { required: !!value })}
-                />
-                Required
-              </Label>
-              <Label className="flex items-center gap-2 text-xs font-normal">
-                <Checkbox
-                  checked={parameter.secret}
-                  onCheckedChange={(value) => setParameter(parameter.key, { secret: !!value })}
-                />
-                Secret
-              </Label>
-            </div>
-          </div>
+            parameter={parameter}
+            onChange={(next) => setParameter(parameter.key, next)}
+            onRemove={() =>
+              set({ parameters: draft.parameters.filter((item) => item.key !== parameter.key) })
+            }
+          />
         ))}
       </FieldSet>
       <Field>

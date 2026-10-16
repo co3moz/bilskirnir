@@ -6,6 +6,8 @@
 //! what a reset runs again. The values live in a record of their own that no route returns:
 //! the environment shows the values of ordinary parameters and only the names of secret ones,
 //! and the setup job's log masks every secret value.
+mod parameters;
+
 use crate::{
     App,
     error::{Error, Result},
@@ -17,6 +19,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+pub(crate) use parameters::Parameter;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -29,27 +32,9 @@ const RUNNER: &str = include_str!("setup_runner.py");
 /// The database kind of each templated environment's pinned template and parameter values.
 const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
-const VALUE_LIMIT: usize = 16_384;
 const SCRIPT_LIMIT: usize = 1_000_000;
 /// How long a new desktop may take to report ready before its setup is given up.
 const READY_LIMIT: Duration = Duration::from_secs(300);
-/// Variables the setup script, its shell or the desktop session rely on.
-const RESERVED: &[&str] = &[
-    "CDPATH", "DISPLAY", "ENV", "HOME", "HOSTNAME", "IFS", "LANG", "LOGNAME", "OLDPWD", "PATH",
-    "PS4", "PWD", "SHELL", "SHLVL", "TERM", "TMPDIR", "TZ", "USER",
-];
-const RESERVED_PREFIXES: &[&str] = &[
-    "BASH",
-    "BILSKIRNIR",
-    "DBUS_",
-    "DESKTOP_",
-    "GPU_",
-    "LC_",
-    "LD_",
-    "PULSE_",
-    "PYTHON",
-    "XDG_",
-];
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,32 +54,6 @@ fn default_timeout() -> u64 {
     600
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Parameter {
-    /// The environment variable that carries the value.
-    pub name: String,
-    /// What the create form asks for; the name when empty.
-    #[serde(default)]
-    pub label: String,
-    #[serde(default)]
-    pub required: bool,
-    /// A password or token: masked in logs and never returned.
-    #[serde(default)]
-    pub secret: bool,
-    #[serde(default)]
-    pub default: String,
-}
-impl Parameter {
-    fn title(&self) -> &str {
-        if self.label.is_empty() {
-            &self.name
-        } else {
-            &self.label
-        }
-    }
-}
-
 impl Template {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.script.trim().is_empty()
@@ -111,21 +70,10 @@ impl Template {
         }
         let mut names = HashSet::new();
         for parameter in &self.parameters {
-            parameter_name(&parameter.name)?;
+            parameter.validate()?;
             if !names.insert(parameter.name.as_str()) {
                 bail!("Parameter names must be unique: {}", parameter.name);
             }
-            if parameter.label.chars().count() > 100 || parameter.label.contains(['\n', '\r', '\0'])
-            {
-                bail!("A parameter label is one line of at most 100 characters");
-            }
-            if parameter.secret && !parameter.default.is_empty() {
-                bail!(
-                    "The secret parameter {} cannot have a default, since the image record would keep it",
-                    parameter.name
-                );
-            }
-            parameter_value(&parameter.name, &parameter.default)?;
         }
         Ok(())
     }
@@ -143,40 +91,11 @@ impl Template {
         }
         let mut values = BTreeMap::new();
         for parameter in &self.parameters {
-            let value = given
-                .get(&parameter.name)
-                .unwrap_or(&parameter.default)
-                .clone();
-            if parameter.required && value.is_empty() {
-                bail!("Enter a value for {}", parameter.title());
-            }
-            parameter_value(&parameter.name, &value)?;
+            let value = parameter.resolve(given.get(&parameter.name))?;
             values.insert(parameter.name.clone(), value);
         }
         Ok(values)
     }
-}
-
-fn parameter_name(name: &str) -> anyhow::Result<()> {
-    let mut bytes = name.bytes();
-    if name.len() > 64
-        || !bytes.next().is_some_and(|b| b.is_ascii_uppercase())
-        || !bytes.all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-    {
-        bail!(
-            "Parameter names are environment variables of at most 64 capital letters, digits and underscores, starting with a letter: {name}"
-        );
-    }
-    if RESERVED.contains(&name) || RESERVED_PREFIXES.iter().any(|p| name.starts_with(p)) {
-        bail!("{name} is used by the desktop or the shell; choose another parameter name");
-    }
-    Ok(())
-}
-fn parameter_value(name: &str, value: &str) -> anyhow::Result<()> {
-    if value.len() > VALUE_LIMIT || value.contains('\0') {
-        bail!("The value of {name} must be at most {VALUE_LIMIT} bytes without NUL characters");
-    }
-    Ok(())
 }
 
 /// Where an environment's template setup stands, as its record shows it.

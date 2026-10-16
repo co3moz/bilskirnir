@@ -40,6 +40,7 @@ import { useEnvironments, useImages, useProfiles, useSettings, useVolumes } from
 import { parameterBody, templateFor } from "@/lib/templates"
 import type { ImageRecord, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
+import { ParameterField } from "./parameter-field"
 import { specBody, specDraft, SpecFields, type SpecDraft } from "./spec-fields"
 
 /** A dialog whose form submits once at a time and shows the manager's error in place. */
@@ -73,7 +74,6 @@ function TemplateValues({
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
 }) {
-  const id = React.useId()
   if (!template.parameters.length)
     return (
       <FieldDescription>The image runs a setup script once the desktop is ready.</FieldDescription>
@@ -87,22 +87,13 @@ function TemplateValues({
       </FieldDescription>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {template.parameters.map((parameter) => (
-          <Field key={parameter.name}>
-            <FieldLabel htmlFor={`${id}-${parameter.name}`}>
-              {parameter.label || parameter.name}
-            </FieldLabel>
-            <Input
-              id={`${id}-${parameter.name}`}
-              type={parameter.secret ? "password" : "text"}
-              autoComplete={parameter.secret ? "new-password" : "off"}
-              required={parameter.required}
-              value={values[parameter.name] ?? parameter.default}
-              onChange={(event) => onChange({ ...values, [parameter.name]: event.target.value })}
-            />
-            {parameter.label && (
-              <FieldDescription className="font-mono text-xs">{parameter.name}</FieldDescription>
-            )}
-          </Field>
+          <ParameterField
+            key={`${parameter.name}-${parameter.type}`}
+            parameter={parameter}
+            value={values[parameter.name] ?? parameter.default}
+            onChange={(value) => onChange({ ...values, [parameter.name]: value })}
+            showName
+          />
         ))}
       </div>
     </FieldSet>

@@ -2,19 +2,40 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
+  displayOf,
+  draftParameter,
+  newOption,
   parameterBody,
   readTemplate,
+  sliderValue,
   templateBody,
   templateDraft,
   templateFor,
+  toggleChoice,
+  withOptions,
+  withType,
 } from "../web/src/lib/templates"
-import type { Template } from "../web/src/lib/types"
+import type { Template, TemplateParameter } from "../web/src/lib/types"
 
 const unity: Template = {
   parameters: [
-    { name: "UNITY_EMAIL", label: "Unity email", required: true, secret: false, default: "" },
-    { name: "UNITY_PASSWORD", label: "", required: true, secret: true, default: "" },
-    { name: "BRANCH", label: "Branch", required: false, secret: false, default: "main" },
+    {
+      name: "UNITY_EMAIL",
+      label: "Unity email",
+      type: "text",
+      required: true,
+      secret: false,
+      default: "",
+    },
+    { name: "UNITY_PASSWORD", label: "", type: "text", required: true, secret: true, default: "" },
+    {
+      name: "BRANCH",
+      label: "Branch",
+      type: "text",
+      required: false,
+      secret: false,
+      default: "main",
+    },
   ],
   script: "set -eu\n",
   root: false,
@@ -71,6 +92,7 @@ test("a template survives the editor unchanged, and a secret loses its default",
   assert.deepEqual(body.parameters[2], {
     name: "TOKEN",
     label: "Branch",
+    type: "text",
     required: false,
     secret: true,
     default: "",
@@ -83,7 +105,9 @@ test("a template survives the editor unchanged, and a secret loses its default",
 
 test("a pasted template fills in what it leaves out and says what is wrong", () => {
   assert.deepEqual(readTemplate({ script: "true", parameters: [{ name: "A" }] }), {
-    parameters: [{ name: "A", label: "", required: false, secret: false, default: "" }],
+    parameters: [
+      { name: "A", label: "", type: "text", required: false, secret: false, default: "" },
+    ],
     script: "true",
     root: false,
     timeout_seconds: 600,
@@ -99,4 +123,134 @@ test("a pasted template fills in what it leaves out and says what is wrong", () 
   ]
   for (const [value, message] of cases)
     assert.throws(() => readTemplate(value), message, JSON.stringify(value))
+})
+
+const flavors = [
+  { value: "vanilla", label: "Vanilla" },
+  { value: "chocolate", label: "" },
+]
+
+// Each type with the fields only it has, as the manager writes them back.
+const typed: TemplateParameter[] = [
+  {
+    name: "NOTES",
+    label: "",
+    type: "text",
+    display: "multiline",
+    required: false,
+    secret: false,
+    default: "a\nb",
+  },
+  {
+    name: "THREADS",
+    label: "",
+    type: "number",
+    display: "slider",
+    required: true,
+    secret: false,
+    default: "4",
+    min: 1,
+    max: 16,
+    step: 1,
+  },
+  {
+    name: "PORT",
+    label: "",
+    type: "number",
+    required: false,
+    secret: false,
+    default: "",
+    min: 1024,
+  },
+  {
+    name: "ACCEPT",
+    label: "",
+    type: "boolean",
+    display: "checkbox",
+    required: true,
+    secret: false,
+    default: "",
+  },
+  {
+    name: "FLAVOR",
+    label: "",
+    type: "choice",
+    display: "radio",
+    required: false,
+    secret: false,
+    default: "mint",
+    options: flavors,
+    allow_custom: true,
+  },
+  {
+    name: "TOPPINGS",
+    label: "",
+    type: "choices",
+    required: false,
+    secret: false,
+    default: "chocolate",
+    options: flavors,
+  },
+]
+
+test("every type survives the editor unchanged", () => {
+  const template = { ...unity, parameters: typed }
+  assert.deepEqual(templateBody(templateDraft(template)), template)
+})
+
+test("a new type starts over without the fields the old one had", () => {
+  const [, threads, , , flavor] = templateDraft({ ...unity, parameters: typed }).parameters
+  const text = withType(threads, "text")
+  assert.deepEqual([text.display, text.default], ["input", ""])
+  // Bounds stay in the draft, but a text parameter does not send them.
+  assert.equal("min" in draftParameter(text), false)
+  const many = draftParameter(withType(flavor, "choices"))
+  assert.deepEqual([many.display, many.options, many.allow_custom], [undefined, flavors, undefined])
+  const secret = withType({ ...templateDraft(unity).parameters[1] }, "number")
+  assert.equal(draftParameter(secret).secret, false)
+  // A choice starts with one empty option to fill in.
+  const choice = withType(text, "choice")
+  assert.equal(choice.options.length, 1)
+  assert.equal(choice.options[0].value, "")
+})
+
+test("removing an option drops a default that picked it", () => {
+  const [, , , , flavor, toppings] = templateDraft({ ...unity, parameters: typed }).parameters
+  const vanillaOnly = (draft: typeof flavor) => [draft.options[0]]
+  assert.equal(withOptions(toppings, vanillaOnly(toppings)).default, "")
+  assert.equal(
+    withOptions({ ...toppings, default: "vanilla\nchocolate" }, vanillaOnly(toppings)).default,
+    "vanilla"
+  )
+  // Another value is allowed anyway, so a custom default stays.
+  assert.equal(withOptions(flavor, vanillaOnly(flavor)).default, "mint")
+  const strict = { ...flavor, allow_custom: false, default: "chocolate" }
+  assert.equal(withOptions(strict, vanillaOnly(strict)).default, "")
+  assert.equal(withOptions(strict, [...strict.options, newOption()]).default, "chocolate")
+})
+
+test("form values are written the way the script reads them", () => {
+  assert.equal(toggleChoice("", "chocolate", true, flavors), "chocolate")
+  // Lines follow the options' order, whatever order they were picked in.
+  assert.equal(toggleChoice("chocolate", "vanilla", true, flavors), "vanilla\nchocolate")
+  assert.equal(toggleChoice("vanilla\nchocolate", "vanilla", false, flavors), "chocolate")
+  assert.equal(sliderValue(0.30000000000000004, 0.1), "0.3")
+  assert.equal(sliderValue(7, null), "7")
+  assert.equal(sliderValue(2.5, 0.25), "2.5")
+  // A display the type does not have falls back to the type's own.
+  assert.equal(displayOf({ type: "boolean", display: "slider" }), "toggle")
+  assert.equal(displayOf({ type: "choice" }), "select")
+})
+
+test("a pasted template keeps typed fields and refuses shapes the manager would", () => {
+  const pasted = readTemplate({ script: "true", parameters: typed })
+  assert.deepEqual(pasted.parameters, typed)
+  const cases: [unknown, RegExp][] = [
+    [{ name: "A", type: "select" }, /unknown type/],
+    [{ name: "A", type: "text", display: "slider" }, /cannot be shown/],
+    [{ name: "A", type: "choice", options: [{ label: "x" }] }, /parameter A/],
+    [{ name: "A", type: "number", min: "1" }, /parameter A/],
+  ]
+  for (const [parameter, message] of cases)
+    assert.throws(() => readTemplate({ script: "true", parameters: [parameter] }), message)
 })

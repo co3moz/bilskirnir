@@ -265,14 +265,16 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
 #[test]
 fn a_template_travels_with_the_archive_and_an_invalid_one_is_dropped() {
     let template = Template {
-        parameters: vec![crate::templates::Parameter {
-            name: "UNITY_EMAIL".into(),
-            label: "Unity email".into(),
-            required: true,
-            secret: false,
-            default: String::new(),
-        }],
-        script: "printf '%s' \"$UNITY_EMAIL\" > ~/unity-email\n".into(),
+        // A choice carries the most fields a parameter has.
+        parameters: vec![
+            serde_json::from_value(json!({
+                "name": "UNITY_EDITOR", "label": "Editor", "type": "choice", "display": "radio",
+                "options": [{"value": "6000.0.23f1", "label": "Unity 6"}, {"value": "2022.3.50f1"}],
+                "allow_custom": true, "default": "6000.0.23f1"
+            }))
+            .unwrap(),
+        ],
+        script: "printf '%s' \"$UNITY_EDITOR\" > ~/unity-editor\n".into(),
         root: false,
         timeout_seconds: 600,
     };

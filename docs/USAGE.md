@@ -95,8 +95,11 @@ A template makes an image ask for a few values each time a desktop is created fr
 
 - **Name** is the environment variable the script reads, such as `UNITY_EMAIL`.
 - **Label** is what **New environment** asks for.
-- **Secret** makes it a password field. Its value is masked in job logs, never shown again and cannot have a default.
-- **Required** values must be filled in, and a **Default** fills in the field.
+- **Type** decides what the field takes: **Text**, a **Number** with an optional minimum, maximum and step, **On or off**, **One choice** from a list of options or **Several choices**. **Shown as** picks the control: a text area for long text, a slider for a number with a range, a checkbox instead of a switch, or radio buttons instead of a menu. **Allow other values** lets one choice also take text that is not an option.
+- **Secret** makes a text field a password field. Its value is masked in job logs, never shown again and cannot have a default.
+- **Required** values must be filled in; an **On or off** value that is required must be turned on, as for accepting a license. The **Default** fills in the field with the same control the form shows.
+
+Whatever the type, the script receives text: a number as `42`, on or off as `true` or `false`, and several choices one per line, which `while read -r item; do ...; done <<< "$PLATFORMS"` reads one at a time.
 
 For example, an image with Unity Hub and an editor installed could ask for a Unity account and a serial number, and activate the license with them:
 

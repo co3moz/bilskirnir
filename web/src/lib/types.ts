@@ -33,12 +33,32 @@ export type Environment = {
 }
 
 /** A template parameter: an environment variable of the setup script. */
+export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices"
+
+export type ParameterDisplay =
+  "input" | "multiline" | "slider" | "toggle" | "checkbox" | "select" | "radio" | "checkboxes"
+
+export type ParameterOption = { value: string; label: string }
+
+/**
+ * A template parameter: an environment variable of the setup script. Whatever its type, its value
+ * and default are text in the form the script reads: `42`, `true`, or a choice per line.
+ */
 export type TemplateParameter = {
   name: string
   label: string
+  type: ParameterType
+  /** The type's first display when left out. */
+  display?: ParameterDisplay | null
+  /** A boolean that is required must be turned on. */
   required: boolean
   secret: boolean
   default: string
+  options?: ParameterOption[]
+  allow_custom?: boolean
+  min?: number | null
+  max?: number | null
+  step?: number | null
 }
 
 /** What a new environment from an image asks for, and the script that receives it. */

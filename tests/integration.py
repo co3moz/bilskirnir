@@ -329,8 +329,8 @@ try:
     assert "script" not in next(image for image in api("images") if image["id"] == built["id"])["build"]
     print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
     # A template asks for values when a desktop is created and hands them to its setup script.
-    template = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True}, {"name": "TOKEN", "required": True, "secret": True}, {"name": "FLAVOR", "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/template-setup\necho \"token is $TOKEN\"\n"}
-    for invalid in [{**template, "parameters": [{"name": "PATH"}]}, {**template, "parameters": [{"name": "TOKEN", "secret": True, "default": "kept"}]}]:
+    template = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True}, {"name": "TOKEN", "required": True, "secret": True}, {"name": "FLAVOR", "type": "choice", "options": [{"value": "vanilla"}, {"value": "chocolate"}], "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/template-setup\necho \"token is $TOKEN\"\n"}
+    for invalid in [{**template, "parameters": [{"name": "PATH"}]}, {**template, "parameters": [{"name": "FLAVOR", "type": "choice"}]}, {**template, "parameters": [{"name": "TOKEN", "secret": True, "default": "kept"}]}]:
         try:
             api(f"images/{built['id']}/template", invalid, method="PUT"); raise AssertionError(f"invalid template accepted: {invalid['parameters']}")
         except urllib.error.HTTPError as error:
@@ -339,7 +339,7 @@ try:
     assert "script" not in templated["template"] and [p["name"] for p in templated["template"]["parameters"]] == ["GREETING", "TOKEN", "FLAVOR"]
     assert api(f"images/{built['id']}/template")["script"] == template["script"]
     assert api(f"images/{built['id']}/config")["template"]["script"] == template["script"]
-    for values in [{}, {"GREETING": "hello", "TOKEN": "x", "UNKNOWN": "y"}]:
+    for values in [{}, {"GREETING": "hello", "TOKEN": "x", "UNKNOWN": "y"}, {"GREETING": "hello", "TOKEN": "x", "FLAVOR": "strawberry"}]:
         try:
             api("environments", {"name": "missing-values", "image": built["image_id"], "parameters": values}); raise AssertionError(f"template values accepted: {values}")
         except urllib.error.HTTPError as error:

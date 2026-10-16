@@ -134,7 +134,7 @@ A template makes a saved image ask for values, such as an account, when an envir
 }
 ```
 
-`create_environment` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_environment` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
+`create_environment` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_environment` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice` or `choices`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. The rules for names, values, reruns and snapshots are in [the HTTP API](API.md#image-templates).
 
 ## Read and write files
 

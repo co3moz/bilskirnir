@@ -927,9 +927,16 @@ fn template_schema() -> Value {
             "parameters":{"type":"array","maxItems":32,"default":[],"items":schema(json!({
                 "name":{"type":"string","pattern":"^[A-Z][A-Z0-9_]{0,63}$","description":"The environment variable that carries the value to the setup script."},
                 "label":{"type":"string","maxLength":100,"default":"","description":"What the create form asks for."},
-                "required":{"type":"boolean","default":false},
-                "secret":{"type":"boolean","default":false,"description":"Masked in job logs and never returned; cannot have a default."},
-                "default":{"type":"string","maxLength":16384,"default":""}
+                "type":{"type":"string","enum":["text","number","boolean","choice","choices"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line."},
+                "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes."},
+                "required":{"type":"boolean","default":false,"description":"A required boolean must be true."},
+                "secret":{"type":"boolean","default":false,"description":"Text only. Masked in job logs and never returned; cannot have a default."},
+                "default":{"type":"string","maxLength":16384,"default":"","description":"In the form the script receives it."},
+                "options":{"type":"array","minItems":1,"maxItems":100,"description":"choice and choices only.","items":schema(json!({"value":{"type":"string","minLength":1,"maxLength":1024},"label":{"type":"string","maxLength":100,"default":""}}), &["value"])},
+                "allow_custom":{"type":"boolean","default":false,"description":"choice only: also accept text that is not an option."},
+                "min":{"type":"number","description":"number only."},
+                "max":{"type":"number","description":"number only."},
+                "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."}
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},

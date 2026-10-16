@@ -169,9 +169,15 @@ A saved image can carry a template: parameters that a new environment from it as
   "parameters": [
     {"name": "UNITY_EMAIL", "label": "Unity email", "required": true},
     {"name": "UNITY_PASSWORD", "label": "Unity password", "required": true, "secret": true},
-    {"name": "PROJECT_BRANCH", "label": "Branch", "default": "main"}
+    {"name": "UNITY_EDITOR", "label": "Editor", "type": "choice", "allow_custom": true,
+     "options": [{"value": "6000.0.23f1", "label": "Unity 6"}, {"value": "2022.3.50f1", "label": "2022 LTS"}],
+     "default": "6000.0.23f1"},
+    {"name": "BUILD_JOBS", "label": "Build jobs", "type": "number", "display": "slider",
+     "min": 1, "max": 16, "default": "4"},
+    {"name": "PLATFORMS", "label": "Platforms", "type": "choices",
+     "options": [{"value": "linux"}, {"value": "windows"}, {"value": "webgl"}], "default": "linux"}
   ],
-  "script": "set -eu\ngit -C ~/project checkout \"$PROJECT_BRANCH\"\n",
+  "script": "set -eu\nwhile read -r platform; do echo \"$UNITY_EDITOR for $platform\"; done <<< \"$PLATFORMS\"\n",
   "root": false,
   "timeout_seconds": 600
 }
@@ -179,12 +185,24 @@ A saved image can carry a template: parameters that a new environment from it as
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `required`, `secret` and `default`. |
+| `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `type`, `display`, `required`, `default` and the fields of their type, below. |
 | `script` | Required | Bash script of at most 1,000,000 bytes, run with fail-on-error and standard input closed. |
 | `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
 | `timeout_seconds` | `600` | From 1 to 3500 seconds. |
 
 A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the template.
+
+Every value reaches the script as text, so a parameter's `type` decides what text it accepts and how the dashboard asks for it. `default` is written the same way the script receives it.
+
+| `type` | `display` | The script receives | Fields of the type |
+| --- | --- | --- | --- |
+| `text` (default) | `input` (default), `multiline` | The text; one line unless `multiline` | `secret` |
+| `number` | `input` (default), `slider` | A plain decimal such as `42` or `-1.5`, without exponents | `min`, `max`, `step`; a slider needs `min` and `max`, and steps count from `min` or from 0 |
+| `boolean` | `toggle` (default), `checkbox` | `true` or `false`; `false` when left out | |
+| `choice` | `select` (default), `radio` | One option's `value` | `options`, `allow_custom` to also accept other text |
+| `choices` | `checkboxes` | The chosen values, one per line, each at most once | `options` |
+
+`options` holds 1 to 100 objects with a `value` of one line and an optional `label` the dashboard shows instead. A field of another type, a display the type does not have or a default the parameter would refuse is an error. `required` means a value must be given; for a boolean, that it must be `true`, as for an agreement. Read several choices in bash with `while read -r item; do ...; done <<< "$PLATFORMS"`.
 
 `POST /api/environments` takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. A value that is left out uses the default. Every parameter reaches the script, an optional one without a value as an empty string, so `set -u` does not trip on it. An unknown name or a missing required value fails the request. The creation job waits until the desktop reports ready, for at most five minutes, then runs the script in the desktop session's environment (`HOME`, `DISPLAY`, `XDG_RUNTIME_DIR`) and completes only when the script succeeds.
 

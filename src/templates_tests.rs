@@ -6,10 +6,7 @@ use super::*;
 fn parameter(name: &str) -> Parameter {
     Parameter {
         name: name.into(),
-        label: String::new(),
-        required: false,
-        secret: false,
-        default: String::new(),
+        ..Default::default()
     }
 }
 

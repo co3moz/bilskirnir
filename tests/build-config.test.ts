@@ -51,7 +51,14 @@ test("a name of 100 characters outside the basic plane still fits", () => {
 test("a configuration carries the image's template both ways", () => {
   const template = {
     parameters: [
-      { name: "UNITY_EMAIL", label: "Email", required: true, secret: false, default: "" },
+      {
+        name: "UNITY_EMAIL",
+        label: "Email",
+        type: "text" as const,
+        required: true,
+        secret: false,
+        default: "",
+      },
     ],
     script: "set -eu\n",
     root: false,
