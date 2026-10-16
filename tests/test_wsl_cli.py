@@ -132,6 +132,57 @@ class UpdateTest(unittest.TestCase):
                 self.assertFalse(any(call.startswith("docker tag ") for call in calls))
 
 
+# sudoedit as root: the editor works on a copy, which is written back over the original. Like sudo,
+# it falls back to a default of its own, vi here, when none of the editor variables is set.
+SUDO_EDIT = """#!/usr/bin/env bash
+[[ $1 == --edit && $# == 2 ]] || exit 64
+copy=$(mktemp)
+cat "$2" > "$copy"
+${SUDO_EDITOR:-${VISUAL:-${EDITOR:-vi}}} "$copy" || exit 1
+chmod u+w "$2" && cat "$copy" > "$2" && chmod u-w "$2"
+"""
+EDITOR = """#!/usr/bin/env bash
+printf 'EDITED_BY=%s\\n' "$(basename "$0")" >> "$1"
+"""
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class SettingsTest(unittest.TestCase):
+    """`bilskirnir settings` as the first-start user, who may read .env but not write it."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "sudo").write_text(SUDO_EDIT)
+        for name in ("nano", "my-editor", "my-visual"):
+            (bin_dir / name).write_text(EDITOR)
+        for stub in bin_dir.iterdir():
+            stub.chmod(0o755)
+        inherited = {k: v for k, v in os.environ.items() if k not in ("EDITOR", "VISUAL", "SUDO_EDITOR")}
+        self.env = {**inherited, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    def test_the_users_editor_saves_the_read_only_file(self):
+        env_file = self.install / ".env"
+        for editors, editor in (({}, "nano"), ({"EDITOR": "my-editor"}, "my-editor"),
+                                ({"VISUAL": "my-visual", "EDITOR": "my-editor"}, "my-visual")):
+            with self.subTest(editors=editors):
+                if env_file.exists():
+                    env_file.chmod(0o640)
+                env_file.write_text("AUTH_MODE=none\n")
+                env_file.chmod(0o440)
+                result = subprocess.run(["bash", str(self.cli), "settings"], env={**self.env, **editors},
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(env_file.read_text(), f"AUTH_MODE=none\nEDITED_BY={editor}\n")
+                self.assertIn("bilskirnir restart", result.stdout)
+
+
 class PackageTest(unittest.TestCase):
     def test_the_package_pins_the_image_the_cli_updates(self):
         # wsl/Dockerfile rewrites this line to the release the package is built for, and the build
