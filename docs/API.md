@@ -146,7 +146,7 @@ Creation accepts `name`, `image` and these optional fields:
 | `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
-| `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. |
+| `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. The manager's own volumes, such as its data volume, are refused, here and whenever the container is created again. |
 | `parameters` | `{}` | Values for the [compose](#composes) parameters of the image, by name. |
 
 ## Change settings after creation

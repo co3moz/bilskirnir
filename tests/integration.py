@@ -409,6 +409,12 @@ try:
             raise AssertionError(f"unsafe mount accepted: {target}")
         except urllib.error.HTTPError as error:
             assert error.code == 400
+    # The manager's data volume holds its database and sessions, so no desktop mounts it.
+    before = len(api("containers"))
+    manager_mount = api("containers", {"name": "manager-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": volume, "target": "/workspace", "readonly": True}]})
+    failed = wait_for(lambda: (j if (j := api(f"jobs/{manager_mount['job_id']}"))["status"] not in ("queued", "running") else None))
+    assert failed["status"] == "failed" and f"{volume} is the manager's own volume" in failed["log"], failed
+    assert len(api("containers")) == before
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/session", headers={"Host":"evil.example","Origin":"http://evil.example"})
     try:
         client.open(request); raise AssertionError("untrusted Host accepted")
@@ -1155,6 +1161,11 @@ try:
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
     assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    # A new container would get the manager's data volume, so the change stops nothing.
+    refused_mount = mcp_job(tool("update_container", {"container_id": edit, "mounts": [{"volume": volume, "target": "/workspace"}]}), success=False)
+    assert f"{volume} is the manager's own volume" in refused_mount["log"], refused_mount["log"]
+    assert docker("inspect", "--format", "{{.Id}} {{.State.Running}}", edit_container).decode().split() == [second["Id"], "true"]
+    assert api(f"containers/{edit}")["spec"]["mounts"] == []
     deletion = job(api(f"containers/{edit}", method="DELETE"))
     container_ids.remove(edit)
     assert deletion["deleted"] == edit and json.loads(docker("image", "inspect", carried, check=False) or b"[]") == []

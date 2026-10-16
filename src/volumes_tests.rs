@@ -1,6 +1,7 @@
 //! Pins down how a volume is opened: the helper container reaches nothing but the volume and
 //! works as the desktop user, its paths stay inside the volume, the manager's own volume is
-//! refused, and a request is checked before Docker is asked anything.
+//! refused to helpers and desktops alike, and a request is checked before Docker is asked
+//! anything.
 use super::*;
 use crate::tests::app;
 use axum::{body::Body, http::Request};
@@ -117,6 +118,33 @@ fn the_managers_own_volume_is_recognized() {
     assert!(manager_volume(&manager, "bilskirnir-data"));
     assert!(!manager_volume(&manager, "project"));
     assert!(!manager_volume(&serde_json::json!({}), "bilskirnir-data"));
+}
+
+#[test]
+fn a_desktop_cannot_mount_the_managers_own_volume() {
+    let manager = serde_json::json!({"Mounts": [
+        {"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"},
+    ]});
+    let mount = |volume: &str, target: &str| Mount {
+        volume: volume.into(),
+        target: target.into(),
+        readonly: true,
+    };
+    assert!(refuse_manager_volumes(&manager, &[]).is_ok());
+    assert!(refuse_manager_volumes(&manager, &[mount("project", "/workspace")]).is_ok());
+    // Read-only does not make it safe: the database holds the sessions.
+    let error = refuse_manager_volumes(
+        &manager,
+        &[
+            mount("project", "/workspace"),
+            mount("bilskirnir-data", "/opt/data"),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+    );
 }
 
 #[test]

@@ -133,6 +133,7 @@ impl App {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
         // Cheap checks come before a catalog image download that can take minutes.
+        crate::volumes::refuse_manager_volumes(&manager_info, &spec.mounts)?;
         for m in &spec.mounts {
             self.inspect("volume", &m.volume)
                 .await
@@ -153,15 +154,10 @@ impl App {
             .map(|(_, pinned)| pinned.mounts())
             .unwrap_or_default();
         crate::compose::check_mounts(&spec.mounts, &compose_mounts)?;
+        // An image's compose names its default volume; it cannot hand a desktop the manager's
+        // database either.
+        crate::volumes::refuse_manager_volumes(&manager_info, &compose_mounts)?;
         for mount in &compose_mounts {
-            // An image's compose names its default volume; it cannot hand a desktop the
-            // manager's database.
-            if crate::volumes::manager_volume(&manager_info, &mount.volume) {
-                bail!(
-                    "{} is the manager's own volume and cannot be mounted in a desktop",
-                    mount.volume
-                );
-            }
             self.inspect("volume", &mount.volume)
                 .await
                 .with_context(|| {
@@ -239,7 +235,10 @@ impl App {
     async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
         // Validate all existing resources before creating or starting anything.
         env.spec.validate()?;
-        for mount in env.mounts() {
+        let manager_info = self.inspect("container", manager).await?;
+        let mounts = env.mounts();
+        crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
+        for mount in &mounts {
             self.inspect("volume", &mount.volume).await.context(
                 "Configured volume is missing; setup stopped without creating an empty replacement",
             )?;
@@ -262,7 +261,6 @@ impl App {
         }
         let private = self.ensure_network(env, &env.private_network, true).await?;
         self.ensure_network(env, &env.egress_network, false).await?;
-        let manager_info = self.inspect("container", manager).await?;
         let manager_id = manager_info["Id"].as_str().context("Missing manager ID")?;
         if manager_info["NetworkSettings"]["Networks"]
             .get(&env.private_network)
@@ -521,6 +519,7 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("Manager label does not match");
         }
+        crate::volumes::refuse_manager_volumes(&info, &env.mounts())?;
         // Check the image before touching the container, so a missing image leaves the desktop intact.
         self.inspect("image", &env.source_image_id)
             .await
