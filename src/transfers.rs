@@ -43,12 +43,13 @@ const LIMIT: usize = 64;
 /// Where links point. Request tracing shows the path without the token.
 pub(crate) const ROUTE: &str = "/api/transfers/";
 /// The names `create_transfer` offers, one for each [`Operation`].
-pub(crate) const OPERATIONS: [&str; 8] = [
+pub(crate) const OPERATIONS: [&str; 9] = [
     "container_upload",
     "container_download",
     "volume_upload",
     "volume_download",
     "volume_import",
+    "volume_extract",
     "volume_export",
     "image_import",
     "image_export",
@@ -84,6 +85,8 @@ pub(crate) enum Operation {
     VolumeDownload { volume: String, path: String },
     /// `POST /api/volumes/import`: a `.tar.gz` or `.tar` into a new volume.
     VolumeImport { name: String },
+    /// `POST /api/volumes/{name}/extract`: a `.tar.gz` or `.tar` into a new folder of a volume.
+    VolumeExtract { volume: String, path: String },
     /// `GET /api/volumes/{name}/archive`
     VolumeExport { volume: String },
     /// `POST /api/images/import`
@@ -105,6 +108,7 @@ impl Operation {
             Self::ContainerUpload { .. }
                 | Self::VolumeUpload { .. }
                 | Self::VolumeImport { .. }
+                | Self::VolumeExtract { .. }
                 | Self::ImageImport { .. }
         )
     }
@@ -116,6 +120,7 @@ impl Operation {
             Self::VolumeUpload { .. } => "volume_upload",
             Self::VolumeDownload { .. } => "volume_download",
             Self::VolumeImport { .. } => "volume_import",
+            Self::VolumeExtract { .. } => "volume_extract",
             Self::VolumeExport { .. } => "volume_export",
             Self::ImageImport { .. } => "image_import",
             Self::ImageExport { .. } => "image_export",
@@ -152,6 +157,10 @@ impl Operation {
             }
             Self::VolumeImport { name: volume } | Self::VolumeExport { volume } => {
                 model::volume_name(volume)?
+            }
+            Self::VolumeExtract { volume, path } => {
+                model::volume_name(volume)?;
+                apps::directory(path)?;
             }
             Self::ImageImport { .. } => {}
             Self::ImageExport { image_id } => {
@@ -291,16 +300,17 @@ async fn run(
             "A download takes no size".into(),
         ));
     }
+    let declared = size.or_else(|| {
+        headers
+            .get(header::CONTENT_LENGTH)?
+            .to_str()
+            .ok()?
+            .parse()
+            .ok()
+    });
+    // A file upload needs its size; an archive import also streams in without one.
     let length = || {
-        size.or_else(|| {
-            headers
-                .get(header::CONTENT_LENGTH)?
-                .to_str()
-                .ok()?
-                .parse()
-                .ok()
-        })
-        .ok_or_else(|| {
+        declared.ok_or_else(|| {
             Error(
                 StatusCode::LENGTH_REQUIRED,
                 "Send Content-Length, or the body's size as ?size=".into(),
@@ -371,9 +381,18 @@ async fn run(
         Operation::VolumeImport { name } => {
             let request = volumes::Import {
                 name,
-                size: length()?,
+                size: declared,
             };
             volumes::import(state, Query(request), binary, link, body)
+                .await
+                .into_response()
+        }
+        Operation::VolumeExtract { volume, path } => {
+            let request = volumes::Extract {
+                path,
+                size: declared,
+            };
+            volumes::extract(state, Path(volume), Query(request), binary, link, body)
                 .await
                 .into_response()
         }
@@ -382,7 +401,7 @@ async fn run(
             .into_response(),
         Operation::ImageImport { name, description } => {
             let request = archives::Import {
-                size: length()?,
+                size: declared,
                 name,
                 description,
             };

@@ -20,7 +20,7 @@ fn unpack(upload: &[u8], size: usize, limit: u64) -> anyhow::Result<Vec<u8>> {
     for piece in upload.chunks(size) {
         plain.extend(unpacker.push(piece)?);
     }
-    plain.extend(unpacker.finish()?);
+    plain.extend(unpacker.finish()?.0);
     Ok(plain)
 }
 
@@ -117,6 +117,17 @@ async fn an_import_is_refused_before_anything_is_created() {
             "application/octet-stream",
             StatusCode::BAD_REQUEST,
         ),
+        // A streamed archive has no size; the rest of the request is checked all the same.
+        (
+            "name=-bad",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "name=project",
+            "text/plain",
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        ),
         (
             "name=a&size=10",
             "application/octet-stream",
@@ -139,4 +150,227 @@ async fn an_import_is_refused_before_anything_is_created() {
         assert_eq!(response.status(), expected, "{query}");
     }
     assert!(app.db.list::<crate::model::Job>("job").unwrap().is_empty());
+}
+
+/// A plain tar of one file, closed as tar closes it.
+fn archive() -> Vec<u8> {
+    let mut tar = crate::archives::tar::entry("notes.txt", b"hello", 0);
+    tar.extend([0; 2 * 512]);
+    tar
+}
+
+fn pieces(data: &[u8]) -> Vec<std::result::Result<Bytes, axum::Error>> {
+    data.chunks(700)
+        .map(|piece| Ok(Bytes::copy_from_slice(piece)))
+        .collect()
+}
+
+/// What `deliver` makes of an upload arriving in these pieces, and what tar received.
+async fn feed(
+    pieces: Vec<std::result::Result<Bytes, axum::Error>>,
+    size: Option<u64>,
+    limit: u64,
+) -> (anyhow::Result<u64>, Vec<u8>) {
+    let mut tar = Vec::new();
+    let stream = futures_util::stream::iter(pieces);
+    let result = deliver(
+        stream,
+        &mut tar,
+        size,
+        limit,
+        std::future::pending(),
+        |_| Ok(()),
+    )
+    .await;
+    (result, tar)
+}
+
+#[tokio::test]
+async fn an_upload_of_unknown_size_is_complete_only_with_its_closing_blocks() {
+    let archive = archive();
+    let (received, tar) = feed(pieces(&archive), None, 1 << 20).await;
+    assert_eq!(received.unwrap(), archive.len() as u64);
+    assert_eq!(tar, archive);
+    assert!(feed(pieces(&gzip(&archive)), None, 1 << 20).await.0.is_ok());
+    // Cut at the member boundary, which GNU tar would unpack without a word.
+    let cut = &archive[..1024];
+    let error = feed(pieces(cut), None, 1 << 20).await.0.unwrap_err();
+    assert!(error.to_string().contains("end-of-archive"), "{error}");
+    // A sender's tar that stopped early while its gzip closed the stream properly.
+    assert!(feed(pieces(&gzip(cut)), None, 1 << 20).await.0.is_err());
+    // A declared size vouches for the archive, as before.
+    assert!(feed(pieces(cut), Some(1024), 1 << 20).await.0.is_ok());
+}
+
+#[tokio::test]
+async fn a_declared_size_is_exact() {
+    let archive = archive();
+    let size = archive.len() as u64;
+    assert!(feed(pieces(&archive), Some(size), 1 << 20).await.0.is_ok());
+    let error = feed(pieces(&archive), Some(size - 1), 1 << 20)
+        .await
+        .0
+        .unwrap_err();
+    assert!(error.to_string().contains("declared size"), "{error}");
+    let error = feed(pieces(&archive), Some(size + 1), 1 << 20)
+        .await
+        .0
+        .unwrap_err();
+    assert!(error.to_string().contains("ended after"), "{error}");
+}
+
+#[tokio::test]
+async fn an_upload_without_a_size_is_held_to_the_limit() {
+    let archive = archive();
+    let error = feed(pieces(&archive), None, 1000).await.0.unwrap_err();
+    assert!(
+        error.to_string().contains("IMAGE_ARCHIVE_MAX_MB"),
+        "{error}"
+    );
+    // The route's body limit stops a chunked body with an error of its own, named the same way.
+    let limited = http_body_util::Limited::new(Body::from(archive), 1000);
+    let mut tar = Vec::new();
+    let error = deliver(
+        Body::new(limited).into_data_stream(),
+        &mut tar,
+        None,
+        1 << 20,
+        std::future::pending(),
+        |_| Ok(()),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("IMAGE_ARCHIVE_MAX_MB"),
+        "{error}"
+    );
+}
+
+#[tokio::test]
+async fn an_interrupted_upload_fails_whether_or_not_it_has_a_size() {
+    let archive = archive();
+    for size in [None, Some(archive.len() as u64)] {
+        // As hyper reports a chunked upload whose connection closed before its last chunk.
+        let mut parts = pieces(&archive[..1024]);
+        parts.push(Err(axum::Error::new(std::io::Error::other(
+            "connection closed before message completed",
+        ))));
+        parts.extend(pieces(&archive[1024..]));
+        let error = feed(parts, size, 1 << 20).await.0.unwrap_err();
+        assert!(error.to_string().contains("interrupted"), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn tar_that_stops_reading_is_told_apart() {
+    let (mut tar, reader) = tokio::io::duplex(64);
+    drop(reader);
+    let stream = futures_util::stream::iter(pieces(&archive()));
+    let error = deliver(
+        stream,
+        &mut tar,
+        None,
+        1 << 20,
+        std::future::pending(),
+        |_| Ok(()),
+    )
+    .await
+    .unwrap_err();
+    assert!(error.is::<Stopped>(), "{error}");
+}
+
+#[tokio::test]
+async fn an_extract_is_refused_before_anything_is_created() {
+    let app = app(false);
+    for (query, content_type, expected) in [
+        (
+            "path=/project&size=99999999",
+            "application/octet-stream",
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "path=/project",
+            "text/plain",
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        ),
+        (
+            "path=project",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "path=/a/../b",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "path=/a//b",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "size=10",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = crate::router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/volumes/project/extract?{query}"))
+                    .header("host", "localhost:8080")
+                    .header("content-type", content_type)
+                    .header("x-wsld-request", "1")
+                    .body(Body::from(vec![0; 10]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{query}");
+    }
+    assert!(app.db.list::<crate::model::Job>("job").unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_refusal_before_the_upload_keeps_its_status() {
+    let app = app(false);
+    // A folder that exists answers 409, as the volume file routes do, not a generic 400.
+    let (accepted, was_accepted) = oneshot::channel();
+    let (_done, outcome) = oneshot::channel();
+    let logged = refuse(
+        accepted,
+        Error(StatusCode::CONFLICT, "/project already exists".into()),
+    );
+    assert_eq!(logged.to_string(), "/project already exists");
+    let refused = answer(
+        &app,
+        "job".into(),
+        was_accepted,
+        outcome,
+        auth::Session::Link,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        (refused.0, refused.1.as_str()),
+        (StatusCode::CONFLICT, "/project already exists")
+    );
+    // A job that ended without a word answers with its error.
+    let (accepted, was_accepted) = oneshot::channel::<Result<()>>();
+    let (done, outcome) = oneshot::channel();
+    drop(accepted);
+    done.send(Err("tar: This does not look like a tar archive".into()))
+        .unwrap();
+    let refused = answer(
+        &app,
+        "job".into(),
+        was_accepted,
+        outcome,
+        auth::Session::Link,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(refused.0, StatusCode::BAD_REQUEST);
+    assert!(refused.1.contains("tar archive"), "{}", refused.1);
 }

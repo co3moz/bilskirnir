@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 63 tools:
+The server currently exposes 64 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -89,7 +89,7 @@ The server currently exposes 63 tools:
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
-| Persistent storage | `list_volumes`, `create_volume` |
+| Persistent storage | `list_volumes`, `create_volume`, `copy_volume` |
 | Large files and archives | `create_transfer` |
 | Operation results | `list_jobs`, `get_job` |
 
@@ -228,6 +228,7 @@ The file tools carry at most 512 KiB per call as base64 through the conversation
 | `volume_upload` | `volume`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file |
 | `volume_download` | `volume`, `path` | `GET` the file |
 | `volume_import` | `name` of a new volume | `PUT` or `POST` a `.tar.gz` or `.tar` |
+| `volume_extract` | `volume`, `path` of a new folder in it | `PUT` or `POST` a `.tar.gz` or `.tar` |
 | `volume_export` | `volume` | `GET` a `.tar.gz` |
 | `image_import` | optional `name` and `description` | `PUT` or `POST` an image archive |
 | `image_export` | `image_id` | `GET` an image archive |
@@ -239,7 +240,7 @@ curl --fail-with-body --upload-file project.tar.gz http://bilskirnir.lan:8080/ap
 curl --fail --output build.zip http://bilskirnir.lan:8080/api/transfers/TOKEN
 ```
 
-The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends, or from a `size` query parameter for a body sent without one; nothing else in the request changes what the link does.
+The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends for a file, or from a `size` query parameter for a body sent without one. An import also takes an archive of unknown size, such as `tar -c -C project . | curl --upload-file - URL`, with the checks the [HTTP API](API.md#volume-archives) describes. Nothing else in the request changes what the link does.
 
 A link is a credential of its own:
 
@@ -276,3 +277,5 @@ Read/write and execution tools operate inside managed desktop containers. They d
 `update_container` changes a container's settings after creation; pass only the fields to change. `name`, `internet`, `ports` and a new or changed resource limit apply in place. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one.
+
+`copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).

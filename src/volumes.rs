@@ -20,7 +20,7 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
-pub(crate) use archive::{Import, export, import};
+pub(crate) use archive::{Extract, Import, copy, export, extract, import};
 pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };

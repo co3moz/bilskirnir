@@ -59,6 +59,8 @@ export const es: Messages = {
   "job.image-import": "Importar imagen",
   "job.volume-export": "Exportar volumen",
   "job.volume-import": "Importar volumen",
+  "job.volume-extract": "Extraer en volumen",
+  "job.volume-copy": "Copiar volumen",
   "jobs.target.container": "Contenedor {id}",
   "jobs.target.image": "Imagen {id}",
   "jobs.log.queued": "Esperando para empezar…",
@@ -165,6 +167,7 @@ export const es: Messages = {
   "progress.exported": "{size} exportados",
   "progress.preparingImage": "Docker está preparando la imagen…",
   "progress.received": "{size} recibidos",
+  "progress.copied": "{size} copiados",
   "progress.receivedOf": "{current} de {total} recibidos",
   "stage.base": "Preparación de la imagen base",
   "stage.script": "Ejecución del script de configuración",
@@ -257,6 +260,12 @@ export const es: Messages = {
     "Un volumen de Docker con nombre que puedes montar en contenedores. Sus archivos sobreviven a los contenedores y no forman parte de las instantáneas.",
   "volumes.namePattern":
     "Letras, dígitos, puntos, guiones y guiones bajos, empezando por una letra o un dígito",
+  "volumes.copy": "Copiar",
+  "volumes.copyOf": "Copiar {name} en un volumen nuevo",
+  "volumes.copyTitle": "Copiar {name}",
+  "volumes.copyDescription":
+    "Copia todos los archivos en un volumen nuevo, y pertenecen al usuario del escritorio. Una copia completa ocupa tanto espacio en disco como el volumen.",
+  "volumes.copyName": "Nombre de la copia",
   "volumes.import.arrived":
     "El archivo comprimido llegó. Se están escribiendo sus últimos archivos.",
   "volumes.import.writing": "Escribiendo los últimos archivos…",

@@ -190,6 +190,13 @@ fn router(app: Arc<App>) -> Router {
             )),
         )
         .route("/api/volumes/{name}/archive", get(volumes::export))
+        .route("/api/volumes/{name}/copy", post(volumes::copy))
+        .route(
+            "/api/volumes/{name}/extract",
+            post(volumes::extract).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
+            )),
+        )
         .route("/api/volumes/{name}/files/list", post(volumes::list))
         .route("/api/volumes/{name}/files/read", post(volumes::read))
         .route("/api/volumes/{name}/files/write", post(volumes::write))

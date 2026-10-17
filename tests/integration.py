@@ -93,6 +93,13 @@ share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
 restored_volume = f"wsld-test-restored-{tag}"
+streamed_volume = f"wsld-test-streamed-{tag}"
+cut_volume = f"wsld-test-cut-{tag}"
+interrupted_volume = f"wsld-test-interrupted-{tag}"
+copied_volume = f"wsld-test-copied-{tag}"
+mcp_copy_volume = f"wsld-test-mcp-copy-{tag}"
+device_volume = f"wsld-test-device-{tag}"
+device_copy_volume = f"wsld-test-device-copy-{tag}"
 linked_volume = f"wsld-test-linked-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
@@ -286,7 +293,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 62
+    assert len(mcp("tools/list")["tools"]) == 64
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -409,6 +416,40 @@ try:
         finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
         assert finished["status"] == "failed", finished
     assert json.loads(docker("volume", "inspect", broken, check=False) or b"[]") == []
+    # An archive streamed as it is made, as `tar -c | curl -T -` sends it, arrives in chunks and
+    # without a size. One whose connection closes before the last chunk, or which stops at a file
+    # boundary as a sending tar that failed leaves it, creates no volume.
+    def stream_volume(name, data, cut=False):
+        def chunks():
+            # A dropped upload stops inside its second header, before any closing block.
+            sent = data[:1000] if cut else data
+            for start in range(0, len(sent), 4096):
+                yield sent[start:start + 4096]
+            if cut:
+                raise ConnectionAbortedError("the acceptance test drops the upload")
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name}), data=chunks(), method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+        with client.open(request, timeout=130) as response:
+            return json.loads(response.read())
+    plain_volume = gzip.decompress(exported_volume)
+    started = stream_volume(streamed_volume, plain_volume)
+    streamed = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+    assert streamed["status"] == "completed" and "of unknown size" in streamed["log"], streamed
+    assert api(f"volumes/{streamed_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
+    with tarfile.open(fileobj=io.BytesIO(plain_volume)) as archive:
+        boundary = archive.getmembers()[-1].offset
+    try:
+        stream_volume(cut_volume, plain_volume[:boundary]); raise AssertionError("an archive without its closing blocks was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 400 and "end-of-archive" in json.loads(error.read())["error"], error.code
+    try:
+        stream_volume(interrupted_volume, plain_volume, cut=True); raise AssertionError("the dropped upload was answered")
+    except urllib.error.URLError:
+        pass
+    dropped = wait_for(lambda: next((j for j in api("jobs") if j["resource"] == f"volume:{interrupted_volume}" and j["status"] not in ("queued", "running")), None), 180)
+    assert dropped["status"] == "failed", dropped
+    assert "The upload was interrupted" in api(f"jobs/{dropped['id']}")["log"]
+    for name in [cut_volume, interrupted_volume]:
+        assert json.loads(docker("volume", "inspect", name, check=False) or b"[]") == [], name
     listed = api(f"{files}/list", {"path": "/notes"})
     assert listed["path"] == "/notes" and sorted(i["name"] for i in listed["items"]) == ["blob.bin", "renamed.txt"], listed
     assert refused(f"{files}/delete", {"path": "/notes"}) == 400
@@ -424,6 +465,35 @@ try:
     assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
     print("PASS volume files and archives go through a removed helper as the desktop user", flush=True)
+    # A copy pipes the export helper into the import helper. It has the source's tree, symlinks
+    # and modes, a file only root may read included, and every file belongs to the desktop user.
+    # An existing target, a missing source and the manager's own volume on either side are
+    # refused, and a copy that fails, here on a device file, leaves no volume.
+    def in_volume(name, *command):
+        return docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={name},dst=/v", "--entrypoint", command[0], "bilskirnir/manager:local", *command[1:])
+    def tree(name):
+        return in_volume(name, "sh", "-c", "cd /v && find . -printf '%p %m %y %l\\n' | sort").decode()
+    in_volume(restored_volume, "sh", "-c", "chmod 664 /v/notes/renamed.txt && ln -s notes/renamed.txt /v/link && printf secret > /v/root-only && chmod 600 /v/root-only")
+    copied = job(api(f"volumes/{restored_volume}/copy", {"name": copied_volume}))
+    assert copied["source"] == restored_volume and copied["name"] == copied_volume and copied["bytes"] > 0, copied
+    assert tree(copied_volume) == tree(restored_volume), tree(copied_volume)
+    assert set(in_volume(copied_volume, "find", "/v", "-printf", "%u:%g\\n").decode().split()) == {"1001:1001"}
+    assert in_volume(copied_volume, "cat", "/v/root-only") == b"secret"
+    assert mcp_job(tool("copy_volume", {"volume": restored_volume, "name": mcp_copy_volume}))["result"]["name"] == mcp_copy_volume
+    assert tree(mcp_copy_volume) == tree(restored_volume)
+    never = f"wsld-test-never-{tag}"
+    for source, target, status in [(restored_volume, copied_volume, 409), (missing, never, 404), (volume, never, 403), (restored_volume, volume, 403)]:
+        assert refused(f"volumes/{source}/copy", {"name": target}) == status, (source, target)
+    for name in [missing, never]:
+        assert json.loads(docker("volume", "inspect", name, check=False) or b"[]") == [], name
+    api("volumes", {"name": device_volume})
+    in_volume(device_volume, "mknod", "/v/null", "c", "1", "3")
+    failed_copy = api(f"volumes/{device_volume}/copy", {"name": device_copy_volume})
+    failed_copy = wait_for(lambda: (j if (j := api(f"jobs/{failed_copy['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+    assert failed_copy["status"] == "failed" and "Removed the incomplete volume" in failed_copy["log"], failed_copy
+    assert json.loads(docker("volume", "inspect", device_copy_volume, check=False) or b"[]") == []
+    assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
+    print("PASS a volume copies into a new one owned by the desktop user, and never over one", flush=True)
     # An MCP client moves archives with one-time links, without the dashboard session.
     exported_link = transfer_link({"operation": "volume_export", "volume": restored_volume})
     assert exported_link["method"] == "GET" and exported_link["url"].startswith("/api/transfers/"), exported_link
@@ -810,6 +880,50 @@ try:
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"
+    # An archive unpacks into a new folder of the volume this running desktop mounts, which sees
+    # it at once, owned by the desktop user. An existing folder, the volume's root while it holds
+    # files, a missing volume and the manager's own volume are refused; a failed extract leaves
+    # no folder.
+    def extract(name, path, data):
+        query = urllib.parse.urlencode({"path": path, "size": len(data)})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/{name}/extract?{query}", data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+        with client.open(request, timeout=130) as response:
+            return json.loads(response.read())
+    project = io.BytesIO()
+    with tarfile.open(fileobj=project, mode="w:gz") as archive:
+        for name, content in {"src/main.cs": b"class Main {}\n", "README.md": b"worktree\n"}.items():
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = len(content), 0o644
+            archive.addfile(info, io.BytesIO(content))
+    project = project.getvalue()
+    extracted = job(extract(share, "/worktree", project))
+    assert extracted == {"volume": share, "path": "/worktree", "bytes": len(project)}, extracted
+    assert docker("exec", container, "cat", "/shared/worktree/src/main.cs") == b"class Main {}\n"
+    assert docker("exec", container, "stat", "-c", "%U", "/shared/worktree", "/shared/worktree/src", "/shared/worktree/README.md") == b"desktop\ndesktop\ndesktop\n"
+    missing_volume = f"wsld-test-missing-{tag}"
+    for name, path, status in [(share, "/worktree", 409), (share, "/", 409), (share, "/absent/worktree", 400), (missing_volume, "/worktree", 404), (volume, "/worktree", 403)]:
+        try:
+            extract(name, path, project); raise AssertionError(f"extract into {name}:{path} accepted")
+        except urllib.error.HTTPError as error:
+            assert error.code == status, (name, path, error.code)
+    assert json.loads(docker("volume", "inspect", missing_volume, check=False) or b"[]") == []
+    assert docker("exec", container, "cat", "/shared/worktree/README.md") == b"worktree\n"
+    # An MCP client unpacks through a one-time link, without a session, streaming without a size.
+    linked = transfer_link({"operation": "volume_extract", "volume": share, "path": "/linked-worktree"})
+    assert linked["method"] == "PUT", linked
+    with without_session(linked["url"], data=iter([project[:1000], project[1000:]]), method="PUT") as response:
+        assert job(json.loads(response.read()))["path"] == "/linked-worktree"
+    assert docker("exec", container, "cat", "/shared/linked-worktree/src/main.cs") == b"class Main {}\n"
+    try:
+        started = extract(share, "/broken", project[: len(project) // 2])
+    except urllib.error.HTTPError as error:
+        assert error.code == 400, error.code
+    else:
+        finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+        assert finished["status"] == "failed", finished
+    assert subprocess.run(["docker", "exec", container, "test", "-e", "/shared/broken"]).returncode != 0
+    assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
+    print("PASS archives unpack into a new folder of a mounted volume as the desktop user, also through a link, never over one", flush=True)
     docker("exec",container,"ln","-s","/tmp","/home/desktop/Downloads/escape")
     for target in ["/etc", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
         try:
@@ -1346,5 +1460,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,linked_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

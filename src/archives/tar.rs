@@ -437,7 +437,7 @@ fn until_nul(bytes: &[u8]) -> &[u8] {
 }
 
 /// An entry's data length; Go refuses a negative one.
-fn size(field: &[u8]) -> Result<u64> {
+pub(crate) fn size(field: &[u8]) -> Result<u64> {
     u64::try_from(numeric(field)?).context("negative size")
 }
 

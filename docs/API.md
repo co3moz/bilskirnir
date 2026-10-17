@@ -89,7 +89,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `compose` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
-| POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
+| POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with optional `size`, `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes, each as `docker volume ls` describes it plus a boolean `manager`. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
 | POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
@@ -101,7 +101,9 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/volumes/{name}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/volumes/{name}/files` | Stream a binary upload. |
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
-| POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and `size` into a new volume; returns a job. |
+| POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and optional `size` into a new volume; returns a job. |
+| POST | `/api/volumes/{name}/extract` | Stream a `.tar.gz` or `.tar` with `path` and optional `size` into a new folder of the volume; returns a job. |
+| POST | `/api/volumes/{name}/copy` | Copy the volume's files into a new volume named by `name`; returns a job. |
 | GET, PUT, POST | `/api/transfers/{token}` | Run the one upload, download, import or export a [transfer link](#transfer-links) authorizes; needs no session. |
 | Any | `/api/containers/{id}/ports/{port}/{path}` | HTTP or WebSocket to a [port inside the desktop](#desktop-ports) that its `ports` setting lists; needs the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
@@ -316,7 +318,35 @@ curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
   http://localhost:8080/api/volumes/unity-projects/archive
 ```
 
-`POST /api/volumes/import?name=NEW_VOLUME&size=BYTES` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if unpacking fails, the new volume is removed again.
+`POST /api/volumes/import?name=NEW_VOLUME` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if the upload or unpacking fails, the new volume is removed again.
+
+`size`, the archive's exact length in bytes, is optional. With it, a body of any other length fails the import, and a size above the limit is refused at once with 413. Without it, an archive can stream in as it is made, with no temporary file on the sending side:
+
+```bash
+tar -c -C project . | curl --cookie bilskirnir.cookies \
+  --header 'X-Wsld-Request: 1' \
+  --header 'Content-Type: application/octet-stream' \
+  --request POST --upload-file - \
+  'http://localhost:8080/api/volumes/import?name=NEW_VOLUME'
+```
+
+curl sends such a body in chunks. Its bytes are counted as they arrive, and the import fails once they pass `IMAGE_ARCHIVE_MAX_MB`. A connection that closes before the last chunk fails it too, and so does an archive that ends without tar's end-of-archive blocks, which every tar writes: GNU tar would otherwise unpack an archive cut at a file boundary as if it were whole, as one is when the sending tar stops early. The job's `progress` then has `current` and no `total`.
+
+`POST /api/volumes/{name}/extract?path=/FOLDER` unpacks a `.tar.gz` or `.tar` into a new folder of a volume that exists, such as one a running container mounts. The body, `size` and limits are those of an import:
+
+```bash
+tar -c -C project . | curl --cookie bilskirnir.cookies \
+  --header 'X-Wsld-Request: 1' \
+  --header 'Content-Type: application/octet-stream' \
+  --request POST --upload-file - \
+  'http://localhost:8080/api/volumes/unity-projects/extract?path=/worktree-42'
+```
+
+The folder must not exist yet. The extract creates it, so no file of the volume can be replaced and no symlink already in the volume can lead the archive elsewhere. `path` is absolute and canonical, as for the [volume file routes](#volume-files), and its parent must exist; `/` is the volume itself, accepted only while it is empty, such as right after `POST /api/volumes`. tar runs inside the new folder as the desktop user, in a helper that mounts only that volume, so every file belongs to UID/GID 1001. The extract holds the volume's write lock, so file writes to the volume wait for it. A folder that exists returns 409, a missing volume 404 without creating it, and the manager's own volumes 403. The response is a `volume-extract` job once the whole archive has arrived; if the upload or unpacking fails, the folder is removed again, or the volume emptied again for `/`. Unpacking over a folder that already holds files is not supported: extract into a new folder, then delete or move the old one. An MCP client, which has no session, gets a `volume_extract` [transfer link](#transfer-links) for this route.
+
+`POST /api/volumes/{name}/copy` with `{"name":"NEW_VOLUME"}` copies every file of the volume into a new one, for work that starts from a prepared volume or a copy kept before a risky change; MCP clients call `copy_volume`. Docker has no volume copy, so the manager pipes the two archive helpers into each other, without compression: one reads the source as root on a read-only mount with only the capability to read every file, the other unpacks into the new volume as the desktop user, and no helper mounts both. The copy keeps the tree, symlinks, hard links and modes. Every file belongs to UID/GID 1001, as after an import, and device files cannot be copied. The new name must not exist (409), a missing source returns 404 and is not created, and the manager's own volumes are refused on either side with 403. The response is a `volume-copy` job whose `progress` counts the bytes copied. It takes one of the two archive transfer slots, `IMAGE_ARCHIVE_MAX_MB` does not apply since nothing is uploaded, and a copy that fails removes the new volume again. A file that changes while it is read is copied as it was read and noted in the job log.
+
+A copy is a full copy, not copy-on-write: disk use grows by the volume's size, and the WSL virtual disk does not shrink by itself after a volume is deleted.
 
 ## Image archives
 
@@ -329,7 +359,7 @@ curl --cookie bilskirnir.cookies --output unity.tar.gz \
 
 An archive holds every layer, the base desktop included, and its size is not known in advance. Docker prepares the whole image before its first layer arrives. The transfer is an `image-export` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent. If Docker fails partway, the download ends with an error instead of a short file.
 
-`POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply the exact `size` and optionally `name` and `description` as query parameters; they default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
+`POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply its exact `size` when it is known, and optionally `name` and `description`, as query parameters; the name and description default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
 
 ```bash
 curl --cookie bilskirnir.cookies \
@@ -345,13 +375,13 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 - The image has the `io.wsl-desktop.desktop=true` label.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
-The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
 
 ## Transfer links
 
-`/api/transfers/{token}` runs one of the transfer routes above for a client that has neither a session nor the administrator password: an agent that holds the MCP token gets the link from the MCP tool `create_transfer`, which names the operation and its arguments. The [MCP guide](MCP.md#move-large-files) lists the operations: uploading into a container or volume, downloading from one, and importing or exporting a volume or image archive.
+`/api/transfers/{token}` runs one of the transfer routes above for a client that has neither a session nor the administrator password: an agent that holds the MCP token gets the link from the MCP tool `create_transfer`, which names the operation and its arguments. The [MCP guide](MCP.md#move-large-files) lists the operations: uploading into a container or volume, downloading from one, importing or exporting a volume or image archive, and unpacking an archive into a new folder of a volume.
 
-The request runs the route the link stands for, with that route's limits, locks, job and answer, and the arguments the link was issued with. Uploads and imports take `PUT` or `POST` with the file or archive as the body, whatever its `Content-Type`; their size is `Content-Length`, or a `size` query parameter when the body is sent without one, and is refused with 411 when neither is there. Downloads and exports take `GET`. No other query parameter is accepted.
+The request runs the route the link stands for, with that route's limits, locks, job and answer, and the arguments the link was issued with. Uploads and imports take `PUT` or `POST` with the file or archive as the body, whatever its `Content-Type`; their size is `Content-Length`, or a `size` query parameter when the body is sent without one. A file upload is refused with 411 when neither is there, while an import then takes the archive as one of unknown size, as described under [volume archives](#volume-archives). Downloads and exports take `GET`. No other query parameter is accepted.
 
 ```bash
 curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
@@ -472,7 +502,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, image archive exports and imports two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

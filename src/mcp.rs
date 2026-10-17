@@ -1,6 +1,6 @@
 use crate::{
     App, api, apps, audio, auth, capture, compose, desktop_input, error, exec, files, gamepad,
-    recordings, terminal, transfers, uploads, usage, waits, windows,
+    recordings, terminal, transfers, uploads, usage, volumes, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -328,6 +328,13 @@ impl BilskirnirMcp {
             }
             "list_volumes" => api::volumes(state).await?.0,
             "create_volume" => api::create_volume(state, Json(parse(args)?)).await?.0,
+            "copy_volume" => {
+                let source = Path(string(&args, "volume")?);
+                args.as_object_mut().unwrap().remove("volume");
+                Box::pin(volumes::copy(state, source, Json(parse(args)?)))
+                    .await?
+                    .0
+            }
             "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
             "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
@@ -784,6 +791,15 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             false,
         ),
         tool(
+            "copy_volume",
+            "Copy every file of a named volume into a new volume called name, such as a prepared project or cache that a task starts from. The copy keeps the tree, symlinks and modes, and every file belongs to the desktop user (UID 1001). It is a full copy, not copy-on-write: disk use grows by the volume's size. The new name must not exist, a missing source is never created and volumes marked manager=true are refused. Returns job_id; get_job reports the bytes copied.",
+            json!({"volume":text,"name":text}),
+            &["volume", "name"],
+            false,
+            false,
+            false,
+        ),
+        tool(
             "list_jobs",
             "List the latest 100 jobs without detailed logs.",
             json!({}),
@@ -993,15 +1009,15 @@ fn transfer_tool(id: Value) -> Tool {
     let text = |description: &str| json!({"type":"string","minLength":1,"description":description});
     tool(
         "create_transfer",
-        "Issue a one-time HTTP link that moves a large file or archive between this server and the machine you run on, instead of base64 through the conversation: container_upload and container_download (container_id with destination, name and replace, or path), volume_upload and volume_download (volume with the same arguments), volume_import (name of a new volume), volume_export (volume), image_import (optional name and description) and image_export (image_id). Returns url, relative to this server's address, its method and expires_at. The link needs no other credential, runs only this operation with these arguments, and is spent by the first request that presents it or after five minutes. Upload with the body as it is, for example curl --fail-with-body --upload-file FILE URL, which sends Content-Length; download with curl --fail --output FILE URL. The result is that of the dashboard's HTTP route: an import or export is a job, named in the reply or the X-Job-Id header, to follow with get_job.",
+        "Issue a one-time HTTP link that moves a large file or archive between this server and the machine you run on, instead of base64 through the conversation: container_upload and container_download (container_id with destination, name and replace, or path), volume_upload and volume_download (volume with the same arguments), volume_import (name of a new volume), volume_extract (volume and path, a new folder in it, such as a project folder in a volume a container mounts), volume_export (volume), image_import (optional name and description) and image_export (image_id). Returns url, relative to this server's address, its method and expires_at. The link needs no other credential, runs only this operation with these arguments, and is spent by the first request that presents it or after five minutes. Upload with the body as it is, for example curl --fail-with-body --upload-file FILE URL, which sends Content-Length; an import or extract also streams an archive as it is made, as tar -c -C DIR . | curl --fail-with-body --upload-file - URL. Download with curl --fail --output FILE URL. The result is that of the dashboard's HTTP route: an import or export is a job, named in the reply or the X-Job-Id header, to follow with get_job.",
         json!({
             "operation":{"type":"string","enum":transfers::OPERATIONS},
             "container_id":id,
-            "volume":text("Named volume from list_volumes, for volume_upload, volume_download and volume_export."),
+            "volume":text("Named volume from list_volumes, for volume_upload, volume_download, volume_extract and volume_export."),
             "image_id":text("Saved image ID from list_images (its id field), for image_export."),
             "destination":text("container_upload and volume_upload: the canonical absolute folder that receives the file, in Downloads or a writable mounted volume for a container."),
             "name":text("container_upload and volume_upload: the new file's name. volume_import: the new volume's name. image_import: the image's name, by default the one in the archive."),
-            "path":text("container_download and volume_download: the canonical absolute path of a regular file."),
+            "path":text("container_download and volume_download: the canonical absolute path of a regular file. volume_extract: the canonical absolute folder the archive is unpacked into, which must not exist yet while its parent does, or / for a volume that is still empty."),
             "replace":{"type":"boolean","default":false,"description":"container_upload and volume_upload: overwrite an existing file."},
             "description":{"type":"string","maxLength":4096,"description":"image_import: the image's description, by default the one in the archive."}
         }),
