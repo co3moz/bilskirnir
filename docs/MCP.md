@@ -228,6 +228,7 @@ The file tools carry at most 512 KiB per call as base64 through the conversation
 | `volume_upload` | `volume`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file |
 | `volume_download` | `volume`, `path` | `GET` the file |
 | `volume_import` | `name` of a new volume | `PUT` or `POST` a `.tar.gz` or `.tar` |
+| `volume_extract` | `volume`, `path` of a new folder in it | `PUT` or `POST` a `.tar.gz` or `.tar` |
 | `volume_export` | `volume` | `GET` a `.tar.gz` |
 | `image_import` | optional `name` and `description` | `PUT` or `POST` an image archive |
 | `image_export` | `image_id` | `GET` an image archive |

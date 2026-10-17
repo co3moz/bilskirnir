@@ -908,6 +908,12 @@ try:
             assert error.code == status, (name, path, error.code)
     assert json.loads(docker("volume", "inspect", missing_volume, check=False) or b"[]") == []
     assert docker("exec", container, "cat", "/shared/worktree/README.md") == b"worktree\n"
+    # An MCP client unpacks through a one-time link, without a session, streaming without a size.
+    linked = transfer_link({"operation": "volume_extract", "volume": share, "path": "/linked-worktree"})
+    assert linked["method"] == "PUT", linked
+    with without_session(linked["url"], data=iter([project[:1000], project[1000:]]), method="PUT") as response:
+        assert job(json.loads(response.read()))["path"] == "/linked-worktree"
+    assert docker("exec", container, "cat", "/shared/linked-worktree/src/main.cs") == b"class Main {}\n"
     try:
         started = extract(share, "/broken", project[: len(project) // 2])
     except urllib.error.HTTPError as error:
@@ -917,7 +923,7 @@ try:
         assert finished["status"] == "failed", finished
     assert subprocess.run(["docker", "exec", container, "test", "-e", "/shared/broken"]).returncode != 0
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
-    print("PASS archives unpack into a new folder of a mounted volume as the desktop user, never over one", flush=True)
+    print("PASS archives unpack into a new folder of a mounted volume as the desktop user, also through a link, never over one", flush=True)
     docker("exec",container,"ln","-s","/tmp","/home/desktop/Downloads/escape")
     for target in ["/etc", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
         try:

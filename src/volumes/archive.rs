@@ -165,22 +165,10 @@ pub async fn extract(
     Path(name): Path<String>,
     Query(request): Query<Extract>,
     headers: HeaderMap,
-    token: auth::Session,
+    session: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     check_upload(&app, request.size, &headers)?;
-    extract_archive(app, name, request, body, token).await
-}
-
-/// An extract once its upload has passed `check_upload`. `session` is what ends the transfer
-/// early, as for every other archive transfer: a dashboard sign-out, or nothing for a link.
-pub(crate) async fn extract_archive(
-    app: Arc<App>,
-    name: String,
-    request: Extract,
-    body: Body,
-    session: auth::Session,
-) -> Result<Json<Value>> {
     crate::apps::directory(&request.path)
         .map_err(|_| anyhow!("Use a canonical absolute folder path without dot segments"))?;
     // Refused before anything is uploaded; the job checks again under the volume's lock.

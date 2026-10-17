@@ -110,9 +110,19 @@ fn an_operation_takes_its_own_arguments_only() {
             replace: false
         }
     );
+    assert_eq!(
+        parse(json!({"operation": "volume_extract", "volume": "project", "path": "/worktree"}))
+            .unwrap(),
+        Operation::VolumeExtract {
+            volume: "project".into(),
+            path: "/worktree".into()
+        }
+    );
     // Another operation's argument is refused, not ignored, as are missing and unknown ones.
     for refused in [
         json!({"operation": "volume_import", "name": "project", "path": "/a"}),
+        json!({"operation": "volume_extract", "name": "project", "path": "/a"}),
+        json!({"operation": "volume_extract", "volume": "project"}),
         json!({"operation": "volume_export", "volume": "project", "container_id": "e"}),
         json!({"operation": "volume_export"}),
         json!({"operation": "delete_volume", "volume": "project"}),
@@ -149,6 +159,25 @@ fn a_link_is_issued_only_for_arguments_its_route_could_accept() {
     assert_eq!(
         refused(Operation::VolumeImport { name: "x".into() }),
         StatusCode::BAD_REQUEST
+    );
+    let extract = |volume: &str, path: &str| Operation::VolumeExtract {
+        volume: volume.into(),
+        path: path.into(),
+    };
+    for (volume, path) in [
+        ("x", "/worktree"),
+        ("project", "worktree"),
+        ("project", "/a/../b"),
+    ] {
+        assert_eq!(
+            refused(extract(volume, path)),
+            StatusCode::BAD_REQUEST,
+            "{volume} {path}"
+        );
+    }
+    assert_eq!(
+        create(&app, extract("project", "/worktree")).unwrap()["method"],
+        "PUT"
     );
     assert_eq!(
         refused(Operation::ImageExport {
@@ -298,6 +327,29 @@ async fn a_refused_request_spends_its_link_without_naming_it() {
     assert_ne!(status, StatusCode::LENGTH_REQUIRED);
     used(app.clone(), url).await;
     used(app.clone(), format!("{ROUTE}{}", "0".repeat(64))).await;
+}
+
+#[tokio::test]
+async fn an_extract_link_streams_into_the_extract_route() {
+    // An archive of unknown size reaches the route, whose own refusal comes back: without
+    // MANAGER_CONTAINER no helper can mount the volume, so nothing is created and no job runs.
+    let app = mcp_app();
+    let operation = Operation::VolumeExtract {
+        volume: "project".into(),
+        path: "/worktree".into(),
+    };
+    let token = app.transfers.issue(operation, Instant::now()).unwrap();
+    let (status, _, body) = send(
+        &app,
+        request("PUT", &format!("{ROUTE}{token}"))
+            .body(Body::from("archive"))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{}", error(&body));
+    assert!(error(&body).contains("MANAGER_CONTAINER"));
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    assert!(app.transfers.take(&token, Instant::now()).is_none());
 }
 
 #[tokio::test]
