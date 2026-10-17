@@ -20,7 +20,7 @@ curl --cookie-jar bilskirnir.cookies \
 
 Send that cookie with subsequent requests. POST and DELETE requests also need `X-Wsld-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
 
-The `wsld_session` cookie and `X-Wsld-Request` header retain their names for compatibility. The MCP bearer token authenticates `/mcp`, not these API routes. Sessions last 12 hours; `/api/logout` revokes the session.
+The `wsld_session` cookie and `X-Wsld-Request` header retain their names for compatibility. The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
 
 ## Endpoints
 
@@ -102,6 +102,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/volumes/{name}/files` | Stream a binary upload. |
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
 | POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and `size` into a new volume; returns a job. |
+| GET, PUT, POST | `/api/transfers/{token}` | Run the one upload, download, import or export a [transfer link](#transfer-links) authorizes; needs no session. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -330,6 +331,18 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+
+## Transfer links
+
+`/api/transfers/{token}` runs one of the transfer routes above for a client that has neither a session nor the administrator password: an agent that holds the MCP token gets the link from the MCP tool `create_transfer`, which names the operation and its arguments. The [MCP guide](MCP.md#move-large-files) lists the operations: uploading into a container or volume, downloading from one, and importing or exporting a volume or image archive.
+
+The request runs the route the link stands for, with that route's limits, locks, job and answer, and the arguments the link was issued with. Uploads and imports take `PUT` or `POST` with the file or archive as the body, whatever its `Content-Type`; their size is `Content-Length`, or a `size` query parameter when the body is sent without one, and is refused with 411 when neither is there. Downloads and exports take `GET`. No other query parameter is accepted.
+
+```bash
+curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
+```
+
+The token replaces the cookie and the `X-Wsld-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
 
 ## Screenshots
 
