@@ -188,6 +188,9 @@ export const fr: Messages = {
   "restart.field.microphone": "le microphone",
   "restart.field.sudo": "l'accès sudo",
   "restart.field.gamepad": "la manette",
+  "restart.field.hostname": "le nom d'hôte",
+  "restart.field.mac_address": "l'adresse MAC",
+  "restart.field.machine_id": "l'identifiant de machine",
   "restart.field.shm_mb": "la mémoire partagée",
   "restart.field.mounts": "le montage des volumes",
   "restart.field.cpus": "la suppression de la limite CPU",
@@ -564,6 +567,16 @@ export const fr: Messages = {
     "Ports de programmes du bureau que les agents munis du jeton MCP atteignent par Bilskirnir, séparés par des virgules.",
   "spec.ports.one": "{count} port relayé",
   "spec.ports.other": "{count} ports relayés",
+
+  "identity.title": "Identité de la machine",
+  "identity.description":
+    "Ce que les logiciels du bureau, comme une licence liée à une machine, voient de la machine. Les réinitialisations et les changements de paramètres la conservent. Ne la modifiez que pour reprendre l'identité d'un conteneur que celui-ci remplace.",
+  "identity.hostname": "Nom d'hôte",
+  "identity.macAddress": "Adresse MAC",
+  "identity.machineId": "Identifiant de machine",
+  "identity.unset": "Défini à la recréation",
+  "identity.fromImage": "Celui de l'image",
+
   "desktop.connection.connecting": "Connexion…",
   "desktop.connection.connected": "Connecté",
   "desktop.connection.disconnected": "Déconnecté",

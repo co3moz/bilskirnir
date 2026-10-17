@@ -189,6 +189,9 @@ export const de: Messages = {
   "restart.field.microphone": "Mikrofon",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "Gamepad",
+  "restart.field.hostname": "Hostname",
+  "restart.field.mac_address": "MAC-Adresse",
+  "restart.field.machine_id": "Maschinen-ID",
   "restart.field.shm_mb": "gemeinsamer Speicher",
   "restart.field.mounts": "Volumes",
   "restart.field.cpus": "Entfernen des CPU-Limits",
@@ -564,6 +567,16 @@ export const de: Messages = {
     "Ports von Programmen im Desktop, die Agenten mit dem MCP-Token über Bilskirnir erreichen, durch Kommas getrennt.",
   "spec.ports.one": "{count} weitergeleiteter Port",
   "spec.ports.other": "{count} weitergeleitete Ports",
+
+  "identity.title": "Maschinenidentität",
+  "identity.description":
+    "Was Software im Desktop, etwa eine an einen Rechner gebundene Lizenz, vom Rechner sieht. Zurücksetzen und Änderungen der Einstellungen behalten sie bei. Ändern Sie sie nur, um die Identität eines Containers zu übernehmen, den dieser ersetzt.",
+  "identity.hostname": "Hostname",
+  "identity.macAddress": "MAC-Adresse",
+  "identity.machineId": "Maschinen-ID",
+  "identity.unset": "Wird beim Neuerstellen gesetzt",
+  "identity.fromImage": "Aus dem Image",
+
   "desktop.connection.connecting": "Verbindung wird hergestellt…",
   "desktop.connection.connected": "Verbunden",
   "desktop.connection.disconnected": "Getrennt",

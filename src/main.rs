@@ -14,6 +14,7 @@ mod error;
 mod exec;
 mod files;
 mod gamepad;
+mod identity;
 mod jobs;
 mod mcp;
 mod media;

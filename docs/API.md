@@ -146,15 +146,28 @@ Creation accepts `name`, `image` and these optional fields:
 | `audio`, `microphone` | `false` | Enable supported browser media; microphone also needs audio. |
 | `sudo` | `true` | Allow the desktop user to use sudo. |
 | `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
+| `hostname` | The Docker container name | The desktop's [machine identity](#machine-identity): one label of letters, digits and hyphens, at most 63 characters. |
+| `mac_address` | Random | A unicast MAC address such as `02:42:ac:11:00:02`. Capitals and hyphens are accepted and stored as lowercase with colons. |
+| `machine_id` | Random | 32 hex digits, written to `/etc/machine-id` and `/var/lib/dbus/machine-id`. A UUID with hyphens is accepted. |
 | `ports` | `[]` | Ports inside the desktop that the [port proxy](#desktop-ports) forwards to, at most 32, from 1 to 65535. |
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. The manager's own volumes, such as its data volume, are refused, here and whenever the container is created again. |
 | `parameters` | `{}` | Values for the [compose](#composes) parameters of the image, by name. |
 
+### Machine identity
+
+`hostname`, `mac_address` and `machine_id` are what software inside the desktop, such as a license bound to one machine, sees of the machine it runs on. Docker gives every container it creates a new hostname and new MAC addresses, so the manager keeps all three in the container's `spec` and gives them to every Docker container it creates for it: a reset, a retry and a settings change that recreates the container keep them. A new container gets its own, also one started from a snapshot of another container. Leave them out unless one container is meant to take over the identity of another it replaces.
+
+- The hostname is passed to `docker create`; `/etc/hostname` and `/etc/hosts` follow it.
+- The MAC address is the private network's address from creation. The internet network gets the same address when it is connected, so whichever interface software reads, it sees one address; Docker numbers a container's interfaces in no fixed order. Only the Engine API takes an address for a network connected after creation, and Docker Engine 29 (API 1.54) is the first release that uses it. Earlier releases, and an installation whose `DOCKER_HOST` is not a Unix socket, give the internet interface an address of their own at every start.
+- The machine ID is written to `/etc/machine-id` and `/var/lib/dbus/machine-id` in the created container before it starts. The catalog images carry one ID that every container of a release shares, and a snapshot carries the ID of the container it was taken from, so neither is used as it is.
+
+Records saved before identities were kept have `null` for all three until a Docker container is next created for them. They then take the hostname of the container being replaced, and its MAC address if it is running, since Docker gives a stopped container its address only when it starts; without such a container they get new ones. Their machine ID stays `null`, which leaves the ID their image or commit carries, as before, until the settings set one.
+
 ## Change settings after creation
 
-`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
+`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `hostname`, `mac_address`, `machine_id`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
 
 With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
 
@@ -162,7 +175,7 @@ With `"dry_run": true` the request is validated and answered at once with `live`
 curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Wsld-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
 ```
 
-A feature the installation has switched off cannot be turned on. The job's result repeats the `live` and `restart` lists.
+A feature the installation has switched off cannot be turned on, and an identity field can be changed but not set back to `null`. The job's result repeats the `live` and `restart` lists.
 
 Start/stop/restart uses `{"action":"start"}`, internet uses `{"enabled":false}` and snapshot uses `{"name":"Editor installed","description":"Optional note"}`. Actions on a container are serialized. Deleting it preserves named volumes and saved images, but removes unsaved changes in its container layer.
 

@@ -634,6 +634,9 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
                 "gamepad":{"type":"boolean","default":false,"description":"Attach /dev/uinput so gamepad_input can create a virtual controller."},
+                "hostname":{"type":"string","maxLength":63,"description":"Machine identity, kept across resets, retries and settings changes; leave out for the Docker container name. Set it, with mac_address and machine_id, only to take over the identity of a container this one replaces."},
+                "mac_address":{"type":"string","description":"Unicast MAC address such as 02:42:ac:11:00:02, on every network interface; leave out for a random one."},
+                "machine_id":{"type":"string","description":"32 hex digits written to /etc/machine-id and /var/lib/dbus/machine-id; leave out for a random one."},
                 "ports":ports_schema(),
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64,"default":512},
@@ -664,13 +667,14 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
                 "resolution":{"type":"string"},"gpu":{"type":"boolean"},"internet":{"type":"boolean"},
                 "audio":{"type":"boolean"},"microphone":{"type":"boolean"},"sudo":{"type":"boolean"},
                 "gamepad":{"type":"boolean"},"ports":ports_schema(),
+                "hostname":{"type":"string","maxLength":63},"mac_address":{"type":"string"},"machine_id":{"type":"string"},
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64},
                 "mounts":{"type":"array","items":schema(json!({"volume":text,"target":text,"readonly":{"type":"boolean","default":false}}), &["volume","target"])}

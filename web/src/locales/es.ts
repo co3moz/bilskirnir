@@ -188,6 +188,9 @@ export const es: Messages = {
   "restart.field.microphone": "el micrófono",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "el gamepad",
+  "restart.field.hostname": "el nombre de host",
+  "restart.field.mac_address": "la dirección MAC",
+  "restart.field.machine_id": "el ID de máquina",
   "restart.field.shm_mb": "la memoria compartida",
   "restart.field.mounts": "los volúmenes",
   "restart.field.cpus": "quitar el límite de CPU",
@@ -560,6 +563,16 @@ export const es: Messages = {
     "Puertos de programas del escritorio a los que llegan los agentes con el token MCP a través de Bilskirnir, separados por comas.",
   "spec.ports.one": "{count} puerto redirigido",
   "spec.ports.other": "{count} puertos redirigidos",
+
+  "identity.title": "Identidad de la máquina",
+  "identity.description":
+    "Lo que el software del escritorio, como una licencia vinculada a una máquina, ve de la máquina. Los restablecimientos y los cambios de configuración la conservan. Cámbiala solo para asumir la identidad de un contenedor al que este reemplaza.",
+  "identity.hostname": "Nombre de host",
+  "identity.macAddress": "Dirección MAC",
+  "identity.machineId": "ID de máquina",
+  "identity.unset": "Se asigna al recrearlo",
+  "identity.fromImage": "El de la imagen",
+
   "desktop.connection.connecting": "Conectando…",
   "desktop.connection.connected": "Conectado",
   "desktop.connection.disconnected": "Desconectado",

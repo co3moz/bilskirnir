@@ -187,6 +187,9 @@ export const tr: Messages = {
   "restart.field.microphone": "mikrofon",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "gamepad",
+  "restart.field.hostname": "ana makine adı",
+  "restart.field.mac_address": "MAC adresi",
+  "restart.field.machine_id": "makine ID'si",
   "restart.field.shm_mb": "paylaşılan bellek",
   "restart.field.mounts": "volume'ler",
   "restart.field.cpus": "CPU sınırının kaldırılması",
@@ -557,6 +560,16 @@ export const tr: Messages = {
     "Masaüstündeki programların, MCP token'ı olan ajanların Bilskirnir üzerinden ulaştığı portları; virgülle ayrılır.",
   "spec.ports.one": "{count} yönlendirilen port",
   "spec.ports.other": "{count} yönlendirilen port",
+
+  "identity.title": "Makine kimliği",
+  "identity.description":
+    "Masaüstündeki yazılımın, örneğin tek bir makineye bağlı bir lisansın, makineden gördükleri. Sıfırlama ve ayar değişiklikleri bunları korur. Yalnızca bu konteynerin yerini aldığı bir konteynerin kimliğini devralmak için değiştirin.",
+  "identity.hostname": "Ana makine adı",
+  "identity.macAddress": "MAC adresi",
+  "identity.machineId": "Makine ID'si",
+  "identity.unset": "Yeniden oluşturulunca atanır",
+  "identity.fromImage": "İmajdaki",
+
   "desktop.connection.connecting": "Bağlanıyor…",
   "desktop.connection.connected": "Bağlandı",
   "desktop.connection.disconnected": "Bağlantı kesildi",

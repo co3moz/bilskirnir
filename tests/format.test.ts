@@ -188,6 +188,10 @@ test("the restart warning names the settings that recreate the container and wha
     restartNotice(["gpu", "mounts", "cpus"], false),
     "GPU, volumes and removing the CPU limit recreate the container: it stays stopped until you start it. Its files are kept."
   )
+  assert.equal(
+    restartNotice(["hostname", "mac_address", "machine_id"], true),
+    "Hostname, MAC address and machine ID recreate the container: it restarts and open applications close. Its files are kept."
+  )
 })
 
 test("uploads never target a read-only mount, nor Downloads under one", () => {
