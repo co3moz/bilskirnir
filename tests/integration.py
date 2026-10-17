@@ -244,6 +244,20 @@ def ready(container):
         raise
 
 
+def machine(container):
+    """The hostname, machine IDs and interface MAC addresses the desktop itself reports."""
+    script = 'echo "h $(hostname)"; echo "i $(cat /etc/machine-id)"; echo "i $(cat /var/lib/dbus/machine-id)"; for i in /sys/class/net/eth*; do echo "m $(cat $i/address)"; done'
+    lines = [line.split(" ", 1) for line in docker("exec", container, "sh", "-c", script).decode().splitlines()]
+    values = lambda kind: [value.strip() for key, value in lines if key == kind and value.strip()]
+    # An empty file, as /etc/machine-id is in the XFCE image, is left out.
+    return {"hostname": values("h")[0], "machine_ids": values("i"), "macs": sorted(values("m"))}
+
+
+def recorded(spec, interfaces=1):
+    """What `machine` reports for a container whose record holds `spec`."""
+    return {"hostname": spec["hostname"], "machine_ids": [spec["machine_id"]] * 2, "macs": [spec["mac_address"]] * interfaces}
+
+
 try:
     port = start_manager()
     login()
@@ -1034,6 +1048,10 @@ try:
     container_ids.append(agent_env)
     ready(f"wsld-{agent_env}")
     assert tool("get_container", {"container_id":agent_env})["structuredContent"]["state"] == "running"
+    # The container's machine identity is its record's, from the files the image carried too.
+    identity = tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"]
+    assert identity["hostname"] == f"wsld-{agent_env}", identity
+    assert machine(f"wsld-{agent_env}") == recorded(identity), (machine(f"wsld-{agent_env}"), identity)
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     tool("write_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt","data":"snapshot from MCP"})
     agent_snapshot = mcp_job(tool("snapshot", {"container_id":agent_env,"name":"Agent snapshot"}))["result"]
@@ -1045,11 +1063,27 @@ try:
     assert tool("read_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt"}, allow_error=True)["isError"]
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     print("PASS container reset discards the container layer and keeps the pinned image", flush=True)
+    assert tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"] == identity
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":True}))
+    # The internet interface gets the same address where the Engine API uses one given on connect.
+    engine_api = tuple(int(part) for part in docker("version", "--format", "{{.Server.APIVersion}}").decode().split("."))
+    online = machine(f"wsld-{agent_env}")
+    if engine_api >= (1, 54):
+        assert online == recorded(identity, interfaces=2), (online, identity)
+    else:
+        assert identity["mac_address"] in online["macs"] and len(online["macs"]) == 2, online
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":False}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"stop"}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"start"}))
     ready(f"wsld-{agent_env}")
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
+    # A retry that has to create the container again keeps the identity as well.
+    docker("rm", "--force", f"wsld-{agent_env}")
+    mcp_job(tool("retry_container", {"container_id":agent_env}))
+    ready(f"wsld-{agent_env}")
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
+    print("PASS machine identity survives reset, internet changes, restart and a recreating retry", flush=True)
     deleted = mcp_job(tool("delete_container", {"container_id":agent_env}))
     assert deleted["result"]["volumes_preserved"] and deleted["result"]["images_preserved"]
     assert "Named volumes and saved images were preserved" in deleted["log"]
@@ -1058,6 +1092,10 @@ try:
     container_ids.append(clone)
     ready(f"wsld-{clone}")
     assert tool("read_file", {"container_id":clone,"path":"/home/desktop/from-agent.txt"})["structuredContent"]["data"] == "snapshot from MCP"
+    # The snapshot carries the source's machine ID; the clone is another machine all the same.
+    clone_identity = tool("get_container", {"container_id":clone})["structuredContent"]["spec"]
+    assert all(clone_identity[key] != identity[key] for key in ("hostname", "mac_address", "machine_id")), clone_identity
+    assert machine(f"wsld-{clone}") == recorded(clone_identity)
     mcp_job(tool("delete_container", {"container_id":clone}))
     container_ids.remove(clone)
     print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
@@ -1136,6 +1174,7 @@ try:
     container_ids.append(edit)
     edit_container = f"wsld-{edit}"
     ready(edit_container)
+    edit_identity = api(f"containers/{edit}")["spec"]
     first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
     preview = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048, "dry_run": True})
     assert preview["live"] == ["name", "cpus", "memory_mb"] and preview["restart"] == [], preview
@@ -1165,6 +1204,22 @@ try:
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
     assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    # The new container has the old one's identity; another identity is a change that recreates it.
+    assert machine(edit_container) == recorded(edit_identity)
+    takeover = {"hostname": "unity-build", "mac_address": "02-00-00-00-00-0A", "machine_id": "8AED3E38-BA43-5C50-DEAD-B0896ACE189B"}
+    preview = api(f"containers/{edit}/settings", {**takeover, "dry_run": True})
+    assert preview["live"] == [] and preview["restart"] == ["hostname", "mac_address", "machine_id"], preview
+    assert refused(f"containers/{edit}/settings", {"hostname": None}) == 400
+    assert refused(f"containers/{edit}/settings", {"mac_address": "01:00:5e:00:00:01"}) == 400
+    job(api(f"containers/{edit}/settings", takeover))
+    image_refs.append(api(f"containers/{edit}")["working_image"]["reference"])
+    ready(edit_container)
+    second = json.loads(docker("inspect", edit_container))[0]
+    taken = {"hostname": "unity-build", "mac_address": "02:00:00:00:00:0a", "machine_id": "8aed3e38ba435c50deadb0896ace189b"}
+    assert {key: api(f"containers/{edit}")["spec"][key] for key in taken} == taken
+    assert machine(edit_container) == recorded(taken)
+    assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
+    print("PASS machine identity survives a settings recreation and moves to the values a takeover sets", flush=True)
     # A new container would get the manager's data volume, so the change stops nothing.
     refused_mount = mcp_job(tool("update_container", {"container_id": edit, "mounts": [{"volume": volume, "target": "/workspace"}]}), success=False)
     assert f"{volume} is the manager's own volume" in refused_mount["log"], refused_mount["log"]

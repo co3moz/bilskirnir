@@ -71,6 +71,91 @@ fn name_internet_and_limits_change_in_place_while_creation_settings_restart() {
 }
 
 #[test]
+fn a_new_identity_recreates_the_container_and_none_cannot_replace_one() {
+    let old = ContainerSpec {
+        hostname: Some("wsld-e".into()),
+        mac_address: Some("02:00:00:00:00:01".into()),
+        machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
+        ..spec()
+    };
+    let taken_over = merged_spec(
+        &old,
+        &request(json!({
+            "hostname": "unity-build", "mac_address": "02-00-00-00-00-02",
+            "machine_id": "0123456789ABCDEF0123456789ABCDEF"
+        })),
+    )
+    .unwrap();
+    assert_eq!(
+        classify(&old, &taken_over),
+        Changes {
+            live: vec![],
+            restart: vec!["hostname", "mac_address", "machine_id"]
+        }
+    );
+    // The same identity written another way is no change.
+    let same = merged_spec(
+        &old,
+        &request(json!({"mac_address": "02:00:00:00:00:01".to_uppercase()})),
+    );
+    assert_eq!(classify(&old, &same.unwrap()), Changes::default());
+    for key in ["hostname", "mac_address", "machine_id"] {
+        let error = merged_spec(&old, &request(json!({ key: null })))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("not removed"), "{key}: {error}");
+    }
+    assert!(merged_spec(&old, &request(json!({"hostname": "unity.lan"}))).is_err());
+    assert!(merged_spec(&old, &request(json!({"mac_address": "ff:ff:ff:ff:ff:ff"}))).is_err());
+    // A record saved before identities were kept has none until it gets a new container.
+    let legacy = spec();
+    let renamed = merged_spec(&legacy, &request(json!({"name": "Other"}))).unwrap();
+    assert_eq!(classify(&legacy, &renamed).live, ["name"]);
+    assert_eq!(renamed.hostname, None);
+}
+
+#[test]
+fn every_setting_that_recreates_the_container_is_named_in_the_dashboards_warning() {
+    let old = ContainerSpec {
+        cpus: Some(2.0),
+        memory_mb: Some(2048),
+        hostname: Some("wsld-e".into()),
+        mac_address: Some("02:00:00:00:00:01".into()),
+        machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
+        ..spec()
+    };
+    let new = ContainerSpec {
+        resolution: "1280x720".into(),
+        gpu: true,
+        audio: true,
+        microphone: true,
+        sudo: false,
+        gamepad: true,
+        hostname: Some("unity-build".into()),
+        mac_address: Some("02:00:00:00:00:02".into()),
+        machine_id: Some("0123456789abcdef0123456789abcdef".into()),
+        cpus: None,
+        memory_mb: None,
+        shm_mb: 1024,
+        mounts: vec![Mount {
+            volume: "work".into(),
+            target: "/workspace".into(),
+            readonly: false,
+        }],
+        ..old.clone()
+    };
+    let restart = classify(&old, &new).restart;
+    assert_eq!(restart.len(), 13, "{restart:?}");
+    let catalog = include_str!("../web/src/locales/en.ts");
+    for name in restart {
+        assert!(
+            catalog.contains(&format!("\"restart.field.{name}\":")),
+            "web/src/locales/en.ts has no restart.field.{name}"
+        );
+    }
+}
+
+#[test]
 fn reordered_mounts_are_not_a_change() {
     let a = json!({"volume": "alpha", "target": "/a"});
     let b = json!({"volume": "beta", "target": "/b"});

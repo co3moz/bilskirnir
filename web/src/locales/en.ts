@@ -197,6 +197,9 @@ export const en = {
   "restart.field.microphone": "microphone",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "gamepad",
+  "restart.field.hostname": "hostname",
+  "restart.field.mac_address": "MAC address",
+  "restart.field.machine_id": "machine ID",
   "restart.field.shm_mb": "shared memory",
   "restart.field.mounts": "volumes",
   "restart.field.cpus": "removing the CPU limit",
@@ -579,6 +582,15 @@ export const en = {
   "spec.readOnly": "Read-only",
   "spec.removeMount": "Remove mount",
   "spec.mountsHint": "Mounted volumes are excluded from snapshots.",
+
+  "identity.title": "Machine identity",
+  "identity.description":
+    "What software in the desktop, such as a license bound to one machine, sees of the machine. Resets and settings changes keep it. Change it only to take over the identity of a container this one replaces.",
+  "identity.hostname": "Hostname",
+  "identity.macAddress": "MAC address",
+  "identity.machineId": "Machine ID",
+  "identity.unset": "Set when recreated",
+  "identity.fromImage": "From the image",
 
   "desktop.connection.connecting": "Connecting…",
   "desktop.connection.connected": "Connected",
