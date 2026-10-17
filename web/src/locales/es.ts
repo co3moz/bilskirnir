@@ -555,6 +555,11 @@ export const es: Messages = {
   "spec.readOnly": "Solo lectura",
   "spec.removeMount": "Quitar punto de montaje",
   "spec.mountsHint": "Los volúmenes montados no se incluyen en las instantáneas.",
+  "spec.proxiedPorts": "Puertos redirigidos",
+  "spec.proxiedPortsHint":
+    "Puertos de programas del escritorio a los que llegan los agentes con el token MCP a través de Bilskirnir, separados por comas.",
+  "spec.ports.one": "{count} puerto redirigido",
+  "spec.ports.other": "{count} puertos redirigidos",
   "desktop.connection.connecting": "Conectando…",
   "desktop.connection.connected": "Conectado",
   "desktop.connection.disconnected": "Desconectado",
@@ -594,7 +599,7 @@ export const es: Messages = {
   "settings.unchanged": "No se cambió ningún ajuste.",
   "settings.title": "Ajustes del contenedor",
   "settings.description":
-    "El nombre, Internet y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
+    "El nombre, Internet, los puertos redirigidos y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
   "settings.saveRestart": "Guardar y reiniciar",
   "parameter.name": "Nombre de la variable",
   "parameter.namePattern": "Letras mayúsculas, dígitos y guiones bajos, empezando por una letra",

@@ -771,6 +771,28 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 404
     print("PASS transfer links upload to and download from a container without a session", flush=True)
+    # A program's own HTTP service in the desktop, through the manager, for the MCP token only.
+    listed = mcp_job(tool("update_container",{"container_id":env_id,"ports":[8765]}))
+    assert listed["result"]["live"] == ["ports"] and listed["result"]["restart"] == [], listed
+    served = tool("launch_application",{"container_id":env_id,"command":"python3","args":["-m","http.server","8765","--bind","0.0.0.0","--directory","/home/desktop/Downloads"],"name":"proxy test"})["structuredContent"]["application_id"]
+    proxied = f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8765/linked.bin"
+    def through_proxy(url=proxied):
+        request = urllib.request.Request(url,headers={"Authorization":f"Bearer {mcp_token}"})
+        with urllib.request.build_opener().open(request,timeout=30) as response:
+            return response.read(), response.headers.get_all("Content-Security-Policy")
+    proxied_body, policies = wait_for(through_proxy, 60)
+    assert proxied_body == payload and "sandbox" in policies, policies
+    try:
+        client.open(proxied,timeout=30); raise AssertionError("the dashboard session opened a proxied port")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401
+    try:
+        through_proxy(f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8766/"); raise AssertionError("an unlisted port was proxied")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403
+    tool("stop_application",{"container_id":env_id,"application_id":served})
+    mcp_job(tool("update_container",{"container_id":env_id,"ports":[]}))
+    print("PASS a listed port of a running desktop is proxied for the MCP token, not the session", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"

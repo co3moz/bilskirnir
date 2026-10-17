@@ -65,7 +65,7 @@ async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Respo
     chunked(response)
 }
 
-fn reject(app: &App, req: &Request) -> Option<Response> {
+pub(crate) fn reject(app: &App, req: &Request) -> Option<Response> {
     if !app.config.mcp_enabled {
         return Some(StatusCode::NOT_FOUND.into_response());
     }
@@ -123,7 +123,7 @@ async fn bound_json(response: Response) -> Response {
 /// Norton's web protection inspects loopback HTTP whose path is `/mcp` and rewrites a reply framed
 /// by Content-Length into `Transfer-Encoding: chunked` without chunking the body, which no client
 /// can parse. A reply that is already chunked passes through its filter intact.
-fn chunked(response: Response) -> Response {
+pub(crate) fn chunked(response: Response) -> Response {
     if response.body().size_hint().exact().is_none() {
         return response;
     }
@@ -634,6 +634,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
                 "gamepad":{"type":"boolean","default":false,"description":"Attach /dev/uinput so gamepad_input can create a virtual controller."},
+                "ports":ports_schema(),
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64,"default":512},
                 "mounts":{"type":"array","default":[],"items":schema(json!({"volume":text,"target":text,"readonly":{"type":"boolean","default":false}}), &["volume","target"])}
@@ -663,13 +664,13 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
                 "resolution":{"type":"string"},"gpu":{"type":"boolean"},"internet":{"type":"boolean"},
                 "audio":{"type":"boolean"},"microphone":{"type":"boolean"},"sudo":{"type":"boolean"},
-                "gamepad":{"type":"boolean"},
+                "gamepad":{"type":"boolean"},"ports":ports_schema(),
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64},
                 "mounts":{"type":"array","items":schema(json!({"volume":text,"target":text,"readonly":{"type":"boolean","default":false}}), &["volume","target"])}
@@ -978,6 +979,10 @@ fn compose_tools() -> [Tool; 2] {
             false,
         ),
     ]
+}
+/// A container's proxied ports, as `create_container` and `update_container` take them.
+fn ports_schema() -> Value {
+    json!({"type":"array","maxItems":32,"uniqueItems":true,"items":{"type":"integer","minimum":1,"maximum":65535},"description":"Ports inside the desktop that /api/containers/{id}/ports/{port}/ proxies, HTTP and WebSocket, for requests with this MCP token. Empty by default; a change applies in place. Use it to reach a server running in the desktop, such as an MCP server at /api/containers/{id}/ports/{port}/mcp."})
 }
 /// `create_transfer`, whose arguments are those of the operation it names.
 fn transfer_tool(id: Value) -> Tool {

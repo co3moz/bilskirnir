@@ -278,3 +278,25 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
     assert_eq!(saved.spec, env.spec);
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
+
+#[test]
+fn proxied_ports_change_in_place_within_their_limits() {
+    let old = spec();
+    assert!(old.ports.is_empty());
+    let new = merged_spec(&old, &request(json!({"ports": [8090, 6400]}))).unwrap();
+    assert_eq!(new.ports, [8090, 6400]);
+    assert_eq!(
+        classify(&old, &new),
+        Changes {
+            live: vec!["ports"],
+            restart: vec![]
+        }
+    );
+    let many = (1..=33).collect::<Vec<u16>>();
+    for ports in [json!([0]), json!([8090, 8090]), json!([70000]), json!(many)] {
+        assert!(
+            merged_spec(&old, &request(json!({ "ports": ports }))).is_err(),
+            "{ports}"
+        );
+    }
+}

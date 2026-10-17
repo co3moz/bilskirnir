@@ -38,6 +38,7 @@ import {
 import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
+import { formatPorts, parsePorts, PORTS_PATTERN } from "@/lib/ports"
 import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
 import { mountableVolumes } from "@/lib/volume-files"
 
@@ -60,6 +61,7 @@ export type SpecDraft = {
   shm_mb: string
   cpus: string
   memory_mb: string
+  ports: string
   mounts: MountDraft[]
 } & Record<Flag, boolean>
 
@@ -77,6 +79,7 @@ export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): Sp
     audio: spec.audio ?? false,
     microphone: spec.microphone ?? false,
     gamepad: spec.gamepad ?? false,
+    ports: formatPorts(spec.ports),
     mounts: (spec.mounts ?? []).map((mount) => ({ ...mount, key: ++mountKey })),
   }
 }
@@ -90,6 +93,7 @@ export function specBody(draft: SpecDraft) {
     cpus: number(draft.cpus),
     memory_mb: number(draft.memory_mb),
     ...Object.fromEntries(FLAGS.map((flag) => [flag, draft[flag]])),
+    ports: parsePorts(draft.ports),
     mounts: draft.mounts.map(({ volume, target, readonly }) => ({ volume, target, readonly })),
   }
 }
@@ -108,6 +112,8 @@ function advancedSummary(draft: SpecDraft) {
       ? t("spec.memory", { count: formatNumber(Number(draft.memory_mb)) })
       : t("spec.unlimitedMemory"),
   ]
+  const ports = parsePorts(draft.ports).length
+  if (ports) parts.push(plural(ports, { one: "spec.ports.one", other: "spec.ports.other" }))
   if (draft.mounts.length)
     parts.push(plural(draft.mounts.length, { one: "spec.mounts.one", other: "spec.mounts.other" }))
   return parts.join(" · ")
@@ -282,6 +288,22 @@ export function SpecFields({
                   value={draft.memory_mb}
                   onChange={(event) => set({ memory_mb: event.target.value })}
                 />
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor={`${id}-ports`}>{t("spec.proxiedPorts")}</FieldLabel>
+                <Input
+                  id={`${id}-ports`}
+                  inputMode="numeric"
+                  pattern={PORTS_PATTERN}
+                  placeholder="8090, 6400"
+                  aria-describedby={`${id}-ports-hint`}
+                  value={draft.ports}
+                  onChange={(event) => set({ ports: event.target.value })}
+                  className="font-mono"
+                />
+                <FieldDescription id={`${id}-ports-hint`} className="text-xs">
+                  {t("spec.proxiedPortsHint")}
+                </FieldDescription>
               </Field>
             </div>
             <Mounts draft={draft} set={set} volumes={mountableVolumes(volumes)} />

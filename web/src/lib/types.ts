@@ -12,6 +12,8 @@ export type ContainerSpec = {
   microphone: boolean
   sudo: boolean
   gamepad: boolean
+  /** Ports inside the desktop that the manager proxies for holders of the MCP token. */
+  ports: number[]
   cpus: number | null
   memory_mb: number | null
   shm_mb: number

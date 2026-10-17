@@ -19,6 +19,7 @@ mod mcp;
 mod media;
 mod model;
 mod process;
+mod proxy;
 mod pulls;
 mod reconfigure;
 mod recordings;
@@ -218,6 +219,10 @@ fn router(app: Arc<App>) -> Router {
                     .unwrap_or(usize::MAX),
             )),
         )
+        // The MCP token opens a desktop's proxied ports, never the dashboard's cookie.
+        .route("/api/containers/{id}/ports/{port}", any(proxy::proxy))
+        .route("/api/containers/{id}/ports/{port}/", any(proxy::proxy))
+        .route("/api/containers/{id}/ports/{port}/{*path}", any(proxy::proxy))
         .route("/healthz",get(||async { "ok" }))
         .fallback_service(ServeDir::new(&app.config.web).append_index_html_on_directories(true))
         .layer(axum::extract::DefaultBodyLimit::max(1_100_000))
@@ -237,7 +242,8 @@ fn router(app: Arc<App>) -> Router {
             let h=res.headers_mut();
             h.insert(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff"));
             h.insert(header::REFERRER_POLICY,HeaderValue::from_static("same-origin"));
-            h.insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
+            // Appended: a proxied desktop service keeps its sandbox policy alongside this one.
+            h.append(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
             if api { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-store")); }
             else if assets && found { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("public, max-age=31536000, immutable")); }
             else { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-cache")); }

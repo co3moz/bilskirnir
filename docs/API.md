@@ -103,6 +103,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
 | POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and `size` into a new volume; returns a job. |
 | GET, PUT, POST | `/api/transfers/{token}` | Run the one upload, download, import or export a [transfer link](#transfer-links) authorizes; needs no session. |
+| Any | `/api/containers/{id}/ports/{port}/{path}` | HTTP or WebSocket to a [port inside the desktop](#desktop-ports) that its `ports` setting lists; needs the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -145,6 +146,7 @@ Creation accepts `name`, `image` and these optional fields:
 | `audio`, `microphone` | `false` | Enable supported browser media; microphone also needs audio. |
 | `sudo` | `true` | Allow the desktop user to use sudo. |
 | `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
+| `ports` | `[]` | Ports inside the desktop that the [port proxy](#desktop-ports) forwards to, at most 32, from 1 to 65535. |
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. The manager's own volumes, such as its data volume, are refused, here and whenever the container is created again. |
@@ -152,7 +154,7 @@ Creation accepts `name`, `image` and these optional fields:
 
 ## Change settings after creation
 
-`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
+`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
 
 With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
 
@@ -343,6 +345,23 @@ curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/
 ```
 
 The token replaces the cookie and the `X-Wsld-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
+
+## Desktop ports
+
+A desktop publishes no ports. The manager reaches it on the private network it shares with it, and `/api/containers/{id}/ports/{port}/{path}` forwards HTTP and WebSocket requests there, to a port the container's `ports` setting lists. A program in the desktop that serves its own API, such as an editor's MCP server, a test runner or a debugger, is then usable without a script job per request. `ports` is empty by default; it is set at creation or changed later, and a change applies at once because the manager, not Docker, does the forwarding. The service must listen on the desktop's network, such as on `0.0.0.0`: one that listens on `127.0.0.1` only is out of the manager's reach.
+
+```bash
+curl --header 'Authorization: Bearer YOUR_MCP_TOKEN' \
+  http://localhost:8080/api/containers/CONTAINER_ID/ports/8090/status
+```
+
+The service receives the method, `{path}` with the query, the body and the other headers as sent, with `Host: localhost:PORT`, as a local client would. Responses stream as the service sends them, server-sent events included, and only the connection to the service has a time limit of 10 seconds. A WebSocket handshake that the service accepts joins the two connections until either side closes. A port not listed answers 403, a stopped container 409, and a service that does not answer 502.
+
+Whatever a desktop serves would appear on the dashboard's address, and a desktop browses sites nobody vouches for, so the route keeps the dashboard's session away from it:
+
+- It takes the MCP bearer token, as `/mcp` does, and never the session cookie, so a browser does not open it signed in. With MCP disabled it answers 404; with `MCP_AUTH_MODE=none` it needs no token, like `/mcp`. A request with an `Origin` header must come from the manager's own address.
+- The `Authorization` header, the `wsld_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
+- Every response carries `Content-Security-Policy: sandbox` beside the dashboard's own policy, and `X-Content-Type-Options: nosniff`. A browser that renders one, as it could with `MCP_AUTH_MODE=none`, runs no script in it and treats it as an origin of its own. `Set-Cookie` and `Clear-Site-Data` from the service are dropped, and a redirect to a path of the service stays under the proxy's prefix.
 
 ## Screenshots
 

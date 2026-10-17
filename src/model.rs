@@ -34,6 +34,10 @@ pub struct ContainerSpec {
     /// Attach /dev/uinput so a virtual controller can be created inside the desktop.
     #[serde(default)]
     pub gamepad: bool,
+    /// Ports inside the desktop that the manager proxies for holders of the MCP token. The
+    /// manager reaches them on the private network, so a change needs no new container.
+    #[serde(default)]
+    pub ports: Vec<u16>,
     pub cpus: Option<f64>,
     pub memory_mb: Option<u64>,
     #[serde(default = "shm")]
@@ -80,6 +84,15 @@ impl ContainerSpec {
         }
         if self.microphone && !self.audio {
             bail!("Enable audio to use the microphone");
+        }
+        let mut ports = std::collections::HashSet::new();
+        if self.ports.len() > 32
+            || self
+                .ports
+                .iter()
+                .any(|port| *port == 0 || !ports.insert(port))
+        {
+            bail!("Proxied ports must be at most 32 different ports between 1 and 65535");
         }
         let mut targets = std::collections::HashSet::new();
         for mount in &self.mounts {

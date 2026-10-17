@@ -565,12 +565,7 @@ impl App {
         if info["State"]["Running"] != true {
             bail!("Container is not running");
         }
-        let ip = info["NetworkSettings"]["Networks"][&env.private_network]["IPAddress"]
-            .as_str()
-            .context("Missing private network address")?;
-        ip.parse::<std::net::Ipv4Addr>()
-            .context("Invalid Docker IP address")?;
-        Ok(format!("{ip}:5900"))
+        Ok(format!("{}:5900", private_ip(env, &info)?))
     }
     pub fn append_log(&self, id: &str, line: &str) -> Result<()> {
         let mut job: Job = self.db.get("job", id)?;
@@ -718,4 +713,13 @@ pub(crate) fn image_volumes_mounted(image: &Value, mounts: &[Mount]) -> Result<(
         }
     }
     Ok(())
+}
+/// The desktop's address on its private network, which only the manager shares with it, from
+/// `docker inspect` of its container.
+pub(crate) fn private_ip(env: &Container, info: &Value) -> Result<std::net::Ipv4Addr> {
+    info["NetworkSettings"]["Networks"][&env.private_network]["IPAddress"]
+        .as_str()
+        .context("Missing private network address")?
+        .parse()
+        .context("Invalid Docker IP address")
 }

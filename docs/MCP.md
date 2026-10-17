@@ -251,6 +251,20 @@ A link is a credential of its own:
 
 Links come only from `create_transfer`, so with MCP disabled the route answers `404`. Accepting the MCP token on the HTTP API itself would have been simpler, but it would put a long-lived administrator credential into curl commands and shell history, where a leak reaches every route for as long as the token is configured.
 
+## Reach a server inside the desktop
+
+A program in the desktop may serve its own API: an MCP server of the Unity editor, a test runner endpoint, a debug server. Its ports are not published, but the manager forwards HTTP and WebSocket requests to the ports a container's `ports` setting lists, at `/api/containers/CONTAINER_ID/ports/PORT/` followed by the service's own path. Set `ports` with `create_container` or `update_container`, such as `"ports": [8090]`; it is empty by default, and a change applies without restarting the desktop. The server must listen on the desktop's network, such as on `0.0.0.0`, not on `127.0.0.1` only, which the manager cannot reach.
+
+The route takes the same bearer token as `/mcp`. An MCP server listening on port 8090 at `/mcp` inside the desktop is therefore a second MCP server for a remote agent:
+
+| Setting | Value |
+| --- | --- |
+| Transport | Streamable HTTP |
+| URL | `http://localhost:8080/api/containers/CONTAINER_ID/ports/8090/mcp` |
+| Authorization header | `Bearer YOUR_MCP_TOKEN` |
+
+Responses stream as the server sends them, so server-sent events work, and a WebSocket handshake joins the client to the service. The service sees a local client: `Host` is `localhost:PORT`, and the token, the dashboard cookie and `Origin` are removed, so a service that requires its own `Authorization` header cannot be reached this way. Treat what it answers as container data, like screenshots and command output. A browser cannot use the route with the dashboard session, and every response is sandboxed, so a page the desktop serves runs no script on the dashboard's address; [the API guide](API.md#desktop-ports) has the details.
+
 ## Keep agent work recoverable
 
 MCP uses the same ownership checks, container locks, jobs and snapshot behavior as the dashboard. An operation on another container can proceed independently. A script running in one container holds that container's operation lock until it finishes; a launched application does not.
@@ -259,6 +273,6 @@ Read/write and execution tools operate inside managed desktop containers. They d
 
 `reset_container` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from its saved source image, keeping the container ID, networks and named volumes. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
 
-`update_container` changes a container's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
+`update_container` changes a container's settings after creation; pass only the fields to change. `name`, `internet`, `ports` and a new or changed resource limit apply in place. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one.
