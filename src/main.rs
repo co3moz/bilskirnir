@@ -14,6 +14,7 @@ mod error;
 mod exec;
 mod files;
 mod gamepad;
+mod icons;
 mod identity;
 mod jobs;
 mod mcp;
@@ -64,7 +65,17 @@ pub struct App {
     /// One-time transfer links issued over MCP and not used yet.
     transfers: transfers::Links,
 }
+/// The interface's content security policy. The templates page reads its list, the templates
+/// and their icons from another host, which is the one exception to `'self'`.
+fn content_security_policy(templates: Option<&str>) -> HeaderValue {
+    let other = templates
+        .map(|origin| format!(" {origin}"))
+        .unwrap_or_default();
+    HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:{other}; connect-src 'self'{other}; worker-src 'self' blob:; frame-ancestors 'self'"))
+        .unwrap_or_else(|_| content_security_policy(None))
+}
 fn router(app: Arc<App>) -> Router {
+    let csp = content_security_policy(app.config.templates_origin());
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
@@ -179,6 +190,10 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/images/{id}/archive", get(archives::export))
         .route("/api/images/{id}/config", get(api::image_config))
         .route(
+            "/api/images/{id}/icon",
+            get(icons::get).put(icons::set).delete(icons::remove),
+        )
+        .route(
             "/api/images/{id}/compose",
             get(compose::get).put(compose::set).delete(compose::remove),
         )
@@ -216,9 +231,11 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
-    Router::new().merge(protected).merge(mcp::router(app.clone()))
-        .route("/api/session",get(api::session))
-        .route("/api/login",post(auth::login))
+    Router::new()
+        .merge(protected)
+        .merge(mcp::router(app.clone()))
+        .route("/api/session", get(api::session))
+        .route("/api/login", post(auth::login))
         // A transfer link authorizes itself, so it stays outside protect().
         .route(
             "/api/transfers/{token}",
@@ -231,32 +248,61 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/containers/{id}/ports/{port}", any(proxy::proxy))
         .route("/api/containers/{id}/ports/{port}/", any(proxy::proxy))
         .route("/api/containers/{id}/ports/{port}/{*path}", any(proxy::proxy))
-        .route("/healthz",get(||async { "ok" }))
+        .route("/healthz", get(|| async { "ok" }))
         .fallback_service(ServeDir::new(&app.config.web).append_index_html_on_directories(true))
         .layer(axum::extract::DefaultBodyLimit::max(1_100_000))
         .layer(TraceLayer::new_for_http().make_span_with(|req: &axum::extract::Request| {
             // DefaultMakeSpan's span, without the credential a transfer link carries in its path.
             tracing::debug_span!("request", method = %req.method(), uri = %transfers::traced(req.uri()), version = ?req.version())
         }))
-        .layer(middleware::from_fn_with_state(app.clone(), auth::check_host))
-        .layer(middleware::from_fn(|req:axum::extract::Request,next:middleware::Next|async move {
-            let api=req.uri().path().starts_with("/api/") || req.uri().path().starts_with("/mcp");
-            // The interface build names every file under /assets after its content, so a found
-            // one never changes. Everything else, index.html above all, is revalidated on each
-            // load: after an upgrade a cached page would ask for assets that no longer exist.
-            let assets=req.uri().path().starts_with("/assets/");
-            let mut res=next.run(req).await;
-            let found=res.status().is_success();
-            let h=res.headers_mut();
-            h.insert(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff"));
-            h.insert(header::REFERRER_POLICY,HeaderValue::from_static("same-origin"));
-            // Appended: a proxied desktop service keeps its sandbox policy alongside this one.
-            h.append(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
-            if api { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-store")); }
-            else if assets && found { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("public, max-age=31536000, immutable")); }
-            else { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-cache")); }
-            res
-        }))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            auth::check_host,
+        ))
+        .layer(middleware::from_fn(
+            move |req: axum::extract::Request, next: middleware::Next| {
+                let csp = csp.clone();
+                async move {
+                    let path = req.uri().path();
+                    let api = path.starts_with("/api/") || path.starts_with("/mcp");
+                    let proxied = path.starts_with("/api/containers/") && path.contains("/ports/");
+                    // The interface build names every file under /assets after its content, so
+                    // a found one never changes. Everything else, index.html above all, is
+                    // revalidated on each load: after an upgrade a cached page would ask for
+                    // assets that no longer exist.
+                    let assets = path.starts_with("/assets/");
+                    let mut res = next.run(req).await;
+                    let found = res.status().is_success();
+                    let h = res.headers_mut();
+                    h.insert(
+                        header::X_CONTENT_TYPE_OPTIONS,
+                        HeaderValue::from_static("nosniff"),
+                    );
+                    h.insert(
+                        header::REFERRER_POLICY,
+                        HeaderValue::from_static("same-origin"),
+                    );
+                    // Appended: a proxied desktop service keeps its sandbox policy alongside this one.
+                    h.append(header::CONTENT_SECURITY_POLICY, csp);
+                    // An image icon names its version in the URL and says itself how long it
+                    // keeps; what a desktop service says about caching is not trusted.
+                    if proxied {
+                        h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                    } else if api {
+                        h.entry(header::CACHE_CONTROL)
+                            .or_insert(HeaderValue::from_static("no-store"));
+                    } else if assets && found {
+                        h.insert(
+                            header::CACHE_CONTROL,
+                            HeaderValue::from_static("public, max-age=31536000, immutable"),
+                        );
+                    } else {
+                        h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+                    }
+                    res
+                }
+            },
+        ))
         .with_state(app)
 }
 #[tokio::main]

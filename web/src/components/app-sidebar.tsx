@@ -1,5 +1,6 @@
 import * as React from "react"
 import {
+  RiApps2Line,
   RiBookOpenLine,
   RiDatabase2Line,
   RiStackLine,
@@ -31,6 +32,7 @@ const navMain = [
   { page: "dashboard", icon: <RiDashboardLine /> },
   { page: "containers", icon: <RiComputerLine /> },
   { page: "images", icon: <RiStackLine /> },
+  { page: "templates", icon: <RiApps2Line /> },
   { page: "volumes", icon: <RiDatabase2Line /> },
   { page: "jobs", icon: <RiListCheck3 /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]

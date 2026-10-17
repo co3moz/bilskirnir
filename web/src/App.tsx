@@ -18,6 +18,7 @@ import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
+import { TemplatesPage } from "@/pages/templates"
 import { VolumesPage } from "@/pages/volumes"
 
 // noVNC is most of the bundle and only the desktop view needs it.
@@ -29,6 +30,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   dashboard: DashboardPage,
   containers: ContainersPage,
   images: ImagesPage,
+  templates: TemplatesPage,
   volumes: VolumesPage,
   jobs: JobsPage,
 }

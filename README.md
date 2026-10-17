@@ -17,6 +17,7 @@ The name is a nod to Thor.
 - **Access, control, change and delete** containers from the browser.
 - **Snapshots and images**: save a container once and start new ones from it, or build an image from a script.
 - **Composes** that ask for values such as an account when a container is created, and run a setup script with them.
+- **Templates**: ready-made images from the project wiki, installed with their script shown for review, and an icon for every saved image.
 - **Volumes** that keep your files after a container is deleted.
 - **Drag and drop uploads** into a container.
 - **An interface in English, German, French, Spanish and Turkish**, following the browser's language.

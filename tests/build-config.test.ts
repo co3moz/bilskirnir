@@ -3,6 +3,8 @@ import assert from "node:assert/strict"
 
 import { formatBuildConfig, parseBuildConfig } from "../web/src/lib/build-config"
 
+const PNG = "data:image/png;base64,"
+
 const config = {
   name: "Unity tools",
   base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
@@ -23,7 +25,7 @@ test("an exported configuration imports back unchanged, in the form's field orde
 })
 
 test("a configuration needs only its script, and unknown fields are ignored", () => {
-  assert.deepEqual(parseBuildConfig('{"script":"echo hi","description":"from a newer release"}'), {
+  assert.deepEqual(parseBuildConfig('{"script":"echo hi","labels":"from a newer release"}'), {
     script: "echo hi",
   })
 })
@@ -39,8 +41,32 @@ test("a configuration that cannot fill the form says why", () => {
     [JSON.stringify({ script: "echo", name: "x".repeat(101) }), /at most 100/],
     ['{"script":"echo","base_image":""}', /image reference/],
     ['{"script":"echo","internet":"yes"}', /true or false/],
+    [JSON.stringify({ script: "echo", description: "x".repeat(4097) }), /4096 bytes/],
+    // Bytes, as the manager counts them, not characters.
+    [JSON.stringify({ script: "echo", description: "ş".repeat(2049) }), /4096 bytes/],
+    ['{"script":"echo","icon":"data:image/gif;base64,R0lGOD"}', /PNG data URL/],
+    [JSON.stringify({ script: "echo", icon: `${PNG}${"A".repeat(410_000)}` }), /300 KiB/],
+    ['{"script":"echo","template_id":"Unity"}', /lowercase/],
+    ['{"script":"echo","template_id":"-unity"}', /lowercase/],
   ]
   for (const [text, message] of cases) assert.throws(() => parseBuildConfig(text), message, text)
+})
+
+test("a description, an icon and a template id travel with the configuration", () => {
+  const icon = `${PNG}iVBORw0KGgo=`
+  const full = { ...config, description: "Git and LFS", icon, template_id: "unity-tools" }
+  const text = formatBuildConfig(full)
+  // The icon, the longest line, comes last so the rest stays readable.
+  assert.deepEqual(Object.keys(JSON.parse(text)), [
+    "name",
+    "description",
+    "base_image",
+    "internet",
+    "script",
+    "template_id",
+    "icon",
+  ])
+  assert.deepEqual(parseBuildConfig(text), full)
 })
 
 test("a name of 100 characters outside the basic plane still fits", () => {

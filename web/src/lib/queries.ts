@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
+import { fetchTemplateList } from "./templates"
 import type { ContainerItem, ImageItem, Job, Session, Settings, SystemInfo, Volume } from "./types"
 
 const LIST_INTERVAL = 8000
@@ -14,8 +15,9 @@ let signedOut = false
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     // Several lists fail together when Docker is down; one toast per distinct message is enough.
-    onError: (error) => {
-      if (!signedOut) toast.error(error.message, { id: error.message })
+    // A query marked quiet shows its error on its own page instead.
+    onError: (error, query) => {
+      if (!signedOut && !query.meta?.quiet) toast.error(error.message, { id: error.message })
     },
   }),
   defaultOptions: {
@@ -71,6 +73,16 @@ export const useJob = (id: string | undefined) =>
     enabled: !!id,
     refetchInterval: (query) =>
       query.state.data && !jobActive(query.state.data) ? false : JOB_INTERVAL,
+  })
+
+/** The templates page's list, read in the browser from the host the manager names. */
+export const useTemplates = (list: string | null | undefined) =>
+  useQuery({
+    queryKey: ["templates", list],
+    queryFn: () => fetchTemplateList(list!),
+    enabled: !!list,
+    staleTime: 5 * 60_000,
+    meta: { quiet: true },
   })
 
 export const refreshAll = () => queryClient.invalidateQueries()

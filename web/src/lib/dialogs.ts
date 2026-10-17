@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import type { ImportedBuild } from "./build-config"
+
 export type Dialog =
   | { kind: "create"; image?: string }
   | { kind: "details"; id: string }
@@ -7,8 +9,9 @@ export type Dialog =
   | { kind: "snapshot"; id: string }
   | { kind: "delete"; id: string }
   | { kind: "upload"; id: string; files?: File[] }
-  | { kind: "build" }
+  | { kind: "build"; config?: ImportedBuild }
   | { kind: "compose"; id: string }
+  | { kind: "icon"; id: string }
   | { kind: "import" }
   | { kind: "volume" }
   | { kind: "volume-files"; name: string }

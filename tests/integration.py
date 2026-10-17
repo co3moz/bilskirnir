@@ -23,6 +23,7 @@ import urllib.request
 import urllib.parse
 import http.client
 import uuid
+import zlib
 
 
 def docker(*args, check=True, data=None):
@@ -122,6 +123,15 @@ def api(path, body=None, method=None, raw=False, anonymous=False):
     with opener.open(request, timeout=130) as response:
         data = response.read()
         return data if raw else (json.loads(data) if data else None)
+
+
+def png(width, height):
+    """A small RGBA PNG, the format image icons are kept in."""
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    rows = b"".join(b"\0" + b"\x61\x52\xc4\xff" * width for _ in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
 
 
 def wait_for(fn, seconds=90):
@@ -545,7 +555,18 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
-    build_request = {"name": "offline-script-test", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n"}
+    # The templates page reads the wiki's list in the browser, so the policy allows that host.
+    assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
+    with client.open(f"http://127.0.0.1:{port}/", timeout=30) as response:
+        policy = response.headers["Content-Security-Policy"]
+    assert "connect-src 'self' https://raw.githubusercontent.com;" in policy, policy
+    icon_png = png(64, 32)
+    build_request = {"name": "offline-script-test", "description": "Built by the acceptance run", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n", "icon": "data:image/png;base64," + base64.b64encode(icon_png).decode(), "template_id": "acceptance"}
+    for refused in [{"icon": "data:image/png;base64," + base64.b64encode(png(512, 512)).decode()}, {"template_id": "Not An Id"}]:
+        try:
+            api("images/build", {**build_request, **refused}); raise AssertionError(f"build accepted {list(refused)}")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
     build_job = api("images/build", build_request)
     built = job(build_job)
     # BuildKit's progress lines start each stage, and each one ends where the next begins.
@@ -557,6 +578,9 @@ try:
     assert built["build"] == {"base_image": build_request["base_image"], "internet": False}, built
     assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
     assert "script" not in next(image for image in api("images") if image["id"] == built["id"])["build"]
+    # Lists name the icon by a version, and the icon route returns the picture itself.
+    assert built["template_id"] == "acceptance" and len(built["icon"]) == 16, built
+    assert api(f"images/{built['id']}/icon?v={built['icon']}", raw=True) == icon_png
     print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
     # A compose asks for values when a container is created and hands them to its setup script.
     compose = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True}, {"name": "TOKEN", "required": True, "secret": True}, {"name": "FLAVOR", "type": "choice", "options": [{"value": "vanilla"}, {"value": "chocolate"}], "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/compose-setup\necho \"token is $TOKEN\"\n"}
@@ -1032,6 +1056,8 @@ try:
     assert "progress" not in snap_record and "Stage 2/3: Committing the container layer\n" in snap_record["log"], snap_record
     assert snap["desktop"]["catalog_id"] == "ubuntu-xfce"
     assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
+    # A snapshot keeps the icon of the image its container came from, but no template.
+    assert snap["icon"] == built["icon"] and "template_id" not in snap, snap
     try:
         api(f"images/{snap['id']}/config"); raise AssertionError("snapshot exported a build configuration")
     except urllib.error.HTTPError as error:

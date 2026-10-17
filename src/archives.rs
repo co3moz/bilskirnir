@@ -12,8 +12,9 @@ use crate::{
     catalog::DesktopInfo,
     compose::Compose,
     error::{Error, Result},
+    icons::Icon,
     jobs,
-    model::{BuildConfig, ImageRecord, image_ref, now},
+    model::{BuildConfig, ImageRecord, image_ref, now, template_id},
     process::{self, Overflow},
 };
 use anyhow::{Context, anyhow, bail};
@@ -71,6 +72,14 @@ pub(crate) struct ArchiveInfo {
     /// Archives exported before templates were called composes name it `template`.
     #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
     pub compose: Option<Compose>,
+    #[serde(
+        default,
+        deserialize_with = "crate::icons::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icon: Option<Icon>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
 }
 
 impl ArchiveInfo {
@@ -86,6 +95,8 @@ impl ArchiveInfo {
             created_at: record.created_at,
             build: record.build.clone(),
             compose: record.compose.clone(),
+            icon: record.icon.clone(),
+            template_id: record.template_id.clone(),
         }
     }
 
@@ -99,6 +110,7 @@ impl ArchiveInfo {
             image_ref(&build.base_image).is_ok() && build.script.len() <= 1_000_000
         });
         info.compose = info.compose.filter(|compose| compose.validate().is_ok());
+        info.template_id = info.template_id.filter(|id| template_id(id).is_ok());
         Some(info)
     }
 }
@@ -482,7 +494,9 @@ impl App {
                 .unwrap_or_default(),
             desktop: crate::catalog::from_image(&info),
             build: metadata.as_ref().and_then(|info| info.build.clone()),
-            compose: metadata.and_then(|info| info.compose),
+            compose: metadata.as_ref().and_then(|info| info.compose.clone()),
+            icon: metadata.as_ref().and_then(|info| info.icon.clone()),
+            template_id: metadata.and_then(|info| info.template_id),
         };
         self.db.put("image", id, &record)?;
         if record.build.is_some() {
