@@ -756,8 +756,12 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Returns job_id; get_job lists the build's stages with their times.",
-            json!({"name":text,"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"compose":compose_schema()}),
+            "Build a reusable desktop image by running a root shell script on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). An exported build configuration or a template from the dashboard's templates page is a valid request as it is. Returns job_id; get_job lists the build's stages with their times.",
+            json!({
+                "name":text,"description":{"type":"string","maxLength":4096,"default":""},"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"compose":compose_schema(),
+                "icon":{"type":"string","description":"A PNG of at most 256 by 256 pixels as a data:image/png;base64, URL, shown beside the image's name."},
+                "template_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the templates page template the image is built from."}
+            }),
             &["name", "base_image", "script"],
             false,
             false,

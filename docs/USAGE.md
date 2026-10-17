@@ -6,7 +6,7 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Volumes** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
 
 The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
@@ -65,7 +65,15 @@ rm -rf /var/lib/apt/lists/*
 
 Keep the desktop startup, VNC and GPU components in place when adding software. The result must still start as a Bilskirnir desktop.
 
-To reuse a build, select **Export configuration**, the copy button on its row under **Images**. It copies the image's name, base image, internet setting and script to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have no configuration to export, and builds from an earlier release did not record theirs. [An archive](#move-an-image-to-another-installation) moves any of them.
+**Build image** also takes an optional description and an icon. Choose any picture, PNG, JPEG, WebP, GIF or SVG; it is scaled down to fit 256 by 256 pixels and saved as a PNG. **Images** shows the icon beside the name, and selecting it, or the plain image symbol of a saved image without one, changes or removes it. Snapshots keep the icon of the image their container came from.
+
+To reuse a build, select **Export configuration**, the copy button on its row under **Images**. It copies the image's name, description, base image, internet setting, script and icon to the clipboard as JSON. In **Build image**, **Import configuration** takes that JSON and fills in the form, so you can change the name or base image before building, here or on another installation. A base image that is not available on this host is pointed out instead of selected. Snapshots and imported images have no script, so they have no configuration to export, and builds from an earlier release did not record theirs. [An archive](#move-an-image-to-another-installation) moves any of them.
+
+## Install a template
+
+**Templates** lists ready-made images from the [Bilskirnir wiki](https://github.com/co3moz/bilskirnir/wiki), each with its icon, a description and tags; search or pick a tag to narrow the list. **Install** opens **Build image** with the template filled in: its base image, script, compose, description and icon. Read the script before you select **Build image**, since it runs as root, and change the name or anything else first if you like. The build then runs like any other, and the image appears under **Images**. A container created from it asks for the compose's values, such as an account, as usual.
+
+A template you have built shows **Installed**, and **Install again** builds another image from its current version. A template that needs a newer Bilskirnir says which release it needs instead of offering **Install**. Your browser reads the list directly from GitHub, so it needs internet access, and the page sends no request until you open it. An installation can point the page at another list or turn it off with `TEMPLATES_URL`; see [the installation guide](INSTALLATION.md#settings).
 
 **Import image** with its **Docker image** tab registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another container until it is available again.
 

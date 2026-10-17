@@ -136,15 +136,26 @@ export type ImageItem = {
   downloaded?: boolean
   /** Catalog images: why a downloaded reference cannot be used. */
   error?: string | null
+  /** Saved images with an icon: its version; `GET images/{id}/icon` returns the PNG. */
+  icon?: string | null
+  /** The templates page template the image was built from. */
+  template_id?: string | null
 }
 
-/** A build request, which is also what an image's exported configuration holds. */
+/**
+ * A build request, which is also what an image's exported configuration holds and what a
+ * template on the templates page is.
+ */
 export type BuildConfig = {
   name: string
+  description?: string
   base_image: string
   internet: boolean
   script: string
   compose?: Compose
+  /** A PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL. */
+  icon?: string
+  template_id?: string
 }
 
 /** One line of `docker volume ls --format json`, and whether it is the manager's own. */
@@ -191,6 +202,8 @@ export type Job = {
 }
 
 export type Settings = {
+  /** The manager's release, such as `0.4.0`. */
+  version: string
   base_image: string
   audio_enabled: boolean
   microphone_enabled: boolean
@@ -201,6 +214,8 @@ export type Settings = {
   upload_limit_bytes: number
   /** The largest unpacked image archive an import accepts. */
   archive_limit_bytes: number
+  /** The template list the templates page reads, or `null` when the page is turned off. */
+  templates_url: string | null
 }
 
 export type SystemInfo = {

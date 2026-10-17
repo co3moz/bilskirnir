@@ -120,7 +120,7 @@ A script holds the container's operation lock until it finishes, so do not start
 
 ## Ask for values with composes
 
-A compose makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_compose` takes the record's `image_id` from `list_images` and a `compose`, or `null` to remove it; `get_image_compose` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `compose` for the image it builds.
+A compose makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_compose` takes the record's `image_id` from `list_images` and a `compose`, or `null` to remove it; `get_image_compose` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `compose` for the image it builds, and a `description`, an `icon` (a PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL) and a `template_id`, so an exported build configuration or a template from the dashboard's **Templates** page is a request it takes as it is. `list_images` names an image's icon by a version instead of carrying the picture.
 
 ```json
 {

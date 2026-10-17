@@ -178,6 +178,19 @@ pub fn mount_target(target: &str) -> Result<()> {
     }
     Ok(())
 }
+/// The id a template has on the templates page: lowercase letters, digits and dashes.
+pub fn template_id(value: &str) -> Result<()> {
+    if value.is_empty()
+        || value.len() > 64
+        || value.starts_with('-')
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        bail!("Invalid template id");
+    }
+    Ok(())
+}
 pub fn volume_name(value: &str) -> Result<()> {
     if value.len() < 2
         || value.len() > 128
@@ -261,6 +274,16 @@ pub struct ImageRecord {
     /// saved before templates were called composes name it `template`.
     #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
     pub compose: Option<crate::compose::Compose>,
+    /// A small picture lists show beside the name.
+    #[serde(
+        default,
+        deserialize_with = "crate::icons::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub icon: Option<crate::icons::Icon>,
+    /// The template on the templates page the image was built from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildConfig {

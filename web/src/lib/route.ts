@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react"
 
-export type Page = "dashboard" | "containers" | "images" | "volumes" | "jobs"
+export type Page = "dashboard" | "containers" | "images" | "templates" | "volumes" | "jobs"
 export type Route = { page: Page } | { page: "desktop"; id: string }
 
-const pages: Page[] = ["dashboard", "containers", "images", "volumes", "jobs"]
+const pages: Page[] = ["dashboard", "containers", "images", "templates", "volumes", "jobs"]
 
 /** Pages live in the URL fragment, so the manager serves one index.html for all of them. */
 export function parseRoute(hash: string): Route {

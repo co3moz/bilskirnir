@@ -102,6 +102,48 @@ Add an entry to `desktop/profiles.json` with an ID, display name, image referenc
 
 Update Compose and the publishing workflow if the new image needs its own build service or published image. Rebuild the manager so its catalog includes the image. Keep image references aligned across the catalog, configuration defaults and installation files.
 
+## Add a template
+
+The **Templates** page lists templates from the project's GitHub wiki. The wiki is a git repository of its own, `https://github.com/co3moz/bilskirnir.wiki.git`, editable by the repository's collaborators. The page reads three kinds of files from its `templates/` folder through `raw.githubusercontent.com/wiki/co3moz/bilskirnir/`:
+
+```
+templates/index.json   the list
+templates/<id>.json    a template: a build configuration
+templates/<id>.png     its icon, at most 256 by 256 pixels
+```
+
+`index.json` names each template once:
+
+```json
+{
+  "templates": [
+    {
+      "id": "unity",
+      "name": "Unity Hub",
+      "description": "Unity Hub with a volume for editor installs.",
+      "tags": ["games", "3d"],
+      "requires": "0.5.0"
+    }
+  ]
+}
+```
+
+`id` is lowercase letters, digits and dashes, up to 64, and names the two files. `name` is 1 to 100 characters, `description` at most 500 and `tags` at most eight short texts. `requires` is the oldest release that can build the template: set it when the template uses something newer than an installed release understands, such as a new compose parameter type, since that release would refuse the build. A release older than `requires` shows the template without **Install**.
+
+To make a template, build the image in the dashboard with **Build image**, give it its compose, description and icon, create a container from it and check that the setup works. Then **Export configuration** copies exactly the JSON `<id>.json` holds. Its `icon` line can be dropped, since the page takes the icon from `<id>.png`; the line is used only when that file is missing. Save the icon at 256 by 256 pixels.
+
+```bash
+git clone https://github.com/co3moz/bilskirnir.wiki.git
+cd bilskirnir.wiki
+mkdir -p templates
+# Add templates/<id>.json and templates/<id>.png, and the entry in templates/index.json.
+git add templates
+git commit -m "Add the Unity template"
+git push
+```
+
+The wiki has no review or checks before a push reaches every installation, which reads the list within about five minutes. Open **Templates** after pushing: an entry the page cannot offer is listed under the cards with the reason, and **Install** reports a template file that does not fill the build form. Every installation's browser fetches these files, and a template's script runs as root in the build, so treat a change to the wiki as a release. The first page of the wiki has to be created on GitHub before the repository can be cloned.
+
 ## Check a change
 
 For the frontend, with Bun 1.4 or later:

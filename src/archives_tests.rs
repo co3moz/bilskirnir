@@ -135,6 +135,8 @@ async fn a_failed_export_breaks_the_download_and_fails_its_job() {
         desktop: None,
         build: None,
         compose: None,
+        icon: None,
+        template_id: None,
     };
     app.db.put("image", &record.id, &record).unwrap();
     let response = crate::router(app.clone())
@@ -257,6 +259,8 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         desktop: None,
         build: Some(build.clone()),
         compose: None,
+        icon: None,
+        template_id: None,
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -299,6 +303,8 @@ fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
         desktop: None,
         build: None,
         compose: Some(compose.clone()),
+        icon: None,
+        template_id: None,
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -310,4 +316,35 @@ fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
     refused["compose"]["parameters"][0]["name"] = json!("PATH");
     let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
     assert!(info.compose.is_none() && info.name == "Unity project");
+}
+
+#[test]
+fn an_icon_and_template_travel_with_the_archive_and_unusable_ones_are_dropped() {
+    let record = ImageRecord {
+        id: "unity".into(),
+        name: "Unity 6".into(),
+        image_id: format!("sha256:{}", "f".repeat(64)),
+        reference: "bilskirnir/custom:unity".into(),
+        parent_image_id: None,
+        source_container: None,
+        kind: "build".into(),
+        created_at: 1,
+        description: String::new(),
+        desktop: None,
+        build: None,
+        compose: None,
+        icon: Some(crate::icons::sample(256, 256)),
+        template_id: Some("unity".into()),
+    };
+    let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
+    let info = ArchiveInfo::read(Some(&written)).unwrap();
+    assert_eq!(info.icon, record.icon);
+    assert_eq!(info.template_id.as_deref(), Some("unity"));
+    // A picture or an id this release cannot use costs the archive nothing else.
+    let mut refused: Value = serde_json::from_slice(&written).unwrap();
+    refused["icon"] = json!("data:image/webp;base64,UklGRg==");
+    refused["template_id"] = json!("Unity 6");
+    let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
+    assert!(info.icon.is_none() && info.template_id.is_none());
+    assert_eq!(info.name, "Unity 6");
 }

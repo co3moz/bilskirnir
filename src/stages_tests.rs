@@ -349,10 +349,13 @@ esac
         async move {
             let body = crate::api::BuildImage {
                 name: "Staged".into(),
+                description: String::new(),
                 base_image: "example/desktop:1".into(),
                 internet: false,
                 script: "true\n".into(),
                 compose: None,
+                icon: None,
+                template_id: None,
             };
             let started = crate::api::build(axum::extract::State(app.clone()), axum::Json(body))
                 .await

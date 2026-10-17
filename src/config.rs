@@ -31,7 +31,12 @@ pub struct Config {
     pub mcp_enabled: bool,
     /// The bearer token `/mcp` requires, or `None` when `MCP_AUTH_MODE=none` turns the check off.
     pub mcp_token: Option<String>,
+    /// The template list the templates page reads in the browser, or `None` to turn it off.
+    pub templates_url: Option<String>,
 }
+/// The template list on the project's GitHub wiki.
+pub(crate) const TEMPLATES_URL: &str =
+    "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json";
 fn flag(key: &str, default: bool) -> Result<bool> {
     match env::var(key).as_deref() {
         Ok("true" | "1") => Ok(true),
@@ -120,6 +125,7 @@ impl Config {
             archive_limit: archive_mb * 1024 * 1024,
             mcp_enabled,
             mcp_token,
+            templates_url: templates_url(env::var("TEMPLATES_URL").ok().as_deref())?,
         };
         super::model::image_ref(&cfg.base_image)?;
         if let Some(profile) = cfg.seccomp_profile()
@@ -148,6 +154,45 @@ impl Config {
         self.user_namespaces
             .then(|| self.desktop_context.join("seccomp.json"))
     }
+
+    /// The scheme and host the templates page reads from, which the interface's content security
+    /// policy has to allow.
+    pub(crate) fn templates_origin(&self) -> Option<&str> {
+        let url = self.templates_url.as_deref()?;
+        let host = url.find("://")? + 3;
+        Some(&url[..url[host..].find('/').map_or(url.len(), |end| host + end)])
+    }
+}
+
+/// `TEMPLATES_URL`: empty for the project wiki's list, `none` for no templates page, or the URL
+/// of another list. The browser reads it, and the content security policy names its host, so it
+/// is held to characters neither can misread.
+pub(crate) fn templates_url(value: Option<&str>) -> Result<Option<String>> {
+    let value = value.unwrap_or_default().trim();
+    if value.is_empty() {
+        return Ok(Some(TEMPLATES_URL.into()));
+    }
+    if value == "none" {
+        return Ok(None);
+    }
+    let host = value
+        .strip_prefix("https://")
+        .or_else(|| value.strip_prefix("http://"))
+        .map(|rest| rest.split('/').next().unwrap_or_default());
+    if value.len() > 2048
+        || host.is_none_or(|host| {
+            host.is_empty()
+                || !host
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b".-:[]".contains(&b))
+        })
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_graphic() && !b"\"'`;,<>\\{}|^".contains(&b))
+    {
+        bail!("TEMPLATES_URL must be an http or https URL, empty for the project wiki, or none");
+    }
+    Ok(Some(value.into()))
 }
 
 /// The socket must reach the daemon the CLI talks to, so it follows the CLI's own `DOCKER_HOST`.
