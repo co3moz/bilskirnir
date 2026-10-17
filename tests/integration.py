@@ -96,6 +96,10 @@ restored_volume = f"wsld-test-restored-{tag}"
 streamed_volume = f"wsld-test-streamed-{tag}"
 cut_volume = f"wsld-test-cut-{tag}"
 interrupted_volume = f"wsld-test-interrupted-{tag}"
+copied_volume = f"wsld-test-copied-{tag}"
+mcp_copy_volume = f"wsld-test-mcp-copy-{tag}"
+device_volume = f"wsld-test-device-{tag}"
+device_copy_volume = f"wsld-test-device-copy-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
 absent_volume = f"wsld-test-absent-{tag}"
@@ -264,7 +268,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 62
+    assert len(mcp("tools/list")["tools"]) == 63
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -436,6 +440,35 @@ try:
     assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
     print("PASS volume files and archives go through a removed helper as the desktop user", flush=True)
+    # A copy pipes the export helper into the import helper. It has the source's tree, symlinks
+    # and modes, a file only root may read included, and every file belongs to the desktop user.
+    # An existing target, a missing source and the manager's own volume on either side are
+    # refused, and a copy that fails, here on a device file, leaves no volume.
+    def in_volume(name, *command):
+        return docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={name},dst=/v", "--entrypoint", command[0], "bilskirnir/manager:local", *command[1:])
+    def tree(name):
+        return in_volume(name, "sh", "-c", "cd /v && find . -printf '%p %m %y %l\\n' | sort").decode()
+    in_volume(restored_volume, "sh", "-c", "chmod 664 /v/notes/renamed.txt && ln -s notes/renamed.txt /v/link && printf secret > /v/root-only && chmod 600 /v/root-only")
+    copied = job(api(f"volumes/{restored_volume}/copy", {"name": copied_volume}))
+    assert copied["source"] == restored_volume and copied["name"] == copied_volume and copied["bytes"] > 0, copied
+    assert tree(copied_volume) == tree(restored_volume), tree(copied_volume)
+    assert set(in_volume(copied_volume, "find", "/v", "-printf", "%u:%g\\n").decode().split()) == {"1001:1001"}
+    assert in_volume(copied_volume, "cat", "/v/root-only") == b"secret"
+    assert mcp_job(tool("copy_volume", {"volume": restored_volume, "name": mcp_copy_volume}))["result"]["name"] == mcp_copy_volume
+    assert tree(mcp_copy_volume) == tree(restored_volume)
+    never = f"wsld-test-never-{tag}"
+    for source, target, status in [(restored_volume, copied_volume, 409), (missing, never, 404), (volume, never, 403), (restored_volume, volume, 403)]:
+        assert refused(f"volumes/{source}/copy", {"name": target}) == status, (source, target)
+    for name in [missing, never]:
+        assert json.loads(docker("volume", "inspect", name, check=False) or b"[]") == [], name
+    api("volumes", {"name": device_volume})
+    in_volume(device_volume, "mknod", "/v/null", "c", "1", "3")
+    failed_copy = api(f"volumes/{device_volume}/copy", {"name": device_copy_volume})
+    failed_copy = wait_for(lambda: (j if (j := api(f"jobs/{failed_copy['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+    assert failed_copy["status"] == "failed" and "Removed the incomplete volume" in failed_copy["log"], failed_copy
+    assert json.loads(docker("volume", "inspect", device_copy_volume, check=False) or b"[]") == []
+    assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
+    print("PASS a volume copies into a new one owned by the desktop user, and never over one", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
     except urllib.error.HTTPError as error:
@@ -1295,5 +1328,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

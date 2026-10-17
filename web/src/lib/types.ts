@@ -159,8 +159,8 @@ export type DownloadProgress = {
   total?: number | null
   layers?: number
   layers_done?: number
-  /** Set for an image archive, whose progress counts bytes instead of layers. */
-  transfer?: "export" | "import"
+  /** Set for an archive transfer or a volume copy, whose progress counts bytes instead of layers. */
+  transfer?: "export" | "import" | "copy"
 }
 
 /** A named part of a job, such as a script build's layer save; times are the manager's seconds. */

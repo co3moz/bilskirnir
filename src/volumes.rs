@@ -20,7 +20,7 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
-pub(crate) use archive::{export, extract, import};
+pub(crate) use archive::{copy, export, extract, import};
 pub(crate) use files::{delete, download, list, make_directory, move_, read, upload, write};
 
 /// Where a helper mounts the volume.

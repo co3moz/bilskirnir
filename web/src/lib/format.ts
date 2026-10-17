@@ -200,7 +200,10 @@ export function downloadProgress(progress?: DownloadProgress | null): DownloadSu
   }
 }
 
-/** A running job's measured progress: layers for an image download, bytes for an archive. */
+/**
+ * A running job's measured progress: layers for an image download, bytes for an archive or a
+ * volume copy.
+ */
 export function jobProgress(progress?: DownloadProgress | null): DownloadSummary | null {
   if (!progress?.transfer) return downloadProgress(progress)
   const { current = 0, total = null } = progress
@@ -210,6 +213,8 @@ export function jobProgress(progress?: DownloadProgress | null): DownloadSummary
         ? t("progress.exported", { size: fileSize(current) })
         : t("progress.preparingImage"),
     }
+  if (progress.transfer === "copy")
+    return { text: t("progress.copied", { size: fileSize(current) }) }
   if (!total) return { text: t("progress.received", { size: fileSize(current) }) }
   return {
     value: current,

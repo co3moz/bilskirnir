@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 62 tools:
+The server currently exposes 63 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -89,7 +89,7 @@ The server currently exposes 62 tools:
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
-| Persistent storage | `list_volumes`, `create_volume` |
+| Persistent storage | `list_volumes`, `create_volume`, `copy_volume` |
 | Operation results | `list_jobs`, `get_job` |
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
@@ -227,3 +227,5 @@ Read/write and execution tools operate inside managed desktop containers. They d
 `update_container` changes a container's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one.
+
+`copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).

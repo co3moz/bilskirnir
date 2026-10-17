@@ -3,6 +3,7 @@ import {
   RiArchive2Line,
   RiDatabase2Line,
   RiAddLine,
+  RiFileCopyLine,
   RiFolderOpenLine,
   RiImportLine,
 } from "@remixicon/react"
@@ -111,6 +112,19 @@ const columns: DataColumn<Row>[] = [
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t("archives.export")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => openDialog({ kind: "volume-copy", name: row.original.Name })}
+                aria-label={t("volumes.copyOf", { name: row.original.Name })}
+              >
+                <RiFileCopyLine />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("volumes.copy")}</TooltipContent>
           </Tooltip>
           <Button
             variant="outline"

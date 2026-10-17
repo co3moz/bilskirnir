@@ -133,6 +133,8 @@ The desktop user runs as UID/GID **1001:1001**. Existing volumes need permission
 
 **Export archive** on a volume's row downloads its files as a `.tar.gz`, and **Import volume** unpacks such an archive, or a `.tar`, into a new volume of the name you choose, for a backup or a move to another installation. An import never replaces an existing volume, and its files belong to the desktop user. **Jobs** shows both transfers.
 
+**Copy** on a volume's row copies all of its files into a new volume of the name you choose, for work that starts from a prepared project or cache, or a copy kept before a risky change. The copy keeps folders, symlinks and modes, and its files belong to the desktop user. It is a full copy, not a shared one: it takes as much disk space as the volume, and deleting a volume later does not shrink the WSL virtual disk by itself. **Jobs** shows the bytes copied.
+
 **Browse files** on a volume's row, or its name, opens its files without starting a container. Open a folder to look inside, a text file of up to 512 KiB to read and change it, and use the row menu to download, rename or delete. **New folder** and **Upload** add to the open folder; files dropped on the list upload too. Everything runs as the desktop user, so a file that user may not change is refused. A new, empty volume is given to the desktop user on its first change, so files can be added at its root.
 
 Mounting the same writable volume in two containers gives both access to the same files. Taking a snapshot does not copy that volume. Deleting a container preserves named volumes and saved images; unsaved changes left only in the container are lost.

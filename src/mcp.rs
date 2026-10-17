@@ -1,6 +1,6 @@
 use crate::{
     App, api, apps, audio, auth, capture, compose, desktop_input, error, exec, files, gamepad,
-    recordings, terminal, uploads, usage, waits, windows,
+    recordings, terminal, uploads, usage, volumes, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -328,6 +328,13 @@ impl BilskirnirMcp {
             }
             "list_volumes" => api::volumes(state).await?.0,
             "create_volume" => api::create_volume(state, Json(parse(args)?)).await?.0,
+            "copy_volume" => {
+                let source = Path(string(&args, "volume")?);
+                args.as_object_mut().unwrap().remove("volume");
+                Box::pin(volumes::copy(state, source, Json(parse(args)?)))
+                    .await?
+                    .0
+            }
             "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
             "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
@@ -767,6 +774,15 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a named Docker volume. Returns a conflict if the name already exists; does not replace existing data.",
             json!({"name":text}),
             &["name"],
+            false,
+            false,
+            false,
+        ),
+        tool(
+            "copy_volume",
+            "Copy every file of a named volume into a new volume called name, such as a prepared project or cache that a task starts from. The copy keeps the tree, symlinks and modes, and every file belongs to the desktop user (UID 1001). It is a full copy, not copy-on-write: disk use grows by the volume's size. The new name must not exist, a missing source is never created and volumes marked manager=true are refused. Returns job_id; get_job reports the bytes copied.",
+            json!({"volume":text,"name":text}),
+            &["volume", "name"],
             false,
             false,
             false,

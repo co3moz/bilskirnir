@@ -60,6 +60,7 @@ export const fr: Messages = {
   "job.volume-export": "Export de volume",
   "job.volume-import": "Import de volume",
   "job.volume-extract": "Extraction dans un volume",
+  "job.volume-copy": "Copie de volume",
   "jobs.target.container": "Conteneur {id}",
   "jobs.target.image": "Image {id}",
   "jobs.log.queued": "En attente de démarrage…",
@@ -166,6 +167,7 @@ export const fr: Messages = {
   "progress.exported": "{size} exportés",
   "progress.preparingImage": "Docker prépare l'image…",
   "progress.received": "{size} reçus",
+  "progress.copied": "{size} copiés",
   "progress.receivedOf": "{current} reçus sur {total}",
   "stage.base": "Préparation de l'image de base",
   "stage.script": "Exécution du script de configuration",
@@ -257,6 +259,12 @@ export const fr: Messages = {
     "Un volume Docker nommé que vous pouvez monter dans des conteneurs. Ses fichiers survivent aux conteneurs et ne font pas partie des instantanés.",
   "volumes.namePattern":
     "Lettres, chiffres, points, tirets et traits de soulignement, en commençant par une lettre ou un chiffre",
+  "volumes.copy": "Copier",
+  "volumes.copyOf": "Copier {name} dans un nouveau volume",
+  "volumes.copyTitle": "Copier {name}",
+  "volumes.copyDescription":
+    "Copie tous les fichiers dans un nouveau volume, ils appartiennent à l'utilisateur du bureau. Une copie complète occupe autant d'espace disque que le volume.",
+  "volumes.copyName": "Nom de la copie",
   "volumes.import.arrived":
     "L'archive est arrivée. Ses derniers fichiers sont en cours d'écriture.",
   "volumes.import.writing": "Écriture des derniers fichiers…",

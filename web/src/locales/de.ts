@@ -60,6 +60,7 @@ export const de: Messages = {
   "job.volume-export": "Volume exportieren",
   "job.volume-import": "Volume importieren",
   "job.volume-extract": "In Volume entpacken",
+  "job.volume-copy": "Volume kopieren",
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",
   "jobs.log.queued": "Wartet auf den Start…",
@@ -167,6 +168,7 @@ export const de: Messages = {
   "progress.exported": "{size} exportiert",
   "progress.preparingImage": "Docker bereitet das Image vor…",
   "progress.received": "{size} empfangen",
+  "progress.copied": "{size} kopiert",
   "progress.receivedOf": "{current} von {total} empfangen",
   "stage.base": "Basis-Image vorbereiten",
   "stage.script": "Einrichtungsskript ausführen",
@@ -258,6 +260,12 @@ export const de: Messages = {
     "Ein benanntes Docker-Volume, das Sie in Container einhängen können. Seine Dateien überdauern die Container und sind nicht Teil von Snapshots.",
   "volumes.namePattern":
     "Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche, beginnend mit einem Buchstaben oder einer Ziffer",
+  "volumes.copy": "Kopieren",
+  "volumes.copyOf": "{name} in ein neues Volume kopieren",
+  "volumes.copyTitle": "{name} kopieren",
+  "volumes.copyDescription":
+    "Kopiert alle Dateien in ein neues Volume, sie gehören dem Desktop-Benutzer. Eine vollständige Kopie belegt so viel Speicherplatz wie das Volume.",
+  "volumes.copyName": "Name der Kopie",
   "volumes.import.arrived": "Das Archiv ist angekommen. Die letzten Dateien werden geschrieben.",
   "volumes.import.writing": "Die letzten Dateien werden geschrieben…",
   "volumes.import.description":

@@ -240,7 +240,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 62);
+    assert_eq!(tools.len(), 63);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);
@@ -393,6 +393,34 @@ async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
     let (_,body)=mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","mounts":[{"volume":"project","target":"/workspace","read_only":true}]}})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    // copy_volume reaches the copy route, which refuses it before any job without a manager.
+    for (arguments, refusal) in [
+        (
+            serde_json::json!({"volume":"project","name":"project-copy"}),
+            "MANAGER_CONTAINER",
+        ),
+        (
+            serde_json::json!({"volume":"project","name":"-bad"}),
+            "Invalid volume name",
+        ),
+    ] {
+        let (_, body) = mcp_request(
+            app.clone(),
+            "tools/call",
+            serde_json::json!({"name":"copy_volume","arguments":arguments}),
+        )
+        .await;
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        assert!(body.to_string().contains(refusal), "{body}");
+    }
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"copy_volume","arguments":{"name":"project-copy"}}),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32602, "{body}");
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
 

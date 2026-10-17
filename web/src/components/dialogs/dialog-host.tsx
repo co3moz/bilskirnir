@@ -6,7 +6,13 @@ import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
 import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
 import { ImportImageDialog } from "./import-dialog"
-import { BuildImageDialog, DeleteDialog, SnapshotDialog, VolumeDialog } from "./simple-dialogs"
+import {
+  BuildImageDialog,
+  DeleteDialog,
+  SnapshotDialog,
+  VolumeCopyDialog,
+  VolumeDialog,
+} from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
 import { UploadDialog } from "./upload-dialog"
 import { VolumeBrowser } from "./volume-browser"
@@ -47,6 +53,8 @@ function render(dialog: Dialog, open: boolean) {
       return <VolumeBrowser {...props} name={dialog.name} />
     case "volume-import":
       return <VolumeImportDialog {...props} />
+    case "volume-copy":
+      return <VolumeCopyDialog {...props} name={dialog.name} />
     case "job":
       return <JobDrawer {...props} id={dialog.id} />
     case "log":

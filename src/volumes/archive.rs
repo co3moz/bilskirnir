@@ -1,6 +1,8 @@
 //! Volume archives: a volume's files leave as a gzip-compressed tar and come back into a new
 //! volume, streamed through a helper container without passing through memory or the data
-//! volume. The archive is an ordinary tar, so other tools read and write it too.
+//! volume. The archive is an ordinary tar, so other tools read and write it too. A copy pipes
+//! the same two helpers into each other.
+mod copy;
 mod ending;
 
 use super::{Access, HELPER_LIMIT, MOUNT, Volume, helper_args, helper_error, helper_name};
@@ -21,6 +23,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+pub(crate) use copy::copy;
 use ending::Ending;
 use flate2::write::MultiGzDecoder;
 use futures_util::{Stream, StreamExt};

@@ -64,6 +64,7 @@ export const en = {
   "job.volume-export": "Export volume",
   "job.volume-import": "Import volume",
   "job.volume-extract": "Extract into volume",
+  "job.volume-copy": "Copy volume",
 
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",
@@ -173,6 +174,7 @@ export const en = {
   "progress.exported": "{size} exported",
   "progress.preparingImage": "Docker is preparing the image…",
   "progress.received": "{size} received",
+  "progress.copied": "{size} copied",
   "progress.receivedOf": "{current} of {total} received",
 
   "stage.base": "Preparing the base image",
@@ -268,6 +270,12 @@ export const en = {
     "A named Docker volume you can mount into containers. Its files outlive the containers and are not part of snapshots.",
   "volumes.namePattern":
     "Letters, digits, dots, dashes and underscores, starting with a letter or digit",
+  "volumes.copy": "Copy",
+  "volumes.copyOf": "Copy {name} into a new volume",
+  "volumes.copyTitle": "Copy {name}",
+  "volumes.copyDescription":
+    "Copies every file into a new volume, owned by the desktop user. A full copy takes as much disk space as the volume.",
+  "volumes.copyName": "Name of the copy",
   "volumes.import.arrived": "The archive arrived. Its last files are being written.",
   "volumes.import.writing": "Writing the last files…",
   "volumes.import.description": "Unpacks an archive exported from a volume into a new one.",

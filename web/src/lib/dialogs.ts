@@ -13,6 +13,7 @@ export type Dialog =
   | { kind: "volume" }
   | { kind: "volume-files"; name: string }
   | { kind: "volume-import" }
+  | { kind: "volume-copy"; name: string }
   | { kind: "job"; id: string }
   | { kind: "log"; title: string; text: string; status?: string }
 

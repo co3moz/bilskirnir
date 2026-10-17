@@ -408,6 +408,47 @@ function ImportConfiguration({
   )
 }
 
+/** Copies a volume's files into a new volume; the copy's job opens once it is queued. */
+export function VolumeCopyDialog({ name: source, ...props }: DialogProps & { name: string }) {
+  const [name, setName] = React.useState(`${source}-copy`)
+  const { busy, error, submit } = useSubmit()
+  const field = React.useId()
+  return (
+    <Dialog {...props}>
+      <DialogContent className="sm:max-w-md">
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={submit(() => runJob(`volumes/${encodeURIComponent(source)}/copy`, { name }))}
+        >
+          <DialogHeader>
+            <DialogTitle className="break-all">
+              {t("volumes.copyTitle", { name: source })}
+            </DialogTitle>
+            <DialogDescription>{t("volumes.copyDescription")}</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor={`${field}-name`}>{t("volumes.copyName")}</FieldLabel>
+              <Input
+                id={`${field}-name`}
+                required
+                pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]+"
+                title={t("volumes.namePattern")}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="font-mono"
+                autoFocus
+              />
+            </Field>
+            <FieldError>{error}</FieldError>
+          </FieldGroup>
+          <Footer busy={busy} label={t("volumes.copy")} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function VolumeDialog(props: DialogProps) {
   const [name, setName] = React.useState("")
   const { busy, error, submit } = useSubmit()

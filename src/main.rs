@@ -185,6 +185,7 @@ fn router(app: Arc<App>) -> Router {
             )),
         )
         .route("/api/volumes/{name}/archive", get(volumes::export))
+        .route("/api/volumes/{name}/copy", post(volumes::copy))
         .route(
             "/api/volumes/{name}/extract",
             post(volumes::extract).layer(tower_http::limit::RequestBodyLimitLayer::new(

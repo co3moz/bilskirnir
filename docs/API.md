@@ -103,6 +103,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
 | POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and optional `size` into a new volume; returns a job. |
 | POST | `/api/volumes/{name}/extract` | Stream a `.tar.gz` or `.tar` with `path` and optional `size` into a new folder of the volume; returns a job. |
+| POST | `/api/volumes/{name}/copy` | Copy the volume's files into a new volume named by `name`; returns a job. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -327,6 +328,10 @@ tar -c -C project . | curl --cookie bilskirnir.cookies \
 
 The folder must not exist yet. The extract creates it, so no file of the volume can be replaced and no symlink already in the volume can lead the archive elsewhere. `path` is absolute and canonical, as for the [volume file routes](#volume-files), and its parent must exist; `/` is the volume itself, accepted only while it is empty, such as right after `POST /api/volumes`. tar runs inside the new folder as the desktop user, in a helper that mounts only that volume, so every file belongs to UID/GID 1001. The extract holds the volume's write lock, so file writes to the volume wait for it. A folder that exists returns 409, a missing volume 404 without creating it, and the manager's own volumes 403. The response is a `volume-extract` job once the whole archive has arrived; if the upload or unpacking fails, the folder is removed again, or the volume emptied again for `/`. Unpacking over a folder that already holds files is not supported: extract into a new folder, then delete or move the old one.
 
+`POST /api/volumes/{name}/copy` with `{"name":"NEW_VOLUME"}` copies every file of the volume into a new one, for work that starts from a prepared volume or a copy kept before a risky change; MCP clients call `copy_volume`. Docker has no volume copy, so the manager pipes the two archive helpers into each other, without compression: one reads the source as root on a read-only mount with only the capability to read every file, the other unpacks into the new volume as the desktop user, and no helper mounts both. The copy keeps the tree, symlinks, hard links and modes. Every file belongs to UID/GID 1001, as after an import, and device files cannot be copied. The new name must not exist (409), a missing source returns 404 and is not created, and the manager's own volumes are refused on either side with 403. The response is a `volume-copy` job whose `progress` counts the bytes copied. It takes one of the two archive transfer slots, `IMAGE_ARCHIVE_MAX_MB` does not apply since nothing is uploaded, and a copy that fails removes the new volume again. A file that changes while it is read is copied as it was read and noted in the job log.
+
+A copy is a full copy, not copy-on-write: disk use grows by the volume's size, and the WSL virtual disk does not shrink by itself after a volume is deleted.
+
 ## Image archives
 
 `GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind and desktop information, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
@@ -452,7 +457,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, image archive exports and imports two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 
