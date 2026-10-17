@@ -89,7 +89,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `compose` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
-| POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with `size` and optional `name` and `description`; returns a job. |
+| POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with optional `size`, `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes, each as `docker volume ls` describes it plus a boolean `manager`. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
 | POST | `/api/volumes` | Create a named volume using `name`. |
 | POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
@@ -101,7 +101,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/volumes/{name}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/volumes/{name}/files` | Stream a binary upload. |
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
-| POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and `size` into a new volume; returns a job. |
+| POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and optional `size` into a new volume; returns a job. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -300,7 +300,19 @@ curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
   http://localhost:8080/api/volumes/unity-projects/archive
 ```
 
-`POST /api/volumes/import?name=NEW_VOLUME&size=BYTES` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if unpacking fails, the new volume is removed again.
+`POST /api/volumes/import?name=NEW_VOLUME` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if the upload or unpacking fails, the new volume is removed again.
+
+`size`, the archive's exact length in bytes, is optional. With it, a body of any other length fails the import, and a size above the limit is refused at once with 413. Without it, an archive can stream in as it is made, with no temporary file on the sending side:
+
+```bash
+tar -c -C project . | curl --cookie bilskirnir.cookies \
+  --header 'X-Wsld-Request: 1' \
+  --header 'Content-Type: application/octet-stream' \
+  --request POST --upload-file - \
+  'http://localhost:8080/api/volumes/import?name=NEW_VOLUME'
+```
+
+curl sends such a body in chunks. Its bytes are counted as they arrive, and the import fails once they pass `IMAGE_ARCHIVE_MAX_MB`. A connection that closes before the last chunk fails it too, and so does an archive that ends without tar's end-of-archive blocks, which every tar writes: GNU tar would otherwise unpack an archive cut at a file boundary as if it were whole, as one is when the sending tar stops early. The job's `progress` then has `current` and no `total`.
 
 ## Image archives
 
@@ -313,7 +325,7 @@ curl --cookie bilskirnir.cookies --output unity.tar.gz \
 
 An archive holds every layer, the base desktop included, and its size is not known in advance. Docker prepares the whole image before its first layer arrives. The transfer is an `image-export` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent. If Docker fails partway, the download ends with an error instead of a short file.
 
-`POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply the exact `size` and optionally `name` and `description` as query parameters; they default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
+`POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply its exact `size` when it is known, and optionally `name` and `description`, as query parameters; the name and description default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
 
 ```bash
 curl --cookie bilskirnir.cookies \
@@ -329,7 +341,7 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 - The image has the `io.wsl-desktop.desktop=true` label.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
-The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
 
 ## Screenshots
 

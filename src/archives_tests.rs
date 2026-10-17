@@ -49,7 +49,15 @@ async fn finished(app: &App, id: &str) -> Job {
 async fn imports_are_checked_before_any_job_or_docker_work() {
     let app = crate::tests::app(false);
     let long_name = format!("size=16&name={}", "x".repeat(101));
+    // An archive streamed without a size is checked the same way.
+    let streamed = format!("name={}", "x".repeat(101));
     for (query, content_type, expected) in [
+        ("", "application/gzip", StatusCode::UNSUPPORTED_MEDIA_TYPE),
+        (
+            streamed.as_str(),
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
         (
             "size=5000000",
             "application/octet-stream",

@@ -93,6 +93,9 @@ share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
 restored_volume = f"wsld-test-restored-{tag}"
+streamed_volume = f"wsld-test-streamed-{tag}"
+cut_volume = f"wsld-test-cut-{tag}"
+interrupted_volume = f"wsld-test-interrupted-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
 absent_volume = f"wsld-test-absent-{tag}"
@@ -384,6 +387,40 @@ try:
         finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
         assert finished["status"] == "failed", finished
     assert json.loads(docker("volume", "inspect", broken, check=False) or b"[]") == []
+    # An archive streamed as it is made, as `tar -c | curl -T -` sends it, arrives in chunks and
+    # without a size. One whose connection closes before the last chunk, or which stops at a file
+    # boundary as a sending tar that failed leaves it, creates no volume.
+    def stream_volume(name, data, cut=False):
+        def chunks():
+            # A dropped upload stops inside its second header, before any closing block.
+            sent = data[:1000] if cut else data
+            for start in range(0, len(sent), 4096):
+                yield sent[start:start + 4096]
+            if cut:
+                raise ConnectionAbortedError("the acceptance test drops the upload")
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name}), data=chunks(), method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+        with client.open(request, timeout=130) as response:
+            return json.loads(response.read())
+    plain_volume = gzip.decompress(exported_volume)
+    started = stream_volume(streamed_volume, plain_volume)
+    streamed = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+    assert streamed["status"] == "completed" and "of unknown size" in streamed["log"], streamed
+    assert api(f"volumes/{streamed_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
+    with tarfile.open(fileobj=io.BytesIO(plain_volume)) as archive:
+        boundary = archive.getmembers()[-1].offset
+    try:
+        stream_volume(cut_volume, plain_volume[:boundary]); raise AssertionError("an archive without its closing blocks was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 400 and "end-of-archive" in json.loads(error.read())["error"], error.code
+    try:
+        stream_volume(interrupted_volume, plain_volume, cut=True); raise AssertionError("the dropped upload was answered")
+    except urllib.error.URLError:
+        pass
+    dropped = wait_for(lambda: next((j for j in api("jobs") if j["resource"] == f"volume:{interrupted_volume}" and j["status"] not in ("queued", "running")), None), 180)
+    assert dropped["status"] == "failed", dropped
+    assert "The upload was interrupted" in api(f"jobs/{dropped['id']}")["log"]
+    for name in [cut_volume, interrupted_volume]:
+        assert json.loads(docker("volume", "inspect", name, check=False) or b"[]") == [], name
     listed = api(f"{files}/list", {"path": "/notes"})
     assert listed["path"] == "/notes" and sorted(i["name"] for i in listed["items"]) == ["blob.bin", "renamed.txt"], listed
     assert refused(f"{files}/delete", {"path": "/notes"}) == 400
@@ -1220,5 +1257,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

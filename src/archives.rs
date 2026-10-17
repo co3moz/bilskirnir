@@ -5,7 +5,7 @@
 //! its way in (see `tar`): the image arrives under its ID only and is tagged with a name the
 //! manager owns. An export saves by image ID, so its archive names no image either.
 mod gzip;
-mod tar;
+pub(crate) mod tar;
 
 use crate::{
     App, auth,
@@ -154,7 +154,9 @@ pub async fn export(
 
 #[derive(Deserialize)]
 pub struct Import {
-    pub size: u64,
+    /// The archive's exact size, or none for one streamed as it is made.
+    #[serde(default)]
+    pub size: Option<u64>,
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default)]
@@ -170,22 +172,7 @@ pub async fn import(
     headers: HeaderMap,
     body: Body,
 ) -> Result<Json<Value>> {
-    if request.size > app.config.archive_limit {
-        return Err(Error(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "The archive is larger than the import limit (IMAGE_ARCHIVE_MAX_MB)".into(),
-        ));
-    }
-    if headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        != Some("application/octet-stream")
-    {
-        return Err(Error(
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "Send the archive as a binary body".into(),
-        ));
-    }
+    check_upload(&app, request.size, &headers)?;
     let name = request.name.as_deref().map(str::trim).unwrap_or_default();
     if name.chars().count() > 100
         || request
@@ -365,10 +352,9 @@ impl App {
     ) -> anyhow::Result<Value> {
         self.append_log(
             job_id,
-            &format!("Receiving an image archive of {} bytes.", request.size),
+            &format!("Receiving an image archive {}.", arriving(request.size)),
         )?;
-        let progress =
-            |current: u64| json!({"transfer": "import", "current": current, "total": request.size});
+        let progress = |current: u64| import_progress(current, request.size);
         self.set_progress(job_id, Some(progress(0)))?;
         let mut child = self
             .command(&["load".into(), "--quiet".into()])
@@ -403,12 +389,9 @@ impl App {
                     _ = &mut revoked => bail!("Session expired. Sign in again."),
                 };
                 let Some(chunk) = chunk else { break };
-                let mut pending =
-                    chunk.map_err(|error| anyhow!("The upload was interrupted: {error}"))?;
+                let mut pending = chunk.map_err(interrupted)?;
                 received += pending.len() as u64;
-                if received > request.size {
-                    bail!("The upload is larger than its declared size");
-                }
+                count(received, request.size, self.config.archive_limit)?;
                 while !pending.is_empty() {
                     let (back, step) = tokio::task::spawn_blocking(move || {
                         let step = unpacker
@@ -427,12 +410,13 @@ impl App {
                     reported = Instant::now();
                 }
             }
-            if received != request.size {
-                bail!(
-                    "The upload ended after {received} of {} bytes",
-                    request.size
-                );
+            if let Some(size) = request.size
+                && received != size
+            {
+                bail!("The upload ended after {received} of {size} bytes");
             }
+            // Without a size, an archive cut at an entry boundary is refused once it lacks what
+            // loading needs: the filter wants the manifest and configuration, Docker every layer.
             let (last, contents) = tokio::task::spawn_blocking(move || unpacker.finish()).await??;
             load.write(&last).await?;
             anyhow::Ok(contents)
@@ -524,6 +508,62 @@ async fn docker_error(errors: tokio::task::JoinHandle<anyhow::Result<Vec<u8>>>) 
         _ => Vec::new(),
     };
     anyhow!("Docker: {}", String::from_utf8_lossy(&errors).trim())
+}
+
+const TOO_LARGE: &str = "The archive is larger than the import limit (IMAGE_ARCHIVE_MAX_MB)";
+
+/// Refuse an archive upload before anything starts: a declared size above the limit, or a body
+/// that is not plain bytes. An upload without a size is held to the limit as it arrives.
+pub(crate) fn check_upload(app: &App, size: Option<u64>, headers: &HeaderMap) -> Result<()> {
+    if size.is_some_and(|size| size > app.config.archive_limit) {
+        return Err(Error(StatusCode::PAYLOAD_TOO_LARGE, TOO_LARGE.into()));
+    }
+    if headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        != Some("application/octet-stream")
+    {
+        return Err(Error(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "Send the archive as a binary body".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Count `received` bytes against the declared size, or without one against the import limit.
+pub(crate) fn count(received: u64, size: Option<u64>, limit: u64) -> anyhow::Result<()> {
+    match size {
+        Some(size) if received > size => bail!("The upload is larger than its declared size"),
+        None if received > limit => bail!(TOO_LARGE),
+        _ => Ok(()),
+    }
+}
+
+/// An upload body that failed: past the route's body limit, or cut off, as a chunked upload is
+/// when its connection closes before the last chunk.
+pub(crate) fn interrupted(error: axum::Error) -> anyhow::Error {
+    let error = error.into_inner();
+    if error.is::<http_body_util::LengthLimitError>() {
+        return anyhow!(TOO_LARGE);
+    }
+    anyhow!("The upload was interrupted: {error}")
+}
+
+/// An import's progress: the bytes received, and of how many when the client said.
+pub(crate) fn import_progress(current: u64, size: Option<u64>) -> Value {
+    match size {
+        Some(total) => json!({"transfer": "import", "current": current, "total": total}),
+        None => json!({"transfer": "import", "current": current}),
+    }
+}
+
+/// How an archive arrives, for the job log.
+pub(crate) fn arriving(size: Option<u64>) -> String {
+    match size {
+        Some(size) => format!("of {size} bytes"),
+        None => "of unknown size as it streams in".into(),
+    }
 }
 
 /// Image and volume archives share two transfer slots: each holds a Docker save, load or tar.

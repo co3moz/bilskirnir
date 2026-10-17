@@ -1,10 +1,12 @@
 //! Volume archives: a volume's files leave as a gzip-compressed tar and come back into a new
 //! volume, streamed through a helper container without passing through memory or the data
 //! volume. The archive is an ordinary tar, so other tools read and write it too.
+mod ending;
+
 use super::{Access, MOUNT, Volume, helper_args, helper_name};
 use crate::{
     App,
-    archives::transfer_permit,
+    archives::{arriving, check_upload, count, import_progress, interrupted, transfer_permit},
     auth,
     error::{Error, Result},
     jobs,
@@ -19,8 +21,9 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use ending::Ending;
 use flate2::write::MultiGzDecoder;
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -30,7 +33,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
     process::Child,
     sync::{mpsc, oneshot},
 };
@@ -94,7 +97,9 @@ pub async fn export(
 pub struct Import {
     /// The new volume's name.
     pub name: String,
-    pub size: u64,
+    /// The archive's exact size, or none for one streamed as it is made.
+    #[serde(default)]
+    pub size: Option<u64>,
 }
 
 /// Receive a `.tar.gz` or `.tar` and unpack it into a new volume. The answer comes once the
@@ -105,22 +110,7 @@ pub async fn import(
     headers: HeaderMap,
     body: Body,
 ) -> Result<Json<Value>> {
-    if request.size > app.config.archive_limit {
-        return Err(Error(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "The archive is larger than the import limit (IMAGE_ARCHIVE_MAX_MB)".into(),
-        ));
-    }
-    if headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        != Some("application/octet-stream")
-    {
-        return Err(Error(
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "Send the archive as a binary body".into(),
-        ));
-    }
+    check_upload(&app, request.size, &headers)?;
     volume_name(&request.name)?;
     // Refused before anything is uploaded; the job checks again under the volume's lock.
     if app
@@ -293,12 +283,13 @@ impl App {
         self.append_log(
             job_id,
             &format!(
-                "Created the volume {}. Receiving an archive of {} bytes.",
-                volume.name, request.size
+                "Created the volume {}. Receiving an archive {}.",
+                volume.name,
+                arriving(request.size)
             ),
         )?;
         match self
-            .extract(job_id, &volume, &request, body, token, accepted)
+            .receive(job_id, &volume, request.size, body, token, accepted)
             .await
         {
             Ok(received) => {
@@ -319,17 +310,16 @@ impl App {
         }
     }
 
-    async fn extract(
+    async fn receive(
         &self,
         job_id: &str,
         volume: &Volume,
-        request: &Import,
+        size: Option<u64>,
         body: Body,
         token: Option<String>,
         accepted: oneshot::Sender<()>,
     ) -> anyhow::Result<u64> {
-        let progress =
-            |current: u64| json!({"transfer": "import", "current": current, "total": request.size});
+        let progress = |current: u64| import_progress(current, size);
         self.set_progress(job_id, Some(progress(0)))?;
         // As the desktop user, without a way to change owners, write devices or leave /volume:
         // what an archive names outside the volume lands nowhere it could matter.
@@ -354,47 +344,14 @@ impl App {
             8192,
             Overflow::Tail,
         ));
-        let delivered = async {
-            let mut unpacker = Unpacker::new(self.config.archive_limit);
-            let revoked = self.session_revoked(token);
-            tokio::pin!(revoked);
-            let mut stream = body.into_data_stream();
-            let (mut received, mut reported) = (0u64, Instant::now());
-            loop {
-                let chunk = tokio::select! {
-                    chunk = stream.next() => chunk,
-                    _ = &mut revoked => bail!("Session expired. Sign in again."),
-                };
-                let Some(chunk) = chunk else { break };
-                let chunk =
-                    chunk.map_err(|error| anyhow!("The upload was interrupted: {error}"))?;
-                received += chunk.len() as u64;
-                if received > request.size {
-                    bail!("The upload is larger than its declared size");
-                }
-                for step in chunk.chunks(GZIP_STEP) {
-                    let output = unpacker.push(step)?;
-                    if stdin.write_all(&output).await.is_err() {
-                        return Err(anyhow!(Stopped));
-                    }
-                }
-                if reported.elapsed() >= PROGRESS_INTERVAL {
-                    self.set_progress(job_id, Some(progress(received)))?;
-                    reported = Instant::now();
-                }
-            }
-            if received != request.size {
-                bail!(
-                    "The upload ended after {received} of {} bytes",
-                    request.size
-                );
-            }
-            let last = unpacker.finish()?;
-            if stdin.write_all(&last).await.is_err() || stdin.shutdown().await.is_err() {
-                return Err(anyhow!(Stopped));
-            }
-            anyhow::Ok(received)
-        }
+        let delivered = deliver(
+            body.into_data_stream(),
+            &mut stdin,
+            size,
+            self.config.archive_limit,
+            self.session_revoked(token),
+            |received| self.set_progress(job_id, Some(progress(received))),
+        )
         .await;
         drop(stdin);
         let received = match delivered {
@@ -431,6 +388,57 @@ impl App {
     }
 }
 
+/// Hand an upload to tar as a plain archive, counted against its declared size or, without one,
+/// against the import limit, and report the bytes received now and then. Returns how many
+/// arrived, or `Stopped` once tar no longer reads.
+async fn deliver(
+    mut stream: impl Stream<Item = std::result::Result<Bytes, axum::Error>> + Unpin,
+    tar: &mut (impl AsyncWrite + Unpin),
+    size: Option<u64>,
+    limit: u64,
+    revoked: impl Future<Output = ()>,
+    mut report: impl FnMut(u64) -> anyhow::Result<()>,
+) -> anyhow::Result<u64> {
+    let mut unpacker = Unpacker::new(limit);
+    tokio::pin!(revoked);
+    let (mut received, mut reported) = (0u64, Instant::now());
+    loop {
+        let chunk = tokio::select! {
+            chunk = stream.next() => chunk,
+            _ = &mut revoked => bail!("Session expired. Sign in again."),
+        };
+        let Some(chunk) = chunk else { break };
+        let chunk = chunk.map_err(interrupted)?;
+        received += chunk.len() as u64;
+        count(received, size, limit)?;
+        for step in chunk.chunks(GZIP_STEP) {
+            let output = unpacker.push(step)?;
+            if tar.write_all(&output).await.is_err() {
+                return Err(anyhow!(Stopped));
+            }
+        }
+        if reported.elapsed() >= PROGRESS_INTERVAL {
+            report(received)?;
+            reported = Instant::now();
+        }
+    }
+    if let Some(size) = size
+        && received != size
+    {
+        bail!("The upload ended after {received} of {size} bytes");
+    }
+    let (last, ended) = unpacker.finish()?;
+    // GNU tar unpacks an archive that stops at a member boundary as if it were whole. A declared
+    // size vouches for the rest; without one, only tar's closing blocks do.
+    if size.is_none() && !ended {
+        bail!("The archive ended before tar's end-of-archive blocks; the upload is incomplete");
+    }
+    if tar.write_all(&last).await.is_err() || tar.shutdown().await.is_err() {
+        return Err(anyhow!(Stopped));
+    }
+    Ok(received)
+}
+
 /// tar stopped reading its input; its own error output says why.
 #[derive(Debug)]
 struct Stopped;
@@ -450,11 +458,12 @@ enum Mode {
 
 /// An upload as the plain tar that tar reads: a gzip-compressed one is unpacked here, so its
 /// unpacked size can be held to the import limit, which a highly compressed archive would
-/// otherwise escape.
+/// otherwise escape. The plain archive is followed to tell whether it reached its end.
 pub(crate) struct Unpacker {
     mode: Mode,
     unpacked: u64,
     limit: u64,
+    ending: Ending,
 }
 
 impl Unpacker {
@@ -463,6 +472,7 @@ impl Unpacker {
             mode: Mode::Sniffing(Vec::new()),
             unpacked: 0,
             limit,
+            ending: Ending::new(),
         }
     }
 
@@ -507,6 +517,7 @@ impl Unpacker {
             }
             Mode::Sniffing(_) => unreachable!("the format is known before data is fed"),
         }
+        self.ending.push(&output[before..]);
         self.count(output.len() - before)
     }
 
@@ -518,8 +529,9 @@ impl Unpacker {
         Ok(())
     }
 
-    /// The rest once the upload has ended.
-    pub(crate) fn finish(mut self) -> anyhow::Result<Vec<u8>> {
+    /// The rest once the upload has ended, and whether the plain archive reached its
+    /// end-of-archive block.
+    pub(crate) fn finish(mut self) -> anyhow::Result<(Vec<u8>, bool)> {
         let rest = match &mut self.mode {
             // Too short to be an archive; tar says so.
             Mode::Sniffing(head) => std::mem::take(head),
@@ -531,8 +543,9 @@ impl Unpacker {
                 std::mem::take(decoder.get_mut())
             }
         };
+        self.ending.push(&rest);
         self.count(rest.len())?;
-        Ok(rest)
+        Ok((rest, self.ending.reached()))
     }
 }
 

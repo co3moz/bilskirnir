@@ -283,6 +283,10 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
     percent: 25,
     text: "1.0 GiB of 4.0 GiB received",
   })
+  // An archive streamed without a size has no total: bytes, and no percentage to show.
+  assert.deepEqual(jobProgress({ transfer: "import", current: 3 * 1024 ** 3 }), {
+    text: "3.0 GiB received",
+  })
   assert.deepEqual(
     jobProgress({ current: 0, total: 0, layers: 0, layers_done: 0 }),
     downloadProgress({ current: 0, total: 0, layers: 0, layers_done: 0 })
