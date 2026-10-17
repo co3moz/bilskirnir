@@ -16,6 +16,8 @@ export type ContainerSpec = {
   hostname?: string | null
   mac_address?: string | null
   machine_id?: string | null
+  /** Ports inside the desktop that the manager proxies for holders of the MCP token. */
+  ports: number[]
   cpus: number | null
   memory_mb: number | null
   shm_mb: number

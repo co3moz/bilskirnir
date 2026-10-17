@@ -93,6 +93,7 @@ share = f"wsld-test-share-{tag}"
 clone_share = f"wsld-test-clone-{tag}"
 files_volume = f"wsld-test-files-{tag}"
 restored_volume = f"wsld-test-restored-{tag}"
+linked_volume = f"wsld-test-linked-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
 absent_volume = f"wsld-test-absent-{tag}"
@@ -188,6 +189,16 @@ def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{eid}/files?{query}",data=data,headers={"Content-Type":"application/octet-stream","X-Wsld-Request":"1"})
     with client.open(request,timeout=120) as response:
         return json.loads(response.read())
+
+
+def transfer_link(arguments):
+    return tool("create_transfer", arguments)["structuredContent"]
+
+
+def without_session(url, data=None, method=None):
+    """A request with no cookie, no X-Wsld-Request and no bearer token, as a shell sends a link."""
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{url}", data=data, method=method)
+    return urllib.request.build_opener().open(request, timeout=130)
 
 
 def import_archive(path, **query):
@@ -413,6 +424,33 @@ try:
     assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
     print("PASS volume files and archives go through a removed helper as the desktop user", flush=True)
+    # An MCP client moves archives with one-time links, without the dashboard session.
+    exported_link = transfer_link({"operation": "volume_export", "volume": restored_volume})
+    assert exported_link["method"] == "GET" and exported_link["url"].startswith("/api/transfers/"), exported_link
+    with without_session(exported_link["url"]) as response:
+        linked_export_job = response.headers["X-Job-Id"]
+        linked_archive = response.read()
+    assert job({"job_id": linked_export_job})["bytes"] == len(linked_archive)
+    assert exported_link["url"].rsplit("/", 1)[1] not in api(f"jobs/{linked_export_job}")["log"]
+    try:
+        without_session(exported_link["url"]); raise AssertionError("a transfer link was used twice")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
+    imported_link = transfer_link({"operation": "volume_import", "name": linked_volume})
+    assert imported_link["method"] == "PUT", imported_link
+    with without_session(imported_link["url"], data=linked_archive, method="PUT") as response:
+        assert job(json.loads(response.read()))["name"] == linked_volume
+    assert api(f"volumes/{linked_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
+    with without_session(transfer_link({"operation": "volume_download", "volume": linked_volume, "path": "/notes/blob.bin"})["url"]) as response:
+        assert response.read() == b"\x00\x01\x02"
+    # A link runs its own operation only: an upload link is no download link.
+    wrong_link = transfer_link({"operation": "volume_import", "name": f"wsld-test-never-{tag}"})
+    try:
+        without_session(wrong_link["url"]); raise AssertionError("an import link downloaded")
+    except urllib.error.HTTPError as error:
+        assert error.code == 405
+    assert json.loads(docker("volume", "inspect", f"wsld-test-never-{tag}", check=False) or b"[]") == []
+    print("PASS transfer links export, import and download a volume without a session", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
     except urllib.error.HTTPError as error:
@@ -736,6 +774,39 @@ try:
     assert docker("exec",container,"cat",uploaded["path"]) == payload
     upload(env_id,"binary & notes.bin",b"replaced",replace=True)
     assert docker("exec",container,"cat",uploaded["path"]) == b"replaced"
+    pushed = transfer_link({"operation":"container_upload","container_id":env_id,"destination":"/home/desktop/Downloads","name":"linked.bin"})
+    with without_session(pushed["url"],data=payload,method="PUT") as response:
+        assert json.loads(response.read())["bytes"] == len(payload)
+    assert docker("exec",container,"cat","/home/desktop/Downloads/linked.bin") == payload
+    with without_session(transfer_link({"operation":"container_download","container_id":env_id,"path":"/home/desktop/Downloads/linked.bin"})["url"]) as response:
+        assert response.read() == payload
+    try:
+        without_session(pushed["url"],data=b"again",method="PUT"); raise AssertionError("an upload link was used twice")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
+    print("PASS transfer links upload to and download from a container without a session", flush=True)
+    # A program's own HTTP service in the desktop, through the manager, for the MCP token only.
+    listed = mcp_job(tool("update_container",{"container_id":env_id,"ports":[8765]}))
+    assert listed["result"]["live"] == ["ports"] and listed["result"]["restart"] == [], listed
+    served = tool("launch_application",{"container_id":env_id,"command":"python3","args":["-m","http.server","8765","--bind","0.0.0.0","--directory","/home/desktop/Downloads"],"name":"proxy test"})["structuredContent"]["application_id"]
+    proxied = f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8765/linked.bin"
+    def through_proxy(url=proxied):
+        request = urllib.request.Request(url,headers={"Authorization":f"Bearer {mcp_token}"})
+        with urllib.request.build_opener().open(request,timeout=30) as response:
+            return response.read(), response.headers.get_all("Content-Security-Policy")
+    proxied_body, policies = wait_for(through_proxy, 60)
+    assert proxied_body == payload and "sandbox" in policies, policies
+    try:
+        client.open(proxied,timeout=30); raise AssertionError("the dashboard session opened a proxied port")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401
+    try:
+        through_proxy(f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8766/"); raise AssertionError("an unlisted port was proxied")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403
+    tool("stop_application",{"container_id":env_id,"application_id":served})
+    mcp_job(tool("update_container",{"container_id":env_id,"ports":[]}))
+    print("PASS a listed port of a running desktop is proxied for the MCP token, not the session", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"
@@ -1275,5 +1346,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,linked_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

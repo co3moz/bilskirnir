@@ -562,6 +562,11 @@ export const fr: Messages = {
   "spec.readOnly": "Lecture seule",
   "spec.removeMount": "Retirer le montage",
   "spec.mountsHint": "Les volumes montés sont exclus des instantanés.",
+  "spec.proxiedPorts": "Ports relayés",
+  "spec.proxiedPortsHint":
+    "Ports de programmes du bureau que les agents munis du jeton MCP atteignent par Bilskirnir, séparés par des virgules.",
+  "spec.ports.one": "{count} port relayé",
+  "spec.ports.other": "{count} ports relayés",
 
   "identity.title": "Identité de la machine",
   "identity.description":
@@ -571,6 +576,7 @@ export const fr: Messages = {
   "identity.machineId": "Identifiant de machine",
   "identity.unset": "Défini à la recréation",
   "identity.fromImage": "Celui de l'image",
+
   "desktop.connection.connecting": "Connexion…",
   "desktop.connection.connected": "Connecté",
   "desktop.connection.disconnected": "Déconnecté",
@@ -610,7 +616,7 @@ export const fr: Messages = {
   "settings.unchanged": "Aucun réglage modifié.",
   "settings.title": "Réglages du conteneur",
   "settings.description":
-    "Le nom, l'accès à Internet et les limites de ressources s'appliquent au conteneur en cours d'exécution. Les autres modifications nécessitent un nouveau conteneur ; ses fichiers sont conservés.",
+    "Le nom, l'accès à Internet, les ports relayés et les limites de ressources s'appliquent au conteneur en cours d'exécution. Les autres modifications nécessitent un nouveau conteneur ; ses fichiers sont conservés.",
   "settings.saveRestart": "Enregistrer et redémarrer",
   "parameter.name": "Nom de la variable",
   "parameter.namePattern":

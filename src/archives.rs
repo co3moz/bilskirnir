@@ -108,11 +108,10 @@ impl ArchiveInfo {
 pub async fn export(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
-    headers: HeaderMap,
+    token: auth::Session,
 ) -> Result<Response> {
     let record: ImageRecord = app.db.get("image", &id)?;
     let permit = transfer_permit(&app)?;
-    let token = auth::cookie(&headers);
     let (ascii, full) = file_names(&record.name);
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
     let (job_id, _) = jobs::start(
@@ -168,6 +167,7 @@ pub async fn import(
     State(app): State<Arc<App>>,
     Query(request): Query<Import>,
     headers: HeaderMap,
+    token: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     if request.size > app.config.archive_limit {
@@ -196,7 +196,6 @@ pub async fn import(
         return Err(anyhow!("Invalid image name or description").into());
     }
     let permit = transfer_permit(&app)?;
-    let token = auth::cookie(&headers);
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (accepted, was_accepted) = oneshot::channel();
     let waiting = app.clone();
@@ -281,7 +280,7 @@ impl App {
         job_id: &str,
         record: &ImageRecord,
         body: &mpsc::Sender<std::io::Result<Bytes>>,
-        token: Option<String>,
+        token: auth::Session,
     ) -> anyhow::Result<Value> {
         let info = self
             .inspect("image", &record.image_id)
@@ -360,7 +359,7 @@ impl App {
         id: &str,
         request: Import,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: oneshot::Sender<()>,
     ) -> anyhow::Result<Value> {
         self.append_log(

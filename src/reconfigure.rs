@@ -23,6 +23,7 @@ const EDITABLE: &[&str] = &[
     "hostname",
     "mac_address",
     "machine_id",
+    "ports",
     "cpus",
     "memory_mb",
     "shm_mb",
@@ -84,6 +85,8 @@ pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     };
     note(old.name != new.name, true, "name");
     note(old.internet != new.internet, true, "internet");
+    // The manager proxies the ports itself; Docker publishes none of them.
+    note(old.ports != new.ports, true, "ports");
     // `docker update` changes or adds a limit, but silently ignores a request to remove one.
     note(old.cpus != new.cpus, new.cpus.is_some(), "cpus");
     note(

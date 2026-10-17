@@ -49,11 +49,10 @@ const EXTRACT_LIMIT: Duration = Duration::from_secs(3600);
 pub async fn export(
     State(app): State<Arc<App>>,
     Path(name): Path<String>,
-    headers: HeaderMap,
+    token: auth::Session,
 ) -> Result<Response> {
     let volume = app.open_volume(&name).await?;
     let permit = transfer_permit(&app)?;
-    let token = auth::cookie(&headers);
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
     let (job_id, _) = jobs::start(
         app,
@@ -103,6 +102,7 @@ pub async fn import(
     State(app): State<Arc<App>>,
     Query(request): Query<Import>,
     headers: HeaderMap,
+    token: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     if request.size > app.config.archive_limit {
@@ -134,7 +134,6 @@ pub async fn import(
         ));
     }
     let permit = transfer_permit(&app)?;
-    let token = auth::cookie(&headers);
     let (accepted, was_accepted) = oneshot::channel();
     let waiting = app.clone();
     let session = token.clone();
@@ -204,7 +203,7 @@ impl App {
         job_id: &str,
         volume: &Volume,
         body: &mpsc::Sender<std::io::Result<Bytes>>,
-        token: Option<String>,
+        token: auth::Session,
     ) -> anyhow::Result<Value> {
         self.append_log(job_id, &format!("Exporting the files of {}.", volume.name))?;
         self.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
@@ -280,7 +279,7 @@ impl App {
         job_id: &str,
         request: Import,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: oneshot::Sender<()>,
     ) -> anyhow::Result<Value> {
         let volume = self
@@ -325,7 +324,7 @@ impl App {
         volume: &Volume,
         request: &Import,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: oneshot::Sender<()>,
     ) -> anyhow::Result<u64> {
         let progress =
