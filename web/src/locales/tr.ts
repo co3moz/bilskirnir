@@ -59,6 +59,7 @@ export const tr: Messages = {
   "job.image-import": "İmaj içe aktarma",
   "job.volume-export": "Volume dışa aktarma",
   "job.volume-import": "Volume içe aktarma",
+  "job.volume-extract": "Volume'a arşiv açma",
   "jobs.target.container": "Konteyner {id}",
   "jobs.target.image": "İmaj {id}",
   "jobs.log.queued": "Başlaması bekleniyor…",

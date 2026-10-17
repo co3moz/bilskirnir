@@ -278,3 +278,87 @@ async fn tar_that_stops_reading_is_told_apart() {
     .unwrap_err();
     assert!(error.is::<Stopped>(), "{error}");
 }
+
+#[tokio::test]
+async fn an_extract_is_refused_before_anything_is_created() {
+    let app = app(false);
+    for (query, content_type, expected) in [
+        (
+            "path=/project&size=99999999",
+            "application/octet-stream",
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "path=/project",
+            "text/plain",
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        ),
+        (
+            "path=project",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "path=/a/../b",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "path=/a//b",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "size=10",
+            "application/octet-stream",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = crate::router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/volumes/project/extract?{query}"))
+                    .header("host", "localhost:8080")
+                    .header("content-type", content_type)
+                    .header("x-wsld-request", "1")
+                    .body(Body::from(vec![0; 10]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{query}");
+    }
+    assert!(app.db.list::<crate::model::Job>("job").unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_refusal_before_the_upload_keeps_its_status() {
+    let app = app(false);
+    // A folder that exists answers 409, as the volume file routes do, not a generic 400.
+    let (accepted, was_accepted) = oneshot::channel();
+    let (_done, outcome) = oneshot::channel();
+    let logged = refuse(
+        accepted,
+        Error(StatusCode::CONFLICT, "/project already exists".into()),
+    );
+    assert_eq!(logged.to_string(), "/project already exists");
+    let refused = answer(&app, "job".into(), was_accepted, outcome, None)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        (refused.0, refused.1.as_str()),
+        (StatusCode::CONFLICT, "/project already exists")
+    );
+    // A job that ended without a word answers with its error.
+    let (accepted, was_accepted) = oneshot::channel::<Result<()>>();
+    let (done, outcome) = oneshot::channel();
+    drop(accepted);
+    done.send(Err("tar: This does not look like a tar archive".into()))
+        .unwrap();
+    let refused = answer(&app, "job".into(), was_accepted, outcome, None)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.0, StatusCode::BAD_REQUEST);
+    assert!(refused.1.contains("tar archive"), "{}", refused.1);
+}

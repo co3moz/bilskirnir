@@ -59,6 +59,7 @@ export const fr: Messages = {
   "job.image-import": "Import d'image",
   "job.volume-export": "Export de volume",
   "job.volume-import": "Import de volume",
+  "job.volume-extract": "Extraction dans un volume",
   "jobs.target.container": "Conteneur {id}",
   "jobs.target.image": "Image {id}",
   "jobs.log.queued": "En attente de démarrage…",

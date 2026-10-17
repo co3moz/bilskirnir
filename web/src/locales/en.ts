@@ -63,6 +63,7 @@ export const en = {
   "job.image-import": "Import image",
   "job.volume-export": "Export volume",
   "job.volume-import": "Import volume",
+  "job.volume-extract": "Extract into volume",
 
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",

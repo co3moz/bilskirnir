@@ -762,6 +762,44 @@ try:
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"
+    # An archive unpacks into a new folder of the volume this running desktop mounts, which sees
+    # it at once, owned by the desktop user. An existing folder, the volume's root while it holds
+    # files, a missing volume and the manager's own volume are refused; a failed extract leaves
+    # no folder.
+    def extract(name, path, data):
+        query = urllib.parse.urlencode({"path": path, "size": len(data)})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/{name}/extract?{query}", data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Wsld-Request": "1"})
+        with client.open(request, timeout=130) as response:
+            return json.loads(response.read())
+    project = io.BytesIO()
+    with tarfile.open(fileobj=project, mode="w:gz") as archive:
+        for name, content in {"src/main.cs": b"class Main {}\n", "README.md": b"worktree\n"}.items():
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = len(content), 0o644
+            archive.addfile(info, io.BytesIO(content))
+    project = project.getvalue()
+    extracted = job(extract(share, "/worktree", project))
+    assert extracted == {"volume": share, "path": "/worktree", "bytes": len(project)}, extracted
+    assert docker("exec", container, "cat", "/shared/worktree/src/main.cs") == b"class Main {}\n"
+    assert docker("exec", container, "stat", "-c", "%U", "/shared/worktree", "/shared/worktree/src", "/shared/worktree/README.md") == b"desktop\ndesktop\ndesktop\n"
+    missing_volume = f"wsld-test-missing-{tag}"
+    for name, path, status in [(share, "/worktree", 409), (share, "/", 409), (share, "/absent/worktree", 400), (missing_volume, "/worktree", 404), (volume, "/worktree", 403)]:
+        try:
+            extract(name, path, project); raise AssertionError(f"extract into {name}:{path} accepted")
+        except urllib.error.HTTPError as error:
+            assert error.code == status, (name, path, error.code)
+    assert json.loads(docker("volume", "inspect", missing_volume, check=False) or b"[]") == []
+    assert docker("exec", container, "cat", "/shared/worktree/README.md") == b"worktree\n"
+    try:
+        started = extract(share, "/broken", project[: len(project) // 2])
+    except urllib.error.HTTPError as error:
+        assert error.code == 400, error.code
+    else:
+        finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
+        assert finished["status"] == "failed", finished
+    assert subprocess.run(["docker", "exec", container, "test", "-e", "/shared/broken"]).returncode != 0
+    assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
+    print("PASS archives unpack into a new folder of a mounted volume as the desktop user, never over one", flush=True)
     docker("exec",container,"ln","-s","/tmp","/home/desktop/Downloads/escape")
     for target in ["/etc", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
         try:
