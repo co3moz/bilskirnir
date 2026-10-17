@@ -552,6 +552,11 @@ export const tr: Messages = {
   "spec.readOnly": "Salt okunur",
   "spec.removeMount": "Bağlamayı kaldır",
   "spec.mountsHint": "Bağlı volume'ler anlık görüntülere dahil edilmez.",
+  "spec.proxiedPorts": "Yönlendirilen portlar",
+  "spec.proxiedPortsHint":
+    "Masaüstündeki programların, MCP token'ı olan ajanların Bilskirnir üzerinden ulaştığı portları; virgülle ayrılır.",
+  "spec.ports.one": "{count} yönlendirilen port",
+  "spec.ports.other": "{count} yönlendirilen port",
   "desktop.connection.connecting": "Bağlanıyor…",
   "desktop.connection.connected": "Bağlandı",
   "desktop.connection.disconnected": "Bağlantı kesildi",
@@ -591,7 +596,7 @@ export const tr: Messages = {
   "settings.unchanged": "Hiçbir ayar değişmedi.",
   "settings.title": "Konteyner ayarları",
   "settings.description":
-    "Ad, internet ve kaynak sınırları çalışan konteynere uygulanır. Diğer değişiklikler yeni bir konteyner gerektirir; dosyaları korunur.",
+    "Ad, internet, yönlendirilen portlar ve kaynak sınırları çalışan konteynere uygulanır. Diğer değişiklikler yeni bir konteyner gerektirir; dosyaları korunur.",
   "settings.saveRestart": "Kaydet ve yeniden başlat",
   "parameter.name": "Değişken adı",
   "parameter.namePattern": "Büyük harf, rakam ve alt çizgi; harfle başlamalı",

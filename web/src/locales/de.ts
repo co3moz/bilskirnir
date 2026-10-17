@@ -559,6 +559,11 @@ export const de: Messages = {
   "spec.readOnly": "Schreibgeschützt",
   "spec.removeMount": "Einhängepunkt entfernen",
   "spec.mountsHint": "Eingehängte Volumes sind von Snapshots ausgenommen.",
+  "spec.proxiedPorts": "Weitergeleitete Ports",
+  "spec.proxiedPortsHint":
+    "Ports von Programmen im Desktop, die Agenten mit dem MCP-Token über Bilskirnir erreichen, durch Kommas getrennt.",
+  "spec.ports.one": "{count} weitergeleiteter Port",
+  "spec.ports.other": "{count} weitergeleitete Ports",
   "desktop.connection.connecting": "Verbindung wird hergestellt…",
   "desktop.connection.connected": "Verbunden",
   "desktop.connection.disconnected": "Getrennt",
@@ -599,7 +604,7 @@ export const de: Messages = {
   "settings.unchanged": "Keine Einstellungen geändert.",
   "settings.title": "Container-Einstellungen",
   "settings.description":
-    "Name, Internet und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
+    "Name, Internet, weitergeleitete Ports und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
   "settings.saveRestart": "Speichern und neu starten",
   "parameter.name": "Variablenname",
   "parameter.namePattern":

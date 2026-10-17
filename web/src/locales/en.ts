@@ -579,6 +579,11 @@ export const en = {
   "spec.readOnly": "Read-only",
   "spec.removeMount": "Remove mount",
   "spec.mountsHint": "Mounted volumes are excluded from snapshots.",
+  "spec.proxiedPorts": "Proxied ports",
+  "spec.proxiedPortsHint":
+    "Ports of programs in the desktop that agents with the MCP token reach through Bilskirnir, separated by commas.",
+  "spec.ports.one": "{count} proxied port",
+  "spec.ports.other": "{count} proxied ports",
 
   "desktop.connection.connecting": "Connecting…",
   "desktop.connection.connected": "Connected",
@@ -623,7 +628,7 @@ export const en = {
   "settings.unchanged": "No settings changed.",
   "settings.title": "Container settings",
   "settings.description":
-    "Name, internet and resource limits apply to the running container. Other changes need a new container; its files are kept.",
+    "Name, internet, proxied ports and resource limits apply to the running container. Other changes need a new container; its files are kept.",
   "settings.saveRestart": "Save and restart",
 
   "parameter.name": "Variable name",

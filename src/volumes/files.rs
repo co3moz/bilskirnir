@@ -370,6 +370,7 @@ pub async fn upload(
     Path(name): Path<String>,
     Query(request): Query<Upload>,
     headers: HeaderMap,
+    session: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     if request.size > app.config.upload_limit {
@@ -396,7 +397,7 @@ pub async fn upload(
             "Two uploads are already in progress. Try again shortly.".into(),
         )
     })?;
-    let revoked = app.session_revoked(auth::cookie(&headers));
+    let revoked = app.session_revoked(session);
     let transfer = app.volume_write(&name, async |volume| {
         deliver(&app, volume, &request, body).await
     });

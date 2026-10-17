@@ -10,7 +10,8 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 62 tools: commands, files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 63 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Servers inside a desktop**, such as an editor's own MCP server, reachable by agents through the manager on the ports you allow.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.
