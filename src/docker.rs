@@ -174,9 +174,13 @@ impl App {
             .cloned()
             .collect::<Vec<_>>();
         image_volumes_mounted(&image, &all_mounts)?;
+        let container = format!("wsld-{id}");
+        let mut spec = spec;
+        // A container from a snapshot gets an identity of its own, not the source container's.
+        crate::identity::assign(&mut spec, &container);
         let env = Container {
             id: id.into(),
-            container: format!("wsld-{id}"),
+            container,
             private_network: format!("wsld-{id}-private"),
             egress_network: format!("wsld-{id}-egress"),
             source_image_id: image_id.into(),
@@ -214,16 +218,13 @@ impl App {
         if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
             bail!("Manager label does not match");
         }
+        let existing = self.optional_inspect("container", &env.container).await?;
         // A container recreated from the source image lacks what the compose setup changed.
-        if env.working_image.is_none()
-            && self
-                .optional_inspect("container", &env.container)
-                .await?
-                .is_none()
-        {
+        if env.working_image.is_none() && existing.is_none() {
             crate::compose::setup_again(&mut env);
-            self.db.put(CONTAINERS, id, &env)?;
         }
+        crate::identity::adopt(&mut env, existing.as_ref());
+        self.db.put(CONTAINERS, id, &env)?;
         let result = self.provision(&env, manager).await;
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
         self.db.put(CONTAINERS, id, &env)?;
@@ -280,25 +281,23 @@ impl App {
                 .get(&env.private_network)
                 .is_none()
             {
-                self.docker(&[
-                    "network",
-                    "connect",
-                    private["Id"].as_str().unwrap(),
-                    container_id,
-                ])
-                .await?;
+                self.connect_network(env, private["Id"].as_str().unwrap(), container_id)
+                    .await?;
             }
             let mut saved = env.clone();
             self.set_internet(&mut saved, env.spec.internet).await?;
             if info["State"]["Running"] != true {
+                // Also a container an earlier attempt created without its machine ID.
+                self.write_machine_id(env).await?;
                 self.docker(&["start", container_id]).await?;
             }
             return Ok(());
         }
         let args = self.container_args(env);
         self.docker_args(&args).await?;
+        self.write_machine_id(env).await?;
         if env.spec.internet {
-            self.docker(&["network", "connect", &env.egress_network, &env.container])
+            self.connect_network(env, &env.egress_network, &env.container)
                 .await?;
         }
         self.docker(&["start", &env.container]).await?;
@@ -329,6 +328,13 @@ impl App {
         .into_iter()
         .map(str::to_owned)
         .collect();
+        if let Some(hostname) = &env.spec.hostname {
+            args.extend(["--hostname".into(), hostname.clone()]);
+        }
+        if let Some(mac) = &env.spec.mac_address {
+            // For the private network; the internet network gets it when it is connected.
+            args.extend(["--mac-address".into(), mac.clone()]);
+        }
         let envs = [
             ("DESKTOP_RESOLUTION", env.spec.resolution.clone()),
             ("DESKTOP_SUDO", env.spec.sudo.to_string()),
@@ -400,14 +406,11 @@ impl App {
         Self::check_network(env, &network, false)?;
         let container_id = info["Id"].as_str().context("Missing container ID")?;
         let network_id = network["Id"].as_str().context("Missing network ID")?;
-        if enabled != connected {
-            self.docker(&[
-                "network",
-                if enabled { "connect" } else { "disconnect" },
-                network_id,
-                container_id,
-            ])
-            .await?;
+        if enabled && !connected {
+            self.connect_network(env, network_id, container_id).await?;
+        } else if !enabled && connected {
+            self.docker(&["network", "disconnect", network_id, container_id])
+                .await?;
         }
         env.spec.internet = enabled;
         self.db.put(CONTAINERS, &env.id, env)?;
@@ -524,12 +527,13 @@ impl App {
         self.inspect("image", &env.source_image_id)
             .await
             .context("Source image is missing; the container was left unchanged")?;
-        if self
-            .optional_inspect("container", &env.container)
-            .await?
-            .is_some()
-        {
-            let owned = self.owned(&env).await?;
+        let existing = match self.optional_inspect("container", &env.container).await? {
+            Some(_) => Some(self.owned(&env).await?),
+            None => None,
+        };
+        // The reset keeps the desktop's identity, also one it had before identities were kept.
+        crate::identity::adopt(&mut env, existing.as_ref());
+        if let Some(owned) = existing {
             self.docker(&[
                 "rm",
                 "--force",
@@ -565,12 +569,7 @@ impl App {
         if info["State"]["Running"] != true {
             bail!("Container is not running");
         }
-        let ip = info["NetworkSettings"]["Networks"][&env.private_network]["IPAddress"]
-            .as_str()
-            .context("Missing private network address")?;
-        ip.parse::<std::net::Ipv4Addr>()
-            .context("Invalid Docker IP address")?;
-        Ok(format!("{ip}:5900"))
+        Ok(format!("{}:5900", private_ip(env, &info)?))
     }
     pub fn append_log(&self, id: &str, line: &str) -> Result<()> {
         let mut job: Job = self.db.get("job", id)?;
@@ -718,4 +717,13 @@ pub(crate) fn image_volumes_mounted(image: &Value, mounts: &[Mount]) -> Result<(
         }
     }
     Ok(())
+}
+/// The desktop's address on its private network, which only the manager shares with it, from
+/// `docker inspect` of its container.
+pub(crate) fn private_ip(env: &Container, info: &Value) -> Result<std::net::Ipv4Addr> {
+    info["NetworkSettings"]["Networks"][&env.private_network]["IPAddress"]
+        .as_str()
+        .context("Missing private network address")?
+        .parse()
+        .context("Invalid Docker IP address")
 }

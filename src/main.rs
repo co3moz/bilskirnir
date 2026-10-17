@@ -14,16 +14,19 @@ mod error;
 mod exec;
 mod files;
 mod gamepad;
+mod identity;
 mod jobs;
 mod mcp;
 mod media;
 mod model;
 mod process;
+mod proxy;
 mod pulls;
 mod reconfigure;
 mod recordings;
 mod stages;
 mod terminal;
+mod transfers;
 mod uploads;
 mod usage;
 mod volumes;
@@ -34,7 +37,7 @@ use axum::{
     Router,
     http::{HeaderValue, header},
     middleware,
-    routing::{get, post},
+    routing::{any, get, post},
 };
 use std::{
     collections::HashMap,
@@ -58,6 +61,8 @@ pub struct App {
     archives: Arc<tokio::sync::Semaphore>,
     /// Resource usage of the running containers over the last 30 minutes, in memory only.
     usage: usage::Usage,
+    /// One-time transfer links issued over MCP and not used yet.
+    transfers: transfers::Links,
 }
 fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
@@ -214,10 +219,25 @@ fn router(app: Arc<App>) -> Router {
     Router::new().merge(protected).merge(mcp::router(app.clone()))
         .route("/api/session",get(api::session))
         .route("/api/login",post(auth::login))
+        // A transfer link authorizes itself, so it stays outside protect().
+        .route(
+            "/api/transfers/{token}",
+            any(transfers::transfer).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                usize::try_from(app.config.archive_limit.max(app.config.upload_limit))
+                    .unwrap_or(usize::MAX),
+            )),
+        )
+        // The MCP token opens a desktop's proxied ports, never the dashboard's cookie.
+        .route("/api/containers/{id}/ports/{port}", any(proxy::proxy))
+        .route("/api/containers/{id}/ports/{port}/", any(proxy::proxy))
+        .route("/api/containers/{id}/ports/{port}/{*path}", any(proxy::proxy))
         .route("/healthz",get(||async { "ok" }))
         .fallback_service(ServeDir::new(&app.config.web).append_index_html_on_directories(true))
         .layer(axum::extract::DefaultBodyLimit::max(1_100_000))
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(|req: &axum::extract::Request| {
+            // DefaultMakeSpan's span, without the credential a transfer link carries in its path.
+            tracing::debug_span!("request", method = %req.method(), uri = %transfers::traced(req.uri()), version = ?req.version())
+        }))
         .layer(middleware::from_fn_with_state(app.clone(), auth::check_host))
         .layer(middleware::from_fn(|req:axum::extract::Request,next:middleware::Next|async move {
             let api=req.uri().path().starts_with("/api/") || req.uri().path().starts_with("/mcp");
@@ -230,7 +250,8 @@ fn router(app: Arc<App>) -> Router {
             let h=res.headers_mut();
             h.insert(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff"));
             h.insert(header::REFERRER_POLICY,HeaderValue::from_static("same-origin"));
-            h.insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
+            // Appended: a proxied desktop service keeps its sandbox policy alongside this one.
+            h.append(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'"));
             if api { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-store")); }
             else if assets && found { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("public, max-age=31536000, immutable")); }
             else { h.insert(header::CACHE_CONTROL,HeaderValue::from_static("no-cache")); }
@@ -282,6 +303,7 @@ async fn main() -> anyhow::Result<()> {
         desktop_inputs: tokio::sync::Semaphore::new(4),
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
         usage: usage::Usage::default(),
+        transfers: transfers::Links::default(),
     });
     usage::spawn(app.clone());
     let reconcile = app.clone();

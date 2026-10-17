@@ -5,8 +5,8 @@ use crate::{
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     Json,
-    extract::{Request, State},
-    http::{HeaderMap, StatusCode, header},
+    extract::{FromRequestParts, Request, State},
+    http::{HeaderMap, StatusCode, header, request::Parts},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -23,6 +23,29 @@ pub fn cookie(headers: &HeaderMap) -> Option<String> {
         .ok()?
         .split(';')
         .find_map(|p| p.trim().strip_prefix("wsld_session=").map(str::to_owned))
+}
+/// What a long transfer answers to once it has begun. A dashboard request's session cookie ends
+/// it when the session signs out or expires. A one-time transfer link was checked when its
+/// request arrived and belongs to no session, so nothing revokes it. No request extracts `Link`;
+/// only the transfer route passes it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Session {
+    Cookie(Option<String>),
+    Link,
+}
+impl From<Option<String>> for Session {
+    fn from(token: Option<String>) -> Self {
+        Self::Cookie(token)
+    }
+}
+impl<S: Send + Sync> FromRequestParts<S> for Session {
+    type Rejection = std::convert::Infallible;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        Ok(Self::Cookie(cookie(&parts.headers)))
+    }
 }
 pub fn origin_matches(headers: &HeaderMap) -> bool {
     let Some(origin) = headers.get(header::ORIGIN).and_then(|h| h.to_str().ok()) else {
@@ -71,12 +94,17 @@ impl App {
             _ => false,
         }
     }
-    pub async fn session_revoked(&self, token: Option<String>) {
-        if !self.config.auth {
-            std::future::pending::<()>().await;
-            return;
-        }
+    /// Resolves once `session` no longer authorizes the work it started: at once for a request
+    /// without a session cookie, never while sign-in is off or for a transfer link.
+    pub async fn session_revoked(&self, session: impl Into<Session>) {
+        let token = match session.into() {
+            _ if !self.config.auth => None,
+            Session::Link => None,
+            Session::Cookie(None) => return,
+            Session::Cookie(Some(token)) => Some(token),
+        };
         let Some(token) = token else {
+            std::future::pending::<()>().await;
             return;
         };
         loop {

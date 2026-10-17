@@ -61,11 +61,10 @@ const UPLOADED: &[&str] = &["--no-same-permissions"];
 pub async fn export(
     State(app): State<Arc<App>>,
     Path(name): Path<String>,
-    headers: HeaderMap,
+    token: auth::Session,
 ) -> Result<Response> {
     let volume = app.open_volume(&name).await?;
     let permit = transfer_permit(&app)?;
-    let token = auth::cookie(&headers);
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
     let (job_id, _) = jobs::start(
         app,
@@ -117,6 +116,7 @@ pub async fn import(
     State(app): State<Arc<App>>,
     Query(request): Query<Import>,
     headers: HeaderMap,
+    token: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     check_upload(&app, request.size, &headers)?;
@@ -133,8 +133,7 @@ pub async fn import(
         ));
     }
     let permit = transfer_permit(&app)?;
-    let session = auth::cookie(&headers);
-    let token = session.clone();
+    let session = token.clone();
     let (accepted, was_accepted) = oneshot::channel();
     let (job_id, outcome) = jobs::start(
         app.clone(),
@@ -166,21 +165,21 @@ pub async fn extract(
     Path(name): Path<String>,
     Query(request): Query<Extract>,
     headers: HeaderMap,
+    token: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     check_upload(&app, request.size, &headers)?;
-    let session = auth::cookie(&headers);
-    extract_archive(app, name, request, body, session).await
+    extract_archive(app, name, request, body, token).await
 }
 
-/// An extract once its upload has passed `check_upload`. `session` is the sign-in whose end
-/// cancels the transfer, as for every other archive transfer.
+/// An extract once its upload has passed `check_upload`. `session` is what ends the transfer
+/// early, as for every other archive transfer: a dashboard sign-out, or nothing for a link.
 pub(crate) async fn extract_archive(
     app: Arc<App>,
     name: String,
     request: Extract,
     body: Body,
-    session: Option<String>,
+    session: auth::Session,
 ) -> Result<Json<Value>> {
     crate::apps::directory(&request.path)
         .map_err(|_| anyhow!("Use a canonical absolute folder path without dot segments"))?;
@@ -213,7 +212,7 @@ async fn answer(
     job_id: String,
     accepted: oneshot::Receiver<Result<()>>,
     outcome: jobs::Outcome,
-    session: Option<String>,
+    session: auth::Session,
 ) -> Result<Json<Value>> {
     tokio::select! {
         result = accepted => match result {
@@ -285,7 +284,7 @@ impl App {
         job_id: &str,
         volume: &Volume,
         body: &mpsc::Sender<std::io::Result<Bytes>>,
-        token: Option<String>,
+        token: auth::Session,
     ) -> anyhow::Result<Value> {
         self.append_log(job_id, &format!("Exporting the files of {}.", volume.name))?;
         self.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
@@ -361,7 +360,7 @@ impl App {
         job_id: &str,
         request: Import,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: Accepted,
     ) -> anyhow::Result<Value> {
         let volume = self
@@ -412,7 +411,7 @@ impl App {
         name: &str,
         request: Extract,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: Accepted,
     ) -> anyhow::Result<Value> {
         let volume = match self.open_volume(name).await {
@@ -515,7 +514,7 @@ impl App {
         unpacking: Unpacking,
         size: Option<u64>,
         body: Body,
-        token: Option<String>,
+        token: auth::Session,
         accepted: Accepted,
     ) -> anyhow::Result<u64> {
         let Unpacking {

@@ -43,6 +43,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         desktop_inputs: tokio::sync::Semaphore::new(4),
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
         usage: usage::Usage::default(),
+        transfers: transfers::Links::default(),
     })
 }
 fn spec() -> model::ContainerSpec {
@@ -50,14 +51,14 @@ fn spec() -> model::ContainerSpec {
         .unwrap()
 }
 
-fn mcp_app() -> Arc<App> {
+pub(crate) fn mcp_app() -> Arc<App> {
     let mut app = app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.mcp_enabled = true;
     config.mcp_token = Some("test-token-with-at-least-32-characters".into());
     app
 }
-async fn mcp_request(
+pub(crate) async fn mcp_request(
     app: Arc<App>,
     method: &str,
     params: serde_json::Value,
@@ -240,7 +241,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 63);
+    assert_eq!(tools.len(), 64);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);

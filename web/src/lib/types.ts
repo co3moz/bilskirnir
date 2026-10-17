@@ -12,6 +12,12 @@ export type ContainerSpec = {
   microphone: boolean
   sudo: boolean
   gamepad: boolean
+  /** The machine identity; `null` on containers created before identities were kept. */
+  hostname?: string | null
+  mac_address?: string | null
+  machine_id?: string | null
+  /** Ports inside the desktop that the manager proxies for holders of the MCP token. */
+  ports: number[]
   cpus: number | null
   memory_mb: number | null
   shm_mb: number

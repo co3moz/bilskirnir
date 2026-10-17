@@ -14,7 +14,7 @@ The **Dashboard** sums up the host: how many containers exist and run, jobs in p
 
 ## Create and connect
 
-Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone and a virtual gamepad device for agents on or off; hover or focus one to see what it does. **Advanced settings** holds the resolution, shared memory, CPU and memory limits and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction.
+Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone and a virtual gamepad device for agents on or off; hover or focus one to see what it does. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
 
 After creation finishes, select **Connect**. The card preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the container's actions menu or its details panel to stop, restart, change settings, inspect or delete it. A desktop's address, such as `#/desktop/<id>`, can be bookmarked.
 
@@ -158,7 +158,9 @@ docker cp wsld-CONTAINER_ID:/home/desktop/Downloads/result ./result
 
 ## Change a container's settings
 
-Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad or volumes. The image cannot change; take a snapshot or reset the container instead.
+Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
+
+**Machine identity** shows the hostname, MAC address and machine ID that software inside the desktop sees, such as a license bound to one machine. A container keeps them through resets, retries and settings changes, while a new container, also one from a snapshot, gets its own. Change them only to let this container take over the identity of one it replaces; they can be changed but not cleared. A container created before Bilskirnir kept identities shows them empty until it is next recreated, and keeps the machine ID of its image until one is set here. The details, including which Docker releases keep the internet interface's MAC address, are in [the API guide](API.md#machine-identity).
 
 The name, internet access and a new CPU or memory limit apply while the container keeps running. Docker fixes the other settings, and removing a limit, when it creates a container, so changing them creates a new one: Bilskirnir stops the container, saves its files to an image, starts a new container from it with the new settings and removes the old one. The dialog says so before applying. Open applications close, but installed software and files in the container are kept, as are named volumes. If the new container cannot start, the previous one is restored.
 

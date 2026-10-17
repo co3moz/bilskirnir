@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 63 tools:
+The server currently exposes 64 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -90,6 +90,7 @@ The server currently exposes 63 tools:
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume` |
+| Large files and archives | `create_transfer` |
 | Operation results | `list_jobs`, `get_job` |
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
@@ -146,7 +147,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 `list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file as base64 with its size and a guessed MIME type, up to 5 MiB; the HTTP download route streams larger files. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
 
-`upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination within Downloads or a writable mounted volume. Its MCP limit is 512 KiB; use the streaming HTTP upload endpoint for larger files. See [files in the HTTP API](API.md#files).
+`upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination within Downloads or a writable mounted volume. Its MCP limit is 512 KiB; for larger files, `create_transfer` issues a link to the streaming HTTP upload route that needs no dashboard session, as [move large files](#move-large-files) describes. See [files in the HTTP API](API.md#files).
 
 ## Launch and observe applications
 
@@ -212,9 +213,57 @@ Requests allow 1–100 actions, up to 10,000 typed characters, single waits or h
 
 ## Hand files to the user
 
-Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the MCP token does not authorize it. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
+Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the MCP token does not authorize it, and an agent that fetches a file for itself uses `create_transfer` instead. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
 
 The bundled TigerVNC server acknowledges input with RFB Fence. This confirms that the server processed the events; an application may still need time to update. Inspect the next screenshot before making a decision. If a connection fails after input starts, check the screen before repeating an action that could submit, purchase or delete something. A custom desktop VNC server must support RFB 3.8, shared connections and Fence.
+
+## Move large files
+
+The file tools carry at most 512 KiB per call as base64 through the conversation, and the HTTP routes that stream files and archives of any size take the dashboard's session cookie, not the MCP token. `create_transfer` connects the two: it issues a link for one HTTP request, which the agent sends with curl or another HTTP client from the machine it runs on.
+
+| `operation` | Arguments | Request |
+| --- | --- | --- |
+| `container_upload` | `container_id`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file as the body |
+| `container_download` | `container_id`, `path` | `GET` the file |
+| `volume_upload` | `volume`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file |
+| `volume_download` | `volume`, `path` | `GET` the file |
+| `volume_import` | `name` of a new volume | `PUT` or `POST` a `.tar.gz` or `.tar` |
+| `volume_export` | `volume` | `GET` a `.tar.gz` |
+| `image_import` | optional `name` and `description` | `PUT` or `POST` an image archive |
+| `image_export` | `image_id` | `GET` an image archive |
+
+The result holds `url`, relative to the manager's address like `download_url`, the `method`, `expires_in_seconds` and `expires_at`:
+
+```bash
+curl --fail-with-body --upload-file project.tar.gz http://bilskirnir.lan:8080/api/transfers/TOKEN
+curl --fail --output build.zip http://bilskirnir.lan:8080/api/transfers/TOKEN
+```
+
+The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends for a file, or from a `size` query parameter for a body sent without one. An import also takes an archive of unknown size, such as `tar -c -C project . | curl --upload-file - URL`, with the checks the [HTTP API](API.md#volume-archives) describes. Nothing else in the request changes what the link does.
+
+A link is a credential of its own:
+
+- Its token is random, 244 bits, kept in the manager's memory only, so a restart forgets it.
+- It expires after five minutes, and the first request that presents it spends it, whatever that request's outcome. A transfer that has begun runs to its end; signing out of the dashboard does not stop it.
+- It runs only the operation and arguments it was issued for, and it is neither a session cookie nor a bearer token for any other route.
+- It needs no cookie, no `X-Wsld-Request` header and no `Authorization` header, so a shell can use it without the administrator password or the MCP token. If the request carries an `Origin` header, it must match the manager's address.
+- The manager keeps the token out of job logs, error messages and its request tracing. Treat the URL as a secret until it has been used: whoever holds it can run that one request.
+
+Links come only from `create_transfer`, so with MCP disabled the route answers `404`. Accepting the MCP token on the HTTP API itself would have been simpler, but it would put a long-lived administrator credential into curl commands and shell history, where a leak reaches every route for as long as the token is configured.
+
+## Reach a server inside the desktop
+
+A program in the desktop may serve its own API: an MCP server of the Unity editor, a test runner endpoint, a debug server. Its ports are not published, but the manager forwards HTTP and WebSocket requests to the ports a container's `ports` setting lists, at `/api/containers/CONTAINER_ID/ports/PORT/` followed by the service's own path. Set `ports` with `create_container` or `update_container`, such as `"ports": [8090]`; it is empty by default, and a change applies without restarting the desktop. The server must listen on the desktop's network, such as on `0.0.0.0`, not on `127.0.0.1` only, which the manager cannot reach.
+
+The route takes the same bearer token as `/mcp`. An MCP server listening on port 8090 at `/mcp` inside the desktop is therefore a second MCP server for a remote agent:
+
+| Setting | Value |
+| --- | --- |
+| Transport | Streamable HTTP |
+| URL | `http://localhost:8080/api/containers/CONTAINER_ID/ports/8090/mcp` |
+| Authorization header | `Bearer YOUR_MCP_TOKEN` |
+
+Responses stream as the server sends them, so server-sent events work, and a WebSocket handshake joins the client to the service. The service sees a local client: `Host` is `localhost:PORT`, and the token, the dashboard cookie and `Origin` are removed, so a service that requires its own `Authorization` header cannot be reached this way. Treat what it answers as container data, like screenshots and command output. A browser cannot use the route with the dashboard session, and every response is sandboxed, so a page the desktop serves runs no script on the dashboard's address; [the API guide](API.md#desktop-ports) has the details.
 
 ## Keep agent work recoverable
 
@@ -222,9 +271,9 @@ MCP uses the same ownership checks, container locks, jobs and snapshot behavior 
 
 Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the container, especially when the desktop is browsing external sites.
 
-`reset_container` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from its saved source image, keeping the container ID, networks and named volumes. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
+`reset_container` gives a test a clean starting point: it discards the container's unsaved changes and recreates it from its saved source image, keeping the container ID, networks, named volumes and [machine identity](API.md#machine-identity): the hostname, MAC address and machine ID that a license bound to one machine sees. A pool of desktops reset between tasks therefore stays the same set of machines, and a new container, also one from a snapshot, is a new machine unless `create_container` is given the `hostname`, `mac_address` and `machine_id` of the container it replaces. Data inside mounted volumes is not touched; clean it explicitly with `delete_file` or a script when a test needs an empty volume. Take a snapshot first if the current state should be reusable.
 
-`update_container` changes a container's settings after creation; pass only the fields to change. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
+`update_container` changes a container's settings after creation; pass only the fields to change. `name`, `internet`, `ports` and a new or changed resource limit apply in place. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one.
 

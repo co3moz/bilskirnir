@@ -191,6 +191,9 @@ export const es: Messages = {
   "restart.field.microphone": "el micrófono",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "el gamepad",
+  "restart.field.hostname": "el nombre de host",
+  "restart.field.mac_address": "la dirección MAC",
+  "restart.field.machine_id": "el ID de máquina",
   "restart.field.shm_mb": "la memoria compartida",
   "restart.field.mounts": "los volúmenes",
   "restart.field.cpus": "quitar el límite de CPU",
@@ -564,6 +567,21 @@ export const es: Messages = {
   "spec.readOnly": "Solo lectura",
   "spec.removeMount": "Quitar punto de montaje",
   "spec.mountsHint": "Los volúmenes montados no se incluyen en las instantáneas.",
+  "spec.proxiedPorts": "Puertos redirigidos",
+  "spec.proxiedPortsHint":
+    "Puertos de programas del escritorio a los que llegan los agentes con el token MCP a través de Bilskirnir, separados por comas.",
+  "spec.ports.one": "{count} puerto redirigido",
+  "spec.ports.other": "{count} puertos redirigidos",
+
+  "identity.title": "Identidad de la máquina",
+  "identity.description":
+    "Lo que el software del escritorio, como una licencia vinculada a una máquina, ve de la máquina. Los restablecimientos y los cambios de configuración la conservan. Cámbiala solo para asumir la identidad de un contenedor al que este reemplaza.",
+  "identity.hostname": "Nombre de host",
+  "identity.macAddress": "Dirección MAC",
+  "identity.machineId": "ID de máquina",
+  "identity.unset": "Se asigna al recrearlo",
+  "identity.fromImage": "El de la imagen",
+
   "desktop.connection.connecting": "Conectando…",
   "desktop.connection.connected": "Conectado",
   "desktop.connection.disconnected": "Desconectado",
@@ -603,7 +621,7 @@ export const es: Messages = {
   "settings.unchanged": "No se cambió ningún ajuste.",
   "settings.title": "Ajustes del contenedor",
   "settings.description":
-    "El nombre, Internet y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
+    "El nombre, Internet, los puertos redirigidos y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
   "settings.saveRestart": "Guardar y reiniciar",
   "parameter.name": "Nombre de la variable",
   "parameter.namePattern": "Letras mayúsculas, dígitos y guiones bajos, empezando por una letra",

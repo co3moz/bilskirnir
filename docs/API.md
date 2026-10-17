@@ -20,7 +20,7 @@ curl --cookie-jar bilskirnir.cookies \
 
 Send that cookie with subsequent requests. POST and DELETE requests also need `X-Wsld-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
 
-The `wsld_session` cookie and `X-Wsld-Request` header retain their names for compatibility. The MCP bearer token authenticates `/mcp`, not these API routes. Sessions last 12 hours; `/api/logout` revokes the session.
+The `wsld_session` cookie and `X-Wsld-Request` header retain their names for compatibility. The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
 
 ## Endpoints
 
@@ -104,6 +104,8 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and optional `size` into a new volume; returns a job. |
 | POST | `/api/volumes/{name}/extract` | Stream a `.tar.gz` or `.tar` with `path` and optional `size` into a new folder of the volume; returns a job. |
 | POST | `/api/volumes/{name}/copy` | Copy the volume's files into a new volume named by `name`; returns a job. |
+| GET, PUT, POST | `/api/transfers/{token}` | Run the one upload, download, import or export a [transfer link](#transfer-links) authorizes; needs no session. |
+| Any | `/api/containers/{id}/ports/{port}/{path}` | HTTP or WebSocket to a [port inside the desktop](#desktop-ports) that its `ports` setting lists; needs the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -146,14 +148,28 @@ Creation accepts `name`, `image` and these optional fields:
 | `audio`, `microphone` | `false` | Enable supported browser media; microphone also needs audio. |
 | `sudo` | `true` | Allow the desktop user to use sudo. |
 | `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
+| `hostname` | The Docker container name | The desktop's [machine identity](#machine-identity): one label of letters, digits and hyphens, at most 63 characters. |
+| `mac_address` | Random | A unicast MAC address such as `02:42:ac:11:00:02`. Capitals and hyphens are accepted and stored as lowercase with colons. |
+| `machine_id` | Random | 32 hex digits, written to `/etc/machine-id` and `/var/lib/dbus/machine-id`. A UUID with hyphens is accepted. |
+| `ports` | `[]` | Ports inside the desktop that the [port proxy](#desktop-ports) forwards to, at most 32, from 1 to 65535. |
 | `cpus`, `memory_mb` | No limit | Positive CPU count and at least 256 MiB of memory. |
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. The manager's own volumes, such as its data volume, are refused, here and whenever the container is created again. |
 | `parameters` | `{}` | Values for the [compose](#composes) parameters of the image, by name. |
 
+### Machine identity
+
+`hostname`, `mac_address` and `machine_id` are what software inside the desktop, such as a license bound to one machine, sees of the machine it runs on. Docker gives every container it creates a new hostname and new MAC addresses, so the manager keeps all three in the container's `spec` and gives them to every Docker container it creates for it: a reset, a retry and a settings change that recreates the container keep them. A new container gets its own, also one started from a snapshot of another container. Leave them out unless one container is meant to take over the identity of another it replaces.
+
+- The hostname is passed to `docker create`; `/etc/hostname` and `/etc/hosts` follow it.
+- The MAC address is the private network's address from creation. The internet network gets the same address when it is connected, so whichever interface software reads, it sees one address; Docker numbers a container's interfaces in no fixed order. Only the Engine API takes an address for a network connected after creation, and Docker Engine 29 (API 1.54) is the first release that uses it. Earlier releases, and an installation whose `DOCKER_HOST` is not a Unix socket, give the internet interface an address of their own at every start.
+- The machine ID is written to `/etc/machine-id` and `/var/lib/dbus/machine-id` in the created container before it starts. The catalog images carry one ID that every container of a release shares, and a snapshot carries the ID of the container it was taken from, so neither is used as it is.
+
+Records saved before identities were kept have `null` for all three until a Docker container is next created for them. They then take the hostname of the container being replaced, and its MAC address if it is running, since Docker gives a stopped container its address only when it starts; without such a container they get new ones. Their machine ID stays `null`, which leaves the ID their image or commit carries, as before, until the settings set one.
+
 ## Change settings after creation
 
-`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
+`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `hostname`, `mac_address`, `machine_id`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
 
 With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
 
@@ -161,7 +177,7 @@ With `"dry_run": true` the request is validated and answered at once with `live`
 curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Wsld-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
 ```
 
-A feature the installation has switched off cannot be turned on. The job's result repeats the `live` and `restart` lists.
+A feature the installation has switched off cannot be turned on, and an identity field can be changed but not set back to `null`. The job's result repeats the `live` and `restart` lists.
 
 Start/stop/restart uses `{"action":"start"}`, internet uses `{"enabled":false}` and snapshot uses `{"name":"Editor installed","description":"Optional note"}`. Actions on a container are serialized. Deleting it preserves named volumes and saved images, but removes unsaved changes in its container layer.
 
@@ -360,6 +376,35 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+
+## Transfer links
+
+`/api/transfers/{token}` runs one of the transfer routes above for a client that has neither a session nor the administrator password: an agent that holds the MCP token gets the link from the MCP tool `create_transfer`, which names the operation and its arguments. The [MCP guide](MCP.md#move-large-files) lists the operations: uploading into a container or volume, downloading from one, and importing or exporting a volume or image archive.
+
+The request runs the route the link stands for, with that route's limits, locks, job and answer, and the arguments the link was issued with. Uploads and imports take `PUT` or `POST` with the file or archive as the body, whatever its `Content-Type`; their size is `Content-Length`, or a `size` query parameter when the body is sent without one. A file upload is refused with 411 when neither is there, while an import then takes the archive as one of unknown size, as described under [volume archives](#volume-archives). Downloads and exports take `GET`. No other query parameter is accepted.
+
+```bash
+curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
+```
+
+The token replaces the cookie and the `X-Wsld-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
+
+## Desktop ports
+
+A desktop publishes no ports. The manager reaches it on the private network it shares with it, and `/api/containers/{id}/ports/{port}/{path}` forwards HTTP and WebSocket requests there, to a port the container's `ports` setting lists. A program in the desktop that serves its own API, such as an editor's MCP server, a test runner or a debugger, is then usable without a script job per request. `ports` is empty by default; it is set at creation or changed later, and a change applies at once because the manager, not Docker, does the forwarding. The service must listen on the desktop's network, such as on `0.0.0.0`: one that listens on `127.0.0.1` only is out of the manager's reach.
+
+```bash
+curl --header 'Authorization: Bearer YOUR_MCP_TOKEN' \
+  http://localhost:8080/api/containers/CONTAINER_ID/ports/8090/status
+```
+
+The service receives the method, `{path}` with the query, the body and the other headers as sent, with `Host: localhost:PORT`, as a local client would. Responses stream as the service sends them, server-sent events included, and only the connection to the service has a time limit of 10 seconds. A WebSocket handshake that the service accepts joins the two connections until either side closes. A port not listed answers 403, a stopped container 409, and a service that does not answer 502.
+
+Whatever a desktop serves would appear on the dashboard's address, and a desktop browses sites nobody vouches for, so the route keeps the dashboard's session away from it:
+
+- It takes the MCP bearer token, as `/mcp` does, and never the session cookie, so a browser does not open it signed in. With MCP disabled it answers 404; with `MCP_AUTH_MODE=none` it needs no token, like `/mcp`. A request with an `Origin` header must come from the manager's own address.
+- The `Authorization` header, the `wsld_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
+- Every response carries `Content-Security-Policy: sandbox` beside the dashboard's own policy, and `X-Content-Type-Options: nosniff`. A browser that renders one, as it could with `MCP_AUTH_MODE=none`, runs no script in it and treats it as an origin of its own. `Set-Cookie` and `Clear-Site-Data` from the service are dropped, and a redirect to a path of the service stays under the proxy's prefix.
 
 ## Screenshots
 

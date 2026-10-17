@@ -100,6 +100,7 @@ copied_volume = f"wsld-test-copied-{tag}"
 mcp_copy_volume = f"wsld-test-mcp-copy-{tag}"
 device_volume = f"wsld-test-device-{tag}"
 device_copy_volume = f"wsld-test-device-copy-{tag}"
+linked_volume = f"wsld-test-linked-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
 absent_volume = f"wsld-test-absent-{tag}"
@@ -197,6 +198,16 @@ def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False
         return json.loads(response.read())
 
 
+def transfer_link(arguments):
+    return tool("create_transfer", arguments)["structuredContent"]
+
+
+def without_session(url, data=None, method=None):
+    """A request with no cookie, no X-Wsld-Request and no bearer token, as a shell sends a link."""
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{url}", data=data, method=method)
+    return urllib.request.build_opener().open(request, timeout=130)
+
+
 def import_archive(path, **query):
     size = os.path.getsize(path)
     query = urllib.parse.urlencode({"size": size, **query})
@@ -251,6 +262,20 @@ def ready(container):
         raise
 
 
+def machine(container):
+    """The hostname, machine IDs and interface MAC addresses the desktop itself reports."""
+    script = 'echo "h $(hostname)"; echo "i $(cat /etc/machine-id)"; echo "i $(cat /var/lib/dbus/machine-id)"; for i in /sys/class/net/eth*; do echo "m $(cat $i/address)"; done'
+    lines = [line.split(" ", 1) for line in docker("exec", container, "sh", "-c", script).decode().splitlines()]
+    values = lambda kind: [value.strip() for key, value in lines if key == kind and value.strip()]
+    # An empty file, as /etc/machine-id is in the XFCE image, is left out.
+    return {"hostname": values("h")[0], "machine_ids": values("i"), "macs": sorted(values("m"))}
+
+
+def recorded(spec, interfaces=1):
+    """What `machine` reports for a container whose record holds `spec`."""
+    return {"hostname": spec["hostname"], "machine_ids": [spec["machine_id"]] * 2, "macs": [spec["mac_address"]] * interfaces}
+
+
 try:
     port = start_manager()
     login()
@@ -268,7 +293,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 63
+    assert len(mcp("tools/list")["tools"]) == 64
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -469,6 +494,33 @@ try:
     assert json.loads(docker("volume", "inspect", device_copy_volume, check=False) or b"[]") == []
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
     print("PASS a volume copies into a new one owned by the desktop user, and never over one", flush=True)
+    # An MCP client moves archives with one-time links, without the dashboard session.
+    exported_link = transfer_link({"operation": "volume_export", "volume": restored_volume})
+    assert exported_link["method"] == "GET" and exported_link["url"].startswith("/api/transfers/"), exported_link
+    with without_session(exported_link["url"]) as response:
+        linked_export_job = response.headers["X-Job-Id"]
+        linked_archive = response.read()
+    assert job({"job_id": linked_export_job})["bytes"] == len(linked_archive)
+    assert exported_link["url"].rsplit("/", 1)[1] not in api(f"jobs/{linked_export_job}")["log"]
+    try:
+        without_session(exported_link["url"]); raise AssertionError("a transfer link was used twice")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
+    imported_link = transfer_link({"operation": "volume_import", "name": linked_volume})
+    assert imported_link["method"] == "PUT", imported_link
+    with without_session(imported_link["url"], data=linked_archive, method="PUT") as response:
+        assert job(json.loads(response.read()))["name"] == linked_volume
+    assert api(f"volumes/{linked_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
+    with without_session(transfer_link({"operation": "volume_download", "volume": linked_volume, "path": "/notes/blob.bin"})["url"]) as response:
+        assert response.read() == b"\x00\x01\x02"
+    # A link runs its own operation only: an upload link is no download link.
+    wrong_link = transfer_link({"operation": "volume_import", "name": f"wsld-test-never-{tag}"})
+    try:
+        without_session(wrong_link["url"]); raise AssertionError("an import link downloaded")
+    except urllib.error.HTTPError as error:
+        assert error.code == 405
+    assert json.loads(docker("volume", "inspect", f"wsld-test-never-{tag}", check=False) or b"[]") == []
+    print("PASS transfer links export, import and download a volume without a session", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
     except urllib.error.HTTPError as error:
@@ -792,6 +844,39 @@ try:
     assert docker("exec",container,"cat",uploaded["path"]) == payload
     upload(env_id,"binary & notes.bin",b"replaced",replace=True)
     assert docker("exec",container,"cat",uploaded["path"]) == b"replaced"
+    pushed = transfer_link({"operation":"container_upload","container_id":env_id,"destination":"/home/desktop/Downloads","name":"linked.bin"})
+    with without_session(pushed["url"],data=payload,method="PUT") as response:
+        assert json.loads(response.read())["bytes"] == len(payload)
+    assert docker("exec",container,"cat","/home/desktop/Downloads/linked.bin") == payload
+    with without_session(transfer_link({"operation":"container_download","container_id":env_id,"path":"/home/desktop/Downloads/linked.bin"})["url"]) as response:
+        assert response.read() == payload
+    try:
+        without_session(pushed["url"],data=b"again",method="PUT"); raise AssertionError("an upload link was used twice")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
+    print("PASS transfer links upload to and download from a container without a session", flush=True)
+    # A program's own HTTP service in the desktop, through the manager, for the MCP token only.
+    listed = mcp_job(tool("update_container",{"container_id":env_id,"ports":[8765]}))
+    assert listed["result"]["live"] == ["ports"] and listed["result"]["restart"] == [], listed
+    served = tool("launch_application",{"container_id":env_id,"command":"python3","args":["-m","http.server","8765","--bind","0.0.0.0","--directory","/home/desktop/Downloads"],"name":"proxy test"})["structuredContent"]["application_id"]
+    proxied = f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8765/linked.bin"
+    def through_proxy(url=proxied):
+        request = urllib.request.Request(url,headers={"Authorization":f"Bearer {mcp_token}"})
+        with urllib.request.build_opener().open(request,timeout=30) as response:
+            return response.read(), response.headers.get_all("Content-Security-Policy")
+    proxied_body, policies = wait_for(through_proxy, 60)
+    assert proxied_body == payload and "sandbox" in policies, policies
+    try:
+        client.open(proxied,timeout=30); raise AssertionError("the dashboard session opened a proxied port")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401
+    try:
+        through_proxy(f"http://127.0.0.1:{port}/api/containers/{env_id}/ports/8766/"); raise AssertionError("an unlisted port was proxied")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403
+    tool("stop_application",{"container_id":env_id,"application_id":served})
+    mcp_job(tool("update_container",{"container_id":env_id,"ports":[]}))
+    print("PASS a listed port of a running desktop is proxied for the MCP token, not the session", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"
@@ -1142,6 +1227,10 @@ try:
     container_ids.append(agent_env)
     ready(f"wsld-{agent_env}")
     assert tool("get_container", {"container_id":agent_env})["structuredContent"]["state"] == "running"
+    # The container's machine identity is its record's, from the files the image carried too.
+    identity = tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"]
+    assert identity["hostname"] == f"wsld-{agent_env}", identity
+    assert machine(f"wsld-{agent_env}") == recorded(identity), (machine(f"wsld-{agent_env}"), identity)
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     tool("write_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt","data":"snapshot from MCP"})
     agent_snapshot = mcp_job(tool("snapshot", {"container_id":agent_env,"name":"Agent snapshot"}))["result"]
@@ -1153,11 +1242,27 @@ try:
     assert tool("read_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt"}, allow_error=True)["isError"]
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     print("PASS container reset discards the container layer and keeps the pinned image", flush=True)
+    assert tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"] == identity
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":True}))
+    # The internet interface gets the same address where the Engine API uses one given on connect.
+    engine_api = tuple(int(part) for part in docker("version", "--format", "{{.Server.APIVersion}}").decode().split("."))
+    online = machine(f"wsld-{agent_env}")
+    if engine_api >= (1, 54):
+        assert online == recorded(identity, interfaces=2), (online, identity)
+    else:
+        assert identity["mac_address"] in online["macs"] and len(online["macs"]) == 2, online
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":False}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"stop"}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"start"}))
     ready(f"wsld-{agent_env}")
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
+    # A retry that has to create the container again keeps the identity as well.
+    docker("rm", "--force", f"wsld-{agent_env}")
+    mcp_job(tool("retry_container", {"container_id":agent_env}))
+    ready(f"wsld-{agent_env}")
+    assert machine(f"wsld-{agent_env}") == recorded(identity)
+    print("PASS machine identity survives reset, internet changes, restart and a recreating retry", flush=True)
     deleted = mcp_job(tool("delete_container", {"container_id":agent_env}))
     assert deleted["result"]["volumes_preserved"] and deleted["result"]["images_preserved"]
     assert "Named volumes and saved images were preserved" in deleted["log"]
@@ -1166,6 +1271,10 @@ try:
     container_ids.append(clone)
     ready(f"wsld-{clone}")
     assert tool("read_file", {"container_id":clone,"path":"/home/desktop/from-agent.txt"})["structuredContent"]["data"] == "snapshot from MCP"
+    # The snapshot carries the source's machine ID; the clone is another machine all the same.
+    clone_identity = tool("get_container", {"container_id":clone})["structuredContent"]["spec"]
+    assert all(clone_identity[key] != identity[key] for key in ("hostname", "mac_address", "machine_id")), clone_identity
+    assert machine(f"wsld-{clone}") == recorded(clone_identity)
     mcp_job(tool("delete_container", {"container_id":clone}))
     container_ids.remove(clone)
     print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
@@ -1244,6 +1353,7 @@ try:
     container_ids.append(edit)
     edit_container = f"wsld-{edit}"
     ready(edit_container)
+    edit_identity = api(f"containers/{edit}")["spec"]
     first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
     preview = api(f"containers/{edit}/settings", {"name": "Settings edited", "cpus": 2, "memory_mb": 2048, "dry_run": True})
     assert preview["live"] == ["name", "cpus", "memory_mb"] and preview["restart"] == [], preview
@@ -1273,6 +1383,22 @@ try:
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
     assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    # The new container has the old one's identity; another identity is a change that recreates it.
+    assert machine(edit_container) == recorded(edit_identity)
+    takeover = {"hostname": "unity-build", "mac_address": "02-00-00-00-00-0A", "machine_id": "8AED3E38-BA43-5C50-DEAD-B0896ACE189B"}
+    preview = api(f"containers/{edit}/settings", {**takeover, "dry_run": True})
+    assert preview["live"] == [] and preview["restart"] == ["hostname", "mac_address", "machine_id"], preview
+    assert refused(f"containers/{edit}/settings", {"hostname": None}) == 400
+    assert refused(f"containers/{edit}/settings", {"mac_address": "01:00:5e:00:00:01"}) == 400
+    job(api(f"containers/{edit}/settings", takeover))
+    image_refs.append(api(f"containers/{edit}")["working_image"]["reference"])
+    ready(edit_container)
+    second = json.loads(docker("inspect", edit_container))[0]
+    taken = {"hostname": "unity-build", "mac_address": "02:00:00:00:00:0a", "machine_id": "8aed3e38ba435c50deadb0896ace189b"}
+    assert {key: api(f"containers/{edit}")["spec"][key] for key in taken} == taken
+    assert machine(edit_container) == recorded(taken)
+    assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
+    print("PASS machine identity survives a settings recreation and moves to the values a takeover sets", flush=True)
     # A new container would get the manager's data volume, so the change stops nothing.
     refused_mount = mcp_job(tool("update_container", {"container_id": edit, "mounts": [{"volume": volume, "target": "/workspace"}]}), success=False)
     assert f"{volume} is the manager's own volume" in refused_mount["log"], refused_mount["log"]
@@ -1328,5 +1454,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

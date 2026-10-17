@@ -192,6 +192,9 @@ export const de: Messages = {
   "restart.field.microphone": "Mikrofon",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "Gamepad",
+  "restart.field.hostname": "Hostname",
+  "restart.field.mac_address": "MAC-Adresse",
+  "restart.field.machine_id": "Maschinen-ID",
   "restart.field.shm_mb": "gemeinsamer Speicher",
   "restart.field.mounts": "Volumes",
   "restart.field.cpus": "Entfernen des CPU-Limits",
@@ -568,6 +571,21 @@ export const de: Messages = {
   "spec.readOnly": "Schreibgeschützt",
   "spec.removeMount": "Einhängepunkt entfernen",
   "spec.mountsHint": "Eingehängte Volumes sind von Snapshots ausgenommen.",
+  "spec.proxiedPorts": "Weitergeleitete Ports",
+  "spec.proxiedPortsHint":
+    "Ports von Programmen im Desktop, die Agenten mit dem MCP-Token über Bilskirnir erreichen, durch Kommas getrennt.",
+  "spec.ports.one": "{count} weitergeleiteter Port",
+  "spec.ports.other": "{count} weitergeleitete Ports",
+
+  "identity.title": "Maschinenidentität",
+  "identity.description":
+    "Was Software im Desktop, etwa eine an einen Rechner gebundene Lizenz, vom Rechner sieht. Zurücksetzen und Änderungen der Einstellungen behalten sie bei. Ändern Sie sie nur, um die Identität eines Containers zu übernehmen, den dieser ersetzt.",
+  "identity.hostname": "Hostname",
+  "identity.macAddress": "MAC-Adresse",
+  "identity.machineId": "Maschinen-ID",
+  "identity.unset": "Wird beim Neuerstellen gesetzt",
+  "identity.fromImage": "Aus dem Image",
+
   "desktop.connection.connecting": "Verbindung wird hergestellt…",
   "desktop.connection.connected": "Verbunden",
   "desktop.connection.disconnected": "Getrennt",
@@ -608,7 +626,7 @@ export const de: Messages = {
   "settings.unchanged": "Keine Einstellungen geändert.",
   "settings.title": "Container-Einstellungen",
   "settings.description":
-    "Name, Internet und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
+    "Name, Internet, weitergeleitete Ports und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
   "settings.saveRestart": "Speichern und neu starten",
   "parameter.name": "Variablenname",
   "parameter.namePattern":

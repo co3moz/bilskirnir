@@ -343,9 +343,15 @@ async fn a_refusal_before_the_upload_keeps_its_status() {
         Error(StatusCode::CONFLICT, "/project already exists".into()),
     );
     assert_eq!(logged.to_string(), "/project already exists");
-    let refused = answer(&app, "job".into(), was_accepted, outcome, None)
-        .await
-        .unwrap_err();
+    let refused = answer(
+        &app,
+        "job".into(),
+        was_accepted,
+        outcome,
+        auth::Session::Link,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         (refused.0, refused.1.as_str()),
         (StatusCode::CONFLICT, "/project already exists")
@@ -356,9 +362,15 @@ async fn a_refusal_before_the_upload_keeps_its_status() {
     drop(accepted);
     done.send(Err("tar: This does not look like a tar archive".into()))
         .unwrap();
-    let refused = answer(&app, "job".into(), was_accepted, outcome, None)
-        .await
-        .unwrap_err();
+    let refused = answer(
+        &app,
+        "job".into(),
+        was_accepted,
+        outcome,
+        auth::Session::Link,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(refused.0, StatusCode::BAD_REQUEST);
     assert!(refused.1.contains("tar archive"), "{}", refused.1);
 }

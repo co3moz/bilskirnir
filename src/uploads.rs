@@ -111,6 +111,7 @@ pub async fn upload(
     Path(id): Path<String>,
     Query(request): Query<Upload>,
     headers: HeaderMap,
+    session: auth::Session,
     body: Body,
 ) -> Result<Json<Value>> {
     if request.size > app.config.upload_limit {
@@ -129,14 +130,7 @@ pub async fn upload(
             "Send a binary file body".into(),
         ));
     }
-    save_file(
-        &app,
-        id,
-        request,
-        body,
-        app.session_revoked(auth::cookie(&headers)),
-    )
-    .await
+    save_file(&app, id, request, body, app.session_revoked(session)).await
 }
 
 pub(crate) async fn save_file(

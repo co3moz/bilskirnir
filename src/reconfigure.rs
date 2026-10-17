@@ -20,6 +20,10 @@ const EDITABLE: &[&str] = &[
     "microphone",
     "sudo",
     "gamepad",
+    "hostname",
+    "mac_address",
+    "machine_id",
+    "ports",
     "cpus",
     "memory_mb",
     "shm_mb",
@@ -57,6 +61,17 @@ pub(crate) fn merged_spec(
     let spec: ContainerSpec =
         serde_json::from_value(value).context("Invalid container settings")?;
     spec.validate()?;
+    // Another value takes over another machine's identity; none would give the desktop a new
+    // one at its next recreation without saying so.
+    for (key, old, new) in [
+        ("hostname", &current.hostname, &spec.hostname),
+        ("MAC address", &current.mac_address, &spec.mac_address),
+        ("machine ID", &current.machine_id, &spec.machine_id),
+    ] {
+        if old.is_some() && new.is_none() {
+            bail!("A container's {key} can be changed but not removed");
+        }
+    }
     Ok(spec)
 }
 
@@ -70,6 +85,8 @@ pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     };
     note(old.name != new.name, true, "name");
     note(old.internet != new.internet, true, "internet");
+    // The manager proxies the ports itself; Docker publishes none of them.
+    note(old.ports != new.ports, true, "ports");
     // `docker update` changes or adds a limit, but silently ignores a request to remove one.
     note(old.cpus != new.cpus, new.cpus.is_some(), "cpus");
     note(
@@ -84,6 +101,11 @@ pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     note(old.microphone != new.microphone, false, "microphone");
     note(old.sudo != new.sudo, false, "sudo");
     note(old.gamepad != new.gamepad, false, "gamepad");
+    // Docker fixes the hostname and MAC address at creation, and software reads the machine ID
+    // when it starts.
+    note(old.hostname != new.hostname, false, "hostname");
+    note(old.mac_address != new.mac_address, false, "mac_address");
+    note(old.machine_id != new.machine_id, false, "machine_id");
     note(old.shm_mb != new.shm_mb, false, "shm_mb");
     let by_target = |mounts: &[Mount]| {
         let mut mounts = mounts.to_vec();
@@ -287,11 +309,13 @@ impl App {
             reference: reference.clone(),
         });
         env.spec = spec;
+        crate::identity::adopt(&mut env, Some(info));
         self.begin_stage(job_id, "create")?;
         let replaced = async {
             self.docker_args(&self.container_args(&env)).await?;
+            self.write_machine_id(&env).await?;
             if env.spec.internet {
-                self.docker(&["network", "connect", &env.egress_network, &env.container])
+                self.connect_network(&env, &env.egress_network, &env.container)
                     .await?;
             }
             if running {

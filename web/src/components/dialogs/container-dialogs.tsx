@@ -41,6 +41,7 @@ import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries
 import { parameterBody, composeFor } from "@/lib/compose"
 import type { ImageItem, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
+import { identityBody, identityDraft, IdentityFields, type IdentityDraft } from "./identity-fields"
 import { ParameterField } from "./parameter-field"
 import { specBody, specDraft, SpecFields, type SpecDraft } from "./spec-fields"
 
@@ -196,6 +197,9 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
   const spec = item?.spec
   const [name, setName] = React.useState(spec?.name ?? "")
   const [draft, setDraftState] = React.useState<SpecDraft>(() => specDraft(spec ?? {}, settings))
+  const [identity, setIdentityState] = React.useState<IdentityDraft>(() =>
+    identityDraft(spec ?? {})
+  )
   // A restart warning is confirmed for one set of values; editing the form asks again.
   const [notice, setNotice] = React.useState("")
   const { busy, error, submit } = useSubmit()
@@ -206,9 +210,13 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
     setNotice("")
     setDraftState(next)
   }
+  const setIdentity = (next: IdentityDraft) => {
+    setNotice("")
+    setIdentityState(next)
+  }
 
   const save = async () => {
-    const body = { name, ...specBody(draft) }
+    const body = { name, ...specBody(draft), ...identityBody(identity) }
     // The server decides what restarts the container; ask it first and warn once before applying.
     if (!notice) {
       const preview = await api<SettingsPreview>(`containers/${id}/settings`, {
@@ -260,6 +268,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
               // These settings are what this dialog is for, so they start in view.
               advancedOpen
             />
+            <IdentityFields draft={identity} onChange={setIdentity} spec={spec} />
           </div>
           {/* Outside the scrolling fields, next to the button whose label it changes. */}
           {notice && (

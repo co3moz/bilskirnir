@@ -20,8 +20,10 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
-pub(crate) use archive::{copy, export, extract, import};
-pub(crate) use files::{delete, download, list, make_directory, move_, read, upload, write};
+pub(crate) use archive::{Import, copy, export, extract, import};
+pub(crate) use files::{
+    DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
+};
 
 /// Where a helper mounts the volume.
 pub(crate) const MOUNT: &str = "/volume";

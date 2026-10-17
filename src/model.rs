@@ -34,6 +34,19 @@ pub struct ContainerSpec {
     /// Attach /dev/uinput so a virtual controller can be created inside the desktop.
     #[serde(default)]
     pub gamepad: bool,
+    /// The machine identity every Docker container created for this one gets (see `identity`).
+    /// A new container is given what its request leaves out; records saved before identities
+    /// were kept have none until another Docker container is created for them.
+    #[serde(default)]
+    pub hostname: Option<String>,
+    #[serde(default, deserialize_with = "crate::identity::mac_input")]
+    pub mac_address: Option<String>,
+    #[serde(default, deserialize_with = "crate::identity::machine_id_input")]
+    pub machine_id: Option<String>,
+    /// Ports inside the desktop that the manager proxies for holders of the MCP token. The
+    /// manager reaches them on the private network, so a change needs no new container.
+    #[serde(default)]
+    pub ports: Vec<u16>,
     pub cpus: Option<f64>,
     pub memory_mb: Option<u64>,
     #[serde(default = "shm")]
@@ -80,6 +93,24 @@ impl ContainerSpec {
         }
         if self.microphone && !self.audio {
             bail!("Enable audio to use the microphone");
+        }
+        if let Some(name) = &self.hostname {
+            crate::identity::hostname(name)?;
+        }
+        if let Some(mac) = &self.mac_address {
+            crate::identity::mac_address(mac)?;
+        }
+        if let Some(id) = &self.machine_id {
+            crate::identity::machine_id(id)?;
+        }
+        let mut ports = std::collections::HashSet::new();
+        if self.ports.len() > 32
+            || self
+                .ports
+                .iter()
+                .any(|port| *port == 0 || !ports.insert(port))
+        {
+            bail!("Proxied ports must be at most 32 different ports between 1 and 65535");
         }
         let mut targets = std::collections::HashSet::new();
         for mount in &self.mounts {
