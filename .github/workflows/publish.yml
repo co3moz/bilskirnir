@@ -56,6 +56,11 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
+      # The compiled dependencies, keyed by the toolchain and the manifests. Only master saves them,
+      # a tag run reads master's, since the image builds share the repository's cache space.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: Check MCP bridge
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Check backend
