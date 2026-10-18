@@ -274,6 +274,7 @@ export const fr: Messages = {
   "volumes.title": "Volumes nommés",
   "volumes.description":
     "Des fichiers qui survivent aux conteneurs. Les volumes sont exclus des instantanés ; parcourez-en un pour lire ou modifier ses fichiers.",
+  "volumes.filtered": "Seuls les volumes portant le label {label} sont listés (VOLUME_FILTER).",
   "volumes.new": "Nouveau volume",
   "volumes.loading": "Chargement des volumes…",
   "volumes.none": "Aucun volume.",

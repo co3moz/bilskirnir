@@ -276,6 +276,7 @@ export const de: Messages = {
   "volumes.title": "Benannte Volumes",
   "volumes.description":
     "Dateien, die Container überdauern. Volumes sind von Snapshots ausgenommen; öffnen Sie eines, um seine Dateien zu lesen oder zu ändern.",
+  "volumes.filtered": "Nur Volumes mit dem Label {label} werden aufgeführt (VOLUME_FILTER).",
   "volumes.new": "Neues Volume",
   "volumes.loading": "Volumes werden geladen…",
   "volumes.none": "Keine Volumes.",

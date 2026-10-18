@@ -135,7 +135,7 @@ impl App {
         // Cheap checks come before a catalog image download that can take minutes.
         crate::volumes::refuse_manager_volumes(&manager_info, &spec.mounts)?;
         for m in &spec.mounts {
-            self.inspect("volume", &m.volume)
+            self.chosen_volume(&m.volume)
                 .await
                 .context("Volume not found")?;
         }
@@ -158,7 +158,7 @@ impl App {
         // database either.
         crate::volumes::refuse_manager_volumes(&manager_info, &compose_mounts)?;
         for mount in &compose_mounts {
-            self.inspect("volume", &mount.volume)
+            self.chosen_volume(&mount.volume)
                 .await
                 .with_context(|| {
                     format!(
@@ -239,6 +239,8 @@ impl App {
         let manager_info = self.inspect("container", manager).await?;
         let mounts = env.mounts();
         crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
+        // These were chosen when the container was created, so a volume VOLUME_FILTER no longer
+        // lists stays mounted.
         for mount in &mounts {
             self.inspect("volume", &mount.volume).await.context(
                 "Configured volume is missing; setup stopped without creating an empty replacement",

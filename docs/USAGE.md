@@ -141,6 +141,8 @@ A `.tar` saved with `docker save` imports the same way, as long as it holds a de
 
 Create a named volume under **Volumes**, then mount it when creating a container. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths, read-only mounts over the desktop's home or configuration and the manager's own data volume, which holds its database, are rejected. **Volumes** labels that volume **Manager data** and offers no file browsing or export for it, and the volume choices of a mount or of a compose's volume parameter leave it out.
 
+**Volumes** lists only the volumes Bilskirnir created, imported or copied, which carry its label; volumes that other software made on the same Docker Engine stay hidden and cannot be mounted or opened. A container that already mounts such a volume keeps it. The installation's `VOLUME_FILTER` setting chooses the label, or shows every volume with `none` ([installation settings](INSTALLATION.md#settings)).
+
 The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
 
 **Export archive** on a volume's row downloads its files as a `.tar.gz`, and **Import volume** unpacks such an archive, or a `.tar`, into a new volume of the name you choose, for a backup or a move to another installation. An import never replaces an existing volume, and its files belong to the desktop user. **Jobs** shows both transfers.

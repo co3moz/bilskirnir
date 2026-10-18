@@ -105,6 +105,7 @@ linked_volume = f"wsld-test-linked-{tag}"
 installs_volume = f"wsld-test-installs-{tag}"
 cache_volume = f"wsld-test-cache-{tag}"
 absent_volume = f"wsld-test-absent-{tag}"
+outside_volume = f"wsld-test-outside-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
@@ -541,14 +542,31 @@ try:
             raise AssertionError(f"unsafe mount accepted: {target}")
         except urllib.error.HTTPError as error:
             assert error.code == 400
-    # The manager's data volume holds its database and sessions, so no desktop mounts it.
+    # The manager's data volume holds its database and sessions, so no desktop mounts it. It
+    # carries no Bilskirnir label, so the default VOLUME_FILTER leaves it out of the list too.
     marked = {item["Name"]: item["manager"] for item in api("volumes")}
-    assert marked[volume] is True and marked[share] is False, marked
+    assert volume not in marked and marked[share] is False, marked
+    assert json.loads(docker("volume", "inspect", share))[0]["Labels"].get("io.wsl-desktop.managed") == "true"
     before = len(api("containers"))
     manager_mount = api("containers", {"name": "manager-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": volume, "target": "/workspace", "readonly": True}]})
     failed = wait_for(lambda: (j if (j := api(f"jobs/{manager_mount['job_id']}"))["status"] not in ("queued", "running") else None))
     assert failed["status"] == "failed" and f"{volume} is the manager's own volume" in failed["log"], failed
     assert len(api("containers")) == before
+    # A volume made outside Bilskirnir is out of reach: not listed, its files and copy answer as
+    # for a missing volume, and no new container mounts it.
+    docker("volume", "create", outside_volume)
+    assert outside_volume not in {item["Name"] for item in api("volumes")}
+    for path, body in [(f"volumes/{outside_volume}/files/list", {"path": "/"}), (f"volumes/{outside_volume}/copy", {"name": f"wsld-test-never-{tag}"})]:
+        try:
+            api(path, body); raise AssertionError(f"{path} reached a filtered volume")
+        except urllib.error.HTTPError as error:
+            assert error.code == 404, (path, error.code)
+    outside_mount = api("containers", {"name": "outside-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": outside_volume, "target": "/workspace"}]})
+    failed = wait_for(lambda: (j if (j := api(f"jobs/{outside_mount['job_id']}"))["status"] not in ("queued", "running") else None))
+    assert failed["status"] == "failed" and "Volume not found" in failed["log"], failed
+    assert len(api("containers")) == before
+    assert json.loads(docker("volume", "inspect", f"wsld-test-never-{tag}", check=False) or b"[]") == []
+    print("PASS VOLUME_FILTER hides and refuses volumes made outside Bilskirnir", flush=True)
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/session", headers={"Host":"evil.example","Origin":"http://evil.example"})
     try:
         client.open(request); raise AssertionError("untrusted Host accepted")
@@ -1517,5 +1535,5 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,absent_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,absent_volume,outside_volume]: docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

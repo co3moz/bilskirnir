@@ -227,6 +227,8 @@ export type Settings = {
   archive_limit_bytes: number
   /** The template list the templates page reads, or `null` when the page is turned off. */
   templates_url: string | null
+  /** The label a volume needs to be listed and mounted, or `null` when every volume is. */
+  volume_filter: string | null
 }
 
 export type SystemInfo = {

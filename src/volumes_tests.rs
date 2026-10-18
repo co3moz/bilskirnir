@@ -1,7 +1,8 @@
 //! Pins down how a volume is opened: the helper container reaches nothing but the volume and
 //! works as the desktop user, its paths stay inside the volume, the manager's own volume is
-//! refused to helpers and desktops alike and marked in the volume list, and a request is checked
-//! before Docker is asked anything.
+//! refused to helpers and desktops alike and marked in the volume list, `VOLUME_FILTER` hides
+//! and refuses what it leaves out while every volume the manager creates passes it, and a
+//! request is checked before Docker is asked anything.
 use super::*;
 use crate::tests::app;
 use axum::{body::Body, http::Request};
@@ -206,6 +207,132 @@ async fn the_volume_list_marks_what_the_manager_mounts() {
         std::fs::read_to_string(&calls).unwrap(),
         "volume ls --format {{json .}}\n"
     );
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn a_filter_reads_labels_as_dockers_label_filter() {
+    use serde_json::json;
+    let volume = |labels: Value| json!({"Name": "v", "Labels": labels});
+    let managed = volume(json!({"io.wsl-desktop.managed": "true", "team": ""}));
+    let compose = volume(json!({"com.docker.compose.project": "db"}));
+    let bare = volume(Value::Null);
+    for volume in [&managed, &compose, &bare] {
+        assert!(listed(None, volume));
+    }
+    let default = Some("io.wsl-desktop.managed=true");
+    assert!(listed(default, &managed));
+    assert!(!listed(default, &compose));
+    assert!(!listed(default, &bare));
+    // A bare key asks for the label with any value, an empty one too; key=value for that value.
+    assert!(listed(Some("team"), &managed));
+    assert!(listed(Some("team="), &managed));
+    assert!(!listed(Some("team=unity"), &managed));
+    assert!(listed(Some("com.docker.compose.project"), &compose));
+    assert!(!listed(Some("com.docker.compose.project"), &managed));
+}
+
+#[test]
+fn every_volume_the_manager_creates_is_one_its_filter_lists() {
+    for filter in [
+        None,
+        Some("io.wsl-desktop.managed=true"),
+        Some("io.wsl-desktop.managed"),
+        Some("team"),
+        Some("team="),
+        Some("com.example.team=unity"),
+    ] {
+        let labels = labels(filter);
+        assert_eq!(labels[0], "io.wsl-desktop.managed=true");
+        // As `docker volume create --label` sets them: a bare key gets an empty value.
+        let set = labels
+            .iter()
+            .map(|label| {
+                let (key, value) = label.split_once('=').unwrap_or((label, ""));
+                (key.to_owned(), Value::String(value.into()))
+            })
+            .collect::<serde_json::Map<_, _>>();
+        assert_eq!(set.len(), labels.len(), "{labels:?}");
+        assert!(
+            listed(filter, &serde_json::json!({"Labels": set})),
+            "{filter:?}: {labels:?}"
+        );
+    }
+}
+
+#[test]
+fn volumes_are_created_in_one_place_only() {
+    // A volume created anywhere but `App::new_volume` would miss the filter's label and vanish
+    // from the listing, so no other code asks Docker to create one.
+    fn sources(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                sources(&path, found);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                found.push(path);
+            }
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&root, &mut files);
+    let mut creating = Vec::new();
+    for file in files {
+        let name = file.file_name().unwrap().to_string_lossy();
+        if name == "tests.rs" || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let code: String = std::fs::read_to_string(&file)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .flat_map(str::chars)
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let asks = code.match_indices("\"volume\"").any(|(at, _)| {
+            code[at..]
+                .chars()
+                .take(40)
+                .collect::<String>()
+                .contains("\"create\"")
+        });
+        if asks || code.contains("volumes/create") || code.contains("volumecreate") {
+            creating.push(file.strip_prefix(&root).unwrap().display().to_string());
+        }
+    }
+    assert_eq!(creating, ["volumes.rs"]);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_volume_filter_hides_and_refuses_what_it_leaves_out() {
+    use axum::extract::State;
+    let mut app = app(false);
+    let calls = crate::tests::manager_docker(&mut app);
+    Arc::get_mut(&mut app).unwrap().config.volume_filter =
+        crate::config::volume_filter(None).unwrap();
+    let listing = crate::api::volumes(State(app.clone())).await.unwrap().0;
+    assert_eq!(
+        listing,
+        serde_json::json!([{"Name": "project", "Driver": "local", "manager": false}])
+    );
+    // Docker filters the list; the manager's data volume carries no label and stays out.
+    assert!(
+        std::fs::read_to_string(&calls)
+            .unwrap()
+            .starts_with("volume ls --filter label=io.wsl-desktop.managed=true --format")
+    );
+    // Named in a request, a volume the filter leaves out is as missing as one that never was.
+    let refused = app.open_volume("outside").await.err().unwrap();
+    assert_eq!(refused.0, StatusCode::NOT_FOUND);
+    assert_eq!(app.open_volume("project").await.unwrap().name, "project");
+    assert!(app.chosen_volume("outside").await.is_err());
+    assert!(app.chosen_volume("project").await.is_ok());
+    // Without a filter, every volume is reachable.
+    Arc::get_mut(&mut app).unwrap().config.volume_filter = None;
+    assert_eq!(app.open_volume("outside").await.unwrap().name, "outside");
+    assert!(app.chosen_volume("outside").await.is_ok());
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
 
