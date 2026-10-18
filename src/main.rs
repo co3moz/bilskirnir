@@ -38,7 +38,7 @@ use axum::{
     Router,
     http::{HeaderValue, header},
     middleware,
-    routing::{any, get, post},
+    routing::{any, delete, get, post},
 };
 use std::{
     collections::HashMap,
@@ -198,11 +198,15 @@ fn router(app: Arc<App>) -> Router {
             get(compose::get).put(compose::set).delete(compose::remove),
         )
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
+        .route("/api/volumes/{name}", delete(volumes::remove))
         .route(
             "/api/volumes/import",
-            post(volumes::import).layer(tower_http::limit::RequestBodyLimitLayer::new(
-                usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
-            )),
+            post(volumes::import)
+                .layer(tower_http::limit::RequestBodyLimitLayer::new(
+                    usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
+                ))
+                // This path wins over `{name}`, and a volume may be called `import` too.
+                .delete(|app| volumes::remove(app, axum::extract::Path("import".into()))),
         )
         .route("/api/volumes/{name}/archive", get(volumes::export))
         .route("/api/volumes/{name}/copy", post(volumes::copy))

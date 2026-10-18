@@ -152,6 +152,8 @@ Mounting the same writable volume in two containers gives both access to the sam
 
 A volume that a compose created for one container says so under its name on **Volumes**: **Created for** links to that container, and **Owner deleted** marks one whose container was deleted while the volume stayed. When you delete a container that has such volumes, the delete dialog lists them under **Also delete the volumes created for this container**, which is off unless you turn it on. Turned on, it deletes those volumes and their files with the container, but never a volume you chose by name, and never one another container mounts.
 
+**Delete** on a volume's row deletes that volume and every file in it once you confirm, such as one marked **Owner deleted** or any other volume you no longer need. It cannot be undone; export an archive first if you may want the files again. A volume that a container mounts, through its volumes or its compose, stays: the dialog names the container, so remove the volume from its settings or delete the container first. **Manager data** has no **Delete**, and a volume that a container outside Bilskirnir still uses is refused as well.
+
 ## Upload files from the browser
 
 Drop files onto a running container card, the connected desktop or the upload dialog. You can also select **Upload files** to use the file picker.

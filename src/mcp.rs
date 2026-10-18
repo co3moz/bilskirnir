@@ -339,6 +339,11 @@ impl BilskirnirMcp {
                     .await?
                     .0
             }
+            "delete_volume" => {
+                Box::pin(volumes::remove(state, Path(string(&args, "name")?)))
+                    .await?
+                    .0
+            }
             "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
             "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
@@ -805,6 +810,15 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             &["volume", "name"],
             false,
             false,
+            false,
+        ),
+        tool(
+            "delete_volume",
+            "Delete a named volume and every file in it, such as one list_volumes shows with owner.deleted=true because its container was deleted without it. Cannot be undone. Refused for volumes marked manager=true, for a volume a managed container mounts through its volumes or its compose (the error names that container), and for one any other Docker container still uses; a missing volume is an error. Answers at once, without a job.",
+            json!({"name":text}),
+            &["name"],
+            false,
+            true,
             false,
         ),
         tool(

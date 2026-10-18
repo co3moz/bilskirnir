@@ -3,6 +3,7 @@ import {
   RiArchive2Line,
   RiDatabase2Line,
   RiAddLine,
+  RiDeleteBinLine,
   RiFileCopyLine,
   RiFolderOpenLine,
   RiImportLine,
@@ -163,6 +164,20 @@ const columns: DataColumn<Row>[] = [
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t("volumes.copy")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => openDialog({ kind: "volume-delete", name: row.original.Name })}
+                aria-label={t("volumes.deleteOf", { name: row.original.Name })}
+              >
+                <RiDeleteBinLine />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("volumes.delete")}</TooltipContent>
           </Tooltip>
           <Button
             variant="outline"

@@ -24,6 +24,13 @@ export function volumeUsers(name: string, containers: Pick<Container, "id" | "sp
   )
 }
 
+/** The names of the containers that keep the volume `name`, each container once: the manager
+ * refuses to delete a volume any container mounts, through its settings or its compose. */
+export const volumeHolders = (
+  name: string,
+  containers: Pick<Container, "id" | "spec" | "setup">[]
+) => [...new Map(volumeUsers(name, containers).map((user) => [user.id, user.name])).values()]
+
 /** The volumes created for the container `id`, which deleting it can remove too. */
 export const ownedVolumes = (volumes: Pick<Volume, "Name" | "owner">[], id: string) =>
   volumes

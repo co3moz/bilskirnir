@@ -13,6 +13,7 @@ import {
   volumeArchiveName,
   volumeArchiveUrl,
   volumeDownloadUrl,
+  volumeHolders,
   volumeUsers,
   type VolumeEntry,
 } from "../web/src/lib/volume-files"
@@ -156,6 +157,37 @@ test("a volume shows where its compose mounts it, and only its owner may delete 
   )
   // An older manager sends no owner, so nothing is offered for deletion.
   assert.deepEqual(ownedVolumes([{ Name: "wsld-e-workspace" }], "e"), [])
+})
+
+test("a volume any container mounts names each of those containers once", () => {
+  type Mount = { volume: string; target: string; readonly: boolean }
+  const mount = (volume: string, target = `/${volume}`): Mount => ({
+    volume,
+    target,
+    readonly: false,
+  })
+  const container = (id: string, name: string, mounts: Mount[], compose: Mount[] = []) => ({
+    id,
+    spec: { ...spec, name, mounts },
+    setup: {
+      status: "completed" as const,
+      image: "i",
+      parameters: {},
+      secrets: [],
+      mounts: compose,
+    },
+  })
+  const containers = [
+    // One container that mounts it twice, and two that share a name.
+    container("a", "Unity", [mount("projects", "/projects"), mount("projects", "/backup")]),
+    container("b", "Build", [], [mount("projects")]),
+    container("c", "Build", [mount("projects")]),
+    container("d", "Other", [mount("saves")]),
+  ]
+  assert.deepEqual(volumeHolders("projects", containers), ["Unity", "Build", "Build"])
+  assert.deepEqual(volumeHolders("saves", containers), ["Other"])
+  // An orphan, such as one whose owner was deleted without it, is held by nobody.
+  assert.deepEqual(volumeHolders("wsld-gone-cache", containers), [])
 })
 
 test("downloads name the volume and the path in the query", () => {

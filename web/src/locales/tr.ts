@@ -270,6 +270,14 @@ export const tr: Messages = {
   "volumes.copyDescription":
     "Tüm dosyaları yeni bir volume'a kopyalar, dosyalar masaüstü kullanıcısına ait olur. Tam bir kopya, volume kadar disk alanı kaplar.",
   "volumes.copyName": "Kopyanın adı",
+  "volumes.delete": "Volume'u sil",
+  "volumes.deleteOf": "Volume'u sil: {name}",
+  "volumes.deleteTitle": "Volume silinsin mi: {name}?",
+  "volumes.deleteDescription":
+    "Volume ve içindeki tüm dosyalar silinir. Bu işlem geri alınamaz; dosyalara yeniden ihtiyacınız olabilecekse önce bir arşiv dışa aktarın.",
+  "volumes.deleteMounted":
+    "Bağlı olduğu konteynerler: {containers}. Bir konteynerin bağladığı volume korunur: önce konteyneri silin ya da volume'u ayarlarından çıkarın.",
+  "volumes.deleted": "Volume silindi: {name}.",
   "volumes.import.arrived": "Arşiv ulaştı. Son dosyaları yazılıyor.",
   "volumes.import.writing": "Son dosyalar yazılıyor…",
   "volumes.import.description": "Bir volume'dan dışa aktarılmış arşivi yeni bir volume'a açar.",
