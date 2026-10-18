@@ -296,6 +296,14 @@ export const de: Messages = {
   "volumes.copyDescription":
     "Kopiert alle Dateien in ein neues Volume, sie gehören dem Desktop-Benutzer. Eine vollständige Kopie belegt so viel Speicherplatz wie das Volume.",
   "volumes.copyName": "Name der Kopie",
+  "volumes.delete": "Volume löschen",
+  "volumes.deleteOf": "{name} löschen",
+  "volumes.deleteTitle": "{name} löschen?",
+  "volumes.deleteDescription":
+    "Das Volume und alle Dateien darin werden gelöscht. Das lässt sich nicht rückgängig machen; exportieren Sie vorher ein Archiv, wenn Sie die Dateien noch brauchen könnten.",
+  "volumes.deleteMounted":
+    "Eingehängt in {containers}. Ein Volume, das ein Container einhängt, bleibt erhalten: Löschen Sie zuerst den Container, oder nehmen Sie das Volume aus seinen Einstellungen.",
+  "volumes.deleted": "Volume {name} gelöscht.",
   "volumes.import.arrived": "Das Archiv ist angekommen. Die letzten Dateien werden geschrieben.",
   "volumes.import.writing": "Die letzten Dateien werden geschrieben…",
   "volumes.import.description":

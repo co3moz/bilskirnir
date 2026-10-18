@@ -304,6 +304,14 @@ export const en = {
   "volumes.copyDescription":
     "Copies every file into a new volume, owned by the desktop user. A full copy takes as much disk space as the volume.",
   "volumes.copyName": "Name of the copy",
+  "volumes.delete": "Delete volume",
+  "volumes.deleteOf": "Delete {name}",
+  "volumes.deleteTitle": "Delete {name}?",
+  "volumes.deleteDescription":
+    "The volume and every file in it are deleted. This cannot be undone; export an archive first if you may need the files again.",
+  "volumes.deleteMounted":
+    "Mounted in {containers}. A volume a container mounts stays: delete the container, or take the volume out of its settings, first.",
+  "volumes.deleted": "Deleted volume {name}.",
   "volumes.import.arrived": "The archive arrived. Its last files are being written.",
   "volumes.import.writing": "Writing the last files…",
   "volumes.import.description": "Unpacks an archive exported from a volume into a new one.",

@@ -17,6 +17,7 @@ export type Dialog =
   | { kind: "volume-files"; name: string }
   | { kind: "volume-import" }
   | { kind: "volume-copy"; name: string }
+  | { kind: "volume-delete"; name: string }
   | { kind: "job"; id: string }
   | { kind: "log"; title: string; text: string; status?: string }
 

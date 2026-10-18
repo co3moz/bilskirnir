@@ -1,6 +1,7 @@
 //! Named volumes beyond listing and creating them: their files, read and changed from the
 //! dashboard without a container that mounts them, the manager's own volumes, which no helper
-//! or desktop gets and which a listing marks, and the volumes created for one container.
+//! or desktop gets and which a listing marks, the volumes created for one container, and
+//! deleting a volume that nothing mounts.
 //!
 //! `VOLUME_FILTER` names the label a volume needs for a request to reach it. Every volume the
 //! manager creates gets that label; the others stay out of the listing, and a request that names
@@ -15,6 +16,7 @@
 mod archive;
 mod files;
 mod owned;
+mod remove;
 
 use crate::{
     App,
@@ -31,6 +33,7 @@ pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };
 pub(crate) use owned::{RemovedVolumes, mark_owners, removable};
+pub(crate) use remove::{mounted_by, remove};
 
 /// Where a helper mounts the volume.
 pub(crate) const MOUNT: &str = "/volume";

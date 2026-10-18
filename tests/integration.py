@@ -113,6 +113,7 @@ image_refs = []
 # Volumes the manager names after this run's containers, which exist only once they are created.
 own_volumes = []
 foreign = f"wsld-test-foreign-{tag}"
+holder = f"wsld-test-holder-{tag}"
 port = None
 cookies = http.cookiejar.CookieJar()
 client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
@@ -306,7 +307,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 64
+    assert len(mcp("tools/list")["tools"]) == 65
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -563,6 +564,12 @@ try:
             api(path, body); raise AssertionError(f"{path} reached a filtered volume")
         except urllib.error.HTTPError as error:
             assert error.code == 404, (path, error.code)
+    # Deleting it is refused the same way, and it stays.
+    try:
+        api(f"volumes/{outside_volume}", method="DELETE"); raise AssertionError("a filtered volume was deleted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404, error.code
+    assert json.loads(docker("volume", "inspect", outside_volume))
     outside_mount = api("containers", {"name": "outside-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": outside_volume, "target": "/workspace"}]})
     failed = wait_for(lambda: (j if (j := api(f"jobs/{outside_mount['job_id']}"))["status"] not in ("queued", "running") else None))
     assert failed["status"] == "failed" and "Volume not found" in failed["log"], failed
@@ -1436,6 +1443,12 @@ try:
     assert own_image["compose"]["parameters"][0]["new_volume"] is True, own_image["compose"]
     own_base = {"image": own_image["image_id"], "internet": False}
     listed_names = lambda: {v["Name"] for v in api("volumes")}
+    def deletion_refused(path):
+        try:
+            api(path, method="DELETE")
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read() or b"{}").get("error", "")
+        raise AssertionError(f"DELETE {path} was accepted")
     before = listed_names()
     # A request refused before its job leaves no volume behind.
     assert refused("containers", {**own_base, "name": "own-refused", "mounts": [{"volume": share, "target": "/home/desktop/Projects"}]}) == 400
@@ -1454,6 +1467,9 @@ try:
     assert next(v for v in api("volumes") if v["Name"] == own_volume)["owner"] == owner
     assert next(v for v in tool("list_volumes")["structuredContent"]["items"] if v["Name"] == own_volume)["owner"] == owner
     assert all(v["owner"] is None for v in api("volumes") if v["Name"] in (share, installs_volume))
+    # Its owner's record mounts it for the compose, so it cannot be deleted by itself.
+    status, message = deletion_refused(f"volumes/{own_volume}")
+    assert status == 409 and message == '"Own workspace" mounts this volume for its compose; delete that container first', (status, message)
     docker("exec", "--user", "desktop", f"wsld-{own}", "sh", "-c", "printf kept > /home/desktop/Projects/extra")
     job(api(f"containers/{own}/reset", {}))
     ready(f"wsld-{own}")
@@ -1499,6 +1515,30 @@ try:
     assert json.loads(docker("volume", "inspect", alone_volume, check=False) or b"[]") == []
     assert docker("volume", "inspect", own_volume) and docker("volume", "inspect", share)
     print("PASS new_volume gives each container its own labelled volume, kept across reset and settings, listed with its owner and deleted only on request", flush=True)
+    # A volume is deleted by itself, such as the clone's, whose owner was deleted without it. It
+    # answers at once, and refuses one a container record mounts, the manager's own, a missing
+    # one and one any other container still uses, without removing anything.
+    status, message = deletion_refused(f"volumes/{share}")
+    assert status == 409 and message.startswith('"GPU test" mounts this volume; remove it from'), (status, message)
+    refused_tool = tool("delete_volume", {"name": share}, allow_error=True)
+    assert refused_tool["isError"] and '"GPU test"' in refused_tool["content"][0]["text"], refused_tool
+    assert deletion_refused(f"volumes/{volume}")[0] == 403
+    assert deletion_refused(f"volumes/{absent_volume}")[0] == 404
+    assert json.loads(docker("volume", "inspect", absent_volume, check=False) or b"[]") == []
+    assert deletion_refused("volumes/-bad")[0] == 400
+    # Docker refuses a volume a container outside Bilskirnir uses, even a stopped one.
+    docker("create", "--name", holder, "--label", f"io.wsl-desktop.test={tag}", "--mount", f"type=volume,src={clone_volume},dst=/held", "--entrypoint", "true", xfce["reference"])
+    status, message = deletion_refused(f"volumes/{clone_volume}")
+    assert status == 409 and "volume is in use" in message, (status, message)
+    docker("rm", holder)
+    assert api(f"volumes/{clone_volume}", method="DELETE") == {"name": clone_volume, "deleted": True}
+    assert json.loads(docker("volume", "inspect", clone_volume, check=False) or b"[]") == []
+    assert clone_volume not in listed_names()
+    # Once the sharer is gone nothing mounts the owner's volume either, and an agent deletes it.
+    assert tool("delete_volume", {"name": own_volume})["structuredContent"] == {"name": own_volume, "deleted": True}
+    assert json.loads(docker("volume", "inspect", own_volume, check=False) or b"[]") == []
+    assert docker("volume", "inspect", share) and docker("volume", "inspect", volume)
+    print("PASS a volume is deleted by itself only while nothing mounts it, never the manager's own or a missing one", flush=True)
     # Settings change after creation: the name and new limits apply to the running container, while
     # audio and removing a limit need a new container that keeps the old one's files.
     edit = job(api("containers", {"name": "Settings edit", "image": xfce["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
@@ -1596,6 +1636,9 @@ finally:
     info=inspect_cleanup("container",foreign)
     if info and info["Config"]["Labels"].get("io.wsl-desktop.test")==tag:
         docker("rm","--force",foreign,check=False)
+    info=inspect_cleanup("container",holder)
+    if info and info["Config"]["Labels"].get("io.wsl-desktop.test")==tag:
+        docker("rm","--force",holder,check=False)
     image_fixture=inspect_cleanup("container",f"wsld-test-image-{tag}")
     if image_fixture and image_fixture["Config"]["Labels"].get("io.wsl-desktop.test")==tag:
         docker("rm","--force",f"wsld-test-image-{tag}",check=False)

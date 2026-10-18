@@ -42,10 +42,10 @@ import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
-import { formatNumber, rich, t } from "@/lib/i18n"
+import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
-import { ownedVolumes } from "@/lib/volume-files"
+import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ComposeFields } from "./compose-dialog"
@@ -499,6 +499,51 @@ export function VolumeCopyDialog({ name: source, ...props }: DialogProps & { nam
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Deletes a volume and its files once confirmed. A volume a container mounts stays, as the
+ * manager refuses it too, so the dialog names those containers instead of offering Delete. */
+export function VolumeDeleteDialog({ name, ...props }: DialogProps & { name: string }) {
+  const holders = volumeHolders(name, useContainers().data ?? [])
+  const { busy, error, submit } = useSubmit()
+  return (
+    <AlertDialog {...props}>
+      <AlertDialogContent>
+        <form
+          className="contents"
+          onSubmit={submit(async () => {
+            await api(volumeApi(name), undefined, "DELETE")
+            closeDialog()
+            toast.success(t("volumes.deleted", { name }))
+            void refreshAll()
+          })}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="break-all">
+              {t("volumes.deleteTitle", { name })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("volumes.deleteDescription")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {holders.length > 0 && (
+            <Alert>
+              <RiAlertLine className="text-warning" />
+              <AlertDescription>
+                {t("volumes.deleteMounted", { containers: formatList(holders) })}
+              </AlertDescription>
+            </Alert>
+          )}
+          <FieldError>{error}</FieldError>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">{t("common.cancel")}</AlertDialogCancel>
+            <Button type="submit" variant="destructive" disabled={busy || holders.length > 0}>
+              {busy && <Spinner data-icon="inline-start" />}
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

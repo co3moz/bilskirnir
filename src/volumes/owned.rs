@@ -98,10 +98,7 @@ pub(crate) fn removable(
     let mut free = Vec::new();
     let mut shared = Vec::new();
     for name in owned {
-        match others
-            .iter()
-            .find(|other| other.mounts().iter().any(|mount| mount.volume == name))
-        {
+        match super::mounted_by(&name, others) {
             Some(other) => shared.push((name, other)),
             None => free.push(name),
         }

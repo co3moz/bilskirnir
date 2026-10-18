@@ -293,6 +293,14 @@ export const fr: Messages = {
   "volumes.copyDescription":
     "Copie tous les fichiers dans un nouveau volume, ils appartiennent à l'utilisateur du bureau. Une copie complète occupe autant d'espace disque que le volume.",
   "volumes.copyName": "Nom de la copie",
+  "volumes.delete": "Supprimer le volume",
+  "volumes.deleteOf": "Supprimer {name}",
+  "volumes.deleteTitle": "Supprimer {name} ?",
+  "volumes.deleteDescription":
+    "Le volume et tous ses fichiers sont supprimés. Cette action est irréversible ; exportez d'abord une archive si vous pourriez encore avoir besoin des fichiers.",
+  "volumes.deleteMounted":
+    "Monté dans {containers}. Un volume qu'un conteneur monte est conservé : supprimez d'abord le conteneur, ou retirez le volume de ses paramètres.",
+  "volumes.deleted": "Volume {name} supprimé.",
   "volumes.import.arrived":
     "L'archive est arrivée. Ses derniers fichiers sont en cours d'écriture.",
   "volumes.import.writing": "Écriture des derniers fichiers…",

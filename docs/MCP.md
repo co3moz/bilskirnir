@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 64 tools:
+The server currently exposes 65 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -89,7 +89,7 @@ The server currently exposes 64 tools:
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
-| Persistent storage | `list_volumes`, `create_volume`, `copy_volume` |
+| Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
 | Operation results | `list_jobs`, `get_job` |
 
@@ -279,3 +279,5 @@ Read/write and execution tools operate inside managed desktop containers. They d
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one. It lists only the volumes that carry the installation's `VOLUME_FILTER` label, by default the ones Bilskirnir created; a volume it leaves out cannot be mounted or opened, so create or copy one instead of naming a volume from elsewhere on the host.
 
 `copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).
+
+`delete_volume` deletes a named volume, `name`, with its files, such as one `list_volumes` shows with `owner.deleted: true` because its container was deleted without it. It cannot be undone, so check the name first. It answers at once, without a job, and deletes nothing when it refuses: for the manager's own volumes, for a volume a managed container mounts through its volumes or its compose, whose name the error gives, and for one another Docker container still uses. A volume `VOLUME_FILTER` leaves out is answered as missing, as `list_volumes` leaves it out.

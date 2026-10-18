@@ -11,6 +11,7 @@ import {
   DeleteDialog,
   SnapshotDialog,
   VolumeCopyDialog,
+  VolumeDeleteDialog,
   VolumeDialog,
 } from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
@@ -58,6 +59,8 @@ function render(dialog: Dialog, open: boolean) {
       return <VolumeImportDialog {...props} />
     case "volume-copy":
       return <VolumeCopyDialog {...props} name={dialog.name} />
+    case "volume-delete":
+      return <VolumeDeleteDialog {...props} name={dialog.name} />
     case "job":
       return <JobDrawer {...props} id={dialog.id} />
     case "log":

@@ -292,6 +292,14 @@ export const es: Messages = {
   "volumes.copyDescription":
     "Copia todos los archivos en un volumen nuevo, y pertenecen al usuario del escritorio. Una copia completa ocupa tanto espacio en disco como el volumen.",
   "volumes.copyName": "Nombre de la copia",
+  "volumes.delete": "Eliminar volumen",
+  "volumes.deleteOf": "Eliminar {name}",
+  "volumes.deleteTitle": "¿Eliminar {name}?",
+  "volumes.deleteDescription":
+    "Se eliminan el volumen y todos sus archivos. No se puede deshacer; exporta antes un archivo comprimido si podrías volver a necesitar los archivos.",
+  "volumes.deleteMounted":
+    "Montado en {containers}. Un volumen que un contenedor monta se conserva: elimina primero el contenedor, o quita el volumen de su configuración.",
+  "volumes.deleted": "Se eliminó el volumen {name}.",
   "volumes.import.arrived":
     "El archivo comprimido llegó. Se están escribiendo sus últimos archivos.",
   "volumes.import.writing": "Escribiendo los últimos archivos…",
