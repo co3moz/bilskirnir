@@ -73,7 +73,7 @@ impl StartRecording {
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Export {
-    /// Directory inside the desktop: Downloads or a writable mounted volume.
+    /// Directory inside the desktop: in its home, a writable volume or a compose folder.
     pub destination: String,
     /// Archive file name, typically ending in .tar.gz.
     pub name: String,
@@ -249,7 +249,7 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
     let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let (env, info) = running(app, id).await?;
-    uploads::validate_target(&env.spec, &body.destination, &body.name)?;
+    uploads::validate_target(&env, &body.destination, &body.name)?;
     let mut recordings = serde_json::Map::new();
     for recording in &body.recording_ids {
         let record = record(app, id, recording)?;

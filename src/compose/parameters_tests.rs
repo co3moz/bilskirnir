@@ -137,6 +137,97 @@ fn a_volume_path_is_where_a_volume_setting_could_be_mounted() {
 }
 
 #[test]
+fn a_folder_is_a_canonical_desktop_folder_outside_the_system_ones() {
+    let project = Parameter {
+        name: "UNITY_PROJECT".into(),
+        label: "Unity project".into(),
+        ..parameter(json!({"type": "folder", "default": "/home/desktop/UnityProjects/MyGame"}))
+    };
+    project.validate().unwrap();
+    for valid in [
+        "/home/desktop/UnityProjects/My Game",
+        "/home/desktop/.local/share/godot",
+        "/srv/projects",
+        "/opt/unity/projects",
+        "/workspace,2026",
+    ] {
+        project
+            .check(valid)
+            .unwrap_or_else(|e| panic!("{valid}: {e:#}"));
+    }
+    for invalid in [
+        "relative/folder",
+        "/",
+        "/home",
+        "/home/desktop/",
+        "/home/desktop//Projects",
+        "/home/desktop/../root",
+        "/etc/unity",
+        "/tmp/build",
+        "/usr/local/projects",
+        "/opt",
+        "/opt/VirtualGL/x",
+        "/home/desktop/two\nlines",
+        "C:\\Projects",
+    ] {
+        let error = project.check(invalid).unwrap_err().to_string();
+        assert!(
+            error.contains("Unity project must be an absolute folder"),
+            "{invalid:?}: {error}"
+        );
+    }
+    // The script gets the folder as it is, and only a required folder has to be given.
+    assert_eq!(
+        project.environment("/srv/projects"),
+        [("UNITY_PROJECT".to_string(), "/srv/projects".to_string())]
+    );
+    let optional = Parameter {
+        default: String::new(),
+        ..project.clone()
+    };
+    assert_eq!(optional.resolve(None).unwrap(), "");
+    let required = Parameter {
+        required: true,
+        ..optional
+    };
+    assert!(
+        required
+            .resolve(None)
+            .unwrap_err()
+            .to_string()
+            .contains("Enter a value")
+    );
+    for (invalid, reason) in [
+        (
+            json!({"type": "folder", "secret": true}),
+            "Only text parameters can be secret",
+        ),
+        (
+            json!({"type": "folder", "display": "multiline"}),
+            "cannot be shown as multiline",
+        ),
+        (
+            json!({"type": "folder", "pattern": "/srv/.*"}),
+            "Only text parameters have a pattern",
+        ),
+        (
+            json!({"type": "folder", "path": "/srv"}),
+            "Only volume parameters have a path",
+        ),
+        (
+            json!({"type": "folder", "default": "/etc"}),
+            "The default of VALUE",
+        ),
+    ] {
+        let error = parameter(invalid.clone())
+            .validate()
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(reason), "{invalid}: {error}");
+    }
+}
+
+#[test]
 fn a_volume_parameter_takes_a_volume_and_gives_the_script_its_path() {
     let unity = Parameter {
         name: "UNITY_HOME".into(),
@@ -391,7 +482,7 @@ fn the_interface_offers_the_displays_this_module_accepts() {
 }
 
 /// Every type. The match stops compiling when a type is added, so the list is looked at then.
-fn kinds() -> [Kind; 6] {
+fn kinds() -> [Kind; 7] {
     let kinds = [
         Kind::Text,
         Kind::Number,
@@ -399,11 +490,12 @@ fn kinds() -> [Kind; 6] {
         Kind::Choice,
         Kind::Choices,
         Kind::Volume,
+        Kind::Folder,
     ];
     for kind in kinds {
         match kind {
             Kind::Text | Kind::Number | Kind::Boolean | Kind::Choice | Kind::Choices => {}
-            Kind::Volume => {}
+            Kind::Volume | Kind::Folder => {}
         }
     }
     kinds

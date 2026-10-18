@@ -31,6 +31,7 @@ import {
   volumeChoices,
   volumeNameValid,
 } from "@/lib/compose"
+import { desktopFolder, HOME } from "@/lib/desktop-paths"
 import { rich, t } from "@/lib/i18n"
 import { queryClient, useVolumes } from "@/lib/queries"
 import type { ComposeParameter } from "@/lib/types"
@@ -388,8 +389,9 @@ function Control({
 }
 
 /**
- * A text value, checked against the parameter's pattern while it is typed. The form refuses to
- * send a value that does not match, and the field says why once it was left or the form sent.
+ * A text value, checked while it is typed against the parameter's pattern, or for a folder against
+ * the manager's rule for one. The form refuses to send a value that does not fit, and the field
+ * says why once it was left or the form sent.
  */
 function TextControl({
   parameter,
@@ -407,8 +409,15 @@ function TextControl({
   // The one control this renders, an input or a text area.
   const control = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null)
   const [checked, setChecked] = React.useState(false)
-  const mismatch = patternMatches(parameter.pattern, value) === false
-  const message = mismatch ? parameter.pattern_message || t("parameter.patternMismatch") : ""
+  const folder = parameter.type === "folder"
+  const mismatch = folder
+    ? !!value && !desktopFolder(value)
+    : patternMatches(parameter.pattern, value) === false
+  const message = !mismatch
+    ? ""
+    : folder
+      ? t("parameter.folderInvalid")
+      : parameter.pattern_message || t("parameter.patternMismatch")
   React.useEffect(() => control.current?.setCustomValidity(message), [message])
   const shared = {
     id,
@@ -437,6 +446,9 @@ function TextControl({
           {...shared}
           type={parameter.secret ? "password" : "text"}
           autoComplete={parameter.secret ? "new-password" : "off"}
+          placeholder={folder ? `${HOME}/Projects` : undefined}
+          spellCheck={folder ? false : undefined}
+          className={cn(folder && "font-mono")}
         />
       )}
       {checked && <FieldError>{message}</FieldError>}

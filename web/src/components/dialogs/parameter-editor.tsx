@@ -184,6 +184,11 @@ export function ParameterEditor({
           </FieldDescription>
         </Field>
       )}
+      {parameter.type === "folder" && (
+        <FieldDescription className="text-xs">
+          {t("parameter.folderHint", { name: parameter.name || "UNITY_PROJECT" })}
+        </FieldDescription>
+      )}
       {parameter.type === "text" && (
         <div className="grid gap-2 sm:grid-cols-2">
           <Field className="gap-1.5">

@@ -954,8 +954,16 @@ try:
     assert subprocess.run(["docker", "exec", container, "test", "-e", "/shared/broken"]).returncode != 0
     assert not docker("ps", "-aq", "--filter", "label=io.wsl-desktop.volume-helper=true").strip()
     print("PASS archives unpack into a new folder of a mounted volume as the desktop user, also through a link, never over one", flush=True)
+    # Anywhere in the home will do, and the upload creates the folders it needs; a folder can also
+    # be made first, as the dashboard's folder browser does.
+    picked = upload(env_id, "picked.txt", b"picked", destination="/home/desktop/Documents/picked")
+    assert picked["path"] == "/home/desktop/Documents/picked/picked.txt", picked
+    assert docker("exec", container, "stat", "-c", "%U", "/home/desktop/Documents/picked") == b"desktop\n"
+    assert api(f"containers/{env_id}/files/mkdir", {"path": "/home/desktop/Documents/made"}) == {"path": "/home/desktop/Documents/made", "created": True}
+    assert refused(f"containers/{env_id}/files/mkdir", {"path": "/home/desktop/Documents/made"}) == 409
+    assert refused(f"containers/{env_id}/files/mkdir", {"path": "/etc/made"}) == 400
     docker("exec",container,"ln","-s","/tmp","/home/desktop/Downloads/escape")
-    for target in ["/etc", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
+    for target in ["/etc", "/home/other", "/home/desktop/Downloads/../.ssh", "/home/desktop/Downloads/escape"]:
         try:
             upload(env_id,"forbidden.txt",b"blocked",destination=target)
             raise AssertionError(f"unsafe upload accepted: {target}")
@@ -980,7 +988,7 @@ try:
     wait_for(lambda: docker("exec",manager,"ls","-A","/data/uploads") == b"")
     assert docker("exec",container,"test","!","-e","/home/desktop/Downloads/interrupted.bin") == b""
     login()
-    print("PASS binary/empty uploads, desktop ownership, volume persistence, overwrite protection, symlinks and revoked transfer cleanup",flush=True)
+    print("PASS binary/empty uploads, any home folder, new folders, desktop ownership, volume persistence, overwrite protection, symlinks and revoked transfer cleanup",flush=True)
     assert docker("exec", container, "cat", "/opt/script-built") == b"script-built"
     diag = api(f"containers/{env_id}/diagnostics")["output"]
     assert "D3D12 (NVIDIA" in diag, diag
@@ -1327,11 +1335,11 @@ try:
     # A volume parameter mounts the volume chosen for it at its path whenever the container is
     # created; without one the path stays in the container. Either way the desktop user owns the
     # folder before the setup script runs, which reads the path and the volume's name.
-    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\n"}
-    for parameters in [[{"name": "UNITY_HOME", "type": "volume"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/tmp/unity"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/opt/../etc"}], [*volume_compose["parameters"], {"name": "UNITY_HOME_VOLUME"}]]:
+    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}, {"name": "UNITY_PROJECT", "type": "folder", "label": "Unity project", "default": "/home/desktop/UnityProjects/MyGame"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\nmkdir -p \"$UNITY_PROJECT\"\n"}
+    for parameters in [[{"name": "UNITY_HOME", "type": "volume"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/tmp/unity"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/opt/../etc"}], [*volume_compose["parameters"], {"name": "UNITY_HOME_VOLUME"}], [{"name": "UNITY_PROJECT", "type": "folder", "default": "/etc/projects"}]]:
         assert refused(f"images/{built['id']}/compose", {**volume_compose, "parameters": parameters}, "PUT") == 400, parameters
     installs_image = job(api("images/build", {"name": "volume-parameters", "base_image": xfce["reference"], "internet": False, "script": f"# volume parameters {tag}\ntrue\n", "compose": volume_compose}))
-    assert installs_image["compose"]["parameters"] == [{**p, "label": "", "description": "", "required": p.get("required", False), "secret": False, "default": ""} for p in volume_compose["parameters"]], installs_image["compose"]
+    assert installs_image["compose"]["parameters"] == [{"label": "", "description": "", "required": False, "secret": False, "default": "", **p} for p in volume_compose["parameters"]], installs_image["compose"]
     api("volumes", {"name": installs_volume})
     base = {"image": installs_image["image_id"], "internet": False}
     # Refused before a job: no volume for a required parameter, a volume also in the volume
@@ -1356,6 +1364,18 @@ try:
     assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
     assert docker("exec", kept_container, "stat", "-c", "%U", "/unity-install-location", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\ndesktop\n"
     assert api(f"containers/{kept}")["setup"]["mounts"] == [{"volume": installs_volume, "target": "/unity-install-location", "readonly": False}]
+    # The folders the compose names take uploads, a volume parameter's outside the home too, and
+    # the record lists them for the upload dialog.
+    assert api(f"containers/{kept}")["setup"]["places"] == [{"label": "UNITY_HOME", "path": "/unity-install-location"}, {"label": "UNITY_CACHE", "path": "/home/desktop/Unity/Cache"}, {"label": "Unity project", "path": "/home/desktop/UnityProjects/MyGame"}]
+    assert docker("exec", kept_container, "stat", "-c", "%U", "/home/desktop/UnityProjects/MyGame") == b"desktop\n"
+    assert upload(kept, "asset.txt", b"asset", destination="/unity-install-location/Assets")["path"] == "/unity-install-location/Assets/asset.txt"
+    assert docker("exec", kept_container, "stat", "-c", "%U", "/unity-install-location/Assets/asset.txt") == b"desktop\n"
+    print("PASS a compose's volume and folder parameters are listed as places that take uploads", flush=True)
+    try:
+        upload(kept, "a.txt", b"a", destination="/unity-install-locationish")
+        raise AssertionError("an upload beside a compose folder was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 400, error.code
     # The volume settings cannot put another volume at its path, and a recreation keeps it.
     assert refused(f"containers/{kept}/settings", {"mounts": [{"volume": share, "target": "/unity-install-location"}]}) == 400
     job(api(f"containers/{kept}/settings", {"resolution": "1280x720"}))

@@ -15,8 +15,6 @@ import {
   jobTarget,
   needsAttention,
   restartNotice,
-  subfolderError,
-  uploadLocations,
 } from "../web/src/lib/format"
 import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../web/src/lib/types"
 
@@ -192,31 +190,6 @@ test("the restart warning names the settings that recreate the container and wha
     restartNotice(["hostname", "mac_address", "machine_id"], true),
     "Hostname, MAC address and machine ID recreate the container: it restarts and open applications close. Its files are kept."
   )
-})
-
-test("uploads never target a read-only mount, nor Downloads under one", () => {
-  const mount = (volume: string, target: string, readonly: boolean) => ({
-    volume,
-    target,
-    readonly,
-  })
-  assert.deepEqual(
-    uploadLocations({
-      mounts: [mount("assets", "/assets", true), mount("work", "/work", false)],
-    }).map((location) => location.target),
-    ["/home/desktop/Downloads", "/work"]
-  )
-  // A read-only volume over the home folder covers Downloads too.
-  assert.deepEqual(uploadLocations({ mounts: [mount("home", "/home/desktop", true)] }), [])
-  assert.deepEqual(uploadLocations({ mounts: [mount("dl", "/home/desktop/Downloads", true)] }), [])
-  assert.equal(uploadLocations({ mounts: [mount("docs", "/home/desktop/Doc", true)] }).length, 1)
-})
-
-test("an upload subfolder stays inside its destination", () => {
-  assert.equal(subfolderError(""), "")
-  assert.equal(subfolderError("assets/textures"), "")
-  for (const folder of ["/etc", "a/../..", "a//b", "./a", "a\\b", "a/"])
-    assert.notEqual(subfolderError(folder), "", folder)
 })
 
 test("job activity counts finished jobs per local day and leaves out running ones", () => {
