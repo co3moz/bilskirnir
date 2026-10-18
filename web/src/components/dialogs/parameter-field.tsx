@@ -24,6 +24,7 @@ import { api } from "@/lib/api"
 import {
   displayOf,
   newVolumeName,
+  patternMatches,
   pickedChoices,
   sliderValue,
   toggleChoice,
@@ -375,28 +376,71 @@ function Control({
     )
   }
 
-  if (display === "multiline")
-    return (
-      <Textarea
-        id={id}
-        rows={4}
-        required={required}
-        spellCheck={false}
-        autoComplete="off"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="max-h-[500px] overflow-y-auto font-mono text-xs"
-      />
-    )
   return (
-    <Input
-      id={id}
-      type={parameter.secret ? "password" : "text"}
-      autoComplete={parameter.secret ? "new-password" : "off"}
-      required={required}
+    <TextControl
+      parameter={parameter}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={onChange}
+      id={id}
+      required={required}
     />
+  )
+}
+
+/**
+ * A text value, checked against the parameter's pattern while it is typed. The form refuses to
+ * send a value that does not match, and the field says why once it was left or the form sent.
+ */
+function TextControl({
+  parameter,
+  value,
+  onChange,
+  id,
+  required,
+}: {
+  parameter: ComposeParameter
+  value: string
+  onChange: (value: string) => void
+  id: string
+  required: boolean
+}) {
+  // The one control this renders, an input or a text area.
+  const control = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null)
+  const [checked, setChecked] = React.useState(false)
+  const mismatch = patternMatches(parameter.pattern, value) === false
+  const message = mismatch ? parameter.pattern_message || t("parameter.patternMismatch") : ""
+  React.useEffect(() => control.current?.setCustomValidity(message), [message])
+  const shared = {
+    id,
+    ref: control,
+    required,
+    value,
+    "aria-invalid": (checked && mismatch) || undefined,
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      onChange(event.target.value),
+    onBlur: () => setChecked(true),
+    onInvalid: () => setChecked(true),
+  }
+
+  return (
+    <>
+      {displayOf(parameter) === "multiline" ? (
+        <Textarea
+          {...shared}
+          rows={4}
+          spellCheck={false}
+          autoComplete="off"
+          className="max-h-[500px] overflow-y-auto font-mono text-xs"
+        />
+      ) : (
+        <Input
+          {...shared}
+          type={parameter.secret ? "password" : "text"}
+          autoComplete={parameter.secret ? "new-password" : "off"}
+        />
+      )}
+      {checked && <FieldError>{message}</FieldError>}
+    </>
   )
 }
 

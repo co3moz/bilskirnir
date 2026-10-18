@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  browserPattern,
   displayLabel,
   DISPLAYS,
   draftParameter,
@@ -182,6 +183,43 @@ export function ParameterEditor({
             {t("parameter.pathHint", { name: parameter.name || "UNITY_HOME" })}
           </FieldDescription>
         </Field>
+      )}
+      {parameter.type === "text" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor={`${id}-pattern`} className={small}>
+              {t("parameter.pattern")}
+            </FieldLabel>
+            <Input
+              id={`${id}-pattern`}
+              placeholder="[0-9.]+:[0-9]+"
+              maxLength={500}
+              spellCheck={false}
+              autoComplete="off"
+              value={parameter.pattern}
+              onChange={(event) => set({ pattern: event.target.value })}
+              className="font-mono"
+            />
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor={`${id}-pattern-message`} className={small}>
+              {t("parameter.patternMessage")}
+            </FieldLabel>
+            <Input
+              id={`${id}-pattern-message`}
+              placeholder={t("parameter.patternMessagePlaceholder")}
+              maxLength={200}
+              disabled={!parameter.pattern}
+              value={parameter.pattern_message}
+              onChange={(event) => set({ pattern_message: event.target.value })}
+            />
+          </Field>
+          <FieldDescription className="text-xs sm:col-span-2">
+            {parameter.pattern && !browserPattern(parameter.pattern)
+              ? t("parameter.patternUnchecked")
+              : t("parameter.patternHint")}
+          </FieldDescription>
+        </div>
       )}
       {options && (
         <OptionsEditor

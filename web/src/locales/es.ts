@@ -703,6 +703,14 @@ export const es: Messages = {
   "parameter.mustBeOn": "Debe estar activado",
   "parameter.required": "Obligatorio",
   "parameter.allowCustom": "Permitir otros valores",
+  "parameter.pattern": "Patrón",
+  "parameter.patternMessage": "Formato esperado",
+  "parameter.patternMessagePlaceholder": "host:puerto, por ejemplo 192.168.1.20:10080",
+  "parameter.patternHint":
+    "Una expresión regular con la que debe coincidir todo el valor, en la sintaxis de Rust: sin lookaround ni referencias inversas.",
+  "parameter.patternUnchecked":
+    "Este navegador no puede leer el patrón, así que solo se comprueba al crear el contenedor.",
+  "parameter.patternMismatch": "No tiene el formato esperado",
   "parameter.options": "Opciones",
   "parameter.option": "Opción",
   "parameter.optionValue": "Valor de la opción {number}",

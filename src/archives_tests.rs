@@ -277,12 +277,16 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
 #[test]
 fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
     let compose = Compose {
-        // A choice carries the most fields a parameter has.
+        // A choice carries the most fields a parameter has, and text its own pattern.
         parameters: vec![
             serde_json::from_value(json!({
                 "name": "UNITY_EDITOR", "label": "Editor", "type": "choice", "display": "radio",
                 "options": [{"value": "6000.0.23f1", "label": "Unity 6"}, {"value": "2022.3.50f1"}],
                 "allow_custom": true, "default": "6000.0.23f1"
+            }))
+            .unwrap(),
+            serde_json::from_value(json!({
+                "name": "ACCELERATOR", "pattern": "[^:]+:[0-9]+", "pattern_message": "host:port"
             }))
             .unwrap(),
         ],

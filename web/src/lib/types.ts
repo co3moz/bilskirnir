@@ -72,6 +72,10 @@ export type ComposeParameter = {
   step?: number | null
   /** Volume parameters: where the volume is mounted in the desktop. */
   path?: string
+  /** Text parameters: a regular expression, in Rust's syntax, a value must match as a whole. */
+  pattern?: string
+  /** Text parameters with a pattern: the expected format, shown when a value does not match. */
+  pattern_message?: string
 }
 
 /** What a new container from an image asks for, and the script that receives it. */

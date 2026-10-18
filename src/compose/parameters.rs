@@ -4,7 +4,8 @@
 //! volume parameter is the one whose value is not what its variable holds: the value names a
 //! volume, and the script reads where it is mounted.
 use crate::model::{mount_target, volume_name};
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -12,6 +13,11 @@ const VALUE_LIMIT: usize = 16_384;
 const OPTION_LIMIT: usize = 100;
 const OPTION_VALUE_LIMIT: usize = 1024;
 const DESCRIPTION_LIMIT: usize = 500;
+const PATTERN_LIMIT: usize = 500;
+const PATTERN_MESSAGE_LIMIT: usize = 200;
+/// The memory a compiled pattern may take. A compose can come from an archive or a pasted
+/// configuration, and a short pattern such as `\w{1,100}` compiles to more than this.
+const PATTERN_MEMORY: usize = 4 << 20;
 /// Variables the setup script, its shell or the desktop session rely on.
 const RESERVED: &[&str] = &[
     "CDPATH", "DISPLAY", "ENV", "HOME", "HOSTNAME", "IFS", "LANG", "LOGNAME", "OLDPWD", "PATH",
@@ -128,6 +134,12 @@ pub struct Parameter {
     /// Where a volume parameter's volume is mounted in the desktop, fixed by the compose.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
+    /// A regular expression a text value must match as a whole.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pattern: String,
+    /// What the create form says when a value does not match the pattern.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pattern_message: String,
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -198,6 +210,11 @@ impl Parameter {
         } else if !self.path.is_empty() {
             bail!("Only volume parameters have a path: {name}");
         }
+        if self.kind == Kind::Text {
+            self.check_pattern()?;
+        } else if !self.pattern.is_empty() || !self.pattern_message.is_empty() {
+            bail!("Only text parameters have a pattern: {name}");
+        }
         self.check(&self.default)
             .with_context(|| format!("The default of {name} is not a value it accepts"))
     }
@@ -245,6 +262,40 @@ impl Parameter {
         Ok(())
     }
 
+    fn check_pattern(&self) -> Result<()> {
+        let name = &self.name;
+        if !one_line(&self.pattern_message, PATTERN_MESSAGE_LIMIT) {
+            bail!(
+                "A pattern message is one line of at most {PATTERN_MESSAGE_LIMIT} characters: {name}"
+            );
+        }
+        if self.pattern.is_empty() && !self.pattern_message.is_empty() {
+            bail!("{name} has a pattern message but no pattern");
+        }
+        self.pattern().map(drop)
+    }
+
+    /// The pattern as it is checked, matching a whole value, or `None` without one. The value
+    /// can be 16 KiB, and the regex crate matches in time linear to it whatever the pattern.
+    fn pattern(&self) -> Result<Option<Regex>> {
+        if self.pattern.is_empty() {
+            return Ok(None);
+        }
+        let name = &self.name;
+        if !one_line(&self.pattern, PATTERN_LIMIT) {
+            bail!("A pattern is one line of at most {PATTERN_LIMIT} characters: {name}");
+        }
+        let compile = |pattern: &str| {
+            RegexBuilder::new(pattern)
+                .size_limit(PATTERN_MEMORY)
+                .build()
+                .map_err(|error| pattern_error(name, error))
+        };
+        // On its own first, so a pattern such as `a)|(b` cannot close the group around it.
+        compile(&self.pattern)?;
+        compile(&format!(r"\A(?:{})\z", self.pattern)).map(Some)
+    }
+
     /// Whether this parameter accepts `value`. An empty value is left to `required`.
     pub(super) fn check(&self, value: &str) -> Result<()> {
         if value.len() > VALUE_LIMIT || value.contains('\0') {
@@ -262,7 +313,14 @@ impl Parameter {
             Kind::Text if lines && self.display() != Display::Multiline => {
                 bail!("{title} must be one line")
             }
-            Kind::Text => {}
+            // The value itself stays out of the error, since a secret can have a pattern too.
+            Kind::Text => match self.pattern()? {
+                Some(pattern) if !pattern.is_match(value) => match &*self.pattern_message {
+                    "" => bail!("{title} does not have the expected format"),
+                    message => bail!("{title} does not have the expected format: {message}"),
+                },
+                _ => {}
+            },
             Kind::Number => {
                 let number = decimal(value)
                     .with_context(|| format!("{title} must be a number such as 42 or -1.5"))?;
@@ -388,6 +446,24 @@ fn wire(value: impl Serialize) -> String {
         .ok()
         .and_then(|value| value.as_str().map(str::to_owned))
         .unwrap_or_default()
+}
+
+/// Why a pattern does not compile, without the regex crate's lines that point at the spot.
+fn pattern_error(name: &str, error: regex::Error) -> anyhow::Error {
+    match error {
+        regex::Error::CompiledTooBig(_) => anyhow!(
+            "The pattern of {name} takes too much memory once compiled; repeat less, or use ASCII classes such as [A-Za-z0-9_] instead of \\w"
+        ),
+        error => {
+            let text = error.to_string();
+            let reason = text
+                .lines()
+                .rev()
+                .find_map(|line| line.strip_prefix("error: "))
+                .unwrap_or(text.trim());
+            anyhow!("The pattern of {name} is not a regular expression the manager reads: {reason}")
+        }
+    }
 }
 
 fn one_line(text: &str, limit: usize) -> bool {

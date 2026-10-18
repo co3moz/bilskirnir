@@ -636,7 +636,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -972,7 +972,9 @@ fn compose_schema() -> Value {
                 "min":{"type":"number","description":"number only."},
                 "max":{"type":"number","description":"number only."},
                 "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."},
-                "path":{"type":"string","pattern":"^/","description":"volume only, and required there: the absolute folder in the desktop where the chosen volume is mounted, such as /opt/unity. Without a volume the folder stays inside the container. Either way it is created if missing and given to the desktop user while empty, before the script runs."}
+                "path":{"type":"string","pattern":"^/","description":"volume only, and required there: the absolute folder in the desktop where the chosen volume is mounted, such as /opt/unity. Without a volume the folder stays inside the container. Either way it is created if missing and given to the desktop user while empty, before the script runs."},
+                "pattern":{"type":"string","maxLength":500,"description":"text only: a regular expression in the syntax of Rust's regex crate that a value must match as a whole, such as [0-9.]+:[0-9]+. No lookaround or backreferences, and \\d and \\w match Unicode digits and letters. An empty value is left to required; a default must match."},
+                "pattern_message":{"type":"string","maxLength":200,"description":"text only, with a pattern: the expected format, which the dashboard shows and an error names when a value does not match, such as host:port, for example 192.168.1.20:10080."}
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},

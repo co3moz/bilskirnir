@@ -710,6 +710,14 @@ export const fr: Messages = {
   "parameter.mustBeOn": "Doit être activé",
   "parameter.required": "Obligatoire",
   "parameter.allowCustom": "Autoriser d'autres valeurs",
+  "parameter.pattern": "Motif",
+  "parameter.patternMessage": "Format attendu",
+  "parameter.patternMessagePlaceholder": "hôte:port, par exemple 192.168.1.20:10080",
+  "parameter.patternHint":
+    "Une expression régulière à laquelle toute la valeur doit correspondre, dans la syntaxe de Rust : sans lookaround ni références arrière.",
+  "parameter.patternUnchecked":
+    "Ce navigateur ne sait pas lire le motif ; il n'est donc vérifié qu'à la création du conteneur.",
+  "parameter.patternMismatch": "N'a pas le format attendu",
   "parameter.options": "Options",
   "parameter.option": "Option",
   "parameter.optionValue": "Valeur de l'option {number}",

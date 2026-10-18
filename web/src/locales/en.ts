@@ -730,6 +730,14 @@ export const en = {
   "parameter.mustBeOn": "Must be turned on",
   "parameter.required": "Required",
   "parameter.allowCustom": "Allow other values",
+  "parameter.pattern": "Pattern",
+  "parameter.patternMessage": "Expected format",
+  "parameter.patternMessagePlaceholder": "host:port, for example 192.168.1.20:10080",
+  "parameter.patternHint":
+    "A regular expression the whole value must match, in Rust's syntax: no lookaround or backreferences.",
+  "parameter.patternUnchecked":
+    "This browser cannot read the pattern, so it is checked only when the container is created.",
+  "parameter.patternMismatch": "Does not have the expected format",
   "parameter.options": "Options",
   "parameter.option": "Option",
   "parameter.optionValue": "Option {number} value",
