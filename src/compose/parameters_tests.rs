@@ -358,6 +358,14 @@ fn a_parameter_is_written_back_as_it_was_given() {
     });
     let parsed: Parameter = serde_json::from_value(volume.clone()).unwrap();
     assert_eq!(serde_json::to_value(&parsed).unwrap(), volume);
+    // So does a text parameter its pattern and the message that goes with it.
+    let address = json!({
+        "name": "ACCELERATOR", "label": "Accelerator", "description": "", "type": "text",
+        "required": false, "secret": false, "default": "",
+        "pattern": "[^:]+:[0-9]+", "pattern_message": "host:port"
+    });
+    let parsed: Parameter = serde_json::from_value(address.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&parsed).unwrap(), address);
 }
 
 #[test]
@@ -426,6 +434,222 @@ fn agents_and_the_api_guide_are_offered_every_type_and_display() {
     for kind in kinds() {
         let row = format!("\n| `{}`", wire(kind));
         assert!(guide.contains(&row), "docs/API.md has no row for {row:?}");
+    }
+}
+
+#[test]
+fn a_pattern_has_to_match_the_whole_value() {
+    let address = parameter(json!({
+        "label": "Accelerator", "pattern": r"[0-9]{1,3}(\.[0-9]{1,3}){3}:[0-9]{1,5}",
+        "pattern_message": "host:port, for example 192.168.1.20:10080"
+    }));
+    address.validate().unwrap();
+    address.check("192.168.1.20:10080").unwrap();
+    // A value that only contains a match is not one, whatever the pattern says about its ends.
+    for invalid in [
+        "192.168.1.20",
+        "x192.168.1.20:10080",
+        "192.168.1.20:10080 ",
+        "1922.168.1.20:10080",
+    ] {
+        assert_eq!(
+            address.check(invalid).unwrap_err().to_string(),
+            "Accelerator does not have the expected format: host:port, for example 192.168.1.20:10080",
+            "{invalid:?}"
+        );
+    }
+    // The whole value, not the first alternative that matches at its start.
+    let alternatives = parameter(json!({"pattern": "a|ab"}));
+    assert!(alternatives.check("ab").is_ok() && alternatives.check("abc").is_err());
+    // Flags in the pattern stay inside it: (?m) does not let ^ and $ match at each line.
+    let lines = parameter(json!({"display": "multiline", "pattern": "(?m)^[a-z]+$"}));
+    assert!(lines.check("abc").is_ok() && lines.check("abc\ndef").is_err());
+    // A multiline value is matched as a whole too, so a pattern spells out the line breaks.
+    let each_line = parameter(json!({"display": "multiline", "pattern": r"[a-z]+(\n[a-z]+)*"}));
+    assert!(each_line.check("abc\ndef").is_ok() && each_line.check("abc\n").is_err());
+    // Without a message the error still names the field.
+    assert_eq!(
+        parameter(json!({"pattern": "[0-9]+"}))
+            .check("12a")
+            .unwrap_err()
+            .to_string(),
+        "VALUE does not have the expected format"
+    );
+}
+
+#[test]
+fn an_empty_value_is_left_to_required_and_a_default_must_match() {
+    let port = parameter(json!({"label": "Port", "pattern": "[0-9]+"}));
+    assert_eq!(port.resolve(None).unwrap(), "");
+    assert_eq!(port.resolve(Some(&String::new())).unwrap(), "");
+    let required = parameter(json!({"label": "Port", "pattern": "[0-9]+", "required": true}));
+    assert_eq!(
+        required.resolve(None).unwrap_err().to_string(),
+        "Enter a value for Port"
+    );
+    assert!(required.resolve(Some(&"80a".into())).is_err());
+    assert_eq!(required.resolve(Some(&"80".into())).unwrap(), "80");
+    parameter(json!({"pattern": "[0-9]+", "default": "8080"}))
+        .validate()
+        .unwrap();
+    let error = parameter(json!({"pattern": "[0-9]+", "default": "http"}))
+        .validate()
+        .unwrap_err();
+    assert_eq!(
+        format!("{error:#}"),
+        "The default of VALUE is not a value it accepts: VALUE does not have the expected format"
+    );
+}
+
+#[test]
+fn a_secret_value_stays_out_of_the_pattern_error() {
+    let token = parameter(json!({
+        "label": "Token", "secret": true, "required": true,
+        "pattern": "ghp_[A-Za-z0-9]{36}", "pattern_message": "A GitHub token starting with ghp_"
+    }));
+    token.validate().unwrap();
+    let error = token
+        .resolve(Some(&"hunter2-not-a-token".into()))
+        .unwrap_err();
+    let error = format!("{error:#} {error:?}");
+    assert!(!error.contains("hunter2"), "{error}");
+    assert!(
+        error.contains("A GitHub token starting with ghp_"),
+        "{error}"
+    );
+    let valid = format!("ghp_{}", "a".repeat(36));
+    assert_eq!(token.resolve(Some(&valid)).unwrap(), valid);
+}
+
+#[test]
+fn only_text_has_a_pattern_and_its_message_needs_one() {
+    for (invalid, reason) in [
+        (
+            json!({"type": "number", "pattern": "[0-9]+"}),
+            "Only text parameters have a pattern",
+        ),
+        (
+            json!({"type": "choice", "options": flavors(), "allow_custom": true, "pattern": "[a-z]+"}),
+            "Only text parameters have a pattern",
+        ),
+        (
+            json!({"type": "volume", "path": "/opt/unity", "pattern_message": "x"}),
+            "Only text parameters have a pattern",
+        ),
+        (
+            json!({"pattern_message": "host:port"}),
+            "has a pattern message but no pattern",
+        ),
+        (
+            json!({"pattern": "[0-9]+", "pattern_message": "x".repeat(201)}),
+            "A pattern message is one line",
+        ),
+        (
+            json!({"pattern": "[0-9]+", "pattern_message": "two\nlines"}),
+            "A pattern message is one line",
+        ),
+    ] {
+        let error = parameter(invalid.clone())
+            .validate()
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(reason), "{invalid}: {error}");
+    }
+    // Characters, not bytes, as for the other text a compose shows.
+    parameter(json!({"pattern": ".+", "pattern_message": "ğ".repeat(200)}))
+        .validate()
+        .unwrap();
+}
+
+#[test]
+fn a_pattern_the_manager_cannot_compile_is_refused_when_the_compose_is_saved() {
+    let refused = |pattern: &str| {
+        parameter(json!({"pattern": pattern}))
+            .validate()
+            .unwrap_err()
+            .to_string()
+    };
+    for (pattern, reason) in [
+        ("[0-9", "unclosed character class"),
+        (
+            "(?=x)y",
+            "look-around, including look-ahead and look-behind, is not supported",
+        ),
+        (r"(a)\1", "backreferences are not supported"),
+        // Balanced only once it is wrapped, which would let it match more than the value.
+        ("a)|(b", "unopened group"),
+    ] {
+        assert_eq!(
+            refused(pattern),
+            format!("The pattern of VALUE is not a regular expression the manager reads: {reason}"),
+            "{pattern}"
+        );
+    }
+    // Short patterns that compile to megabytes, and long or multiline ones.
+    for pattern in [r"\w{1,100}", "a{1000}{1000}"] {
+        assert!(
+            refused(pattern).contains("takes too much memory"),
+            "{pattern}"
+        );
+    }
+    parameter(json!({"pattern": r"\w{1,64}"}))
+        .validate()
+        .unwrap();
+    parameter(json!({"pattern": "x".repeat(500)}))
+        .validate()
+        .unwrap();
+    assert!(refused(&"x".repeat(501)).contains("at most 500 characters"));
+    assert!(refused("a\nb").contains("one line"));
+}
+
+#[test]
+fn every_field_reaches_agents_the_dashboard_and_the_guide() {
+    // Every field spelled out, so a new one stops this compiling until it is listed here.
+    let full = Parameter {
+        name: "A".into(),
+        label: "x".into(),
+        description: "x".into(),
+        kind: Kind::Text,
+        display: Some(Display::Input),
+        required: true,
+        secret: true,
+        default: "x".into(),
+        options: vec![Choice {
+            value: "x".into(),
+            label: String::new(),
+        }],
+        allow_custom: true,
+        min: Some(0.0),
+        max: Some(1.0),
+        step: Some(1.0),
+        path: "/opt/x".into(),
+        pattern: "x".into(),
+        pattern_message: "x".into(),
+    };
+    // The MCP schema refuses fields it does not list, a pasted configuration keeps only those
+    // the dashboard reads, and the guide explains each one.
+    let mcp = include_str!("../mcp.rs");
+    let reader = include_str!("../../web/src/lib/compose.ts");
+    let guide = include_str!("../../docs/API.md");
+    for field in serde_json::to_value(&full)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .keys()
+    {
+        assert!(
+            mcp.contains(&format!("\"{field}\":{{")),
+            "the compose schema in src/mcp.rs must list {field}"
+        );
+        assert!(
+            reader.contains(&format!("\"{field}\""))
+                || reader.contains(&format!("parameter.{field}")),
+            "readParameter in web/src/lib/compose.ts must read {field}"
+        );
+        assert!(
+            guide.contains(&format!("`{field}`")),
+            "docs/API.md must explain {field}"
+        );
     }
 }
 

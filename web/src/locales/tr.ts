@@ -699,6 +699,14 @@ export const tr: Messages = {
   "parameter.mustBeOn": "Açık olmalı",
   "parameter.required": "Zorunlu",
   "parameter.allowCustom": "Başka değerlere izin ver",
+  "parameter.pattern": "Desen",
+  "parameter.patternMessage": "Beklenen biçim",
+  "parameter.patternMessagePlaceholder": "host:port, örneğin 192.168.1.20:10080",
+  "parameter.patternHint":
+    "Değerin tamamının uyması gereken, Rust sözdizimiyle yazılmış bir düzenli ifade: lookaround ve geri başvuru kullanılamaz.",
+  "parameter.patternUnchecked":
+    "Bu tarayıcı deseni okuyamıyor; desen yalnızca konteyner oluşturulurken denetlenir.",
+  "parameter.patternMismatch": "Beklenen biçimde değil",
   "parameter.options": "Seçenekler",
   "parameter.option": "Seçenek",
   "parameter.optionValue": "Seçenek {number} değeri",

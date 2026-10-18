@@ -110,6 +110,28 @@ export function newVolumeName(
   return name
 }
 
+/**
+ * A text parameter's pattern as this browser checks it, matching a whole value as the manager
+ * does, or `null` when the browser cannot read it. The manager reads Rust's syntax, which this
+ * only approximates, so its answer is the one that counts either way.
+ */
+export function browserPattern(pattern: string) {
+  try {
+    // On its own first, so a pattern such as `a)|(b` cannot close the group around it.
+    new RegExp(pattern, "u")
+    return new RegExp(`^(?:${pattern})$`, "u")
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a text value has its pattern's format, or `undefined` when only the manager can tell.
+ * An empty value is left to `required`.
+ */
+export const patternMatches = (pattern: string | undefined, value: string) =>
+  !pattern || !value || browserPattern(pattern)?.test(value)
+
 /** A slider position as the script reads it, with no more decimals than its step has. */
 export function sliderValue(position: number, step?: number | null) {
   const decimals = String(step ?? 1).split(".")[1]?.length ?? 0
@@ -134,6 +156,8 @@ export type ParameterDraft = {
   max: string
   step: string
   path: string
+  pattern: string
+  pattern_message: string
 }
 export type ComposeDraft = {
   parameters: ParameterDraft[]
@@ -162,6 +186,8 @@ export const newParameter = (): ParameterDraft => ({
   max: "",
   step: "",
   path: "",
+  pattern: "",
+  pattern_message: "",
 })
 
 const bound = (value?: number | null) => (value === undefined || value === null ? "" : `${value}`)
@@ -183,6 +209,8 @@ function parameterDraft(parameter: ComposeParameter): ParameterDraft {
     max: bound(parameter.max),
     step: bound(parameter.step),
     path: parameter.path ?? "",
+    pattern: parameter.pattern ?? "",
+    pattern_message: parameter.pattern_message ?? "",
   }
 }
 
@@ -247,6 +275,15 @@ export function draftParameter(draft: ParameterDraft): ComposeParameter {
     ...(draft.type === "choice" && draft.allow_custom ? { allow_custom: true } : {}),
     ...range,
     ...(draft.type === "volume" ? { path: draft.path.trim() } : {}),
+    // Spaces can be part of a pattern, and a message without one is never shown.
+    ...(draft.type === "text" && draft.pattern
+      ? {
+          pattern: draft.pattern,
+          ...(draft.pattern_message.trim()
+            ? { pattern_message: draft.pattern_message.trim() }
+            : {}),
+        }
+      : {}),
   }
 }
 
@@ -313,6 +350,8 @@ function readParameter(value: unknown): ComposeParameter {
       : {}),
     ...(flag("allow_custom") ? { allow_custom: true } : {}),
     ...(text("path") ? { path: text("path") } : {}),
+    ...(text("pattern") ? { pattern: text("pattern") } : {}),
+    ...(text("pattern_message") ? { pattern_message: text("pattern_message") } : {}),
   }
   for (const field of ["min", "max", "step"] as const) {
     const bound = parameter[field]

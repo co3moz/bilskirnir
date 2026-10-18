@@ -85,6 +85,8 @@ test("a configuration carries the image's compose both ways", () => {
         required: true,
         secret: false,
         default: "",
+        pattern: "[^@]+@[^@]+",
+        pattern_message: "An email address",
       },
     ],
     script: "set -eu\n",

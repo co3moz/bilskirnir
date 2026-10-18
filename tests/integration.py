@@ -583,8 +583,8 @@ try:
     assert api(f"images/{built['id']}/icon?v={built['icon']}", raw=True) == icon_png
     print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
     # A compose asks for values when a container is created and hands them to its setup script.
-    compose = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True}, {"name": "TOKEN", "required": True, "secret": True}, {"name": "FLAVOR", "type": "choice", "options": [{"value": "vanilla"}, {"value": "chocolate"}], "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/compose-setup\necho \"token is $TOKEN\"\n"}
-    for invalid in [{**compose, "parameters": [{"name": "PATH"}]}, {**compose, "parameters": [{"name": "FLAVOR", "type": "choice"}]}, {**compose, "parameters": [{"name": "TOKEN", "secret": True, "default": "kept"}]}]:
+    compose = {"parameters": [{"name": "GREETING", "label": "Greeting", "required": True, "pattern": "[a-z]+", "pattern_message": "lowercase letters"}, {"name": "TOKEN", "required": True, "secret": True, "pattern": "\\S+"}, {"name": "FLAVOR", "type": "choice", "options": [{"value": "vanilla"}, {"value": "chocolate"}], "default": "vanilla"}], "script": "set -eu\nprintf '%s|%s|%s|%s' \"$GREETING\" \"$TOKEN\" \"$FLAVOR\" \"$(id -u)\" > ~/compose-setup\necho \"token is $TOKEN\"\n"}
+    for invalid in [{**compose, "parameters": [{"name": "PATH"}]}, {**compose, "parameters": [{"name": "FLAVOR", "type": "choice"}]}, {**compose, "parameters": [{"name": "TOKEN", "secret": True, "default": "kept"}]}, {**compose, "parameters": [{"name": "GREETING", "pattern": "(?=a)a"}]}, {**compose, "parameters": [{"name": "GREETING", "type": "number", "pattern": "[0-9]+"}]}, {**compose, "parameters": [{"name": "GREETING", "pattern": "[a-z]+", "default": "Hello"}]}]:
         try:
             api(f"images/{built['id']}/compose", invalid, method="PUT"); raise AssertionError(f"invalid compose accepted: {invalid['parameters']}")
         except urllib.error.HTTPError as error:
@@ -593,11 +593,17 @@ try:
     assert "script" not in composed["compose"] and [p["name"] for p in composed["compose"]["parameters"]] == ["GREETING", "TOKEN", "FLAVOR"]
     assert api(f"images/{built['id']}/compose")["script"] == compose["script"]
     assert api(f"images/{built['id']}/config")["compose"]["script"] == compose["script"]
-    for values in [{}, {"GREETING": "hello", "TOKEN": "x", "UNKNOWN": "y"}, {"GREETING": "hello", "TOKEN": "x", "FLAVOR": "strawberry"}]:
+    for values in [{}, {"GREETING": "hello", "TOKEN": "x", "UNKNOWN": "y"}, {"GREETING": "hello", "TOKEN": "x", "FLAVOR": "strawberry"}, {"GREETING": "Hello", "TOKEN": "x"}]:
         try:
             api("containers", {"name": "missing-values", "image": built["image_id"], "parameters": values}); raise AssertionError(f"compose values accepted: {values}")
         except urllib.error.HTTPError as error:
             assert error.code == 400
+    # A secret that does not match its pattern is refused without the error repeating it.
+    try:
+        api("containers", {"name": "missing-values", "image": built["image_id"], "parameters": {"GREETING": "hello", "TOKEN": f"two words-{tag}"}}); raise AssertionError("a secret with a space was accepted")
+    except urllib.error.HTTPError as error:
+        body = error.read().decode()
+        assert error.code == 400 and "expected format" in body and f"words-{tag}" not in body, body
     secret = f"s3cret-{tag}"
     spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}], "parameters": {"GREETING": "hello", "TOKEN": secret}}
     created = api("containers", spec)

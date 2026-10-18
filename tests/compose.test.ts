@@ -2,11 +2,13 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
+  browserPattern,
   displayOf,
   draftParameter,
   newOption,
   newVolumeName,
   parameterBody,
+  patternMatches,
   readCompose,
   sliderValue,
   composeBody,
@@ -219,6 +221,17 @@ const typed: ComposeParameter[] = [
     default: "chocolate",
     options: flavors,
   },
+  {
+    name: "ACCELERATOR",
+    label: "",
+    description: "",
+    type: "text",
+    required: false,
+    secret: false,
+    default: "192.168.1.20:10080",
+    pattern: "[^:]+:[0-9]+",
+    pattern_message: "host:port, for example 192.168.1.20:10080",
+  },
 ]
 
 const installs: ComposeParameter = {
@@ -296,6 +309,49 @@ test("removing an option drops a default that picked it", () => {
   const strict = { ...flavor, allow_custom: false, default: "chocolate" }
   assert.equal(withOptions(strict, vanillaOnly(strict)).default, "")
   assert.equal(withOptions(strict, [...strict.options, newOption()]).default, "chocolate")
+})
+
+test("a text value has to match its pattern as a whole before the form sends it", () => {
+  const address = "[0-9]{1,3}(\\.[0-9]{1,3}){3}:[0-9]{1,5}"
+  assert.equal(patternMatches(address, "192.168.1.20:10080"), true)
+  for (const value of ["192.168.1.20", "x192.168.1.20:10080", "192.168.1.20:10080 "])
+    assert.equal(patternMatches(address, value), false, value)
+  // The whole value, not the first alternative that matches at its start.
+  assert.equal(patternMatches("a|ab", "ab"), true)
+  assert.equal(patternMatches("a|ab", "abc"), false)
+  // An empty value is left to required, and a parameter without a pattern takes anything.
+  assert.equal(patternMatches(address, ""), true)
+  assert.equal(patternMatches(undefined, "anything"), true)
+  assert.equal(patternMatches("", "anything"), true)
+})
+
+test("a pattern the browser cannot read is left to the manager", () => {
+  // Rust syntax JavaScript does not have, and one that would close the group around it.
+  for (const pattern of ["\\A[0-9]+\\z", "(?i)abc", "a)|(b"]) {
+    assert.equal(browserPattern(pattern), null, pattern)
+    assert.equal(patternMatches(pattern, "a"), undefined, pattern)
+  }
+  assert.ok(browserPattern("[0-9]+") instanceof RegExp)
+})
+
+test("a pattern stays with text parameters through the editor", () => {
+  const [, , , , , , accelerator] = composeDraft({ ...unity, parameters: typed }).parameters
+  assert.deepEqual(draftParameter(accelerator), typed[6])
+  // Another type sends no pattern, though the draft keeps it while the type changes.
+  const number = withType(accelerator, "number")
+  assert.equal("pattern" in draftParameter(number), false)
+  assert.equal(draftParameter(withType(number, "text")).pattern, "[^:]+:[0-9]+")
+  // A message without a pattern would never be shown, and spaces around it are dropped.
+  const cleared = draftParameter({ ...accelerator, pattern: "" })
+  assert.equal("pattern" in cleared || "pattern_message" in cleared, false)
+  const spaced = draftParameter({ ...accelerator, pattern: " +", pattern_message: " spaces " })
+  assert.deepEqual([spaced.pattern, spaced.pattern_message], [" +", "spaces"])
+  // A secret can have a pattern too.
+  assert.equal(draftParameter({ ...accelerator, secret: true }).pattern, "[^:]+:[0-9]+")
+  assert.throws(
+    () => readCompose({ script: "true", parameters: [{ name: "A", pattern: 5 }] }),
+    /parameter A/
+  )
 })
 
 test("form values are written the way the script reads them", () => {
