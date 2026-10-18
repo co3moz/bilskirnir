@@ -285,6 +285,7 @@ export const en = {
   "volumes.title": "Named volumes",
   "volumes.description":
     "Files that outlive containers. Volumes are excluded from snapshots; browse one to read or change its files.",
+  "volumes.filtered": "Only volumes labeled {label} are listed (VOLUME_FILTER).",
   "volumes.new": "New volume",
   "volumes.loading": "Loading volumes…",
   "volumes.none": "No volumes.",

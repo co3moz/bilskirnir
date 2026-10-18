@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -681,9 +681,8 @@ pub async fn snapshot(
     )
 }
 pub async fn volumes(State(app): State<Arc<App>>) -> Result<Json<Value>> {
-    let bytes = app
-        .docker(&["volume", "ls", "--format", "{{json .}}"])
-        .await?;
+    let filter = app.config.volume_filter.as_deref();
+    let bytes = app.docker_args(&crate::volumes::list_args(filter)).await?;
     let mut values = String::from_utf8_lossy(&bytes)
         .lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())

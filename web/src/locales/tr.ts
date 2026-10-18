@@ -273,6 +273,7 @@ export const tr: Messages = {
   "volumes.title": "Adlandırılmış volume'ler",
   "volumes.description":
     "Konteynerlerden sonra da kalan dosyalar. Volume'ler anlık görüntülere dahil edilmez; dosyalarını okumak ya da değiştirmek için birine göz atın.",
+  "volumes.filtered": "Yalnızca {label} etiketli volume'ler listelenir (VOLUME_FILTER).",
   "volumes.new": "Yeni volume",
   "volumes.loading": "Volume'ler yükleniyor…",
   "volumes.none": "Volume yok.",

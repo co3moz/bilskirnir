@@ -32,6 +32,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             mcp_enabled: false,
             mcp_token: Some(String::new()),
             templates_url: None,
+            volume_filter: None,
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -124,6 +125,41 @@ fn templates_url_defaults_to_the_wiki_and_none_turns_the_page_off() {
         "https://example.com?x/index.json",
     ] {
         assert!(config::templates_url(Some(refused)).is_err(), "{refused}");
+    }
+}
+#[test]
+fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
+    // Compose hands an unset variable over as an empty one, so empty cannot switch it off.
+    for unset in [None, Some(""), Some("  ")] {
+        assert_eq!(
+            config::volume_filter(unset).unwrap().as_deref(),
+            Some("io.wsl-desktop.managed=true")
+        );
+    }
+    assert_eq!(config::volume_filter(Some("none")).unwrap(), None);
+    for label in [
+        "team",
+        "team=",
+        "com.example.team=unity",
+        "io.wsl-desktop.managed",
+        "io.wsl-desktop.managed=true",
+    ] {
+        assert_eq!(
+            config::volume_filter(Some(label)).unwrap().as_deref(),
+            Some(label)
+        );
+    }
+    // A label the manager could not put on what it creates, or one Docker's filter reads apart.
+    for refused in [
+        "=true",
+        "team name=a",
+        "team=a b",
+        "team=a,b",
+        "team\n=a",
+        "io.wsl-desktop.managed=false",
+        "io.wsl-desktop.managed=",
+    ] {
+        assert!(config::volume_filter(Some(refused)).is_err(), "{refused}");
     }
 }
 #[tokio::test]
@@ -1505,8 +1541,9 @@ async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
 
 /// A Docker CLI stand-in for a manager named `bilskirnir-manager` whose data volume is
 /// `bilskirnir-data`. It answers the manager's inspect, lists no containers, lists that volume
-/// and `project` as `GET /api/volumes` asks for them, fails everything else and records its
-/// arguments in the returned file.
+/// and `project` as `GET /api/volumes` asks for them, or only `project` under the default
+/// `VOLUME_FILTER`, inspects `project`, which carries the manager's label, and `outside`, which
+/// carries none, fails everything else and records its arguments in the returned file.
 #[cfg(unix)]
 pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -1518,6 +1555,7 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     let calls = dir.join("calls");
     let manager = serde_json::json!([{
         "Id": "manager",
+        "Image": "sha256:manager",
         "Config": {"Labels": {"io.wsl-desktop.manager": "true"}},
         "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
     }]);
@@ -1525,10 +1563,14 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=io.wsl-desktop.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
             calls = calls.display(),
             data = serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
             project = serde_json::json!({"Name": "project", "Driver": "local"}),
+            labeled = serde_json::json!([
+                {"Name": "project", "Labels": {"io.wsl-desktop.managed": "true"}}
+            ]),
+            outside = serde_json::json!([{"Name": "outside", "Labels": null}]),
         ),
     )
     .unwrap();
@@ -1680,6 +1722,37 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     assert!(
         !made.contains("network") && !made.contains("create"),
         "{made}"
+    );
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_desktop_cannot_be_created_with_a_volume_the_filter_leaves_out() {
+    let mut app = app(false);
+    let calls = manager_docker(&mut app);
+    Arc::get_mut(&mut app).unwrap().config.volume_filter = config::volume_filter(None).unwrap();
+    let mut spec = spec();
+    spec.mounts.push(model::Mount {
+        volume: "outside".into(),
+        target: "/workspace".into(),
+        readonly: false,
+    });
+    let error = app
+        .create_container("outside", spec, Default::default(), "create-job")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Volume not found");
+    // Refused before the image is looked at or downloaded, and nothing is saved.
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "container inspect bilskirnir-manager\nvolume inspect outside\n"
+    );
+    assert!(
+        app.db
+            .list::<model::Container>(model::CONTAINERS)
+            .unwrap()
+            .is_empty()
     );
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }

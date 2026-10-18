@@ -273,6 +273,7 @@ export const es: Messages = {
   "volumes.title": "Volúmenes con nombre",
   "volumes.description":
     "Archivos que sobreviven a los contenedores. Los volúmenes no se incluyen en las instantáneas; explora uno para leer o cambiar sus archivos.",
+  "volumes.filtered": "Solo se listan los volúmenes con la etiqueta {label} (VOLUME_FILTER).",
   "volumes.new": "Nuevo volumen",
   "volumes.loading": "Cargando volúmenes…",
   "volumes.none": "No hay volúmenes.",

@@ -29,7 +29,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
 | POST | `/api/login` | Sign in with `username` and `password`. |
 | POST | `/api/logout` | Sign out. |
-| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off. |
+| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is. |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
@@ -92,8 +92,8 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET, PUT, DELETE | `/api/images/{id}/icon` | Read, set or remove a saved image's [icon](#image-icons). |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with optional `size`, `name` and `description`; returns a job. |
-| GET | `/api/volumes` | Docker named volumes, each as `docker volume ls` describes it plus a boolean `manager`. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
-| POST | `/api/volumes` | Create a named volume using `name`. |
+| GET | `/api/volumes` | Docker named volumes that carry the `VOLUME_FILTER` label (by default the ones Bilskirnir created), each as `docker volume ls` describes it plus a boolean `manager`. A route or container setting that names a volume the filter leaves out answers as if it did not exist, except for a volume a container already mounts. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
+| POST | `/api/volumes` | Create a named volume using `name`, with the manager's label and the one `VOLUME_FILTER` asks for. |
 | POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
 | POST | `/api/volumes/{name}/files/read` | Read a bounded file slice as text or base64. |
 | POST | `/api/volumes/{name}/files/write` | Write text or base64 file data atomically. |
