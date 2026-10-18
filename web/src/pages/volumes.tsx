@@ -3,6 +3,7 @@ import {
   RiArchive2Line,
   RiDatabase2Line,
   RiAddLine,
+  RiDeleteBinLine,
   RiFileCopyLine,
   RiFolderOpenLine,
   RiImportLine,
@@ -25,13 +26,14 @@ import { openDialog } from "@/lib/dialogs"
 import { rich, t } from "@/lib/i18n"
 import { useContainers, useSettings, useVolumes } from "@/lib/queries"
 import type { Volume } from "@/lib/types"
+import { volumeUsers } from "@/lib/volume-files"
 
 // The ownership label the manager puts on what it creates; see src/model.rs.
 const LABEL = "io.wsl-desktop.managed"
 const MANAGED = `${LABEL}=true`
 
 type Row = Volume & {
-  users: { id: string; name: string; target: string; readonly: boolean }[]
+  users: ReturnType<typeof volumeUsers>
   /** Whether to mark the volume as one Bilskirnir created. */
   managed: boolean
 }
@@ -40,32 +42,64 @@ const column = columnHelper<Row>()
 const columns: DataColumn<Row>[] = [
   column.accessor("Name", {
     header: ({ column }) => <SortHeader column={column}>{t("table.name")}</SortHeader>,
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <RiDatabase2Line className="size-4 shrink-0 text-primary" aria-hidden />
-        {row.original.manager ? (
-          <span className="font-mono text-xs">{row.original.Name}</span>
-        ) : (
-          <button
-            type="button"
-            className="font-mono text-xs hover:underline"
-            onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
-          >
-            {row.original.Name}
-          </button>
-        )}
-        {row.original.manager && (
-          <Badge variant="outline" className="text-muted-foreground">
-            {t("volumes.manager")}
-          </Badge>
-        )}
-        {row.original.managed && (
-          <Badge variant="outline" className="text-muted-foreground">
-            Bilskirnir
-          </Badge>
-        )}
-      </div>
-    ),
+    cell: ({ row }) => {
+      const { owner } = row.original
+      return (
+        <div className="flex items-start gap-2">
+          <RiDatabase2Line className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+          <div className="flex flex-col gap-1">
+            {/* A long name keeps the icon beside it; the badges wrap below it instead. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {row.original.manager ? (
+                <span className="font-mono text-xs">{row.original.Name}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="text-left font-mono text-xs hover:underline"
+                  onClick={() => openDialog({ kind: "volume-files", name: row.original.Name })}
+                >
+                  {row.original.Name}
+                </button>
+              )}
+              {row.original.manager && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  {t("volumes.manager")}
+                </Badge>
+              )}
+              {row.original.managed && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  Bilskirnir
+                </Badge>
+              )}
+              {owner?.deleted && (
+                <Badge
+                  variant="outline"
+                  className="text-warning"
+                  title={t("volumes.ownerDeletedHint")}
+                >
+                  {t("volumes.ownerDeleted")}
+                </Badge>
+              )}
+            </div>
+            {owner && !owner.deleted && (
+              <span className="text-xs text-muted-foreground">
+                {rich("volumes.createdFor", {
+                  container: (
+                    <button
+                      type="button"
+                      className="text-foreground hover:underline"
+                      onClick={() => openDialog({ kind: "details", id: owner.container_id })}
+                    >
+                      {owner.name}
+                    </button>
+                  ),
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    },
   }),
   column.display({
     id: "users",
@@ -83,9 +117,14 @@ const columns: DataColumn<Row>[] = [
                 {user.name}
               </button>{" "}
               <span className="text-muted-foreground">
-                {rich(user.readonly ? "volumes.mountedAtReadOnly" : "volumes.mountedAt", {
-                  target: <code className="font-mono">{user.target}</code>,
-                })}
+                {rich(
+                  user.compose
+                    ? "volumes.mountedByCompose"
+                    : user.readonly
+                      ? "volumes.mountedAtReadOnly"
+                      : "volumes.mountedAt",
+                  { target: <code className="font-mono">{user.target}</code> }
+                )}
               </span>
             </li>
           ))}
@@ -131,6 +170,20 @@ const columns: DataColumn<Row>[] = [
             </TooltipTrigger>
             <TooltipContent>{t("volumes.copy")}</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => openDialog({ kind: "volume-delete", name: row.original.Name })}
+                aria-label={t("volumes.deleteOf", { name: row.original.Name })}
+              >
+                <RiDeleteBinLine />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("volumes.delete")}</TooltipContent>
+          </Tooltip>
           <Button
             variant="outline"
             size="sm"
@@ -155,16 +208,7 @@ export function VolumesPage() {
     () =>
       (volumes.data ?? []).map((volume) => ({
         ...volume,
-        users: (containers ?? []).flatMap((container) =>
-          container.spec.mounts
-            .filter((mount) => mount.volume === volume.Name)
-            .map((mount) => ({
-              id: container.id,
-              name: container.spec.name,
-              target: mount.target,
-              readonly: mount.readonly,
-            }))
-        ),
+        users: volumeUsers(volume.Name, containers ?? []),
         managed: marked && !!volume.Labels?.split(",").includes(MANAGED),
       })),
     [volumes.data, containers, marked]

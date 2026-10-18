@@ -1,19 +1,39 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import type { Volume } from "../web/src/lib/types"
+import type { ContainerSpec, Volume } from "../web/src/lib/types"
 import {
   entryNameError,
   joinPath,
   mountableVolumes,
+  ownedVolumes,
   parentPath,
   pathCrumbs,
   sortEntries,
   volumeArchiveName,
   volumeArchiveUrl,
   volumeDownloadUrl,
+  volumeHolders,
+  volumeUsers,
   type VolumeEntry,
 } from "../web/src/lib/volume-files"
+
+const spec: ContainerSpec = {
+  name: "",
+  image: "sha256:ws",
+  resolution: "1920x1080",
+  gpu: false,
+  internet: true,
+  audio: false,
+  microphone: false,
+  sudo: true,
+  gamepad: false,
+  ports: [],
+  cpus: null,
+  memory_mb: null,
+  shm_mb: 512,
+  mounts: [],
+}
 
 test("volume paths join and climb without leaving the root", () => {
   assert.equal(joinPath("/", "notes.txt"), "/notes.txt")
@@ -81,6 +101,93 @@ test("the manager's own volumes are not offered for a mount", () => {
     mountableVolumes(listed).map((item) => item.Name),
     ["project", "saves"]
   )
+})
+
+test("a volume shows where its compose mounts it, and only its owner may delete it along", () => {
+  const container = (id: string, mounts: string[], compose: string[]) => ({
+    id,
+    spec: { ...spec, name: `Desktop ${id}`, mounts: mounts.map(mount) },
+    setup: {
+      status: "completed" as const,
+      image: "i",
+      parameters: {},
+      secrets: [],
+      mounts: compose.map(mount),
+    },
+  })
+  const mount = (volume: string) => ({ volume, target: `/${volume}`, readonly: false })
+  const containers = [
+    container("e", ["projects"], ["wsld-e-workspace"]),
+    container("b", [], ["wsld-e-workspace"]),
+  ]
+  // The compose's mount counts as much as a volume setting does.
+  assert.deepEqual(
+    volumeUsers("wsld-e-workspace", containers).map((user) => [user.id, user.compose]),
+    [
+      ["e", true],
+      ["b", true],
+    ]
+  )
+  assert.deepEqual(volumeUsers("projects", containers)[0], {
+    id: "e",
+    name: "Desktop e",
+    target: "/projects",
+    readonly: false,
+    compose: false,
+  })
+  // A record without a setup mounts only what its settings say.
+  assert.deepEqual(volumeUsers("projects", [{ ...containers[0], setup: null }]).length, 1)
+  const owned = (Name: string, container_id?: string) => ({
+    Name,
+    owner: container_id
+      ? { container_id, parameter: "UNITY_WORKSPACE", name: null, deleted: false }
+      : null,
+  })
+  assert.deepEqual(
+    ownedVolumes(
+      [
+        owned("wsld-e-workspace", "e"),
+        owned("projects"),
+        owned("wsld-e-cache", "e"),
+        owned("x", "b"),
+      ],
+      "e"
+    ),
+    ["wsld-e-cache", "wsld-e-workspace"]
+  )
+  // An older manager sends no owner, so nothing is offered for deletion.
+  assert.deepEqual(ownedVolumes([{ Name: "wsld-e-workspace" }], "e"), [])
+})
+
+test("a volume any container mounts names each of those containers once", () => {
+  type Mount = { volume: string; target: string; readonly: boolean }
+  const mount = (volume: string, target = `/${volume}`): Mount => ({
+    volume,
+    target,
+    readonly: false,
+  })
+  const container = (id: string, name: string, mounts: Mount[], compose: Mount[] = []) => ({
+    id,
+    spec: { ...spec, name, mounts },
+    setup: {
+      status: "completed" as const,
+      image: "i",
+      parameters: {},
+      secrets: [],
+      mounts: compose,
+    },
+  })
+  const containers = [
+    // One container that mounts it twice, and two that share a name.
+    container("a", "Unity", [mount("projects", "/projects"), mount("projects", "/backup")]),
+    container("b", "Build", [], [mount("projects")]),
+    container("c", "Build", [mount("projects")]),
+    container("d", "Other", [mount("saves")]),
+  ]
+  assert.deepEqual(volumeHolders("projects", containers), ["Unity", "Build", "Build"])
+  assert.deepEqual(volumeHolders("saves", containers), ["Other"])
+  // An orphan, such as one whose owner was deleted without it, is held by nobody.
+  assert.deepEqual(volumeHolders("wsld-gone-cache", containers), [])
 })
 
 test("downloads name the volume and the path in the query", () => {

@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 64 tools:
+The server currently exposes 65 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -89,7 +89,7 @@ The server currently exposes 64 tools:
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
 | Images | `list_images`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
-| Persistent storage | `list_volumes`, `create_volume`, `copy_volume` |
+| Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
 | Operation results | `list_jobs`, `get_job` |
 
@@ -135,7 +135,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 }
 ```
 
-`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `text` parameter can have a `pattern`, a regular expression in the syntax of Rust's regex crate that a value must match as a whole, and a `pattern_message` describing the expected format, which the error repeats when a value does not match; an empty value is left to `required`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes`, other than one marked `manager`, or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`. Its job completes after the script succeeded, and `get_container` reports the result in `setup`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `text` parameter can have a `pattern`, a regular expression in the syntax of Rust's regex crate that a value must match as a whole, and a `pattern_message` describing the expected format, which the error repeats when a value does not match; an empty value is left to `required`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes`, other than one marked `manager`, or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. With `"new_volume": true`, `""` or no value gives the new container a volume of its own, `wsld-CONTAINER_ID-name`, which its creation job creates, so there is no `create_volume` to call first and nothing to clean up when the request is refused. `list_volumes` reports such a volume's `owner`: its `container_id`, `parameter` and the container's `name`, or `deleted: true` once that container was deleted. `delete_container` keeps it unless `delete_volumes` is `true`, and then removes only the volumes created for that container that no other container mounts, listing them in the job result as `volumes_deleted` and `volumes_kept`. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
 
 ## Read and write files
 
@@ -279,3 +279,5 @@ Read/write and execution tools operate inside managed desktop containers. They d
 Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one. It lists only the volumes that carry the installation's `VOLUME_FILTER` label, by default the ones Bilskirnir created; a volume it leaves out cannot be mounted or opened, so create or copy one instead of naming a volume from elsewhere on the host.
 
 `copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).
+
+`delete_volume` deletes a named volume, `name`, with its files, such as one `list_volumes` shows with `owner.deleted: true` because its container was deleted without it. It cannot be undone, so check the name first. It answers at once, without a job, and deletes nothing when it refuses: for the manager's own volumes, for a volume a managed container mounts through its volumes or its compose, whose name the error gives, and for one another Docker container still uses. A volume `VOLUME_FILTER` leaves out is answered as missing, as `list_volumes` leaves it out.

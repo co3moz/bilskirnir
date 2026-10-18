@@ -5,7 +5,7 @@ use crate::{
 use axum::{
     Json, Router,
     body::{Body, HttpBody, to_bytes},
-    extract::{Path, Request, State},
+    extract::{Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -291,7 +291,11 @@ impl BilskirnirMcp {
                     .0
             }
             "retry_container" => api::retry(state, Path(id.unwrap())).await?.0,
-            "delete_container" => api::remove(state, Path(id.unwrap())).await?.0,
+            "delete_container" => {
+                api::remove(state, Path(id.unwrap()), Query(parse(args)?))
+                    .await?
+                    .0
+            }
             "container_logs" => api::logs(state, Path(id.unwrap())).await?.0,
             "container_diagnostics" => api::diagnostics(state, Path(id.unwrap())).await?.0,
             "exec_container" => {
@@ -332,6 +336,11 @@ impl BilskirnirMcp {
                 let source = Path(string(&args, "volume")?);
                 args.as_object_mut().unwrap().remove("volume");
                 Box::pin(volumes::copy(state, source, Json(parse(args)?)))
+                    .await?
+                    .0
+            }
+            "delete_volume" => {
+                Box::pin(volumes::remove(state, Path(string(&args, "name")?)))
                     .await?
                     .0
             }
@@ -636,7 +645,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none; with new_volume, an empty string or no value has the job create a volume for this container, named wsld-CONTAINER_ID-parameter-name."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -702,8 +711,8 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "delete_container",
-            "Delete a managed container and its networks. Unsnapshotted container files are lost; named volumes and saved images are preserved. Returns job_id.",
-            env(),
+            "Delete a managed container and its networks. Unsnapshotted container files are lost; named volumes and saved images are preserved, except with delete_volumes=true the volumes created for this container (list_volumes shows them with its owner), unless another container mounts one. Returns job_id; with delete_volumes the job result lists volumes_deleted and volumes_kept.",
+            json!({"container_id":id,"delete_volumes":{"type":"boolean","default":false,"description":"Also delete the volumes a compose volume parameter with new_volume made for this container. Volumes chosen by name, or mounted by another container, always stay."}}),
             &["container_id"],
             false,
             true,
@@ -778,7 +787,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "list_volumes",
-            "List the named volumes containers may use: by default the ones Bilskirnir created, as the installation's VOLUME_FILTER label sets. A volume left out cannot be mounted or opened, and a request that names it is answered as if it did not exist. manager=true marks the manager's own volumes, such as its data volume, which a container cannot mount. Listing does not grant arbitrary container execution.",
+            "List the named volumes containers may use: by default the ones Bilskirnir created, as the installation's VOLUME_FILTER label sets. A volume left out cannot be mounted or opened, and a request that names it is answered as if it did not exist. manager=true marks the manager's own volumes, such as its data volume, which a container cannot mount. owner is set on a volume made for a container by a compose volume parameter with new_volume: its container_id, the parameter, and the container's name, or deleted=true once that container was deleted; it is null on every other volume. Listing does not grant arbitrary container execution.",
             json!({}),
             &[],
             true,
@@ -801,6 +810,15 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             &["volume", "name"],
             false,
             false,
+            false,
+        ),
+        tool(
+            "delete_volume",
+            "Delete a named volume and every file in it, such as one list_volumes shows with owner.deleted=true because its container was deleted without it. Cannot be undone. Refused for volumes marked manager=true, for a volume a managed container mounts through its volumes or its compose (the error names that container), and for one any other Docker container still uses; a missing volume, or one VOLUME_FILTER leaves out, is an error. Answers at once, without a job.",
+            json!({"name":text}),
+            &["name"],
+            false,
+            true,
             false,
         ),
         tool(
@@ -962,7 +980,7 @@ fn compose_schema() -> Value {
                 "name":{"type":"string","pattern":"^[A-Z][A-Z0-9_]{0,63}$","description":"The environment variable that carries the value to the setup script."},
                 "label":{"type":"string","maxLength":100,"default":"","description":"What the create form asks for."},
                 "description":{"type":"string","maxLength":500,"default":"","description":"Help the create form shows with the field, such as where to find the value."},
-                "type":{"type":"string","enum":["text","number","boolean","choice","choices","volume","folder"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line. A volume's value names a named volume, or is empty for none; the volume is mounted at path, the variable holds the path and NAME_VOLUME the volume. A folder's value is a canonical absolute folder outside the system folders, such as /home/desktop/Projects. Volume paths and folder values become the container's setup.places, which take uploads."},
+                "type":{"type":"string","enum":["text","number","boolean","choice","choices","volume","folder"],"default":"text","description":"Every value reaches the script as text: a number as a plain decimal such as 42 or -1.5, a boolean as true or false, several choices one per line. A volume's value names a named volume, or is empty for none, or for a new one with new_volume; the volume is mounted at path, the variable holds the path and NAME_VOLUME the volume. A folder's value is a canonical absolute folder outside the system folders, such as /home/desktop/Projects. Volume paths and folder values become the container's setup.places, which take uploads."},
                 "display":{"type":"string","enum":["input","multiline","slider","toggle","checkbox","select","radio","checkboxes"],"description":"How the dashboard shows it. text: input (default) or multiline; number: input or slider (needs min and max); boolean: toggle or checkbox; choice: select or radio; choices: checkboxes; volume: select; folder: input."},
                 "required":{"type":"boolean","default":false,"description":"A required boolean must be true."},
                 "secret":{"type":"boolean","default":false,"description":"Text only. Masked in job logs and never returned; cannot have a default."},
@@ -974,7 +992,8 @@ fn compose_schema() -> Value {
                 "step":{"type":"number","exclusiveMinimum":0,"description":"number only; counted from min, or from 0 without one."},
                 "path":{"type":"string","pattern":"^/","description":"volume only, and required there: the absolute folder in the desktop where the chosen volume is mounted, such as /opt/unity. Without a volume the folder stays inside the container. Either way it is created if missing and given to the desktop user while empty, before the script runs."},
                 "pattern":{"type":"string","maxLength":500,"description":"text only: a regular expression in the syntax of Rust's regex crate that a value must match as a whole, such as [0-9.]+:[0-9]+. No lookaround or backreferences, and \\d and \\w match Unicode digits and letters. An empty value is left to required; a default must match."},
-                "pattern_message":{"type":"string","maxLength":200,"description":"text only, with a pattern: the expected format, which the dashboard shows and an error names when a value does not match, such as host:port, for example 192.168.1.20:10080."}
+                "pattern_message":{"type":"string","maxLength":200,"description":"text only, with a pattern: the expected format, which the dashboard shows and an error names when a value does not match, such as host:port, for example 192.168.1.20:10080."},
+                "new_volume":{"type":"boolean","default":false,"description":"volume only, without a default: a container whose request leaves the value empty gets a new volume of its own, wsld-CONTAINER_ID-name in lowercase with dashes for underscores, created by its creation job and labeled with its owner, instead of none; required then never fails. A request that names a volume still uses it. Resets, retries and settings changes keep the volume, a snapshot's new containers get their own, and delete_container removes it only with delete_volumes=true."}
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},

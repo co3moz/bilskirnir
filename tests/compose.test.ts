@@ -5,8 +5,10 @@ import {
   browserPattern,
   displayOf,
   draftParameter,
+  NEW_VOLUME,
   newOption,
   newVolumeName,
+  NO_VOLUME,
   parameterBody,
   patternMatches,
   readCompose,
@@ -16,9 +18,13 @@ import {
   composeFor,
   toggleChoice,
   volumeChoices,
+  volumeDefault,
+  volumeExtras,
   volumeNameValid,
+  volumeSelection,
   withOptions,
   withType,
+  withVolumeDefault,
 } from "../web/src/lib/compose"
 import type { Compose, ComposeParameter } from "../web/src/lib/types"
 
@@ -295,6 +301,74 @@ test("a volume parameter offers the volumes there are and names a new one after 
     assert.ok(volumeNameValid(name), name)
   for (const name of ["", "a", "-unity", "with space", "a/b", "x".repeat(129)])
     assert.equal(volumeNameValid(name), false, name)
+})
+
+const workspace: ComposeParameter = {
+  name: "UNITY_WORKSPACE",
+  label: "Workspace",
+  description: "",
+  type: "volume",
+  required: true,
+  secret: false,
+  default: "",
+  path: "/home/desktop/Projects",
+  new_volume: true,
+}
+
+test("the editor offers a new volume for each container as a default of its own", () => {
+  const [draft] = composeDraft({ ...unity, parameters: [workspace] }).parameters
+  assert.equal(volumeDefault(draft), NEW_VOLUME)
+  // It survives the editor and a pasted configuration, and is sent only when set.
+  assert.deepEqual(composeBody(composeDraft({ ...unity, parameters: [workspace] })).parameters, [
+    workspace,
+  ])
+  assert.deepEqual(readCompose({ script: "true", parameters: [workspace] }).parameters, [workspace])
+  // The three defaults: none, a volume by name, and a new one, which clears a named default.
+  const none = withVolumeDefault(draft, "")
+  assert.deepEqual([none.new_volume, none.default, volumeDefault(none)], [false, "", ""])
+  assert.equal("new_volume" in draftParameter(none), false)
+  const named = withVolumeDefault(draft, "unity-installs")
+  assert.deepEqual([named.new_volume, draftParameter(named).default], [false, "unity-installs"])
+  const fresh = withVolumeDefault(named, NEW_VOLUME)
+  assert.deepEqual([draftParameter(fresh).new_volume, draftParameter(fresh).default], [true, ""])
+  // The editor's select offers both no volume and a new one, whatever the draft holds.
+  for (const parameter of [draftParameter(none), draftParameter(fresh)])
+    assert.deepEqual(volumeExtras(parameter, { required: false, defaults: true }), {
+      none: true,
+      fresh: true,
+    })
+  assert.equal(volumeSelection(draftParameter(fresh), volumeDefault(fresh), false), NEW_VOLUME)
+  assert.equal(volumeSelection(draftParameter(none), volumeDefault(none), false), NO_VOLUME)
+  // Another type drops it, and only a volume parameter can send it.
+  const text = withType(fresh, "text")
+  assert.equal(text.new_volume, false)
+  assert.equal("new_volume" in draftParameter({ ...text, new_volume: true }), false)
+})
+
+test("the create form preselects the new volume and sends it as an empty value", () => {
+  const compose = { ...unity, parameters: [workspace] }
+  // Left alone, the request leaves it empty, which the job turns into the container's volume.
+  assert.deepEqual(parameterBody(compose, {}), { UNITY_WORKSPACE: "" })
+  assert.equal(volumeSelection(workspace, "", true), NEW_VOLUME)
+  // Required or not, the form offers the new volume instead of none.
+  for (const required of [true, false])
+    assert.deepEqual(volumeExtras(workspace, { required, defaults: false }), {
+      none: false,
+      fresh: true,
+    })
+  // A volume picked by name is sent as it is.
+  assert.equal(volumeSelection(workspace, "projects", true), "projects")
+  assert.deepEqual(parameterBody(compose, { UNITY_WORKSPACE: "projects" }), {
+    UNITY_WORKSPACE: "projects",
+  })
+  // A parameter without it keeps no volume, or nothing chosen yet when one is required.
+  const plain = { ...workspace, new_volume: undefined }
+  assert.deepEqual(volumeExtras(plain, { required: false, defaults: false }), {
+    none: true,
+    fresh: false,
+  })
+  assert.equal(volumeSelection(plain, "", false), NO_VOLUME)
+  assert.equal(volumeSelection(plain, "", true), "")
 })
 
 test("every type survives the editor unchanged", () => {

@@ -68,6 +68,7 @@ export const es: Messages = {
   "jobs.log.deletedNamed": 'Se eliminó "{name}".',
   "jobs.log.deleted": "Contenedor eliminado.",
   "jobs.log.volumesPreserved": "Se conservaron los volúmenes con nombre.",
+  "jobs.log.volumesDeleted": "Se eliminaron los volúmenes creados para él: {names}.",
   "jobs.log.imagesPreserved": "Se conservaron las imágenes guardadas.",
   "jobs.log.completed":
     "La operación se completó correctamente. No se guardó ningún registro detallado.",
@@ -264,6 +265,9 @@ export const es: Messages = {
   "volumes.mountedAtReadOnly": "en {target} (solo lectura)",
   "volumes.mountedByCompose": "en {target}, elegido para el compose",
   "volumes.notMounted": "Sin montar",
+  "volumes.createdFor": "Creado para {container}",
+  "volumes.ownerDeleted": "Propietario eliminado",
+  "volumes.ownerDeletedHint": "Creado para un contenedor que se eliminó sin él.",
   "volumes.manager": "Datos del gestor",
   "volumes.managerHint":
     "La base de datos y las sesiones de Bilskirnir. No se puede abrir, exportar ni montar.",
@@ -288,6 +292,14 @@ export const es: Messages = {
   "volumes.copyDescription":
     "Copia todos los archivos en un volumen nuevo, y pertenecen al usuario del escritorio. Una copia completa ocupa tanto espacio en disco como el volumen.",
   "volumes.copyName": "Nombre de la copia",
+  "volumes.delete": "Eliminar volumen",
+  "volumes.deleteOf": "Eliminar {name}",
+  "volumes.deleteTitle": "¿Eliminar {name}?",
+  "volumes.deleteDescription":
+    "Se eliminan el volumen y todos sus archivos. No se puede deshacer; exporta antes un archivo comprimido si podrías volver a necesitar los archivos.",
+  "volumes.deleteMounted":
+    "Montado en {containers}. Un volumen que un contenedor monta se conserva: elimina primero el contenedor, o quita el volumen de su configuración.",
+  "volumes.deleted": "Se eliminó el volumen {name}.",
   "volumes.import.arrived":
     "El archivo comprimido llegó. Se están escribiendo sus últimos archivos.",
   "volumes.import.writing": "Escribiendo los últimos archivos…",
@@ -699,6 +711,9 @@ export const es: Messages = {
   "delete.title": "¿Eliminar este contenedor?",
   "delete.description":
     "Se eliminan el contenedor y sus cambios sin guardar. Los volúmenes y las instantáneas se conservan.",
+  "delete.descriptionVolumes":
+    "Se eliminan el contenedor, sus cambios sin guardar y los volúmenes creados para él. Los demás volúmenes y las instantáneas se conservan.",
+  "delete.volumes": "Eliminar también los volúmenes creados para este contenedor",
   "create.description":
     "Un contenedor a partir de cualquier imagen. Una imagen del catálogo que aún no está descargada se descarga primero.",
   "create.namePlaceholder": "Espacio de trabajo de Unity",
@@ -761,6 +776,9 @@ export const es: Messages = {
   "parameter.volume.newName": "Nombre del nuevo volumen",
   "parameter.volume.mountedAt": "Montado en {path}.",
   "parameter.volume.stays": "Sin volumen, {path} queda dentro del contenedor.",
+  "parameter.volume.newEach": "Un volumen nuevo para cada contenedor",
+  "parameter.volume.newOwn": "Un volumen nuevo para este contenedor",
+  "parameter.volume.newMounted": "Se crea con el contenedor y se monta en {path}.",
   "import.archive.description":
     "Carga en Docker un archivo comprimido exportado desde Bilskirnir o guardado con docker save.",
   "import.docker.description":

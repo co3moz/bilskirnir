@@ -1,6 +1,7 @@
 //! Named volumes beyond listing and creating them: their files, read and changed from the
-//! dashboard without a container that mounts them, and the manager's own volumes, which no
-//! helper or desktop gets and which a listing marks.
+//! dashboard without a container that mounts them, the manager's own volumes, which no helper
+//! or desktop gets and which a listing marks, the volumes created for one container, and
+//! deleting a volume that nothing mounts.
 //!
 //! `VOLUME_FILTER` names the label a volume needs for a request to reach it. Every volume the
 //! manager creates gets that label; the others stay out of the listing, and a request that names
@@ -14,6 +15,8 @@
 //! desktop user (UID/GID 1001), as a desktop that mounts the volume would.
 mod archive;
 mod files;
+mod owned;
+mod remove;
 
 use crate::{
     App,
@@ -29,6 +32,8 @@ pub(crate) use archive::{Extract, Import, copy, export, extract, import};
 pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };
+pub(crate) use owned::{RemovedVolumes, mark_owners, removable};
+pub(crate) use remove::{mounted_by, remove};
 
 /// Where a helper mounts the volume.
 pub(crate) const MOUNT: &str = "/volume";
@@ -65,20 +70,21 @@ impl App {
                 "A volume with this name already exists".into(),
             ));
         }
-        let mut args = vec!["volume".to_owned(), "create".into()];
-        for label in labels(self.config.volume_filter.as_deref()) {
-            args.extend(["--label".into(), label]);
-        }
-        args.push(name.into());
+        self.make_volume(name, &[]).await?;
+        Ok(())
+    }
+
+    /// Ask Docker for the volume `name` with the manager's label, the one `VOLUME_FILTER` asks
+    /// for and `extra`, and return how Docker describes it. Every volume the manager creates is
+    /// created here, so none misses the filter's label.
+    pub(crate) async fn make_volume(&self, name: &str, extra: &[String]) -> anyhow::Result<Value> {
+        let args = create_args(name, self.config.volume_filter.as_deref(), extra);
         self.docker_args(&args).await?;
         let created = self.inspect("volume", name).await?;
         if created["Labels"][LABEL] != "true" || !self.lists_volume(&created) {
-            return Err(anyhow::anyhow!(
-                "Volume was created by another operation; ownership does not match"
-            )
-            .into());
+            anyhow::bail!("Volume was created by another operation; ownership does not match");
         }
-        Ok(())
+        Ok(created)
     }
 
     /// The manager container, whose image every helper runs.
@@ -239,6 +245,17 @@ pub(crate) fn labels(filter: Option<&str>) -> Vec<String> {
         labels.push(filter.into());
     }
     labels
+}
+
+/// The `docker volume create` arguments of the volume `name`, with the labels `filter` asks for and
+/// `extra`.
+fn create_args(name: &str, filter: Option<&str>, extra: &[String]) -> Vec<String> {
+    let mut args = vec!["volume".to_owned(), "create".into()];
+    for label in labels(filter).into_iter().chain(extra.iter().cloned()) {
+        args.extend(["--label".into(), label]);
+    }
+    args.push(name.into());
+    args
 }
 
 /// Add `manager` to each line of `docker volume ls`: whether the manager mounts that volume, so a

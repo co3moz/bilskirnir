@@ -1,4 +1,4 @@
-use crate::{App, model::*};
+use crate::{App, model::*, volumes::RemovedVolumes};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{process::Stdio, time::Duration};
@@ -148,7 +148,7 @@ impl App {
             bail!("Image must be derived from a Bilskirnir desktop image");
         }
         let image_id = image["Id"].as_str().context("Missing image ID")?;
-        let compose = self.pin_compose(&spec.image, image_id, &parameters)?;
+        let compose = self.pin_compose(id, &spec.image, image_id, &parameters)?;
         let compose_mounts = compose
             .as_ref()
             .map(|(_, pinned)| pinned.mounts())
@@ -157,7 +157,14 @@ impl App {
         // An image's compose names its default volume; it cannot hand a desktop the manager's
         // database either.
         crate::volumes::refuse_manager_volumes(&manager_info, &compose_mounts)?;
-        for mount in &compose_mounts {
+        let own_volumes = compose
+            .as_ref()
+            .map(|(_, pinned)| pinned.new_volumes(id))
+            .unwrap_or_default();
+        for mount in compose_mounts
+            .iter()
+            .filter(|mount| !own_volumes.iter().any(|(_, own)| *own == mount.volume))
+        {
             self.chosen_volume(&mount.volume)
                 .await
                 .with_context(|| {
@@ -191,6 +198,18 @@ impl App {
             working_image: None,
             setup: compose.as_ref().map(|(image, pinned)| pinned.setup(image)),
         };
+        // The container's own volumes are made before its record, so no record names one that
+        // was never made; a missing one later was removed, and the rule for missing volumes holds.
+        for (parameter, volume) in &own_volumes {
+            let lock = self.resource_lock(&format!("volume:{volume}"));
+            let _guard = lock.lock().await;
+            if self.container_volume(id, parameter, volume).await? {
+                self.append_log(
+                    job_id,
+                    &format!("Created the volume {volume} for {parameter}."),
+                )?;
+            }
+        }
         // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
         if let Some((_, pinned)) = &compose {
             self.save_pinned(id, pinned)?;
@@ -240,11 +259,17 @@ impl App {
         let mounts = env.mounts();
         crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
         // These were chosen when the container was created, so a volume VOLUME_FILTER no longer
-        // lists stays mounted.
+        // lists stays mounted. Also a volume created for this container: one that is gone may
+        // have held its work.
         for mount in &mounts {
-            self.inspect("volume", &mount.volume).await.context(
-                "Configured volume is missing; setup stopped without creating an empty replacement",
-            )?;
+            self.inspect("volume", &mount.volume)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Configured volume {} is missing; setup stopped without creating an empty replacement",
+                        mount.volume
+                    )
+                })?;
         }
         let existing = self.optional_inspect("container", &env.container).await?;
         if existing.is_some() {
@@ -418,7 +443,14 @@ impl App {
         self.db.put(CONTAINERS, &env.id, env)?;
         Ok(())
     }
-    pub async fn remove_container(&self, env: &Container, job_id: &str) -> Result<()> {
+    /// Delete a container and its networks. Named volumes stay, except with `volumes` those
+    /// created for it that no other container mounts.
+    pub(crate) async fn remove_container(
+        &self,
+        env: &Container,
+        job_id: &str,
+        volumes: bool,
+    ) -> Result<RemovedVolumes> {
         self.append_log(
             job_id,
             &format!("Checking ownership before deleting \"{}\".", env.spec.name),
@@ -428,15 +460,48 @@ impl App {
             None => None,
         };
         let container_id = container.as_ref().and_then(|v| v["Id"].as_str());
-        let manager = if let Some(name) = &self.config.manager {
+        let manager_info = if let Some(name) = &self.config.manager {
             let m = self.inspect("container", name).await?;
             if m["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
                 bail!("Manager ownership does not match");
             }
-            Some(m["Id"].as_str().context("Missing manager ID")?.to_owned())
+            Some(m)
         } else {
             None
         };
+        let manager = match &manager_info {
+            Some(m) => Some(m["Id"].as_str().context("Missing manager ID")?.to_owned()),
+            None => None,
+        };
+        let mut removed = RemovedVolumes::default();
+        let mut doomed = Vec::new();
+        if volumes {
+            let mut owned = self.owned_volumes(&env.id).await?;
+            // A label alone never hands over the manager's own volumes.
+            owned.retain(|name| {
+                !manager_info
+                    .as_ref()
+                    .is_some_and(|m| crate::volumes::manager_volume(m, name))
+            });
+            let others = self
+                .db
+                .list::<Container>(CONTAINERS)?
+                .into_iter()
+                .filter(|other| other.id != env.id)
+                .collect::<Vec<_>>();
+            let (free, shared) = crate::volumes::removable(owned, &others);
+            for (name, other) in shared {
+                self.append_log(
+                    job_id,
+                    &format!(
+                        "Keeping the volume {name}: \"{}\" mounts it too.",
+                        other.spec.name
+                    ),
+                )?;
+                removed.kept.push(name);
+            }
+            doomed = free;
+        }
         let mut networks = Vec::new();
         // Preflight ownership and every endpoint BEFORE deleting the container's writable layer.
         for (name, internal) in [(&env.private_network, true), (&env.egress_network, false)] {
@@ -478,6 +543,19 @@ impl App {
             self.docker(&["network", "rm", id]).await?;
             self.append_log(job_id, &format!("Removed the container's {role} network."))?;
         }
+        // The container is gone, so Docker refuses only a volume something else still uses.
+        for name in doomed {
+            match self.docker(&["volume", "rm", &name]).await {
+                Ok(_) => {
+                    self.append_log(job_id, &format!("Deleted the volume {name}."))?;
+                    removed.deleted.push(name);
+                }
+                Err(error) => {
+                    self.append_log(job_id, &format!("Keeping the volume {name}: {error:#}"))?;
+                    removed.kept.push(name);
+                }
+            }
+        }
         if let Some(image) = &env.working_image {
             self.release_working_image(image, job_id).await?;
         }
@@ -486,12 +564,19 @@ impl App {
         self.db.remove(CONTAINERS, &env.id)?;
         self.append_log(
             job_id,
-            &format!(
-                "Deleted \"{}\". Named volumes and saved images were preserved.",
-                env.spec.name
-            ),
+            &if removed.deleted.is_empty() {
+                format!(
+                    "Deleted \"{}\". Named volumes and saved images were preserved.",
+                    env.spec.name
+                )
+            } else {
+                format!(
+                    "Deleted \"{}\" and the volumes created for it. Other named volumes and saved images were preserved.",
+                    env.spec.name
+                )
+            },
         )?;
-        Ok(())
+        Ok(removed)
     }
     /// Remove records that describe processes inside a container that no longer exists.
     pub fn remove_container_records(&self, container_id: &str) -> Result<()> {

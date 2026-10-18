@@ -73,6 +73,7 @@ export const en = {
   "jobs.log.deletedNamed": 'Deleted "{name}".',
   "jobs.log.deleted": "Container deleted.",
   "jobs.log.volumesPreserved": "Named volumes were preserved.",
+  "jobs.log.volumesDeleted": "Deleted the volumes created for it: {names}.",
   "jobs.log.imagesPreserved": "Saved images were preserved.",
   "jobs.log.completed": "Operation completed successfully. No detailed log was recorded.",
   "jobs.log.failed": "Operation failed. No detailed log was recorded.",
@@ -276,6 +277,9 @@ export const en = {
   "volumes.mountedAtReadOnly": "at {target} (read-only)",
   "volumes.mountedByCompose": "at {target}, chosen for the compose",
   "volumes.notMounted": "Not mounted",
+  "volumes.createdFor": "Created for {container}",
+  "volumes.ownerDeleted": "Owner deleted",
+  "volumes.ownerDeletedHint": "Created for a container that was deleted without it.",
   "volumes.manager": "Manager data",
   "volumes.managerHint":
     "Bilskirnir's own database and sessions. It cannot be opened, exported or mounted.",
@@ -300,6 +304,14 @@ export const en = {
   "volumes.copyDescription":
     "Copies every file into a new volume, owned by the desktop user. A full copy takes as much disk space as the volume.",
   "volumes.copyName": "Name of the copy",
+  "volumes.delete": "Delete volume",
+  "volumes.deleteOf": "Delete {name}",
+  "volumes.deleteTitle": "Delete {name}?",
+  "volumes.deleteDescription":
+    "The volume and every file in it are deleted. This cannot be undone; export an archive first if you may need the files again.",
+  "volumes.deleteMounted":
+    "Mounted in {containers}. A volume a container mounts stays: delete the container, or take the volume out of its settings, first.",
+  "volumes.deleted": "Deleted volume {name}.",
   "volumes.import.arrived": "The archive arrived. Its last files are being written.",
   "volumes.import.writing": "Writing the last files…",
   "volumes.import.description": "Unpacks an archive exported from a volume into a new one.",
@@ -723,6 +735,9 @@ export const en = {
   "delete.title": "Delete this container?",
   "delete.description":
     "The container and its unsaved changes are deleted. Volumes and snapshots are kept.",
+  "delete.descriptionVolumes":
+    "The container, its unsaved changes and the volumes created for it are deleted. Other volumes and snapshots are kept.",
+  "delete.volumes": "Also delete the volumes created for this container",
 
   "create.description":
     "A container from any image. A catalog image that is not downloaded yet downloads first.",
@@ -787,6 +802,9 @@ export const en = {
   "parameter.volume.newName": "New volume name",
   "parameter.volume.mountedAt": "Mounted at {path}.",
   "parameter.volume.stays": "Without a volume, {path} stays inside the container.",
+  "parameter.volume.newEach": "A new volume for each container",
+  "parameter.volume.newOwn": "A new volume for this container",
+  "parameter.volume.newMounted": "Created with the container and mounted at {path}.",
 
   "import.archive.description":
     "Loads an archive exported from Bilskirnir, or saved with docker save, into Docker.",

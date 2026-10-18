@@ -262,7 +262,7 @@ fn every_volume_the_manager_creates_is_one_its_filter_lists() {
 
 #[test]
 fn volumes_are_created_in_one_place_only() {
-    // A volume created anywhere but `App::new_volume` would miss the filter's label and vanish
+    // A volume created anywhere but `App::make_volume` would miss the filter's label and vanish
     // from the listing, so no other code asks Docker to create one.
     fn sources(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -315,7 +315,7 @@ async fn a_volume_filter_hides_and_refuses_what_it_leaves_out() {
     let listing = crate::api::volumes(State(app.clone())).await.unwrap().0;
     assert_eq!(
         listing,
-        serde_json::json!([{"Name": "project", "Driver": "local", "manager": false}])
+        serde_json::json!([{"Name": "project", "Driver": "local", "manager": false, "owner": null}])
     );
     // Docker filters the list; the manager's data volume carries no label and stays out.
     assert!(
