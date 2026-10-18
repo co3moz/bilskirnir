@@ -68,6 +68,7 @@ export const fr: Messages = {
   "jobs.log.deletedNamed": "« {name} » supprimé.",
   "jobs.log.deleted": "Conteneur supprimé.",
   "jobs.log.volumesPreserved": "Les volumes nommés ont été conservés.",
+  "jobs.log.volumesDeleted": "Les volumes créés pour lui ont été supprimés : {names}.",
   "jobs.log.imagesPreserved": "Les images enregistrées ont été conservées.",
   "jobs.log.completed":
     "Opération terminée avec succès. Aucun journal détaillé n'a été enregistré.",
@@ -245,6 +246,9 @@ export const fr: Messages = {
   "volumes.mountedAtReadOnly": "sur {target} (lecture seule)",
   "volumes.mountedByCompose": "sur {target}, choisi pour le compose",
   "volumes.notMounted": "Non monté",
+  "volumes.createdFor": "Créé pour {container}",
+  "volumes.ownerDeleted": "Propriétaire supprimé",
+  "volumes.ownerDeletedHint": "Créé pour un conteneur supprimé sans lui.",
   "volumes.manager": "Données du gestionnaire",
   "volumes.managerHint":
     "La base de données et les sessions de Bilskirnir. Il ne peut être ni ouvert, ni exporté, ni monté.",
@@ -682,6 +686,9 @@ export const fr: Messages = {
   "delete.title": "Supprimer ce conteneur ?",
   "delete.description":
     "Le conteneur et ses modifications non enregistrées sont supprimés. Les volumes et les instantanés sont conservés.",
+  "delete.descriptionVolumes":
+    "Le conteneur, ses modifications non enregistrées et les volumes créés pour lui sont supprimés. Les autres volumes et les instantanés sont conservés.",
+  "delete.volumes": "Supprimer aussi les volumes créés pour ce conteneur",
   "create.description":
     "Un conteneur à partir de n'importe quelle image. Une image du catalogue pas encore téléchargée est d'abord téléchargée.",
   "create.namePlaceholder": "Espace de travail Unity",
@@ -741,6 +748,9 @@ export const fr: Messages = {
   "parameter.volume.newName": "Nom du nouveau volume",
   "parameter.volume.mountedAt": "Monté sur {path}.",
   "parameter.volume.stays": "Sans volume, {path} reste dans le conteneur.",
+  "parameter.volume.newEach": "Un nouveau volume pour chaque conteneur",
+  "parameter.volume.newOwn": "Un nouveau volume pour ce conteneur",
+  "parameter.volume.newMounted": "Créé avec le conteneur et monté sur {path}.",
   "import.archive.description":
     "Charge dans Docker une archive exportée depuis Bilskirnir ou enregistrée avec docker save.",
   "import.docker.description":

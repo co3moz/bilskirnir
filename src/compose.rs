@@ -104,10 +104,12 @@ impl Compose {
             .collect()
     }
 
-    /// Every parameter's value for a new container: the one given, otherwise the default.
+    /// Every parameter's value for the new container `container`: the one given, otherwise the
+    /// default, and for a volume parameter left empty that creates a volume, the one it gets.
     pub fn resolve(
         &self,
         given: &BTreeMap<String, String>,
+        container: &str,
     ) -> anyhow::Result<BTreeMap<String, String>> {
         if let Some(name) = given
             .keys()
@@ -117,7 +119,7 @@ impl Compose {
         }
         let mut values = BTreeMap::new();
         for parameter in &self.parameters {
-            let value = parameter.resolve(given.get(&parameter.name))?;
+            let value = parameter.resolve(given.get(&parameter.name), container)?;
             values.insert(parameter.name.clone(), value);
         }
         Ok(values)
@@ -210,6 +212,19 @@ impl Pinned {
     pub fn mounts(&self) -> Vec<Mount> {
         self.compose.mounts(&self.values)
     }
+    /// The volumes the container `container` gets of its own, as `(parameter, volume)`: those
+    /// of the parameters that create one and were left empty, so their value names it.
+    pub fn new_volumes(&self, container: &str) -> Vec<(&str, &str)> {
+        self.compose
+            .parameters
+            .iter()
+            .filter_map(|p| {
+                let value = self.values.get(&p.name)?;
+                (p.new_volume_for(container).as_ref() == Some(value))
+                    .then_some((p.name.as_str(), value.as_str()))
+            })
+            .collect()
+    }
     /// The paths of the volume parameters, which the desktop user is given before the script
     /// runs, whether a volume was mounted there or not.
     pub fn paths(&self) -> Vec<&str> {
@@ -264,9 +279,11 @@ pub(crate) fn compose_image<'a>(
 }
 
 impl App {
-    /// The compose and values a new container from this image runs, or `None` without one.
+    /// The compose and values the new container `container` from this image runs, or `None`
+    /// without one.
     pub(crate) fn pin_compose(
         &self,
+        container: &str,
         requested: &str,
         image_id: &str,
         given: &BTreeMap<String, String>,
@@ -279,7 +296,7 @@ impl App {
             return Ok(None);
         };
         let compose = record.compose.clone().context("Missing compose")?;
-        let values = compose.resolve(given)?;
+        let values = compose.resolve(given, container)?;
         Ok(Some((record.id.clone(), Pinned { compose, values })))
     }
 

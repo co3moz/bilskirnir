@@ -97,6 +97,54 @@ export function volumeChoices(volumes: Pick<Volume, "Name">[], value: string) {
   return value && !names.includes(value) ? [value, ...names] : names
 }
 
+// Values never contain NUL, so these cannot collide with a volume's name.
+/** The select item for no volume. */
+export const NO_VOLUME = "\u0000none"
+/**
+ * The select item for a volume the creation job makes for the container. The editor holds a
+ * default of that kind as this value too; the create form sends it as an empty value.
+ */
+export const NEW_VOLUME = "\u0000new"
+
+/**
+ * What a volume parameter's select offers before the volumes. The form offers no volume unless
+ * one is required or an empty value makes a new one, and a new one only when the parameter makes
+ * it; the editor of `defaults` offers both.
+ */
+export function volumeExtras(
+  parameter: Pick<ComposeParameter, "new_volume">,
+  { required, defaults }: { required: boolean; defaults: boolean }
+) {
+  return {
+    none: defaults || (!required && !parameter.new_volume),
+    fresh: defaults || !!parameter.new_volume,
+  }
+}
+
+/**
+ * The select item for `value`. An empty value is the new volume when the parameter makes one,
+ * otherwise no volume, or nothing chosen yet for a required parameter.
+ */
+export function volumeSelection(
+  parameter: Pick<ComposeParameter, "new_volume">,
+  value: string,
+  required: boolean
+) {
+  if (value) return value
+  if (parameter.new_volume) return NEW_VOLUME
+  return required ? "" : NO_VOLUME
+}
+
+/** The editor's value for a volume parameter's default: a volume, `""` for none, or NEW_VOLUME. */
+export const volumeDefault = (draft: Pick<ParameterDraft, "default" | "new_volume">) =>
+  draft.new_volume ? NEW_VOLUME : draft.default
+
+/** A draft with the default the editor's volume select picked; a new volume has no default. */
+export function withVolumeDefault(draft: ParameterDraft, value: string): ParameterDraft {
+  const fresh = value === NEW_VOLUME
+  return { ...draft, new_volume: fresh, default: fresh ? "" : value }
+}
+
 /** A name for a new volume of `parameter`, such as `unity-home` for UNITY_HOME, not yet taken. */
 export function newVolumeName(
   parameter: Pick<ComposeParameter, "name">,
@@ -158,6 +206,7 @@ export type ParameterDraft = {
   path: string
   pattern: string
   pattern_message: string
+  new_volume: boolean
 }
 export type ComposeDraft = {
   parameters: ParameterDraft[]
@@ -188,6 +237,7 @@ export const newParameter = (): ParameterDraft => ({
   path: "",
   pattern: "",
   pattern_message: "",
+  new_volume: false,
 })
 
 const bound = (value?: number | null) => (value === undefined || value === null ? "" : `${value}`)
@@ -211,6 +261,7 @@ function parameterDraft(parameter: ComposeParameter): ParameterDraft {
     path: parameter.path ?? "",
     pattern: parameter.pattern ?? "",
     pattern_message: parameter.pattern_message ?? "",
+    new_volume: parameter.new_volume ?? false,
   }
 }
 
@@ -226,6 +277,7 @@ export function withType(draft: ParameterDraft, type: ParameterType): ParameterD
     default: "",
     secret: type === "text" && draft.secret,
     allow_custom: type === "choice" && draft.allow_custom,
+    new_volume: false,
     options: hasOptions(type) && !draft.options.length ? [newOption()] : draft.options,
   }
 }
@@ -275,6 +327,7 @@ export function draftParameter(draft: ParameterDraft): ComposeParameter {
     ...(draft.type === "choice" && draft.allow_custom ? { allow_custom: true } : {}),
     ...range,
     ...(draft.type === "volume" ? { path: draft.path.trim() } : {}),
+    ...(draft.type === "volume" && draft.new_volume ? { new_volume: true } : {}),
     // Spaces can be part of a pattern, and a message without one is never shown.
     ...(draft.type === "text" && draft.pattern
       ? {
@@ -352,6 +405,7 @@ function readParameter(value: unknown): ComposeParameter {
     ...(text("path") ? { path: text("path") } : {}),
     ...(text("pattern") ? { pattern: text("pattern") } : {}),
     ...(text("pattern_message") ? { pattern_message: text("pattern_message") } : {}),
+    ...(flag("new_volume") ? { new_volume: true } : {}),
   }
   for (const field of ["min", "max", "step"] as const) {
     const bound = parameter[field]

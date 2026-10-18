@@ -163,8 +163,10 @@ export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.status === "completed") {
     if (job.result?.deleted) {
       const name = job.result.name as string | undefined
+      const removed = (job.result.volumes_deleted as string[] | undefined) ?? []
       return [
         name ? t("jobs.log.deletedNamed", { name }) : t("jobs.log.deleted"),
+        ...(removed.length ? [t("jobs.log.volumesDeleted", { names: removed.join(", ") })] : []),
         ...(job.result.volumes_preserved ? [t("jobs.log.volumesPreserved")] : []),
         ...(job.result.images_preserved ? [t("jobs.log.imagesPreserved")] : []),
       ].join(" ")

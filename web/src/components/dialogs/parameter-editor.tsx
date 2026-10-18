@@ -23,8 +23,10 @@ import {
   newOption,
   PARAMETER_NAME,
   typeLabel,
+  volumeDefault,
   withOptions,
   withType,
+  withVolumeDefault,
   type OptionDraft,
   type ParameterDraft,
 } from "@/lib/compose"
@@ -241,8 +243,13 @@ export function ParameterEditor({
           parameter={draftParameter(parameter)}
           label={parameter.type === "boolean" ? t("parameter.onByDefault") : t("parameter.default")}
           optional
-          value={parameter.default}
-          onChange={(value) => set({ default: value })}
+          defaults
+          value={parameter.type === "volume" ? volumeDefault(parameter) : parameter.default}
+          onChange={(value) =>
+            parameter.type === "volume"
+              ? onChange(withVolumeDefault(parameter, value))
+              : set({ default: value })
+          }
         />
       )}
       <div className="flex flex-wrap items-center gap-4">

@@ -76,6 +76,8 @@ export type ComposeParameter = {
   pattern?: string
   /** Text parameters with a pattern: the expected format, shown when a value does not match. */
   pattern_message?: string
+  /** Volume parameters without a default: an empty value gets the container a volume of its own. */
+  new_volume?: boolean
 }
 
 /** What a new container from an image asks for, and the script that receives it. */
@@ -171,6 +173,17 @@ export type Volume = {
   Mountpoint?: string
   /** One of the manager's own volumes, such as its data volume: never mounted or opened. */
   manager?: boolean
+  /** The container a compose created this volume for; `null` for any other volume. */
+  owner?: VolumeOwner | null
+}
+
+export type VolumeOwner = {
+  container_id: string
+  /** The compose parameter the volume was created for. */
+  parameter: string | null
+  /** The container's name, or `null` once it was deleted. */
+  name: string | null
+  deleted: boolean
 }
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "interrupted"

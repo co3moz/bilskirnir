@@ -73,6 +73,7 @@ export const en = {
   "jobs.log.deletedNamed": 'Deleted "{name}".',
   "jobs.log.deleted": "Container deleted.",
   "jobs.log.volumesPreserved": "Named volumes were preserved.",
+  "jobs.log.volumesDeleted": "Deleted the volumes created for it: {names}.",
   "jobs.log.imagesPreserved": "Saved images were preserved.",
   "jobs.log.completed": "Operation completed successfully. No detailed log was recorded.",
   "jobs.log.failed": "Operation failed. No detailed log was recorded.",
@@ -256,6 +257,9 @@ export const en = {
   "volumes.mountedAtReadOnly": "at {target} (read-only)",
   "volumes.mountedByCompose": "at {target}, chosen for the compose",
   "volumes.notMounted": "Not mounted",
+  "volumes.createdFor": "Created for {container}",
+  "volumes.ownerDeleted": "Owner deleted",
+  "volumes.ownerDeletedHint": "Created for a container that was deleted without it.",
   "volumes.manager": "Manager data",
   "volumes.managerHint":
     "Bilskirnir's own database and sessions. It cannot be opened, exported or mounted.",
@@ -701,6 +705,9 @@ export const en = {
   "delete.title": "Delete this container?",
   "delete.description":
     "The container and its unsaved changes are deleted. Volumes and snapshots are kept.",
+  "delete.descriptionVolumes":
+    "The container, its unsaved changes and the volumes created for it are deleted. Other volumes and snapshots are kept.",
+  "delete.volumes": "Also delete the volumes created for this container",
 
   "create.description":
     "A container from any image. A catalog image that is not downloaded yet downloads first.",
@@ -761,6 +768,9 @@ export const en = {
   "parameter.volume.newName": "New volume name",
   "parameter.volume.mountedAt": "Mounted at {path}.",
   "parameter.volume.stays": "Without a volume, {path} stays inside the container.",
+  "parameter.volume.newEach": "A new volume for each container",
+  "parameter.volume.newOwn": "A new volume for this container",
+  "parameter.volume.newMounted": "Created with the container and mounted at {path}.",
 
   "import.archive.description":
     "Loads an archive exported from Bilskirnir, or saved with docker save, into Docker.",

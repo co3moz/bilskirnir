@@ -68,6 +68,7 @@ export const tr: Messages = {
   "jobs.log.deletedNamed": '"{name}" silindi.',
   "jobs.log.deleted": "Konteyner silindi.",
   "jobs.log.volumesPreserved": "Adlandırılmış volume'ler korundu.",
+  "jobs.log.volumesDeleted": "Onun için oluşturulan volume'ler silindi: {names}.",
   "jobs.log.imagesPreserved": "Kaydedilmiş imajlar korundu.",
   "jobs.log.completed": "İşlem başarıyla tamamlandı. Ayrıntılı log kaydedilmedi.",
   "jobs.log.failed": "İşlem başarısız oldu. Ayrıntılı log kaydedilmedi.",
@@ -244,6 +245,9 @@ export const tr: Messages = {
   "volumes.mountedAtReadOnly": "{target} konumunda (salt okunur)",
   "volumes.mountedByCompose": "{target} konumunda, Compose için seçildi",
   "volumes.notMounted": "Bağlı değil",
+  "volumes.createdFor": "{container} için oluşturuldu",
+  "volumes.ownerDeleted": "Sahibi silindi",
+  "volumes.ownerDeletedHint": "Onsuz silinen bir konteyner için oluşturuldu.",
   "volumes.manager": "Bilskirnir verisi",
   "volumes.managerHint":
     "Bilskirnir'in kendi veritabanı ve oturumları. Açılamaz, dışa aktarılamaz ve konteynerlere bağlanamaz.",
@@ -672,6 +676,9 @@ export const tr: Messages = {
   "delete.title": "Bu konteyner silinsin mi?",
   "delete.description":
     "Konteyner ve kaydedilmemiş değişiklikleri silinir. Volume'ler ve anlık görüntüler korunur.",
+  "delete.descriptionVolumes":
+    "Konteyner, kaydedilmemiş değişiklikleri ve onun için oluşturulan volume'ler silinir. Diğer volume'ler ve anlık görüntüler korunur.",
+  "delete.volumes": "Bu konteyner için oluşturulan volume'leri de sil",
   "create.description":
     "Herhangi bir imajdan bir konteyner. Henüz indirilmemiş bir katalog imajı önce indirilir.",
   "create.namePlaceholder": "Unity çalışma alanı",
@@ -730,6 +737,9 @@ export const tr: Messages = {
   "parameter.volume.newName": "Yeni volume adı",
   "parameter.volume.mountedAt": "{path} konumuna bağlanır.",
   "parameter.volume.stays": "Volume olmadan {path} konteynerin içinde kalır.",
+  "parameter.volume.newEach": "Her konteyner için yeni bir volume",
+  "parameter.volume.newOwn": "Bu konteyner için yeni bir volume",
+  "parameter.volume.newMounted": "Konteynerle birlikte oluşturulur ve {path} konumuna bağlanır.",
   "import.archive.description":
     "Bilskirnir'den dışa aktarılmış ya da docker save ile kaydedilmiş bir arşivi Docker'a yükler.",
   "import.docker.description":

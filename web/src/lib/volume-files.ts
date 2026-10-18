@@ -1,10 +1,35 @@
 // Paths and entries of a volume's files, as the volume browser shows them, and which volumes a
-// container may mount. A path is absolute within the volume, `/` being its root.
+// container may mount, mounts or owns. A path is absolute within the volume, `/` being its root.
 import { t } from "./i18n"
-import type { Volume } from "./types"
+import type { Container, Volume } from "./types"
 
 /** The volumes a container may mount: the manager refuses its own. */
 export const mountableVolumes = (volumes: Volume[]) => volumes.filter((volume) => !volume.manager)
+
+/** Where containers mount the volume `name`: through their volume settings, or their compose. */
+export function volumeUsers(name: string, containers: Pick<Container, "id" | "spec" | "setup">[]) {
+  return containers.flatMap((container) =>
+    [
+      ...container.spec.mounts.map((mount) => ({ ...mount, compose: false })),
+      ...(container.setup?.mounts ?? []).map((mount) => ({ ...mount, compose: true })),
+    ]
+      .filter((mount) => mount.volume === name)
+      .map((mount) => ({
+        id: container.id,
+        name: container.spec.name,
+        target: mount.target,
+        readonly: mount.readonly,
+        compose: mount.compose,
+      }))
+  )
+}
+
+/** The volumes created for the container `id`, which deleting it can remove too. */
+export const ownedVolumes = (volumes: Pick<Volume, "Name" | "owner">[], id: string) =>
+  volumes
+    .filter((volume) => volume.owner?.container_id === id)
+    .map((volume) => volume.Name)
+    .sort((a, b) => a.localeCompare(b))
 
 /** One entry of `POST volumes/{name}/files/list`. */
 export type VolumeEntry = {

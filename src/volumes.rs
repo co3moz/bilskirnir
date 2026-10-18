@@ -1,6 +1,6 @@
 //! Named volumes beyond listing and creating them: their files, read and changed from the
-//! dashboard without a container that mounts them, and the manager's own volumes, which no
-//! helper or desktop gets and which a listing marks.
+//! dashboard without a container that mounts them, the manager's own volumes, which no helper
+//! or desktop gets and which a listing marks, and the volumes created for one container.
 //!
 //! A volume is reached through a short-lived helper container started from the manager's own
 //! image, which carries python3 and tar. The helper mounts nothing but that volume, has no
@@ -9,6 +9,7 @@
 //! desktop user (UID/GID 1001), as a desktop that mounts the volume would.
 mod archive;
 mod files;
+mod owned;
 
 use crate::{
     App,
@@ -24,6 +25,7 @@ pub(crate) use archive::{Extract, Import, copy, export, extract, import};
 pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };
+pub(crate) use owned::{RemovedVolumes, mark_owners, removable};
 
 /// Where a helper mounts the volume.
 pub(crate) const MOUNT: &str = "/volume";

@@ -68,6 +68,7 @@ export const de: Messages = {
   "jobs.log.deletedNamed": "„{name}“ gelöscht.",
   "jobs.log.deleted": "Container gelöscht.",
   "jobs.log.volumesPreserved": "Benannte Volumes wurden beibehalten.",
+  "jobs.log.volumesDeleted": "Die dafür erstellten Volumes wurden gelöscht: {names}.",
   "jobs.log.imagesPreserved": "Gespeicherte Images wurden beibehalten.",
   "jobs.log.completed":
     "Vorgang erfolgreich abgeschlossen. Es wurde kein detailliertes Protokoll aufgezeichnet.",
@@ -246,6 +247,10 @@ export const de: Messages = {
   "volumes.mountedAtReadOnly": "unter {target} (schreibgeschützt)",
   "volumes.mountedByCompose": "unter {target}, für die Compose-Einrichtung gewählt",
   "volumes.notMounted": "Nicht eingehängt",
+  "volumes.createdFor": "Erstellt für {container}",
+  "volumes.ownerDeleted": "Besitzer gelöscht",
+  "volumes.ownerDeletedHint":
+    "Für einen Container erstellt, der ohne dieses Volume gelöscht wurde.",
   "volumes.manager": "Manager-Daten",
   "volumes.managerHint":
     "Die eigene Datenbank und die Sitzungen von Bilskirnir. Es kann nicht geöffnet, exportiert oder eingehängt werden.",
@@ -682,6 +687,9 @@ export const de: Messages = {
   "delete.title": "Diesen Container löschen?",
   "delete.description":
     "Der Container und seine ungespeicherten Änderungen werden gelöscht. Volumes und Snapshots bleiben erhalten.",
+  "delete.descriptionVolumes":
+    "Der Container, seine ungespeicherten Änderungen und die dafür erstellten Volumes werden gelöscht. Andere Volumes und Snapshots bleiben erhalten.",
+  "delete.volumes": "Auch die für diesen Container erstellten Volumes löschen",
   "create.description":
     "Ein Container aus einem beliebigen Image. Ein noch nicht heruntergeladenes Katalog-Image wird zuerst heruntergeladen.",
   "create.namePlaceholder": "Unity-Arbeitsbereich",
@@ -741,6 +749,9 @@ export const de: Messages = {
   "parameter.volume.newName": "Name des neuen Volumes",
   "parameter.volume.mountedAt": "Eingehängt unter {path}.",
   "parameter.volume.stays": "Ohne Volume bleibt {path} im Container.",
+  "parameter.volume.newEach": "Ein neues Volume für jeden Container",
+  "parameter.volume.newOwn": "Ein neues Volume für diesen Container",
+  "parameter.volume.newMounted": "Wird mit dem Container erstellt und unter {path} eingehängt.",
   "import.archive.description":
     "Lädt ein aus Bilskirnir exportiertes oder mit docker save gespeichertes Archiv in Docker.",
   "import.docker.description":

@@ -23,13 +23,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import {
   displayOf,
+  NEW_VOLUME,
   newVolumeName,
+  NO_VOLUME,
   patternMatches,
   pickedChoices,
   sliderValue,
   toggleChoice,
   volumeChoices,
+  volumeExtras,
   volumeNameValid,
+  volumeSelection,
 } from "@/lib/compose"
 import { rich, t } from "@/lib/i18n"
 import { queryClient, useVolumes } from "@/lib/queries"
@@ -57,6 +61,7 @@ export function ParameterField({
   optional,
   hints,
   createVolumes,
+  defaults,
 }: {
   parameter: ComposeParameter
   value: string
@@ -68,6 +73,8 @@ export function ParameterField({
   hints?: boolean
   /** Let a volume parameter create the volume it is given. */
   createVolumes?: boolean
+  /** Pick a default: a volume parameter offers a new volume for each container as NEW_VOLUME. */
+  defaults?: boolean
 }) {
   const id = React.useId()
   const title = label ?? (parameter.label || parameter.name)
@@ -112,6 +119,7 @@ export function ParameterField({
           id={id}
           required={required}
           creates={createVolumes ?? false}
+          defaults={defaults ?? false}
         />
       ) : (
         <Control
@@ -131,7 +139,8 @@ export function ParameterField({
 
 /**
  * A named volume for the parameter's path: an existing one other than the manager's own, one
- * created here, or none, which leaves the path inside the container.
+ * created here, a new one the creation job makes for the container when the parameter asks for
+ * that, or none, which leaves the path inside the container.
  */
 function VolumeControl({
   parameter,
@@ -140,6 +149,7 @@ function VolumeControl({
   id,
   required,
   creates,
+  defaults,
 }: {
   parameter: ComposeParameter
   value: string
@@ -147,6 +157,7 @@ function VolumeControl({
   id: string
   required: boolean
   creates: boolean
+  defaults: boolean
 }) {
   const volumes = useVolumes().data ?? []
   const [creating, setCreating] = React.useState(false)
@@ -154,12 +165,15 @@ function VolumeControl({
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState("")
   const path = parameter.path ?? ""
+  const extras = volumeExtras(parameter, { required, defaults })
 
   const pick = (next: string) => {
     setError("")
     setCreating(next === CREATE)
     if (next === CREATE) setName(newVolumeName(parameter, volumes))
-    else onChange(next === NONE ? "" : next)
+    // The form asks for the new volume with an empty value; the editor keeps the choice itself.
+    else if (next === NEW_VOLUME) onChange(defaults ? NEW_VOLUME : "")
+    else onChange(next === NO_VOLUME ? "" : next)
   }
   const create = async () => {
     const volume = name.trim()
@@ -181,7 +195,7 @@ function VolumeControl({
       setBusy(false)
     }
   }
-  const selected = creating ? CREATE : value === "" ? (required ? "" : NONE) : value
+  const selected = creating ? CREATE : volumeSelection(parameter, value, required)
 
   return (
     <>
@@ -191,8 +205,16 @@ function VolumeControl({
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            {!required && <SelectItem value={NONE}>{t("parameter.volume.none")}</SelectItem>}
-            {volumeChoices(mountableVolumes(volumes), value).map((volume) => (
+            {extras.none && <SelectItem value={NO_VOLUME}>{t("parameter.volume.none")}</SelectItem>}
+            {extras.fresh && (
+              <SelectItem value={NEW_VOLUME}>
+                {defaults ? t("parameter.volume.newEach") : t("parameter.volume.newOwn")}
+              </SelectItem>
+            )}
+            {volumeChoices(
+              mountableVolumes(volumes),
+              selected === NEW_VOLUME || selected === NO_VOLUME ? "" : value
+            ).map((volume) => (
               <SelectItem key={volume} value={volume} className="font-mono">
                 {volume}
               </SelectItem>
@@ -226,9 +248,14 @@ function VolumeControl({
       {creating && error && <FieldError>{error}</FieldError>}
       {path && (
         <FieldDescription className="text-xs">
-          {rich(value && !creating ? "parameter.volume.mountedAt" : "parameter.volume.stays", {
-            path: <code className="font-mono">{path}</code>,
-          })}
+          {rich(
+            creating || selected === NO_VOLUME || selected === ""
+              ? "parameter.volume.stays"
+              : selected === NEW_VOLUME
+                ? "parameter.volume.newMounted"
+                : "parameter.volume.mountedAt",
+            { path: <code className="font-mono">{path}</code> }
+          )}
         </FieldDescription>
       )}
     </>

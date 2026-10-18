@@ -51,8 +51,9 @@ pub enum Kind {
     Choice,
     /// Any of the options, one per line.
     Choices,
-    /// A named volume mounted at the parameter's `path`, or empty for none. The script receives
-    /// the path, and the volume's name in a second variable.
+    /// A named volume mounted at the parameter's `path`, or empty for none, or for a volume of
+    /// the container's own with `new_volume`. The script receives the path, and the volume's
+    /// name in a second variable.
     Volume,
 }
 
@@ -140,6 +141,9 @@ pub struct Parameter {
     /// What the create form says when a value does not match the pattern.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub pattern_message: String,
+    /// A volume parameter left empty gets a volume created for its container, instead of none.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub new_volume: bool,
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -209,6 +213,17 @@ impl Parameter {
             })?;
         } else if !self.path.is_empty() {
             bail!("Only volume parameters have a path: {name}");
+        }
+        if self.new_volume {
+            if self.kind != Kind::Volume {
+                bail!("Only volume parameters can create a volume: {name}");
+            }
+            // An empty value is what asks for the new volume, so a default would never let it.
+            if !self.default.is_empty() {
+                bail!(
+                    "{name} creates a volume for each container, so it cannot have a default volume"
+                );
+            }
         }
         if self.kind == Kind::Text {
             self.check_pattern()?;
@@ -398,12 +413,29 @@ impl Parameter {
         })
     }
 
+    /// The volume a container with this ID gets for a parameter that creates one:
+    /// `wsld-<container>-<name>`, the name in lowercase with dashes for underscores.
+    pub(super) fn new_volume_for(&self, container: &str) -> Option<String> {
+        self.new_volume.then(|| {
+            format!(
+                "wsld-{container}-{}",
+                self.name.to_ascii_lowercase().replace('_', "-")
+            )
+        })
+    }
+
     /// The value a new container gives the script: the one given, otherwise the default. A
-    /// boolean without one is `false`.
-    pub(super) fn resolve(&self, given: Option<&String>) -> Result<String> {
+    /// boolean without one is `false`, and a volume parameter that creates a volume, left
+    /// empty, names the one `container` gets.
+    pub(super) fn resolve(&self, given: Option<&String>, container: &str) -> Result<String> {
         let mut value = given.unwrap_or(&self.default).clone();
         if self.kind == Kind::Boolean && value.is_empty() {
             value = "false".into();
+        }
+        if value.is_empty()
+            && let Some(volume) = self.new_volume_for(container)
+        {
+            value = volume;
         }
         if self.required {
             let title = self.title();

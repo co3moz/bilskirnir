@@ -164,16 +164,16 @@ pub async fn create(
 ) -> Result<Json<Value>> {
     let CreateContainer { spec, parameters } = body;
     spec.validate()?;
+    let id = uuid::Uuid::new_v4().simple().to_string();
     // A compose found by the name the request uses is checked now; the job checks again once
     // Docker has resolved the image.
     let records: Vec<ImageRecord> = app.db.list("image")?;
     if let Some(record) = crate::compose::compose_image(&records, &spec.image, &spec.image)
         && let Some(compose) = &record.compose
     {
-        let values = compose.resolve(&parameters)?;
+        let values = compose.resolve(&parameters, &id)?;
         crate::compose::check_mounts(&spec.mounts, &compose.mounts(&values))?;
     }
-    let id = uuid::Uuid::new_v4().simple().to_string();
     launch(
         app,
         "create",
@@ -268,7 +268,19 @@ pub async fn update_settings(
         move |app, job_id| async move { app.update_container(&id, request, &job_id).await },
     )
 }
-pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
+/// How a container is deleted: its named volumes stay unless `delete_volumes` asks for those
+/// created for it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Remove {
+    #[serde(default)]
+    pub delete_volumes: bool,
+}
+pub async fn remove(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    axum::extract::Query(options): axum::extract::Query<Remove>,
+) -> Result<Json<Value>> {
     app.container(&id)?;
     launch(
         app,
@@ -276,12 +288,31 @@ pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resu
         format!("container:{id}"),
         move |app, job_id| async move {
             let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
-            app.remove_container(&env, &job_id).await?;
-            Ok(
-                json!({"deleted":id,"name":env.spec.name,"volumes_preserved":true,"images_preserved":true}),
-            )
+            let removed = app
+                .remove_container(&env, &job_id, options.delete_volumes)
+                .await?;
+            Ok(removal(
+                &id,
+                &env.spec.name,
+                options.delete_volumes,
+                removed,
+            ))
         },
     )
+}
+/// A delete job's result. The volumes it went through are listed only when it was asked to.
+pub(crate) fn removal(
+    id: &str,
+    name: &str,
+    asked: bool,
+    removed: crate::volumes::RemovedVolumes,
+) -> Value {
+    let mut result = json!({"deleted":id,"name":name,"volumes_preserved":removed.deleted.is_empty(),"images_preserved":true});
+    if asked {
+        result["volumes_deleted"] = json!(removed.deleted);
+        result["volumes_kept"] = json!(removed.kept);
+    }
+    result
 }
 pub async fn logs(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
     let env = app.container(&id)?;
@@ -690,6 +721,7 @@ pub async fn volumes(State(app): State<Arc<App>>) -> Result<Json<Value>> {
         .collect::<Vec<_>>();
     let manager = app.listing_manager().await?;
     crate::volumes::mark_manager_volumes(&mut values, manager.as_ref());
+    crate::volumes::mark_owners(&mut values, &app.db.list::<Container>(CONTAINERS)?);
     Ok(Json(json!(values)))
 }
 #[derive(Deserialize)]

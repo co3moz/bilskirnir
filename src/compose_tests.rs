@@ -117,10 +117,13 @@ fn a_compose_needs_a_script_and_safe_parameter_names() {
 #[test]
 fn values_come_from_the_request_then_the_default() {
     let values = unity()
-        .resolve(&given(&[
-            ("UNITY_EMAIL", "dev@example.com"),
-            ("UNITY_PASSWORD", "hunter2"),
-        ]))
+        .resolve(
+            &given(&[
+                ("UNITY_EMAIL", "dev@example.com"),
+                ("UNITY_PASSWORD", "hunter2"),
+            ]),
+            "e",
+        )
         .unwrap();
     assert_eq!(
         values,
@@ -134,31 +137,40 @@ fn values_come_from_the_request_then_the_default() {
     );
     // A value cleared on purpose stays empty instead of falling back to the default.
     let cleared = unity()
-        .resolve(&given(&[
-            ("UNITY_EMAIL", "dev@example.com"),
-            ("UNITY_PASSWORD", "hunter2"),
-            ("UNITY_LICENSE", ""),
-        ]))
+        .resolve(
+            &given(&[
+                ("UNITY_EMAIL", "dev@example.com"),
+                ("UNITY_PASSWORD", "hunter2"),
+                ("UNITY_LICENSE", ""),
+            ]),
+            "e",
+        )
         .unwrap();
     assert_eq!(cleared["UNITY_LICENSE"], "");
     let error = unity()
-        .resolve(&given(&[("UNITY_EMAIL", "dev@example.com")]))
+        .resolve(&given(&[("UNITY_EMAIL", "dev@example.com")]), "e")
         .unwrap_err();
     assert_eq!(error.to_string(), "Enter a value for Unity password");
     assert!(
         unity()
-            .resolve(&given(&[
-                ("UNITY_EMAIL", "a"),
-                ("UNITY_PASSWORD", "b"),
-                ("UNITY_TYPO", "c"),
-            ]))
+            .resolve(
+                &given(&[
+                    ("UNITY_EMAIL", "a"),
+                    ("UNITY_PASSWORD", "b"),
+                    ("UNITY_TYPO", "c"),
+                ]),
+                "e"
+            )
             .unwrap_err()
             .to_string()
             .contains("UNITY_TYPO")
     );
     assert!(
         unity()
-            .resolve(&given(&[("UNITY_EMAIL", "a"), ("UNITY_PASSWORD", "nul\0")]))
+            .resolve(
+                &given(&[("UNITY_EMAIL", "a"), ("UNITY_PASSWORD", "nul\0")]),
+                "e"
+            )
             .is_err()
     );
 }
@@ -166,10 +178,13 @@ fn values_come_from_the_request_then_the_default() {
 #[test]
 fn the_container_shows_ordinary_values_and_only_the_names_of_secrets() {
     let values = unity()
-        .resolve(&given(&[
-            ("UNITY_EMAIL", "dev@example.com"),
-            ("UNITY_PASSWORD", "hunter2"),
-        ]))
+        .resolve(
+            &given(&[
+                ("UNITY_EMAIL", "dev@example.com"),
+                ("UNITY_PASSWORD", "hunter2"),
+            ]),
+            "e",
+        )
         .unwrap();
     let pinned = Pinned {
         compose: unity(),
@@ -249,7 +264,7 @@ fn volume_parameters_need_paths_and_variables_of_their_own() {
 #[test]
 fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
     let values = installs()
-        .resolve(&given(&[("UNITY_EDITOR", "6000.0.23f1")]))
+        .resolve(&given(&[("UNITY_EDITOR", "6000.0.23f1")]), "e")
         .unwrap();
     // The default volume is chosen unless the request clears it; the cache has none.
     assert_eq!(values["UNITY_HOME"], "unity-installs");
@@ -274,10 +289,10 @@ fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
         })
     );
     let cleared = installs()
-        .resolve(&given(&[
-            ("UNITY_HOME", ""),
-            ("UNITY_CACHE", "unity-cache"),
-        ]))
+        .resolve(
+            &given(&[("UNITY_HOME", ""), ("UNITY_CACHE", "unity-cache")]),
+            "e",
+        )
         .unwrap();
     assert_eq!(
         installs().mounts(&cleared),
@@ -285,7 +300,7 @@ fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
     );
     assert!(
         installs()
-            .resolve(&given(&[("UNITY_HOME", "not a volume")]))
+            .resolve(&given(&[("UNITY_HOME", "not a volume")]), "e")
             .is_err()
     );
 }
@@ -321,7 +336,7 @@ fn every_new_container_mounts_the_volumes_its_compose_was_given() {
     let app = crate::tests::app(false);
     let pinned = Pinned {
         compose: installs(),
-        values: installs().resolve(&BTreeMap::new()).unwrap(),
+        values: installs().resolve(&BTreeMap::new(), "e").unwrap(),
     };
     let mut env = Container {
         setup: Some(pinned.setup("img")),
@@ -356,6 +371,125 @@ fn every_new_container_mounts_the_volumes_its_compose_was_given() {
     old.as_object_mut().unwrap().remove("mounts");
     let old: Setup = serde_json::from_value(old).unwrap();
     assert!(old.mounts.is_empty());
+}
+
+/// A compose whose workspace is a volume of each container's own, unless one is named.
+fn workspace() -> Compose {
+    Compose {
+        parameters: vec![Parameter {
+            kind: parameters::Kind::Volume,
+            path: "/home/desktop/Projects".into(),
+            required: true,
+            new_volume: true,
+            ..parameter("UNITY_WORKSPACE")
+        }],
+        script: "ls \"$UNITY_WORKSPACE\"\n".into(),
+        root: false,
+        timeout_seconds: 600,
+    }
+}
+
+#[test]
+fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
+    workspace().validate().unwrap();
+    let values = workspace().resolve(&BTreeMap::new(), "e").unwrap();
+    let pinned = Pinned {
+        compose: workspace(),
+        values,
+    };
+    let own = mount("wsld-e-unity-workspace", "/home/desktop/Projects");
+    assert_eq!(pinned.mounts(), std::slice::from_ref(&own));
+    assert_eq!(
+        pinned.new_volumes("e"),
+        [("UNITY_WORKSPACE", "wsld-e-unity-workspace")]
+    );
+    // The record shows it like a chosen volume, and the script reads it the same way.
+    let setup = pinned.setup("img");
+    assert_eq!(setup.mounts, std::slice::from_ref(&own));
+    assert_eq!(
+        setup.parameters["UNITY_WORKSPACE"],
+        "wsld-e-unity-workspace"
+    );
+    assert_eq!(
+        pinned.environment()["UNITY_WORKSPACE_VOLUME"],
+        "wsld-e-unity-workspace"
+    );
+    // Its path is taken like a chosen volume's, so the volume settings cannot use it too.
+    assert!(check_mounts(&[mount("projects", "/home/desktop/Projects")], &[own]).is_err());
+    // A volume named in the request is used instead, and nothing is created for it.
+    let named = Pinned {
+        compose: workspace(),
+        values: workspace()
+            .resolve(&given(&[("UNITY_WORKSPACE", "projects")]), "e")
+            .unwrap(),
+    };
+    assert_eq!(
+        named.mounts(),
+        [mount("projects", "/home/desktop/Projects")]
+    );
+    assert!(named.new_volumes("e").is_empty());
+}
+
+#[test]
+fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
+    let app = crate::tests::app(false);
+    let pinned = Pinned {
+        compose: workspace(),
+        values: workspace().resolve(&BTreeMap::new(), "e").unwrap(),
+    };
+    let mut env = Container {
+        setup: Some(pinned.setup("img")),
+        ..container()
+    };
+    let flag = "--mount type=volume,src=wsld-e-unity-workspace,dst=/home/desktop/Projects";
+    assert!(app.container_args(&env).join(" ").contains(flag));
+    // A reset or a retry that recreates a missing container runs the setup again with it.
+    setup_again(&mut env);
+    assert!(app.container_args(&env).join(" ").contains(flag));
+    // A settings change that recreates the container cannot drop it.
+    env.spec =
+        crate::reconfigure::merged_spec(&env.spec, json!({"mounts": []}).as_object().unwrap())
+            .unwrap();
+    assert!(app.container_args(&env).join(" ").contains(flag));
+    // The record, as it is saved and read again.
+    let saved: Container = serde_json::from_value(serde_json::to_value(&env).unwrap()).unwrap();
+    assert_eq!(saved.mounts(), pinned.mounts());
+}
+
+#[tokio::test]
+async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
+    let app = crate::tests::app(false);
+    // A snapshot keeps the compose of its container, not the values that container was given.
+    let source = Pinned {
+        compose: workspace(),
+        values: workspace().resolve(&BTreeMap::new(), "e").unwrap(),
+    };
+    app.save_pinned("e", &source).unwrap();
+    let snapshot = image("snap", app.pinned_compose("e"));
+    app.db.put("image", "snap", &snapshot).unwrap();
+    let (_, clone) = app
+        .pin_compose("f", "sha256:snap", "sha256:snap", &BTreeMap::new())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        clone.mounts(),
+        [mount("wsld-f-unity-workspace", "/home/desktop/Projects")]
+    );
+    assert_eq!(
+        clone.new_volumes("f"),
+        [("UNITY_WORKSPACE", "wsld-f-unity-workspace")]
+    );
+    // Sharing the source's volume is still a choice a request can make.
+    let (_, shared) = app
+        .pin_compose(
+            "g",
+            "sha256:snap",
+            "sha256:snap",
+            &given(&[("UNITY_WORKSPACE", "wsld-e-unity-workspace")]),
+        )
+        .unwrap()
+        .unwrap();
+    assert!(shared.new_volumes("g").is_empty());
 }
 
 #[test]
@@ -411,6 +545,7 @@ async fn a_new_container_pins_the_compose_and_its_values() {
     app.db.put("image", "plain", &image("plain", None)).unwrap();
     let (record, pinned) = app
         .pin_compose(
+            "e",
             "sha256:unity",
             "sha256:unity",
             &given(&[("UNITY_EMAIL", "a@b"), ("UNITY_PASSWORD", "pw")]),
@@ -420,13 +555,13 @@ async fn a_new_container_pins_the_compose_and_its_values() {
     assert_eq!(record, "unity");
     assert_eq!(pinned.values["UNITY_PASSWORD"], "pw");
     assert!(
-        app.pin_compose("sha256:plain", "sha256:plain", &BTreeMap::new())
+        app.pin_compose("e", "sha256:plain", "sha256:plain", &BTreeMap::new())
             .unwrap()
             .is_none()
     );
     // Values for an image without a compose are a mistake worth reporting.
     assert!(
-        app.pin_compose("sha256:plain", "sha256:plain", &given(&[("A", "b")]))
+        app.pin_compose("e", "sha256:plain", "sha256:plain", &given(&[("A", "b")]))
             .is_err()
     );
     app.save_pinned("env", &pinned).unwrap();

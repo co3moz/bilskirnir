@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -42,8 +43,9 @@ import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
 import { formatNumber, rich, t } from "@/lib/i18n"
-import { refreshAll, useContainers, useImages, useSettings } from "@/lib/queries"
+import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
+import { ownedVolumes } from "@/lib/volume-files"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ComposeFields } from "./compose-dialog"
@@ -131,20 +133,44 @@ export function SnapshotDialog({ id, ...props }: DialogProps & { id: string }) {
 
 export function DeleteDialog({ id, ...props }: DialogProps & { id: string }) {
   const item = useContainers().data?.find((entry) => entry.id === id)
+  const owned = ownedVolumes(useVolumes().data ?? [], id)
+  // Volumes stay unless this is turned on, and it offers only those created for the container.
+  const [volumes, setVolumes] = React.useState(false)
+  const removing = volumes && owned.length > 0
   const { busy, error, submit } = useSubmit()
+  const field = React.useId()
   return (
     <AlertDialog {...props}>
       <AlertDialogContent>
         <form
           className="contents"
-          onSubmit={submit(() => runJob(`containers/${id}`, undefined, "DELETE"))}
+          onSubmit={submit(() =>
+            runJob(`containers/${id}${removing ? "?delete_volumes=true" : ""}`, undefined, "DELETE")
+          )}
         >
           <AlertDialogHeader>
             <AlertDialogTitle>
               {item ? t("delete.titleOf", { name: item.spec.name }) : t("delete.title")}
             </AlertDialogTitle>
-            <AlertDialogDescription>{t("delete.description")}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {removing ? t("delete.descriptionVolumes") : t("delete.description")}
+            </AlertDialogDescription>
           </AlertDialogHeader>
+          {owned.length > 0 && (
+            <Field orientation="horizontal" className="items-start">
+              <Checkbox
+                id={field}
+                checked={volumes}
+                onCheckedChange={(checked) => setVolumes(checked === true)}
+              />
+              <div className="flex min-w-0 flex-col gap-1">
+                <FieldLabel htmlFor={field}>{t("delete.volumes")}</FieldLabel>
+                <FieldDescription className="font-mono text-xs break-all">
+                  {owned.join(", ")}
+                </FieldDescription>
+              </div>
+            </Field>
+          )}
           <FieldError>{error}</FieldError>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">{t("common.cancel")}</AlertDialogCancel>
