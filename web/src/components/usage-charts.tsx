@@ -317,6 +317,10 @@ const lastRowSum = (rows: Row[], series: Series[]) =>
 
 const seriesKey = (id: string) => `c${id}`
 
+/** A deleted container keeps its color and is named as deleted, so its history still reads. */
+const seriesLabel = (series: UsageSeries) =>
+  series.removed ? t("usage.deletedName", { name: series.name }) : series.name
+
 /** The latest sample if it is recent; a stopped container has none. */
 function current(series: UsageSeries, latest: number) {
   const sample = series.samples[series.samples.length - 1]
@@ -330,7 +334,6 @@ function CurrentTable({
   containers: { series: UsageSeries; color: string }[]
   latest: number
 }) {
-  const dash = <span className="text-muted-foreground">{t("usage.stopped")}</span>
   return (
     <div className="overflow-x-auto rounded-xl border">
       <Table>
@@ -376,8 +379,8 @@ function CurrentTable({
                     <TableCell className="text-right tabular-nums">{rate(sample.net_tx)}</TableCell>
                   </>
                 ) : (
-                  <TableCell colSpan={6} className="text-right">
-                    {dash}
+                  <TableCell colSpan={6} className="text-right text-muted-foreground">
+                    {series.removed ? t("usage.deleted") : t("usage.stopped")}
                   </TableCell>
                 )}
               </TableRow>
@@ -480,7 +483,7 @@ export function UsageOverview() {
   const series: Series[] = [
     ...named.map((item) => ({
       key: seriesKey(item.series.id),
-      label: item.series.name,
+      label: seriesLabel(item.series),
       color: item.color,
     })),
     ...(others.length

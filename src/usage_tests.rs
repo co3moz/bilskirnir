@@ -1,6 +1,7 @@
 //! Pins down what the usage routes and the `get_usage` tool return: only containers this manager
-//! has a record of, only samples after the cursor, the GPU as the host's, and summaries whose
-//! units are in their names. Also that both routes are served and documented.
+//! has or had a record of, a deleted one until its samples age out, only samples after the
+//! cursor, the GPU as the host's, and summaries whose units are in their names. Also that both
+//! routes are served and documented.
 use super::*;
 use crate::model::ContainerSpec;
 use axum::{body::Body, http::Request};
@@ -117,6 +118,75 @@ async fn one_container_is_found_by_its_record() {
         .await
         .unwrap_err();
     assert_eq!(missing.0, axum::http::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_deleted_container_stays_listed_until_its_samples_age_out() {
+    let app = crate::tests::app(false);
+    app.db
+        .put(CONTAINERS, "a", &record("a", Some(2.0)))
+        .unwrap();
+    app.db
+        .put(CONTAINERS, "b", &record("b", Some(1.0)))
+        .unwrap();
+    app.usage.record("a", &measure(0.5, 100.0));
+    app.usage.record("b", &measure(1.0, 0.0));
+    // The collector labels each series with its record before b is deleted.
+    let records: Vec<Container> = app.db.list(CONTAINERS).unwrap();
+    app.usage.prune(&records);
+    app.db.remove(CONTAINERS, "b").unwrap();
+    app.usage
+        .prune(&app.db.list::<Container>(CONTAINERS).unwrap());
+
+    let Json(body) = all(State(app.clone()), Query(Since { since: 0 }))
+        .await
+        .unwrap();
+    let containers = body["containers"].as_array().unwrap();
+    assert_eq!(containers.len(), 2);
+    assert_eq!(containers[0]["id"], "a");
+    assert_eq!(containers[0]["removed"], false);
+    assert_eq!(containers[1]["id"], "b");
+    assert_eq!(containers[1]["removed"], true);
+    assert_eq!(containers[1]["name"], "Desktop b");
+    assert_eq!(containers[1]["cpu_limit"], 1.0);
+    assert_eq!(containers[1]["samples"][0]["cpu"], 1.0);
+
+    let Json(one) = container(
+        State(app.clone()),
+        Path("b".into()),
+        Query(Since { since: 0 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(one["removed"], true);
+    assert_eq!(one["samples"].as_array().unwrap().len(), 1);
+    let listed = summary(&app, None, &Summary { seconds: None }).unwrap();
+    assert_eq!(listed["containers"][1]["removed"], true);
+    let alone = summary(&app, Some("b"), &Summary { seconds: None }).unwrap();
+    assert_eq!(alone["containers"][0]["name"], "Desktop b");
+
+    // Once its samples age out, it is gone, while a keeps its empty entry as a record.
+    app.usage
+        .store()
+        .prune(now_ms() + WINDOW_MS + 1000, |_| None);
+    let Json(body) = all(State(app.clone()), Query(Since { since: 0 }))
+        .await
+        .unwrap();
+    assert_eq!(body["containers"], json!([]));
+    let gone = container(
+        State(app.clone()),
+        Path("b".into()),
+        Query(Since { since: 0 }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(gone.0, axum::http::StatusCode::NOT_FOUND);
+    assert!(summary(&app, Some("b"), &Summary { seconds: None }).is_err());
+    let Json(kept) = container(State(app), Path("a".into()), Query(Since { since: 0 }))
+        .await
+        .unwrap();
+    assert_eq!(kept["removed"], false);
+    assert_eq!(kept["samples"], json!([]));
 }
 
 #[tokio::test]

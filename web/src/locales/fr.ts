@@ -564,6 +564,8 @@ export const fr: Messages = {
   "usage.unit.rate": "{size}/s",
   "usage.limit": "Limite",
   "usage.stopped": "Arrêté",
+  "usage.deleted": "Supprimé",
+  "usage.deletedName": "{name} (supprimé)",
   "usage.empty":
     "Aucun conteneur n'a tourné depuis le démarrage de Bilskirnir. Démarrez-en un pour voir son utilisation ici.",
   "usage.noSamples": "Pas encore de mesures. Elles commencent dès que le conteneur tourne.",

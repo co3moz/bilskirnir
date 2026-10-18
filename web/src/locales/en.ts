@@ -580,6 +580,8 @@ export const en = {
   "usage.unit.rate": "{size}/s",
   "usage.limit": "Limit",
   "usage.stopped": "Not running",
+  "usage.deleted": "Deleted",
+  "usage.deletedName": "{name} (deleted)",
   "usage.empty": "No container has run since Bilskirnir started. Start one to see its use here.",
   "usage.noSamples": "No samples yet. They start once the container runs.",
   "usage.waiting": "Waiting for the first samples…",

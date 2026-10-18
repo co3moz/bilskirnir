@@ -25,10 +25,11 @@ const sample = (t: number, cpu = 1): UsageSample => ({
   net_rx: 0,
   net_tx: 0,
 })
-const series = (id: string, samples: UsageSample[]): UsageSeries => ({
+const series = (id: string, samples: UsageSample[], removed = false): UsageSeries => ({
   id,
   name: id,
   cpu_limit: null,
+  removed,
   memory_limit: 1000,
   online_cpus: 8,
   samples,
@@ -67,7 +68,16 @@ test("responses grow the history and a container the manager stops listing goes"
       ["b", [1500]],
     ]
   )
-  // Deleted: no longer listed.
+  // Deleted: still listed, so its history stays and says so.
+  history = mergeUsage(history, report(3500, [series("a", [sample(3500)]), series("b", [], true)]))
+  assert.deepEqual(
+    history.containers.map((entry) => [entry.id, entry.removed, entry.samples.length]),
+    [
+      ["a", false, 4],
+      ["b", true, 1],
+    ]
+  )
+  // Aged out: no longer listed.
   history = mergeUsage(history, report(4000, [series("a", [sample(4000)])]))
   assert.deepEqual(
     history.containers.map((entry) => entry.id),
@@ -77,7 +87,7 @@ test("responses grow the history and a container the manager stops listing goes"
   history = mergeUsage(history, report(70_000, [series("a", [sample(62_000)])]))
   assert.deepEqual(
     history.containers[0].samples.map((s) => s.t),
-    [2000, 3000, 4000, 62_000]
+    [2000, 3000, 3500, 4000, 62_000]
   )
   assert.equal(history.cursor, 70_000)
 })

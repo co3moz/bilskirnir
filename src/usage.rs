@@ -2,9 +2,10 @@
 //! last 30 minutes, with the host's GPU beside them, kept in memory and never written to disk.
 //!
 //! Docker reports each container's counters on a stats stream that the collector keeps open for
-//! as long as the container runs; stopped containers keep their samples until they age out of
-//! the window, and a deleted container's go with it. Each container holds at most 1800 samples
-//! of 40 bytes, about 70 KiB, reserved when its first sample arrives; a GPU holds 1800 of 32.
+//! as long as the container runs. Stopped and deleted containers keep their samples until they
+//! age out of the window; a deleted one is listed as `removed`, under the name it last had. Each
+//! container holds at most 1800 samples of 40 bytes, about 70 KiB, reserved when its first sample
+//! arrives; a GPU holds 1800 of 32.
 //! Every sample is stamped by one clock that only moves forward, so the newest stamp is a cursor:
 //! a client that passes it back as `since` receives exactly what came after.
 mod collector;
@@ -15,14 +16,15 @@ mod stats;
 
 use crate::{
     App,
-    error::Result,
+    error::{Result, missing},
     model::{CONTAINERS, Container},
 };
 use axum::{
     Json,
     extract::{Path, Query, State},
+    http::StatusCode,
 };
-use history::{GpuSample, GpuState, Sample, Store, WINDOW_MS};
+use history::{GpuSample, GpuState, Label, Sample, Series, Store, WINDOW_MS};
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -63,27 +65,44 @@ impl Usage {
         store.gpu_state = state;
         store.gpu_reason = reason;
     }
-    pub(crate) fn prune(&self, keep: impl Fn(&str) -> bool) {
-        self.store().prune(now_ms(), keep);
+    /// Forget what aged out, and label each series with the record it still has.
+    pub(crate) fn prune(&self, records: &[Container]) {
+        self.store().prune(now_ms(), |id| {
+            records.iter().find(|record| record.id == id).map(Label::of)
+        });
     }
 
-    /// The samples after `since` of the given records and of the GPUs, copied out of the lock.
-    fn snapshot(&self, records: &[&Container], since: u64) -> Snapshot {
+    /// The samples after `since` of the given records, then of the deleted containers whose
+    /// samples are still in the window, and of the GPUs, copied out of the lock. `only` limits
+    /// the containers to one ID.
+    fn snapshot(&self, records: &[Container], only: Option<&str>, since: u64) -> Snapshot {
         let store = self.store();
-        let containers = records
+        let wanted = |id: &str| only.is_none_or(|only| only == id);
+        let mut containers: Vec<ContainerSamples> = records
             .iter()
+            .filter(|record| wanted(&record.id))
             .filter_map(|record| {
                 let series = store.containers.get(&record.id)?;
-                Some(ContainerSamples {
-                    id: record.id.clone(),
-                    name: record.spec.name.clone(),
-                    cpu_limit: record.spec.cpus,
-                    memory_limit: series.memory_limit,
-                    online_cpus: series.online_cpus,
-                    samples: series.samples.since(since).copied().collect(),
-                })
+                Some(ContainerSamples::new(
+                    &record.id,
+                    Label::of(record),
+                    false,
+                    series,
+                    since,
+                ))
             })
             .collect();
+        let mut removed: Vec<ContainerSamples> = store
+            .containers
+            .iter()
+            .filter(|(id, _)| wanted(id) && !records.iter().any(|record| &record.id == *id))
+            .filter_map(|(id, series)| {
+                let label = series.label.clone()?;
+                Some(ContainerSamples::new(id, label, true, series, since))
+            })
+            .collect();
+        removed.sort_by(|a, b| a.id.cmp(&b.id));
+        containers.append(&mut removed);
         let gpus = store
             .gpus
             .iter()
@@ -105,10 +124,21 @@ impl Usage {
     }
 }
 
+impl Label {
+    fn of(record: &Container) -> Self {
+        Self {
+            name: record.spec.name.clone(),
+            cpu_limit: record.spec.cpus,
+        }
+    }
+}
+
 struct ContainerSamples {
     id: String,
     name: String,
     cpu_limit: Option<f64>,
+    /// The record is deleted; the samples stay until they age out.
+    removed: bool,
     memory_limit: u64,
     online_cpus: u32,
     samples: Vec<Sample>,
@@ -129,8 +159,19 @@ struct Snapshot {
 }
 
 impl ContainerSamples {
+    fn new(id: &str, label: Label, removed: bool, series: &Series, since: u64) -> Self {
+        Self {
+            id: id.to_owned(),
+            name: label.name,
+            cpu_limit: label.cpu_limit,
+            removed,
+            memory_limit: series.memory_limit,
+            online_cpus: series.online_cpus,
+            samples: series.samples.since(since).copied().collect(),
+        }
+    }
     fn json(&self) -> Value {
-        json!({"id": self.id, "name": self.name, "cpu_limit": self.cpu_limit, "memory_limit": self.memory_limit, "online_cpus": self.online_cpus, "samples": self.samples})
+        json!({"id": self.id, "name": self.name, "cpu_limit": self.cpu_limit, "removed": self.removed, "memory_limit": self.memory_limit, "online_cpus": self.online_cpus, "samples": self.samples})
     }
 }
 impl Snapshot {
@@ -149,12 +190,20 @@ pub struct Since {
     pub since: u64,
 }
 
-/// Every container's samples, and the host's GPU.
+/// The record `id` names, or `None` once it is deleted: a deleted container's samples are still
+/// served while they are in the window.
+fn record(app: &App, id: &str) -> Result<Option<Container>> {
+    match app.container(id) {
+        Ok(record) => Ok(Some(record)),
+        Err(error) if error.0 == StatusCode::NOT_FOUND => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Every container's samples, deleted ones included, and the host's GPU.
 pub async fn all(State(app): State<Arc<App>>, Query(query): Query<Since>) -> Result<Json<Value>> {
     let records: Vec<Container> = app.db.list(CONTAINERS)?;
-    let snapshot = app
-        .usage
-        .snapshot(&records.iter().collect::<Vec<_>>(), query.since);
+    let snapshot = app.usage.snapshot(&records, None, query.since);
     let mut body = snapshot.header();
     body["containers"] = snapshot
         .containers
@@ -170,22 +219,25 @@ pub async fn all(State(app): State<Arc<App>>, Query(query): Query<Since>) -> Res
     Ok(Json(body))
 }
 
-/// One container's samples; empty until it has run since the manager started.
+/// One container's samples; empty until it has run since the manager started, and still there
+/// after it is deleted until they age out.
 pub async fn container(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
     Query(query): Query<Since>,
 ) -> Result<Json<Value>> {
-    let record = app.container(&id)?;
-    let snapshot = app.usage.snapshot(&[&record], query.since);
+    let record = record(&app, &id)?;
+    let snapshot = app
+        .usage
+        .snapshot(record.as_slice(), Some(&id), query.since);
     let mut body = snapshot.header();
-    let series = snapshot
-        .containers
-        .first()
-        .map(ContainerSamples::json)
-        .unwrap_or_else(|| {
-            json!({"id": record.id, "name": record.spec.name, "cpu_limit": record.spec.cpus, "memory_limit": null, "online_cpus": null, "samples": []})
-        });
+    let series = match (snapshot.containers.first(), &record) {
+        (Some(series), _) => series.json(),
+        (None, Some(record)) => {
+            json!({"id": record.id, "name": record.spec.name, "cpu_limit": record.spec.cpus, "removed": false, "memory_limit": null, "online_cpus": null, "samples": []})
+        }
+        (None, None) => return Err(missing()),
+    };
     for (key, value) in series.as_object().into_iter().flatten() {
         body[key] = value.clone();
     }
@@ -209,13 +261,14 @@ pub(crate) fn summary(app: &App, id: Option<&str>, options: &Summary) -> Result<
         return Err(anyhow::anyhow!("seconds must be between 1 and 1800").into());
     }
     let records: Vec<Container> = match id {
-        Some(id) => vec![app.container(id)?],
+        Some(id) => record(app, id)?.into_iter().collect(),
         None => app.db.list(CONTAINERS)?,
     };
     let since = now_ms().saturating_sub(seconds * 1000);
-    let snapshot = app
-        .usage
-        .snapshot(&records.iter().collect::<Vec<_>>(), since);
+    let snapshot = app.usage.snapshot(&records, id, since);
+    if id.is_some() && records.is_empty() && snapshot.containers.is_empty() {
+        return Err(missing());
+    }
     let containers: Vec<Value> = snapshot
         .containers
         .iter()
@@ -227,6 +280,7 @@ pub(crate) fn summary(app: &App, id: Option<&str>, options: &Summary) -> Result<
             json!({
                 "id": container.id,
                 "name": container.name,
+                "removed": container.removed,
                 "samples": container.samples.len(),
                 "cpu_limit": container.cpu_limit,
                 "memory_limit_bytes": container.memory_limit,

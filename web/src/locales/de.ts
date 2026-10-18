@@ -563,6 +563,8 @@ export const de: Messages = {
   "usage.unit.rate": "{size}/s",
   "usage.limit": "Limit",
   "usage.stopped": "Läuft nicht",
+  "usage.deleted": "Gelöscht",
+  "usage.deletedName": "{name} (gelöscht)",
   "usage.empty":
     "Seit dem Start von Bilskirnir lief noch kein Container. Starten Sie einen, um seine Nutzung hier zu sehen.",
   "usage.noSamples": "Noch keine Messwerte. Sie beginnen, sobald der Container läuft.",
