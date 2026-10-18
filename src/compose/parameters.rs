@@ -54,6 +54,9 @@ pub enum Kind {
     /// A named volume mounted at the parameter's `path`, or empty for none. The script receives
     /// the path, and the volume's name in a second variable.
     Volume,
+    /// An absolute folder of the desktop outside its system folders, such as the project an
+    /// editor opens. The script creates what it needs there, and uploads may go into it.
+    Folder,
 }
 
 /// How the create form shows a parameter.
@@ -80,6 +83,7 @@ impl Kind {
             Kind::Choice => &[Display::Select, Display::Radio],
             Kind::Choices => &[Display::Checkboxes],
             Kind::Volume => &[Display::Select],
+            Kind::Folder => &[Display::Input],
         }
     }
 }
@@ -364,6 +368,10 @@ impl Parameter {
                 "{title} must name a volume: 2 to 128 letters, digits, dots, dashes and underscores, starting with a letter or digit"
             ),
             Kind::Volume => {}
+            Kind::Folder if lines || crate::model::desktop_folder(value).is_err() => bail!(
+                "{title} must be an absolute folder outside the desktop's system folders, such as /home/desktop/Projects"
+            ),
+            Kind::Folder => {}
         }
         Ok(())
     }
@@ -387,6 +395,20 @@ impl Parameter {
             ],
             None => vec![(self.name.clone(), value.into())],
         }
+    }
+
+    /// The folder this parameter names for `value`: a volume parameter's path, which the desktop
+    /// user is given whether a volume was mounted there or not, and a folder parameter's value.
+    pub(super) fn place(&self, value: &str) -> Option<super::Place> {
+        let path = match self.kind {
+            Kind::Volume => self.path.clone(),
+            Kind::Folder if !value.is_empty() => value.into(),
+            _ => return None,
+        };
+        Some(super::Place {
+            label: self.title().into(),
+            path,
+        })
     }
 
     /// Where this parameter mounts `value`, a volume parameter given a volume.
@@ -413,7 +435,7 @@ impl Parameter {
                     bail!("Choose a value for {title}")
                 }
                 Kind::Volume if value.is_empty() => bail!("Choose a volume for {title}"),
-                Kind::Text | Kind::Number if value.is_empty() => {
+                Kind::Text | Kind::Number | Kind::Folder if value.is_empty() => {
                     bail!("Enter a value for {title}")
                 }
                 _ => {}

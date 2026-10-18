@@ -558,6 +558,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "files/read",
         "files/write",
         "files/list",
+        "files/mkdir",
         "files/move",
         "files/delete",
         "input",
@@ -746,29 +747,47 @@ fn uploads_only_accept_canonical_paths_in_writable_locations() {
             readonly: true,
         },
     ];
+    let places = [crate::compose::Place {
+        label: "Unity project".into(),
+        path: "/srv/unity/MyGame".into(),
+    }];
+    let check = |spec: &model::ContainerSpec, target: &str, name: &str| {
+        uploads::check_target(&spec.mounts, &places, target, name)
+    };
+    // The whole home is the desktop user's, hidden folders too.
     for target in [
+        "/home/desktop",
         "/home/desktop/Downloads",
         "/home/desktop/Downloads/project",
+        "/home/desktop/Downloads-fake",
+        "/home/desktop/Documents/notes",
+        "/home/desktop/.config/autostart",
+        "/shared",
         "/shared/assets",
+        "/srv/unity/MyGame",
+        "/srv/unity/MyGame/Assets",
     ] {
-        assert!(
-            uploads::validate_target(&spec, target, "file & notes.txt").is_ok(),
-            "{target}"
-        );
+        assert!(check(&spec, target, "file & notes.txt").is_ok(), "{target}");
     }
     for target in [
+        "/",
         "/etc",
+        "/tmp",
+        "/home",
+        "/home/other",
+        "/home/desktopper",
         "/sharedish",
+        "/shared/reference",
         "/shared/reference/sub",
-        "/home/desktop/Downloads-fake",
+        "/srv/unity",
+        "/srv/unity/MyGameOld",
         "/home/desktop/Downloads/../.ssh",
+        "/home/desktop/",
         "/shared//assets",
         "/shared/.",
+        "relative/folder",
     ] {
-        assert!(
-            uploads::validate_target(&spec, target, "file.txt").is_err(),
-            "{target}"
-        );
+        assert!(check(&spec, target, "file.txt").is_err(), "{target}");
     }
     for name in [
         "",
@@ -779,14 +798,17 @@ fn uploads_only_accept_canonical_paths_in_writable_locations() {
         "file\\name",
         "file\0name",
     ] {
-        assert!(uploads::validate_target(&spec, "/shared", name).is_err());
+        assert!(check(&spec, "/shared", name).is_err());
     }
+    // A read-only volume inside the home closes that folder and nothing else.
     spec.mounts.push(model::Mount {
         volume: "downloads".into(),
         target: "/home/desktop/Downloads".into(),
         readonly: true,
     });
-    assert!(uploads::validate_target(&spec, "/home/desktop/Downloads", "file.txt").is_err());
+    assert!(check(&spec, "/home/desktop/Downloads", "file.txt").is_err());
+    assert!(check(&spec, "/home/desktop/Downloads/sub", "file.txt").is_err());
+    assert!(check(&spec, "/home/desktop/Documents", "file.txt").is_ok());
 }
 
 #[tokio::test]
@@ -1939,10 +1961,10 @@ fn screenshot_save_targets_and_download_links_are_shaped_for_users() {
         assert!(save(invalid).target().is_err(), "{invalid}");
     }
     // The directory part still has to pass the upload destination rules.
-    assert!(
-        uploads::validate_target(&spec(), "/home/desktop/Downloads/../.ssh", "id_rsa").is_err()
-    );
-    assert!(uploads::validate_target(&spec(), "/home/desktop/Downloads", "clock.jpg").is_ok());
+    let check = |target: &str, name: &str| uploads::check_target(&[], &[], target, name);
+    assert!(check("/home/desktop/Downloads/../.ssh", "id_rsa").is_err());
+    assert!(check("/etc", "clock.jpg").is_err());
+    assert!(check("/home/desktop/Downloads", "clock.jpg").is_ok());
     assert_eq!(
         files::download_url("abc123", "/home/desktop/Downloads/saat 17:20.jpg"),
         "/api/containers/abc123/files/download?path=/home/desktop/Downloads/saat%2017%3A20.jpg"

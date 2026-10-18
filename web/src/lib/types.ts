@@ -41,7 +41,8 @@ export type Container = {
 }
 
 /** A compose parameter: an environment variable of the setup script. */
-export type ParameterType = "text" | "number" | "boolean" | "choice" | "choices" | "volume"
+export type ParameterType =
+  "text" | "number" | "boolean" | "choice" | "choices" | "volume" | "folder"
 
 export type ParameterDisplay =
   "input" | "multiline" | "slider" | "toggle" | "checkbox" | "select" | "radio" | "checkboxes"
@@ -51,7 +52,8 @@ export type ParameterOption = { value: string; label: string }
 /**
  * A compose parameter: an environment variable of the setup script. Whatever its type, its value
  * and default are text in the form the script reads: `42`, `true`, or a choice per line. A volume
- * parameter's value names a volume, or is empty for none; the script reads its `path`.
+ * parameter's value names a volume, or is empty for none; the script reads its `path`. A folder
+ * parameter's value is an absolute folder of the desktop, which uploads can go into.
  */
 export type ComposeParameter = {
   name: string
@@ -97,7 +99,12 @@ export type ContainerSetup = {
   finished_at?: number | null
   /** The volumes its volume parameters were given, mounted beside the settings' own. */
   mounts?: Mount[]
+  /** The folders its volume and folder parameters name, which take uploads. */
+  places?: Place[]
 }
+
+/** A folder of the desktop that a compose names, by its parameter's label. */
+export type Place = { label: string; path: string }
 
 export type Health = "healthy" | "unhealthy" | "starting" | "unknown"
 

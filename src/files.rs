@@ -213,6 +213,12 @@ pub struct DeleteFile {
     #[serde(default)]
     pub recursive: bool,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MakeDirectory {
+    /// Canonical absolute path of the new folder, whose parent must exist.
+    pub path: String,
+}
 impl ListFiles {
     pub fn validate(&self) -> anyhow::Result<()> {
         crate::apps::directory(&self.path)?;
@@ -327,6 +333,15 @@ pub async fn move_(
     Json(body): Json<MoveFile>,
 ) -> Result<Json<Value>> {
     Ok(Json(move_file(&app, &id, &body).await?))
+}
+/// Create one folder as the desktop user, such as a new upload destination.
+pub async fn make_directory(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Json(body): Json<MakeDirectory>,
+) -> Result<Json<Value>> {
+    split_path(&body.path)?;
+    Ok(Json(operate(&app, &id, &["mkdir", &body.path]).await?))
 }
 pub async fn delete(
     State(app): State<Arc<App>>,
