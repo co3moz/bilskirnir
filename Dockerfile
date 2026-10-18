@@ -7,15 +7,29 @@ COPY THIRD_PARTY_NOTICES.md LICENSE ./
 COPY web web
 RUN bun run build
 
-FROM rust:1-bookworm AS backend
+FROM rust:1-bookworm AS chef
+RUN cargo install cargo-chef --locked --version 0.1.78
 WORKDIR /build
+
+# The recipe names only the dependencies, with the crate's own version masked, so a source change
+# or a version bump leaves it as it was and the dependencies come from the build cache.
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY src src
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS backend
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY desktop/profiles.json desktop/profiles.json
 # A release build names its version, and the manager then downloads the desktop images published
 # with it. Without it, the manager downloads each catalog image's reference.
 ARG BILSKIRNIR_RELEASE
-RUN cargo build --release --locked
+# Only the binary is left in this layer, so the build cache keeps one copy of the compiled
+# dependencies, the one above, instead of one with every commit.
+RUN cargo build --release --locked && mv target/release/bilskirnir /bilskirnir && rm -rf target
 
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
@@ -23,7 +37,7 @@ LABEL org.opencontainers.image.title="Bilskirnir" org.opencontainers.image.licen
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
-COPY --from=backend /build/target/release/bilskirnir /usr/local/bin/bilskirnir
+COPY --from=backend /bilskirnir /usr/local/bin/bilskirnir
 COPY --from=ui /build/web/dist /app/web
 COPY desktop /app/desktop
 COPY scripts/mcp_bridge.py /app/mcp_bridge.py
