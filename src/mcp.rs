@@ -814,7 +814,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "delete_volume",
-            "Delete a named volume and every file in it, such as one list_volumes shows with owner.deleted=true because its container was deleted without it. Cannot be undone. Refused for volumes marked manager=true, for a volume a managed container mounts through its volumes or its compose (the error names that container), and for one any other Docker container still uses; a missing volume is an error. Answers at once, without a job.",
+            "Delete a named volume and every file in it, such as one list_volumes shows with owner.deleted=true because its container was deleted without it. Cannot be undone. Refused for volumes marked manager=true, for a volume a managed container mounts through its volumes or its compose (the error names that container), and for one any other Docker container still uses; a missing volume, or one VOLUME_FILTER leaves out, is an error. Answers at once, without a job.",
             json!({"name":text}),
             &["name"],
             false,

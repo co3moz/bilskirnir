@@ -1,8 +1,9 @@
 //! Deleting a named volume by itself, such as one a compose created for a container that was
 //! deleted without it. Never the manager's own volume, and never one a container record mounts,
 //! through its volume settings or its compose: a reset, retry or settings change of that container
-//! would stop at the missing volume. Docker refuses one that any other container still uses, so
-//! nothing is forced and nothing is pruned.
+//! would stop at the missing volume. One `VOLUME_FILTER` leaves out is answered as missing, as
+//! opening it is. Docker refuses one that any other container still uses, so nothing is forced
+//! and nothing is pruned.
 use super::manager_volume;
 use crate::{
     App,
@@ -48,6 +49,7 @@ impl App {
         }
         self.optional_inspect("volume", name)
             .await?
+            .filter(|info| self.lists_volume(info))
             .ok_or_else(missing)?;
         let containers = self.db.list::<Container>(CONTAINERS)?;
         if let Some(container) = mounted_by(name, &containers) {

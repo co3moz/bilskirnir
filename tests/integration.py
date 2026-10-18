@@ -564,6 +564,12 @@ try:
             api(path, body); raise AssertionError(f"{path} reached a filtered volume")
         except urllib.error.HTTPError as error:
             assert error.code == 404, (path, error.code)
+    # Deleting it is refused the same way, and it stays.
+    try:
+        api(f"volumes/{outside_volume}", method="DELETE"); raise AssertionError("a filtered volume was deleted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404, error.code
+    assert json.loads(docker("volume", "inspect", outside_volume))
     outside_mount = api("containers", {"name": "outside-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": outside_volume, "target": "/workspace"}]})
     failed = wait_for(lambda: (j if (j := api(f"jobs/{outside_mount['job_id']}"))["status"] not in ("queued", "running") else None))
     assert failed["status"] == "failed" and "Volume not found" in failed["log"], failed

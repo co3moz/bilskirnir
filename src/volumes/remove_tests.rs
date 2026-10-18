@@ -1,7 +1,7 @@
-//! Pins down deleting a volume by itself: the manager's own volume, a missing one and one a
-//! container record mounts are refused with their own status before Docker is asked to remove
-//! anything, Docker's own refusal keeps its meaning, nothing is forced or pruned, and a delete
-//! waits for the volume's lock.
+//! Pins down deleting a volume by itself: the manager's own volume, a missing one, one
+//! `VOLUME_FILTER` leaves out and one a container record mounts are refused with their own status
+//! before Docker is asked to remove anything, Docker's own refusal keeps its meaning, nothing is
+//! forced or pruned, and a delete waits for the volume's lock.
 use super::*;
 use crate::model::Mount;
 use axum::{body::Body, http::Request};
@@ -258,6 +258,28 @@ async fn a_manager_outside_docker_owns_no_volume() {
     let (status, body) = answer(app, "orphan").await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(calls(&dir), "volume inspect orphan\nvolume rm orphan\n");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_volume_the_filter_leaves_out_is_missing() {
+    let (mut app, dir) = fake_docker(
+        "  'volume inspect outside') echo '[{\"Name\":\"outside\",\"Labels\":{}}]' ;;\n  'volume inspect kept') echo '[{\"Name\":\"kept\",\"Labels\":{\"io.wsl-desktop.managed\":\"true\"}}]' ;;\n  'volume rm kept') echo kept ;;",
+    );
+    Arc::get_mut(&mut app).unwrap().config.volume_filter =
+        crate::config::volume_filter(None).unwrap();
+    // Made outside Bilskirnir, so the default filter hides it: deleting it fails as opening it does.
+    let (status, body) = answer(app.clone(), "outside").await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    let (status, body) = answer(app, "kept").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let removals = calls(&dir)
+        .lines()
+        .filter(|call| call.starts_with("volume rm"))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    assert_eq!(removals, ["volume rm kept"]);
     std::fs::remove_dir_all(dir).unwrap();
 }
 
