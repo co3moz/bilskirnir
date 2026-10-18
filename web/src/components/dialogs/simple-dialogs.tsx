@@ -2,6 +2,7 @@ import * as React from "react"
 import { RiAlertLine, RiClipboardLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { IconPicker, ImageChoiceItem } from "@/components/image-icon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -28,7 +29,6 @@ import {
   Select,
   SelectContent,
   SelectGroup,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -165,30 +165,44 @@ apt-get update
 apt-get install -y git build-essential
 rm -rf /var/lib/apt/lists/*`
 
-export function BuildImageDialog(props: DialogProps) {
+/** Builds an image from a script, or from a configuration a template or a paste filled in. */
+export function BuildImageDialog({ config, ...props }: DialogProps & { config?: ImportedBuild }) {
   const settings = useSettings().data
-  const choices = imageChoices(useImages().data ?? [], settings?.base_image)
-  const [name, setName] = React.useState("")
+  const images = useImages()
+  const choices = imageChoices(images.data ?? [], settings?.base_image)
+  const [name, setName] = React.useState(config?.name ?? "")
+  const [description, setDescription] = React.useState(config?.description ?? "")
+  const [icon, setIcon] = React.useState(config?.icon)
+  const [iconError, setIconError] = React.useState<string>()
+  const [templateId, setTemplateId] = React.useState(config?.template_id)
+  // The base the user chose, and the one a loaded configuration named.
   const [base, setBase] = React.useState<string | undefined>()
-  const [script, setScript] = React.useState(DEFAULT_SCRIPT)
-  const [internet, setInternet] = React.useState(true)
-  const [compose, setCompose] = React.useState<ComposeDraft | null>(null)
+  const [wanted, setWanted] = React.useState(config?.base_image)
+  const [script, setScript] = React.useState(config?.script ?? DEFAULT_SCRIPT)
+  const [internet, setInternet] = React.useState(config?.internet ?? true)
+  const [compose, setCompose] = React.useState<ComposeDraft | null>(
+    config?.compose ? composeDraft(config.compose) : null
+  )
   const [importing, setImporting] = React.useState(false)
-  // The base image a loaded configuration named when this host cannot build on it.
-  const [missingBase, setMissingBase] = React.useState<string>()
-  const chosen = base ?? initialImage(choices, settings?.base_image)
+  const usable = choices.some((choice) => choice.value === wanted && !choice.disabled)
+  const chosen = base ?? (usable ? wanted : initialImage(choices, settings?.base_image))
+  // The base a loaded configuration named when this host cannot build on it.
+  const missingBase = base === undefined && !usable && !images.isPending ? wanted : undefined
   const { busy, error, submit } = useSubmit()
   const field = React.useId()
 
   const load = (config: ImportedBuild) => {
     if (config.name !== undefined) setName(config.name)
+    if (config.description !== undefined) setDescription(config.description)
+    if (config.icon !== undefined) setIcon(config.icon)
     if (config.internet !== undefined) setInternet(config.internet)
+    setTemplateId(config.template_id)
     setScript(config.script)
     setCompose(config.compose ? composeDraft(config.compose) : null)
-    const wanted = config.base_image
-    const usable = choices.some((choice) => choice.value === wanted && !choice.disabled)
-    if (usable) setBase(wanted)
-    setMissingBase(usable ? undefined : wanted)
+    if (config.base_image !== undefined) {
+      setWanted(config.base_image)
+      setBase(undefined)
+    }
     setImporting(false)
   }
 
@@ -204,16 +218,21 @@ export function BuildImageDialog(props: DialogProps) {
             onSubmit={submit(() =>
               runJob("images/build", {
                 name,
+                ...(description.trim() ? { description } : {}),
                 base_image: chosen,
                 script,
                 internet,
                 ...(compose ? { compose: composeBody(compose) } : {}),
+                ...(icon ? { icon } : {}),
+                ...(templateId ? { template_id: templateId } : {}),
               })
             )}
           >
             <DialogHeader>
               <DialogTitle>{t("images.build")}</DialogTitle>
-              <DialogDescription>{t("build.description")}</DialogDescription>
+              <DialogDescription>
+                {templateId ? t("build.fromTemplate") : t("build.description")}
+              </DialogDescription>
             </DialogHeader>
             <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -231,33 +250,41 @@ export function BuildImageDialog(props: DialogProps) {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${field}-base`}>{t("build.base")}</FieldLabel>
-                  <Select
-                    value={chosen ?? ""}
-                    onValueChange={(value) => {
-                      setBase(value)
-                      setMissingBase(undefined)
-                    }}
-                  >
+                  <Select value={chosen ?? ""} onValueChange={setBase}>
                     <SelectTrigger id={`${field}-base`} className="w-full">
                       <SelectValue placeholder={t("build.noBase")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
                         {choices.map((choice) => (
-                          <SelectItem
-                            key={choice.value}
-                            value={choice.value}
-                            disabled={choice.disabled}
-                          >
-                            {choice.label}
-                            {choice.disabled ? ` · ${t("images.unavailable")}` : ""}
-                          </SelectItem>
+                          <ImageChoiceItem key={choice.value} choice={choice} />
                         ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
+              <Field>
+                <FieldLabel htmlFor={`${field}-description`}>{t("common.description")}</FieldLabel>
+                <Textarea
+                  id={`${field}-description`}
+                  rows={2}
+                  maxLength={4096}
+                  placeholder={t("common.optional")}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+              </Field>
+              <Field data-invalid={!!iconError}>
+                <FieldLabel htmlFor={`${field}-icon`}>{t("icons.label")}</FieldLabel>
+                <IconPicker
+                  id={`${field}-icon`}
+                  value={icon}
+                  onChange={setIcon}
+                  onError={setIconError}
+                />
+                <FieldError>{iconError}</FieldError>
+              </Field>
               {missingBase && (
                 <Alert>
                   <RiAlertLine className="text-warning" />

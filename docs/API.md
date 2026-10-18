@@ -29,7 +29,7 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
 | POST | `/api/login` | Sign in with `username` and `password`. |
 | POST | `/api/logout` | Sign out. |
-| GET | `/api/settings` | Defaults and supported features, without credentials. |
+| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off. |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
@@ -81,13 +81,14 @@ The `wsld_session` cookie and `X-Wsld-Request` header retain their names for com
 | POST | `/api/containers/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/containers/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image` and `internet`, and a compose its parameters without the script. |
+| GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image` and `internet`, a compose its parameters without the script, an [icon](#image-icons) its version and an image built from a template its `template_id`. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
-| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `internet` and `compose`; returns a job. |
+| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `description`, `internet`, `compose`, `icon` and `template_id`; returns a job. |
 | POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
 | POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
-| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `compose` if it has one, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
+| GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `description`, `compose`, `icon` and `template_id` when it has them, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
+| GET, PUT, DELETE | `/api/images/{id}/icon` | Read, set or remove a saved image's [icon](#image-icons). |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with optional `size`, `name` and `description`; returns a job. |
 | GET | `/api/volumes` | Docker named volumes, each as `docker volume ls` describes it plus a boolean `manager`. `true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. |
@@ -208,6 +209,14 @@ The default user is UID/GID 1001:1001; root execution must be explicit. Bash run
 | `archive` | Loaded from an [image archive](#image-archives). |
 
 The catalog images come first. Their `id` is the catalog ID, such as `ubuntu-xfce`, and a container or a build names one by its `reference`. `image_id` is `null` until the image is downloaded, `downloaded` tells whether Docker has the reference and `available` whether it can be used; `error` explains a downloaded reference whose labels belong to another desktop. `created_at`, `parent_image_id` and `source_container` are `null`. The other kinds are saved records, named by their Docker `image_id`, with `available: false` once Docker no longer has the image. Every kind reports `desktop`, the catalog image it derives from (`catalog_id`) and its session, when its labels say so.
+
+## Image icons
+
+A saved image can have an icon, a PNG of at most 256 by 256 pixels and 300 KiB that lists show beside its name. Requests and exported configurations carry it as a data URL, `"icon": "data:image/png;base64,..."`; the dashboard scales any picture to fit before it sends one. `PUT /api/images/{id}/icon` with `{"icon": "data:image/png;base64,..."}` sets it and `DELETE` removes it, both returning the image as lists show it. Lists name the icon by a version instead of carrying it, and `GET /api/images/{id}/icon?v=<version>` returns the PNG; with the current version the response may be cached for good, and without it the browser revalidates with the `ETag`. A snapshot keeps the icon of the saved image its container was created from, and image archives carry it. Catalog images have none.
+
+## Templates
+
+The dashboard's **Templates** page lists ready-made images. It reads the list in the browser from `templates_url` in `/api/settings`, by default `templates/index.json` on the project's GitHub wiki; `TEMPLATES_URL` points it elsewhere or turns it off. A template is a build request, the same JSON `/api/images/{id}/config` returns, beside the list as `<id>.json` with its icon as `<id>.png`; installing one fills in the **Build image** form, and the build sets `template_id` so the page can tell which templates are installed. The manager itself never fetches a template, and the content security policy allows the list's host for these requests and pictures only. [The development guide](DEVELOPMENT.md#add-a-template) describes the list format.
 
 ## Composes
 
@@ -350,7 +359,7 @@ A copy is a full copy, not copy-on-write: disk use grows by the volume's size, a
 
 ## Image archives
 
-`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind and desktop information, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
+`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind, desktop information, icon and template, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
 
 ```bash
 curl --cookie bilskirnir.cookies --output unity.tar.gz \

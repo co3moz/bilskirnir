@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -407,13 +407,17 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     )))
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
-/// megabyte, so only the configuration and compose routes return them.
+/// megabyte, so only the configuration and compose routes return them; an icon is named by its
+/// version, and only the icon route returns the picture.
 pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
     for key in ["build", "compose"] {
         if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
             part.remove("script");
         }
+    }
+    if let Some(icon) = &record.icon {
+        value["icon"] = json!(icon.version());
     }
     value
 }
@@ -431,10 +435,13 @@ pub async fn image_config(
     })?;
     Ok(Json(BuildImage {
         name: record.name,
+        description: record.description,
         base_image: build.base_image,
         internet: build.internet,
         script: build.script,
         compose: record.compose,
+        icon: record.icon,
+        template_id: record.template_id,
     }))
 }
 #[derive(Deserialize)]
@@ -468,15 +475,20 @@ pub async fn register_image(
         desktop: crate::catalog::from_image(&info),
         build: None,
         compose: None,
+        icon: None,
+        template_id: None,
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
 }
 /// A build request. `GET /api/images/{id}/config` returns the same shape, so an exported
-/// configuration is a request that builds the image again.
+/// configuration is a request that builds the image again, and a template on the templates page
+/// is one too.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildImage {
     pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
     pub base_image: String,
     #[serde(default = "default_true")]
     pub internet: bool,
@@ -485,6 +497,35 @@ pub struct BuildImage {
     /// composes name it `template`.
     #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
     pub compose: Option<crate::compose::Compose>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<crate::icons::Icon>,
+    /// Set by the templates page, so it can tell which of its templates are installed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+}
+impl BuildImage {
+    fn validate(&self) -> anyhow::Result<()> {
+        image_ref(&self.base_image)?;
+        if self.script.len() > 1_000_000
+            || self.name.trim().is_empty()
+            || self.name.chars().count() > 100
+        {
+            anyhow::bail!("Invalid image name or script");
+        }
+        if self.description.len() > 4096 {
+            anyhow::bail!("An image description must be at most 4096 bytes");
+        }
+        if let Some(compose) = &self.compose {
+            compose.validate()?;
+        }
+        if let Some(icon) = &self.icon {
+            icon.validate()?;
+        }
+        if let Some(id) = &self.template_id {
+            template_id(id)?;
+        }
+        Ok(())
+    }
 }
 fn default_true() -> bool {
     true
@@ -493,16 +534,7 @@ pub async fn build(
     State(app): State<Arc<App>>,
     Json(body): Json<BuildImage>,
 ) -> Result<Json<Value>> {
-    image_ref(&body.base_image)?;
-    if body.script.len() > 1_000_000
-        || body.name.trim().is_empty()
-        || body.name.chars().count() > 100
-    {
-        return Err(anyhow::anyhow!("Invalid image name or script").into());
-    }
-    if let Some(compose) = &body.compose {
-        compose.validate()?;
-    }
+    body.validate()?;
     launch(
         app,
         "build",
@@ -561,7 +593,7 @@ pub async fn build(
                 source_container: None,
                 kind: "build".into(),
                 created_at: now(),
-                description: String::new(),
+                description: body.description,
                 desktop: crate::catalog::from_image(&info),
                 build: Some(BuildConfig {
                     base_image: body.base_image,
@@ -569,6 +601,8 @@ pub async fn build(
                     script,
                 }),
                 compose: body.compose,
+                icon: body.icon,
+                template_id: body.template_id,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))
@@ -623,6 +657,8 @@ pub async fn snapshot(
             let info = app.inspect("image", &reference).await?;
             // A container from the snapshot asks for the same parameters again.
             let compose = app.pinned_compose(&env_id);
+            let records: Vec<ImageRecord> = app.db.list("image")?;
+            let icon = crate::icons::inherited(&records, &env.source_image_id);
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
@@ -636,6 +672,8 @@ pub async fn snapshot(
                 desktop: crate::catalog::from_image(&info),
                 build: None,
                 compose,
+                icon,
+                template_id: None,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))

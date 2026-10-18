@@ -8,7 +8,7 @@ Bilskirnir's appearance draws on the Asgard ships and interiors that inspired th
 
 A user should be able to see which containers are running, open one, and understand whether an operation succeeded. Make those actions and states easy to recognize before adding decoration.
 
-Use familiar names: **Dashboard**, **Containers**, **Images**, **Volumes** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
+Use familiar names: **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
 
 Write visible copy in English in `web/src/locales/en.ts`, and give the same key a translation in every other catalog there; see [Translate the interface](DEVELOPMENT.md#translate-the-interface). Write each language as natural interface text of its own rather than word for word, keep placeholders where the sentence needs them, and keep labels short enough for a button in every language. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
 
@@ -16,10 +16,10 @@ Write visible copy in English in `web/src/locales/en.ts`, and give the same key 
 
 The layout is `dashboard-01`, filled with Bilskirnir's own data:
 
-- **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the five pages, a **Running containers** group where the block lists documents, links to the documentation and agent access, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
+- **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the six pages, a **Running containers** group where the block lists documents, links to the documentation and agent access, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
 - **Site header**: the sidebar button, the page title, the Docker connection and the page's main action.
 - **Dashboard**: four summary cards, resource usage, the job activity chart and the containers table, in that order. The block has one chart; resource usage is the second, in the same card style.
-- **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Volumes** and **Jobs**: tables.
+- **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Templates**: one card per template, with a search field and tag filters; **Volumes** and **Jobs**: tables.
 - **Desktop view**: full screen without the sidebar. A 48 px toolbar leaves as much room as possible for the remote desktop.
 
 Pages live in the URL fragment (`#/images`, `#/desktop/<id>`) so they survive a reload and can be bookmarked.
@@ -64,7 +64,8 @@ Components come from shadcn/ui (Radix base, Maia style) in `web/src/components/u
 - **Tables** use `web/src/components/data-table.tsx`: the block's view tabs (a select on narrow pages), the columns menu, row selection where bulk actions exist, sorting on columns where order matters, and pagination that stays on its page while the list refreshes.
 - **Detail drawers** open from a table row, from the right, or from the bottom on a phone, as the block's row viewer does. The container drawer holds the preview, the configuration and every action; the job drawer follows the log while the job runs.
 - **Container cards** show the desktop preview, name, state, desktop, resources and actions. Preserve the full screenshot instead of cropping away parts of the desktop. Hover can strengthen the border but should not move the card.
-- **Image rows** use violet icons, a cloud for catalog images, and an indented tree for parent relationships; the source and a status badge sit beside the name.
+- **Image rows** use violet icons, a cloud for catalog images, and an indented tree for parent relationships; the source and a status badge sit beside the name. A saved image's own icon replaces the violet one at 36 px, and selecting either opens the icon dialog. Image selects show the icon too.
+- **Template cards** show the template's icon at 56 px, its name, tags and description, an **Installed** badge once an image was built from it, and **Install**, which opens **Build image** filled in so the script is read before anything runs. A template that needs a newer release shows that instead of **Install**, and list entries that cannot be offered are listed below the cards with the reason.
 - **Dialogs** open one at a time through `web/src/lib/dialogs.ts`. Explain consequences beside the relevant control: whether a file will be replaced, what a snapshot excludes, why a script runs as root, or which setting restarts the desktop. Destructive confirmations use an alert dialog with a destructive button.
 - **File uploads** use a dashed drop target and a compact queue with progress and explicit **Uploaded**, **Failed** or **Cancelled** results. Keep completed outcomes visible and make retry available for unfinished files. Do not offer read-only destinations.
 

@@ -2,6 +2,7 @@ import * as React from "react"
 import { RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { ImageChoiceItem } from "@/components/image-icon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,7 +28,6 @@ import {
   Select,
   SelectContent,
   SelectGroup,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -154,14 +154,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
                   <SelectContent>
                     <SelectGroup>
                       {choices.map((choice) => (
-                        <SelectItem
-                          key={choice.value}
-                          value={choice.value}
-                          disabled={choice.disabled}
-                        >
-                          {choice.label}
-                          {choice.disabled ? ` · ${t("images.unavailable")}` : ""}
-                        </SelectItem>
+                        <ImageChoiceItem key={choice.value} choice={choice} />
                       ))}
                     </SelectGroup>
                   </SelectContent>

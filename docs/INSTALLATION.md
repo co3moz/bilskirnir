@@ -45,6 +45,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
+| `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 

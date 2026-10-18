@@ -57,6 +57,8 @@ fn image(id: &str, compose: Option<Compose>) -> ImageRecord {
         desktop: None,
         build: None,
         compose,
+        icon: None,
+        template_id: None,
     }
 }
 

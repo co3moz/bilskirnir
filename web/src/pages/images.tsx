@@ -13,6 +13,8 @@ import {
   RiRefreshLine,
 } from "@remixicon/react"
 
+import { cn } from "cn"
+
 import {
   columnHelper,
   DataTablePagination,
@@ -20,6 +22,7 @@ import {
   useDataTable,
   type DataColumn,
 } from "@/components/data-table"
+import { ImageIcon } from "@/components/image-icon"
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +32,7 @@ import { attempt, exportArchive, exportBuildConfig, runJob } from "@/lib/actions
 import { openDialog } from "@/lib/dialogs"
 import { imageKind, imageSource, imageStatus, imageTree, shortDate } from "@/lib/format"
 import { formatList, t } from "@/lib/i18n"
+import { iconUrl } from "@/lib/icons"
 import { useImages } from "@/lib/queries"
 import type { ImageItem } from "@/lib/types"
 
@@ -163,13 +167,34 @@ const columns: DataColumn<Row>[] = [
           : image.kind === "catalog"
             ? RiCloudLine
             : RiStackLine
+      const icon = iconUrl(image)
       return (
         // Table cells do not wrap; a long reference does here so the row actions stay in view.
         <div
           className="flex min-w-64 items-start gap-2 whitespace-normal"
           style={{ paddingLeft: `${Math.min(image.depth, 8) * 1.25}rem` }}
         >
-          <Icon className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+          {image.kind === "catalog" ? (
+            <Icon className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+          ) : (
+            // A saved image's icon is where its icon is changed.
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => openDialog({ kind: "icon", id: image.id })}
+                  aria-label={t("icons.changeOf", { name: image.name })}
+                  className={cn(
+                    "flex shrink-0 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    icon ? "size-9" : "mt-0.5 size-4"
+                  )}
+                >
+                  <ImageIcon src={icon} fallback={Icon} className={icon ? "size-9" : "size-4"} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{icon ? t("icons.change") : t("icons.add")}</TooltipContent>
+            </Tooltip>
+          )}
           <div className="flex flex-col gap-0.5">
             <span className="font-medium">{image.name}</span>
             {image.description && (

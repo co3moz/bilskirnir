@@ -17,6 +17,8 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
         desktop: None,
         build,
         compose: None,
+        icon: None,
+        template_id: None,
     }
 }
 
@@ -31,16 +33,23 @@ fn unity_tools() -> BuildConfig {
 #[tokio::test]
 async fn configuration_is_the_request_that_built_the_image() {
     let app = crate::tests::app(false);
-    app.db
-        .put("image", "a", &record("a", "build", Some(unity_tools())))
-        .unwrap();
+    let built = ImageRecord {
+        description: "Git for Unity projects".into(),
+        icon: Some(crate::icons::sample(256, 256)),
+        template_id: Some("unity".into()),
+        ..record("a", "build", Some(unity_tools()))
+    };
+    app.db.put("image", "a", &built).unwrap();
     let Json(config) = image_config(State(app), Path("a".into())).await.unwrap();
     let expected = BuildImage {
         name: "build image".into(),
+        description: "Git for Unity projects".into(),
         base_image: unity_tools().base_image,
         internet: false,
         script: unity_tools().script,
         compose: None,
+        icon: Some(crate::icons::sample(256, 256)),
+        template_id: Some("unity".into()),
     };
     assert_eq!(config, expected);
     // What the interface copies is a body the build route accepts as it is.
@@ -49,6 +58,42 @@ async fn configuration_is_the_request_that_built_the_image() {
         serde_json::from_str::<BuildImage>(&exported).unwrap(),
         expected
     );
+}
+
+#[test]
+fn a_build_request_checks_its_description_icon_and_template() {
+    let request = |extra: Value| {
+        let mut body = json!({"name": "Unity", "base_image": "ubuntu:24.04", "script": "true"});
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value::<BuildImage>(body)
+    };
+    let plain = request(json!({})).unwrap();
+    assert!(plain.validate().is_ok());
+    // An exported configuration names only what the image has.
+    let exported = serde_json::to_value(&plain).unwrap();
+    for key in ["description", "icon", "template_id", "compose"] {
+        assert!(exported.get(key).is_none(), "{key}");
+    }
+    let full = request(json!({
+        "description": "Unity Hub and an editor",
+        "icon": crate::icons::sample(256, 256),
+        "template_id": "unity-6",
+    }))
+    .unwrap();
+    assert!(full.validate().is_ok());
+    for refused in [
+        json!({"description": "x".repeat(4097)}),
+        json!({"icon": crate::icons::sample(300, 300)}),
+        json!({"template_id": "Unity"}),
+        json!({"template_id": "-unity"}),
+        json!({"template_id": "a".repeat(65)}),
+    ] {
+        let body = request(refused.clone()).unwrap();
+        assert!(body.validate().is_err(), "{refused}");
+    }
+    assert!(request(json!({"icon": "data:image/gif;base64,R0lGODlh"})).is_err());
 }
 
 #[tokio::test]

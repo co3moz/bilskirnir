@@ -1,4 +1,5 @@
 import { formatDate, formatList, formatNumber, getLocale, has, plural, t } from "./i18n"
+import { iconUrl } from "./icons"
 import { fileSize } from "./uploads"
 import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } from "./types"
 
@@ -270,12 +271,14 @@ export function currentStage(job: Pick<Job, "status" | "stages">) {
   return stage && stageLabel(stage.name)
 }
 
-export type ImageChoice = { value: string; label: string; disabled: boolean }
+/** An image a form can choose; `icon` is the URL of a saved image's icon. */
+export type ImageChoice = { value: string; label: string; disabled: boolean; icon?: string }
 
 type Choosable = Pick<
   ImageItem,
   "kind" | "reference" | "image_id" | "name" | "desktop" | "available" | "error"
->
+> &
+  Partial<Pick<ImageItem, "id" | "icon">>
 
 export function imageChoices(
   images: Choosable[],
@@ -302,10 +305,12 @@ export function imageChoices(
     })
   for (const image of images) {
     if (image.kind === "catalog" || !image.image_id) continue
+    const icon = image.id ? iconUrl({ id: image.id, icon: image.icon }) : undefined
     choices.set(image.image_id, {
       value: image.image_id,
       label: image.desktop ? `${image.name} · ${image.desktop.title}` : image.name,
       disabled: image.available === false,
+      ...(icon ? { icon } : {}),
     })
   }
   if (selected && !choices.has(selected))

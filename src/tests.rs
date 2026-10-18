@@ -31,6 +31,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             archive_limit: 4 * 1024 * 1024,
             mcp_enabled: false,
             mcp_token: Some(String::new()),
+            templates_url: None,
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -95,6 +96,79 @@ pub(crate) async fn mcp_request(
         .await
         .unwrap();
     (status, serde_json::from_slice(&bytes).unwrap())
+}
+#[test]
+fn templates_url_defaults_to_the_wiki_and_none_turns_the_page_off() {
+    for unset in [None, Some(""), Some("  ")] {
+        assert_eq!(
+            config::templates_url(unset).unwrap().as_deref(),
+            Some(config::TEMPLATES_URL)
+        );
+    }
+    assert_eq!(config::templates_url(Some("none")).unwrap(), None);
+    let mirror = "http://10.0.0.5:8000/bilskirnir/index.json";
+    assert_eq!(
+        config::templates_url(Some(mirror)).unwrap().as_deref(),
+        Some(mirror)
+    );
+    // The policy header names the host, so nothing may close the directive or start another.
+    for refused in [
+        "None",
+        "ftp://example.com/index.json",
+        "https://",
+        "https:///index.json",
+        "https://example.com/a b.json",
+        "https://example.com;script-src *",
+        "https://example.com/index.json'",
+        "https://user@example.com/index.json",
+        "https://example.com?x/index.json",
+    ] {
+        assert!(config::templates_url(Some(refused)).is_err(), "{refused}");
+    }
+}
+#[tokio::test]
+async fn the_content_security_policy_allows_the_templates_host_only() {
+    let mut origins = app(false);
+    let config = &mut Arc::get_mut(&mut origins).unwrap().config;
+    for (url, origin) in [
+        (config::TEMPLATES_URL, "https://raw.githubusercontent.com"),
+        ("http://10.0.0.5:8000/x/index.json", "http://10.0.0.5:8000"),
+        ("https://example.com", "https://example.com"),
+    ] {
+        config.templates_url = Some(url.into());
+        assert_eq!(config.templates_origin(), Some(origin));
+    }
+    let policy = |app: Arc<App>| async move {
+        let response = router(app)
+            .oneshot(
+                Request::builder()
+                    .header("host", "localhost:8080")
+                    .uri("/api/session")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        response.headers()["content-security-policy"]
+            .to_str()
+            .unwrap()
+            .to_owned()
+    };
+    let none = policy(app(false)).await;
+    assert!(none.contains("img-src 'self' data:;") && none.contains("connect-src 'self';"));
+    let mut github = app(false);
+    Arc::get_mut(&mut github).unwrap().config.templates_url = Some(config::TEMPLATES_URL.into());
+    let github = policy(github).await;
+    let host = "https://raw.githubusercontent.com";
+    assert!(
+        github.contains(&format!("img-src 'self' data: {host};")),
+        "{github}"
+    );
+    assert!(
+        github.contains(&format!("connect-src 'self' {host};")),
+        "{github}"
+    );
+    assert!(github.contains("script-src 'self';"), "{github}");
 }
 #[test]
 fn mcp_token_and_script_validation() {
@@ -1102,6 +1176,8 @@ fn database_round_trip_keeps_snapshot_parent() {
         desktop: None,
         build: None,
         compose: None,
+        icon: None,
+        template_id: None,
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(
