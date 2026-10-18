@@ -306,6 +306,72 @@ fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
 }
 
 #[test]
+fn the_folders_a_compose_names_are_offered_and_take_uploads() {
+    let mut compose = installs();
+    compose.parameters.push(Parameter {
+        kind: parameters::Kind::Folder,
+        label: "Unity project".into(),
+        default: "/srv/unity/MyGame".into(),
+        ..parameter("UNITY_PROJECT")
+    });
+    compose.validate().unwrap();
+    // UNITY_CACHE has no volume, yet its folder is the desktop user's all the same.
+    let pinned = Pinned {
+        values: compose.resolve(&given(&[]), "e").unwrap(),
+        compose,
+    };
+    let place = |label: &str, path: &str| Place {
+        label: label.into(),
+        path: path.into(),
+    };
+    let setup = pinned.setup("img");
+    assert_eq!(
+        setup.places,
+        [
+            place("Unity installs", "/opt/unity"),
+            place("UNITY_CACHE", "/home/desktop/.cache/unity"),
+            place("Unity project", "/srv/unity/MyGame"),
+        ]
+    );
+    let env = Container {
+        setup: Some(setup),
+        ..container()
+    };
+    for target in [
+        "/opt/unity",
+        "/opt/unity/Editors",
+        "/srv/unity/MyGame/Assets",
+    ] {
+        crate::uploads::validate_target(&env, target, "a.txt")
+            .unwrap_or_else(|e| panic!("{target}: {e:#}"));
+    }
+    for target in ["/opt/unityish", "/srv/unity", "/srv"] {
+        assert!(
+            crate::uploads::validate_target(&env, target, "a.txt").is_err(),
+            "{target}"
+        );
+    }
+    // A folder left empty names nothing, and a record from before places were kept has none.
+    let mut cleared = pinned.clone();
+    cleared.values.insert("UNITY_PROJECT".into(), String::new());
+    assert!(
+        !cleared
+            .setup("img")
+            .places
+            .iter()
+            .any(|p| p.label == "Unity project")
+    );
+    let mut old = serde_json::to_value(pinned.setup("img")).unwrap();
+    old.as_object_mut().unwrap().remove("places");
+    assert!(
+        serde_json::from_value::<Setup>(old)
+            .unwrap()
+            .places
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_compose_volume_has_its_path_and_its_volume_to_itself() {
     let compose = [mount("unity-installs", "/opt/unity")];
     check_mounts(&[mount("projects", "/home/desktop/Projects")], &compose).unwrap();

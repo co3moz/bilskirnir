@@ -1,7 +1,8 @@
 use crate::{
     App, auth,
+    compose::Place,
     error::{Error, Result},
-    model::ContainerSpec,
+    model::{Container, Mount},
     process,
 };
 use axum::{
@@ -51,7 +52,24 @@ pub(crate) fn file_name(name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> anyhow::Result<()> {
+/// The desktop user's home, where every upload may go.
+const HOME: &str = "/home/desktop";
+
+/// Whether a file `name` may be written into the folder `destination` of a container.
+pub fn validate_target(record: &Container, destination: &str, name: &str) -> anyhow::Result<()> {
+    check_target(&record.mounts(), record.places(), destination, name)
+}
+
+/// The upload rule: anywhere in the desktop home, in a writable volume or in a folder the
+/// compose names, and nowhere under a read-only volume. It keeps uploads out of the system
+/// folders; it is not what protects the desktop, which is that files are written as the desktop
+/// user and never through a symlink.
+pub(crate) fn check_target(
+    mounts: &[Mount],
+    places: &[Place],
+    destination: &str,
+    name: &str,
+) -> anyhow::Result<()> {
     file_name(name)?;
     if !destination.starts_with('/')
         || destination.len() > 4096
@@ -63,20 +81,21 @@ pub fn validate_target(spec: &ContainerSpec, destination: &str, name: &str) -> a
     {
         anyhow::bail!("Destination must be a canonical absolute directory");
     }
-    if spec
-        .mounts
+    if mounts
         .iter()
         .any(|mount| mount.readonly && within(destination, &mount.target))
     {
         anyhow::bail!("Cannot upload to a read-only volume");
     }
-    if !within(destination, "/home/desktop/Downloads")
-        && !spec
-            .mounts
+    if !within(destination, HOME)
+        && !mounts
             .iter()
-            .any(|mount| !mount.readonly && within(destination, &mount.target))
+            .any(|mount| within(destination, &mount.target))
+        && !places.iter().any(|place| within(destination, &place.path))
     {
-        anyhow::bail!("Choose Downloads or a writable mounted volume");
+        anyhow::bail!(
+            "Choose a folder in the desktop home, a writable volume or a folder the image's compose names"
+        );
     }
     Ok(())
 }
@@ -156,7 +175,7 @@ pub(crate) async fn save_file(
         let lock = app.resource_lock(&format!("container:{id}"));
         let _guard = lock.lock().await;
         let record = app.container(&id)?;
-        validate_target(&record.spec, &request.destination, &request.name)?;
+        validate_target(&record, &request.destination, &request.name)?;
         let container = app.owned(&record).await?;
         if container["State"]["Running"] != true {
             return Err(Error(

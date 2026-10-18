@@ -29,6 +29,7 @@ services:
       UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-1024}
       IMAGE_ARCHIVE_MAX_MB: ${IMAGE_ARCHIVE_MAX_MB:-65536}
       TEMPLATES_URL: ${TEMPLATES_URL:-}
+      VOLUME_FILTER: ${VOLUME_FILTER:-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
       RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
     volumes:

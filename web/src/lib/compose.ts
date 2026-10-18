@@ -26,6 +26,7 @@ export const DISPLAYS: Record<ParameterType, ParameterDisplay[]> = {
   choice: ["select", "radio"],
   choices: ["checkboxes"],
   volume: ["select"],
+  folder: ["input"],
 }
 
 export const typeLabel = (type: ParameterType) => t(`compose.type.${type}`)

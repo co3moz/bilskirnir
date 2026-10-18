@@ -147,7 +147,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 `list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file as base64 with its size and a guessed MIME type, up to 5 MiB; the HTTP download route streams larger files. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
 
-`upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination within Downloads or a writable mounted volume. Its MCP limit is 512 KiB; for larger files, `create_transfer` issues a link to the streaming HTTP upload route that needs no dashboard session, as [move large files](#move-large-files) describes. See [files in the HTTP API](API.md#files).
+`upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination folder anywhere in the desktop home, in a writable mounted volume or in one of the `places` of the container's `setup`. Its MCP limit is 512 KiB; for larger files, `create_transfer` issues a link to the streaming HTTP upload route that needs no dashboard session, as [move large files](#move-large-files) describes. See [files in the HTTP API](API.md#files).
 
 ## Launch and observe applications
 
@@ -169,7 +169,7 @@ Supervisor files live under `/tmp` in the desktop, so they are not part of snaps
 
 `start_recording` captures the desktop as JPEG frames at `fps` (1–5) until `stop_recording`, `max_seconds` (up to 600), 3000 frames or 256 MiB. `max_width` scales frames (default 960) and `region` limits them to part of the desktop. `list_recordings` shows each recording's state, frame count and size; frames are regular files under `/tmp/bilskirnir-recordings/<recording_id>` and can be read with `read_file`. The frames are a sequence, not an encoded video.
 
-Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv and ffmpeg play; the stop result describes it under `video`. `export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in Downloads or a writable mounted volume so the files outlive the desktop, and returns the archive's `path` and `download_url`. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting a container.
+Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv and ffmpeg play; the stop result describes it under `video`. `export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in the desktop home, a writable mounted volume or a compose folder so the files outlive the desktop, and returns the archive's `path` and `download_url`. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting a container.
 
 ## Listen, talk, type and press buttons
 
@@ -209,7 +209,7 @@ Requests allow 1–100 actions, up to 10,000 typed characters, single waits or h
 
 `screenshot` captures the desktop at full resolution by default. `max_width` scales the image down, `region` crops `x,y,width,height` and `window_id` captures one window from `list_windows`. The result's `structuredContent` holds `width`, `height` and `captured_at`. `act_and_observe` sends actions, waits `settle_ms` (default 500) and returns the screenshot together with the input result, which is the shortest loop for driving an application.
 
-`save_screenshot` takes the same options under `capture` and writes the JPEG inside the desktop at `path`, an absolute file path in Downloads or a writable mounted volume, as the desktop user and under the upload destination rules. It returns the file's `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`. An existing file needs `replace=true`. `screenshot` stays a read-only tool; the image it returns reaches the agent, not necessarily the person.
+`save_screenshot` takes the same options under `capture` and writes the JPEG inside the desktop at `path`, an absolute file path in the desktop home, a writable mounted volume or a compose folder, as the desktop user and under the upload destination rules. It returns the file's `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`. An existing file needs `replace=true`. `screenshot` stays a read-only tool; the image it returns reaches the agent, not necessarily the person.
 
 ## Hand files to the user
 
@@ -276,6 +276,6 @@ Read/write and execution tools operate inside managed desktop containers. They d
 
 `update_container` changes a container's settings after creation; pass only the fields to change. `name`, `internet`, `ports` and a new or changed resource limit apply in place. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
-Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one.
+Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one. It lists only the volumes that carry the installation's `VOLUME_FILTER` label, by default the ones Bilskirnir created; a volume it leaves out cannot be mounted or opened, so create or copy one instead of naming a volume from elsewhere on the host.
 
 `copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).

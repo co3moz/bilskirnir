@@ -35,10 +35,16 @@ fn container(id: &str, mounts: &[(&str, &str)]) -> Container {
 
 #[test]
 fn a_volume_created_for_a_container_carries_its_owner() {
-    let args = create_args("e", "UNITY_WORKSPACE", "wsld-e-unity-workspace");
+    let owner = owner_labels("e", "UNITY_WORKSPACE");
+    let args = |filter| crate::volumes::create_args("wsld-e-unity-workspace", filter, &owner);
     assert_eq!(
-        args.join(" "),
+        args(Some("io.wsl-desktop.managed=true")).join(" "),
         "volume create --label io.wsl-desktop.managed=true --label io.wsl-desktop.environment=e --label io.wsl-desktop.parameter=UNITY_WORKSPACE wsld-e-unity-workspace"
+    );
+    // It is created like any other volume, so another VOLUME_FILTER's label is on it too.
+    assert_eq!(
+        args(Some("team=unity")).join(" "),
+        "volume create --label io.wsl-desktop.managed=true --label team=unity --label io.wsl-desktop.environment=e --label io.wsl-desktop.parameter=UNITY_WORKSPACE wsld-e-unity-workspace"
     );
     // The owner label is the one the container carries.
     let desktop = crate::tests::app(false).container_args(&container("e", &[]));

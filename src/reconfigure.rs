@@ -189,11 +189,16 @@ impl App {
             let manager_info = self.inspect("container", manager).await?;
             crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
         }
-        // A new container would get an empty volume in place of a missing one.
+        // A new container would get an empty volume in place of a missing one. A volume the
+        // container already mounts stays, while a new choice has to be one VOLUME_FILTER lists.
+        let mounted = env.mounts();
         for mount in &mounts {
-            self.inspect("volume", &mount.volume)
-                .await
-                .with_context(|| format!("Volume not found: {}", mount.volume))?;
+            let found = if mounted.iter().any(|m| m.volume == mount.volume) {
+                self.inspect("volume", &mount.volume).await
+            } else {
+                self.chosen_volume(&mount.volume).await
+            };
+            found.with_context(|| format!("Volume not found: {}", mount.volume))?;
         }
         if self
             .optional_inspect("container", &env.container)

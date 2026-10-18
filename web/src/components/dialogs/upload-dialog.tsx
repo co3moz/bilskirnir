@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiUploadLine } from "@remixicon/react"
+import { RiFolderOpenLine, RiUploadLine } from "@remixicon/react"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
@@ -15,20 +15,19 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
-import { subfolderError, uploadLocations } from "@/lib/format"
+import {
+  defaultFolder,
+  inVolume,
+  recentFolders,
+  rememberFolder,
+  uploadProblem,
+} from "@/lib/desktop-paths"
 import { useContainers, useSettings } from "@/lib/queries"
 import { formatNumber, t } from "@/lib/i18n"
 import { FileUploads, fileSize, uploadStatus } from "@/lib/uploads"
+import { FolderBrowser } from "./folder-browser"
 import type { DialogProps } from "./side-drawer"
 
 /** The upload queue, rendered again whenever it reports progress. */
@@ -60,13 +59,21 @@ export function UploadDialog({
   React.useEffect(() => {
     if (!open) uploads.cancel()
   }, [open, uploads])
-  const locations = item ? uploadLocations(item.spec) : []
-  const [destination, setDestination] = React.useState(locations[0]?.target ?? "")
-  const [subfolder, setSubfolder] = React.useState("")
+  const [recent] = React.useState(() => recentFolders(id))
+  const [destination, setDestination] = React.useState("")
+  const [browsing, setBrowsing] = React.useState(false)
   const [replace, setReplace] = React.useState(false)
+  const [checked, setChecked] = React.useState(false)
   const [error, setError] = React.useState("")
   const input = React.useRef<HTMLInputElement>(null)
   const field = React.useId()
+  // The container record may arrive after the dialog opens; the folder is chosen once it has.
+  const seeded = React.useRef(false)
+  React.useEffect(() => {
+    if (!item || seeded.current) return
+    seeded.current = true
+    setDestination(defaultFolder(item, recent))
+  }, [item, recent])
 
   const select = React.useCallback(
     (chosen: File[]) => {
@@ -86,14 +93,16 @@ export function UploadDialog({
   }, [select])
   const drop = useFileDrop(select)
 
+  const folder = destination.trim()
+  const problem = item ? uploadProblem(item, folder) : ""
+
   const start = () => {
-    const folder = subfolder.trim()
-    const problem = subfolderError(folder)
-    setError(problem)
+    setChecked(true)
     if (problem) return
+    rememberFolder(id, folder)
     void uploads.start({
       target: `containers/${encodeURIComponent(id)}`,
-      destination: folder ? `${destination}/${folder}` : destination,
+      destination: folder,
       replace,
     })
   }
@@ -103,50 +112,63 @@ export function UploadDialog({
   const completed = items.filter((entry) => entry.status === "completed").length
   const unfinished = items.some((entry) => entry.status !== "completed")
   const retry = items.some((entry) => entry.status === "failed" || entry.status === "cancelled")
+  const ready = item?.state === "running"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={browsing ? "sm:max-w-3xl" : "sm:max-w-lg"}>
         <DialogHeader>
-          <DialogTitle>{t("uploads.title")}</DialogTitle>
+          <DialogTitle>{browsing ? t("folders.title") : t("uploads.title")}</DialogTitle>
           <DialogDescription>{item?.spec.name}</DialogDescription>
         </DialogHeader>
-        {!item || item.state !== "running" ? (
+        {!item || !ready ? (
           <p className="text-sm text-muted-foreground">{t("uploads.notRunning")}</p>
-        ) : !locations.length ? (
-          <p className="text-sm text-muted-foreground">{t("uploads.noDestination")}</p>
+        ) : browsing ? (
+          <FolderBrowser
+            container={item}
+            initial={folder}
+            recent={recent}
+            onCancel={() => setBrowsing(false)}
+            onChoose={(path) => {
+              setDestination(path)
+              setChecked(true)
+              setBrowsing(false)
+            }}
+          />
         ) : (
           <FieldGroup className="gap-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={`${field}-destination`}>{t("uploads.destination")}</FieldLabel>
-                <Select value={destination} onValueChange={setDestination} disabled={running}>
-                  <SelectTrigger id={`${field}-destination`} className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {locations.map((location) => (
-                        <SelectItem key={location.target} value={location.target}>
-                          {location.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${field}-subfolder`}>{t("uploads.subfolder")}</FieldLabel>
+            <Field data-invalid={(checked && !!problem) || undefined}>
+              <FieldLabel htmlFor={`${field}-destination`}>{t("uploads.destination")}</FieldLabel>
+              <div className="flex gap-2">
                 <Input
-                  id={`${field}-subfolder`}
-                  placeholder={t("common.optional")}
+                  id={`${field}-destination`}
                   autoComplete="off"
+                  spellCheck={false}
                   disabled={running}
-                  value={subfolder}
-                  onChange={(event) => setSubfolder(event.target.value)}
+                  value={destination}
+                  aria-invalid={(checked && !!problem) || undefined}
+                  onChange={(event) => setDestination(event.target.value)}
+                  onBlur={() => setChecked(true)}
+                  className="min-w-0 flex-1 font-mono"
                 />
-              </Field>
-            </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={running}
+                  onClick={() => setBrowsing(true)}
+                >
+                  <RiFolderOpenLine data-icon="inline-start" />
+                  {t("uploads.browse")}
+                </Button>
+              </div>
+              {checked && problem ? (
+                <FieldError>{problem}</FieldError>
+              ) : (
+                inVolume(item, folder) && (
+                  <FieldDescription className="text-xs">{t("uploads.inVolume")}</FieldDescription>
+                )
+              )}
+            </Field>
             <Field orientation="horizontal">
               <Checkbox
                 id={`${field}-replace`}
@@ -221,16 +243,18 @@ export function UploadDialog({
             <FieldError>{error}</FieldError>
           </FieldGroup>
         )}
-        <DialogFooter>
-          {running && (
-            <Button variant="outline" onClick={() => uploads.cancel()}>
-              {t("uploads.cancel")}
+        {!browsing && (
+          <DialogFooter>
+            {running && (
+              <Button variant="outline" onClick={() => uploads.cancel()}>
+                {t("uploads.cancel")}
+              </Button>
+            )}
+            <Button disabled={running || !unfinished || !ready} onClick={start}>
+              {running ? t("uploads.uploading") : retry ? t("uploads.retry") : t("uploads.title")}
             </Button>
-          )}
-          <Button disabled={running || !unfinished || !locations.length} onClick={start}>
-            {running ? t("uploads.uploading") : retry ? t("uploads.retry") : t("uploads.title")}
-          </Button>
-        </DialogFooter>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

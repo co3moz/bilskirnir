@@ -152,7 +152,15 @@ pub fn mount_target(target: &str) -> Result<()> {
     {
         bail!("Invalid volume target");
     }
-    if [
+    if infrastructure(target) {
+        bail!("Volume target conflicts with desktop infrastructure");
+    }
+    Ok(())
+}
+/// Whether `path` is one of the desktop's system folders, inside one, or a parent folder that
+/// holds more of them, such as `/opt` or `/home`.
+fn infrastructure(path: &str) -> bool {
+    [
         "/proc",
         "/sys",
         "/dev",
@@ -169,12 +177,15 @@ pub fn mount_target(target: &str) -> Result<()> {
         "/opt/VirtualGL",
     ]
     .iter()
-    .any(|p| target == *p || target.starts_with(&format!("{p}/")))
-    {
-        bail!("Volume target conflicts with desktop infrastructure");
-    }
-    if target == "/opt" || target == "/var" || target == "/home" {
-        bail!("Volume target conflicts with desktop infrastructure");
+    .any(|p| path == *p || path.starts_with(&format!("{p}/")))
+        || ["/", "/opt", "/var", "/home"].contains(&path)
+}
+/// A folder of the desktop that a compose names: a canonical absolute path outside the system
+/// folders, which the setup script receives and the upload dialog offers.
+pub fn desktop_folder(path: &str) -> Result<()> {
+    crate::apps::directory(path)?;
+    if infrastructure(path) {
+        bail!("A folder outside the desktop's system folders is needed");
     }
     Ok(())
 }
@@ -242,6 +253,10 @@ impl Container {
         let mut mounts = self.spec.mounts.clone();
         mounts.extend_from_slice(self.compose_mounts());
         mounts
+    }
+    /// The folders its compose names, which the upload dialog offers by their labels.
+    pub fn places(&self) -> &[crate::compose::Place] {
+        self.setup.as_ref().map_or(&[], |setup| &setup.places)
     }
 }
 /// A commit that carries a container's files over to its replacement.

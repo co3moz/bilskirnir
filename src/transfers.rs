@@ -63,7 +63,7 @@ pub(crate) const OPERATIONS: [&str; 9] = [
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Operation {
-    /// `POST /api/containers/{id}/files`: into Downloads or a writable mounted volume.
+    /// `POST /api/containers/{id}/files`: into the desktop home, a writable volume or a compose folder.
     ContainerUpload {
         container_id: String,
         destination: String,
@@ -136,7 +136,7 @@ impl Operation {
                 destination,
                 name,
                 ..
-            } => uploads::validate_target(&app.container(container_id)?.spec, destination, name)?,
+            } => uploads::validate_target(&app.container(container_id)?, destination, name)?,
             Self::ContainerDownload { container_id, path } => {
                 app.container(container_id)?;
                 files::split_path(path)?;

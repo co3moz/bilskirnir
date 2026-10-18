@@ -23,14 +23,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { attempt, exportVolume } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { rich, t } from "@/lib/i18n"
-import { useContainers, useVolumes } from "@/lib/queries"
+import { useContainers, useSettings, useVolumes } from "@/lib/queries"
 import type { Volume } from "@/lib/types"
 import { volumeUsers } from "@/lib/volume-files"
 
 // The ownership label the manager puts on what it creates; see src/model.rs.
-const MANAGED = "io.wsl-desktop.managed=true"
+const LABEL = "io.wsl-desktop.managed"
+const MANAGED = `${LABEL}=true`
 
-type Row = Volume & { users: ReturnType<typeof volumeUsers> }
+type Row = Volume & {
+  users: ReturnType<typeof volumeUsers>
+  /** Whether to mark the volume as one Bilskirnir created. */
+  managed: boolean
+}
 const column = columnHelper<Row>()
 
 const columns: DataColumn<Row>[] = [
@@ -60,7 +65,7 @@ const columns: DataColumn<Row>[] = [
                   {t("volumes.manager")}
                 </Badge>
               )}
-              {row.original.Labels?.split(",").includes(MANAGED) && (
+              {row.original.managed && (
                 <Badge variant="outline" className="text-muted-foreground">
                   Bilskirnir
                 </Badge>
@@ -180,13 +185,18 @@ const columns: DataColumn<Row>[] = [
 export function VolumesPage() {
   const volumes = useVolumes()
   const containers = useContainers().data
+  const settings = useSettings().data
+  const filter = settings?.volume_filter
+  // A filter on the ownership label lists only Bilskirnir's volumes, so marking them adds nothing.
+  const marked = !!settings && filter?.split("=")[0] !== LABEL
   const data = React.useMemo<Row[]>(
     () =>
       (volumes.data ?? []).map((volume) => ({
         ...volume,
         users: volumeUsers(volume.Name, containers ?? []),
+        managed: marked && !!volume.Labels?.split(",").includes(MANAGED),
       })),
-    [volumes.data, containers]
+    [volumes.data, containers, marked]
   )
   const table = useDataTable({
     data,
@@ -198,7 +208,14 @@ export function VolumesPage() {
   return (
     <PageBody>
       <DockerAlert />
-      <SectionHeading title={t("volumes.title")} description={t("volumes.description")}>
+      <SectionHeading
+        title={t("volumes.title")}
+        description={
+          filter
+            ? `${t("volumes.description")} ${t("volumes.filtered", { label: filter })}`
+            : t("volumes.description")
+        }
+      >
         <Button variant="outline" size="sm" onClick={() => openDialog({ kind: "volume-import" })}>
           <RiImportLine data-icon="inline-start" />
           {t("job.volume-import")}
