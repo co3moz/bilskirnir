@@ -15,20 +15,13 @@ pub(crate) const OWNER: &str = "io.wsl-desktop.environment";
 /// The label naming the compose parameter a volume was created for.
 pub(crate) const PARAMETER: &str = "io.wsl-desktop.parameter";
 
-/// The `docker volume create` arguments of the volume `name` for `container`'s `parameter`.
-pub(crate) fn create_args(container: &str, parameter: &str, name: &str) -> Vec<String> {
-    [
-        "volume".into(),
-        "create".into(),
-        "--label".into(),
-        format!("{LABEL}=true"),
-        "--label".into(),
+/// The labels a volume for `container`'s `parameter` gets beside those of every volume the
+/// manager creates.
+pub(crate) fn owner_labels(container: &str, parameter: &str) -> Vec<String> {
+    vec![
         format!("{OWNER}={container}"),
-        "--label".into(),
         format!("{PARAMETER}={parameter}"),
-        name.into(),
     ]
-    .to_vec()
 }
 
 /// Whether `docker volume inspect` shows a volume the manager created for `container`.
@@ -54,9 +47,10 @@ impl App {
                 "A volume named {name} already exists and was not created for this container; choose a volume for {parameter} instead"
             );
         }
-        self.docker_args(&create_args(container, parameter, name))
+        let created = self
+            .make_volume(name, &owner_labels(container, parameter))
             .await?;
-        if !owned_by(&self.inspect("volume", name).await?, container) {
+        if !owned_by(&created, container) {
             bail!("Volume was created by another operation; ownership does not match");
         }
         Ok(true)

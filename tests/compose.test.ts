@@ -267,6 +267,28 @@ test("a volume parameter keeps its path through the editor and a pasted configur
   )
 })
 
+test("a folder parameter is plain text the editor and a pasted configuration keep", () => {
+  const project: ComposeParameter = {
+    name: "UNITY_PROJECT",
+    label: "Unity project",
+    description: "",
+    type: "folder",
+    required: true,
+    secret: false,
+    default: "/home/desktop/UnityProjects/MyGame",
+  }
+  const compose = { ...unity, parameters: [installs, project] }
+  assert.deepEqual(composeBody(composeDraft(compose)), compose)
+  assert.deepEqual(readCompose({ script: "true", parameters: [project] }).parameters, [project])
+  assert.equal(displayOf({ type: "folder" }), "input")
+  // A secret text parameter turned into a folder is no longer secret, and its default goes.
+  const [draft] = composeDraft({ ...unity, parameters: [typed[0]] }).parameters
+  const folder = draftParameter(withType({ ...draft, secret: true }, "folder"))
+  assert.equal(folder.secret, false)
+  assert.equal(folder.default, "")
+  assert.equal("pattern" in folder, false)
+})
+
 test("a volume parameter offers the volumes there are and names a new one after itself", () => {
   const volumes = [{ Name: "projects" }, { Name: "Assets" }, { Name: "unity-home" }]
   assert.deepEqual(volumeChoices(volumes, ""), ["Assets", "projects", "unity-home"])

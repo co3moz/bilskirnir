@@ -157,7 +157,7 @@ pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screensho
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SaveCapture {
-    /// Absolute file path in Downloads or a writable mounted volume, written as the desktop user.
+    /// Absolute file path in the desktop home, a writable volume or a compose folder, written as the desktop user.
     pub path: String,
     /// Replace an existing file at path.
     #[serde(default)]
@@ -174,7 +174,9 @@ impl SaveCapture {
             .and_then(|_| self.path.rsplit_once('/'))
             .filter(|(directory, name)| !directory.is_empty() && !name.is_empty());
         let Some((directory, name)) = target else {
-            bail!("path must be an absolute file path in Downloads or a writable mounted volume");
+            bail!(
+                "path must be an absolute file path in the desktop home, a writable volume or a compose folder"
+            );
         };
         Ok((directory.to_owned(), name.to_owned()))
     }

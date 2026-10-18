@@ -1,3 +1,4 @@
+use crate::model::LABEL;
 use anyhow::{Result, bail};
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use std::{env, path::PathBuf};
@@ -33,6 +34,9 @@ pub struct Config {
     pub mcp_token: Option<String>,
     /// The template list the templates page reads in the browser, or `None` to turn it off.
     pub templates_url: Option<String>,
+    /// The label a volume carries for a request to list and choose it, `key` or `key=value`, or
+    /// `None` for every volume. See [`volume_filter`].
+    pub volume_filter: Option<String>,
 }
 /// The template list on the project's GitHub wiki.
 pub(crate) const TEMPLATES_URL: &str =
@@ -126,6 +130,7 @@ impl Config {
             mcp_enabled,
             mcp_token,
             templates_url: templates_url(env::var("TEMPLATES_URL").ok().as_deref())?,
+            volume_filter: volume_filter(env::var("VOLUME_FILTER").ok().as_deref())?,
         };
         super::model::image_ref(&cfg.base_image)?;
         if let Some(profile) = cfg.seccomp_profile()
@@ -191,6 +196,36 @@ pub(crate) fn templates_url(value: Option<&str>) -> Result<Option<String>> {
             .all(|b| b.is_ascii_graphic() && !b"\"'`;,<>\\{}|^".contains(&b))
     {
         bail!("TEMPLATES_URL must be an http or https URL, empty for the project wiki, or none");
+    }
+    Ok(Some(value.into()))
+}
+
+/// `VOLUME_FILTER`: the label a volume needs to be listed and chosen, as `key` or `key=value`.
+/// Empty keeps the label the manager puts on every volume it creates, so volumes made outside
+/// Bilskirnir, the manager's own data volume among them, are out of reach; `none` lists every
+/// volume. The manager gives the label to each volume it creates, so the label has to be one
+/// `docker volume create --label` and Docker's `label` filter read the same way.
+pub(crate) fn volume_filter(value: Option<&str>) -> Result<Option<String>> {
+    let value = value.unwrap_or_default().trim();
+    if value.is_empty() {
+        return Ok(Some(format!("{LABEL}=true")));
+    }
+    if value == "none" {
+        return Ok(None);
+    }
+    let (key, label) = value.split_once('=').unwrap_or((value, ""));
+    if value.len() > 256
+        || key.is_empty()
+        || !key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-/".contains(&b))
+        || !label.bytes().all(|b| b.is_ascii_graphic() && b != b',')
+    {
+        bail!("VOLUME_FILTER must be a label as key or key=value, empty for {LABEL}=true, or none");
+    }
+    // The ownership label means the same on every volume the manager creates.
+    if key == LABEL && !matches!(value.split_once('='), None | Some((_, "true"))) {
+        bail!("VOLUME_FILTER can ask for {LABEL} only with the value true");
     }
     Ok(Some(value.into()))
 }

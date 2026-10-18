@@ -33,7 +33,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FieldError } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
@@ -45,7 +44,6 @@ import { queryClient, useSettings } from "@/lib/queries"
 import { FileUploads, fileSize, uploadStatus } from "@/lib/uploads"
 import {
   EDIT_LIMIT,
-  entryNameError,
   joinPath,
   parentPath,
   pathCrumbs,
@@ -55,6 +53,7 @@ import {
   type VolumeEntry,
   type VolumeListing,
 } from "@/lib/volume-files"
+import { NameForm } from "./name-form"
 import type { DialogProps } from "./side-drawer"
 
 type Editing = { path: string; text: string; saved: string }
@@ -97,54 +96,6 @@ function useUploads(onDone: () => void) {
     running.current = uploads.running
   })
   return uploads
-}
-
-/** A name for a new folder or a renamed entry, asked for inline above the list. */
-function NameForm({
-  label,
-  initial,
-  busy,
-  onSubmit,
-  onCancel,
-}: {
-  label: string
-  initial: string
-  busy: boolean
-  onSubmit: (name: string) => void
-  onCancel: () => void
-}) {
-  const [name, setName] = React.useState(initial)
-  const [error, setError] = React.useState("")
-  return (
-    <form
-      className="flex flex-col gap-1.5"
-      onSubmit={(event) => {
-        event.preventDefault()
-        const problem = entryNameError(name.trim())
-        setError(problem)
-        if (!problem) onSubmit(name.trim())
-      }}
-    >
-      <div className="flex gap-2">
-        <Input
-          aria-label={label}
-          placeholder={label}
-          value={name}
-          autoFocus
-          disabled={busy}
-          onChange={(event) => setName(event.target.value)}
-          className="font-mono"
-        />
-        <Button type="submit" disabled={busy}>
-          {t("common.save")}
-        </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
-          {t("common.cancel")}
-        </Button>
-      </div>
-      <FieldError>{error}</FieldError>
-    </form>
-  )
 }
 
 /** Browses a volume's files and changes them as the desktop user. */

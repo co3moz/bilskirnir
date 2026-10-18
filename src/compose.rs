@@ -171,6 +171,18 @@ pub struct Setup {
     /// own every time it is created.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mounts: Vec<Mount>,
+    /// The folders its volume and folder parameters name. Files can be uploaded into them, and
+    /// the upload dialog offers them by the parameter's label.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub places: Vec<Place>,
+}
+
+/// A folder of the desktop that a compose names, such as the project of an editor it installs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Place {
+    /// The parameter's label, or its name without one.
+    pub label: String,
+    pub path: String,
 }
 
 /// The compose a container was created with and every value it was given, secret ones too.
@@ -207,6 +219,12 @@ impl Pinned {
                 .collect(),
             finished_at: None,
             mounts: self.mounts(),
+            places: self
+                .compose
+                .parameters
+                .iter()
+                .filter_map(|p| p.place(self.values.get(&p.name)?))
+                .collect(),
         }
     }
     pub fn mounts(&self) -> Vec<Mount> {

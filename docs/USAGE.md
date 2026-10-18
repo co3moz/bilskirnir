@@ -99,13 +99,16 @@ A compose makes an image ask for a few values each time a container is created f
 
 - **Name** is the environment variable the script reads, such as `UNITY_EMAIL`.
 - **Label** is what **New container** asks for. A **Description** appears under the field, for help such as where to find the value.
-- **Type** decides what the field takes: **Text**, a **Number** with an optional minimum, maximum and step, **On or off**, **One choice** from a list of options, **Several choices** or a **Volume**. **Shown as** picks the control: a text area for long text, a slider for a number with a range, a checkbox instead of a switch, or radio buttons instead of a menu. **Allow other values** lets one choice also take text that is not an option.
+- **Type** decides what the field takes: **Text**, a **Number** with an optional minimum, maximum and step, **On or off**, **One choice** from a list of options, **Several choices**, a **Volume** or a **Folder**. **Shown as** picks the control: a text area for long text, a slider for a number with a range, a checkbox instead of a switch, or radio buttons instead of a menu. **Allow other values** lets one choice also take text that is not an option.
 - **Secret** makes a text field a password field. Its value is masked in job logs, never shown again and cannot have a default.
 - **Pattern** makes a text value follow a format: a regular expression the whole value must match, such as `[A-Za-z0-9.-]+:[0-9]{1,5}` for a host and a port. **Expected format** describes it, such as `host:port, for example 192.168.1.20:10080`. **New container** shows it under the field when the value does not match, and creates nothing until it does; an empty value is still allowed unless the field is **Required**. The manager reads the pattern as Rust does, without lookaround or backreferences, and refuses one it cannot read when you save the compose. When the browser cannot read a pattern, the editor says so and only the manager checks it.
 - **Required** values must be filled in; an **On or off** value that is required must be turned on, as for accepting a license. The **Default** fills in the field with the same control the form shows.
 - **Volume** keeps files that every container of the image needs in one place, such as Unity installs, in a named volume instead of the image or the container. **Path in the desktop** is the folder the volume is mounted at, such as `/opt/unity`. As the **Default**, **No volume** leaves the folder in the container, a named volume shares it, and **A new volume for each container** gives every container one of its own, such as a workspace that should outlive a reset but not be shared.
+- **Folder** names a folder of the desktop the script works in, such as the Unity project `/home/desktop/UnityProjects/MyGame`: an absolute path outside the system folders. The script creates what it needs there; the manager does not create the folder.
 
 Whatever the type, the script receives text: a number as `42`, on or off as `true` or `false`, and several choices one per line, which `while read -r item; do ...; done <<< "$PLATFORMS"` reads one at a time. A volume parameter is the exception: the script reads its path, `/opt/unity`, and the name of the chosen volume from the same name with `_VOLUME` appended, such as `UNITY_HOME_VOLUME`, which is empty without a volume.
+
+The upload dialog offers a container's volume and folder parameters by their labels under **From the image**, so files go straight into the folder the setup script prepared. A volume parameter's folder is offered with or without a volume.
 
 In **New container**, a volume parameter lists the named volumes. **Create new volume…** creates one right there, named after the parameter unless you change it, and chooses it; it works when there are no volumes yet. **No volume** leaves the folder inside the container, where a reset discards it and snapshots keep it. Either way the folder exists and belongs to the desktop user before the script runs, so a script installing into `$UNITY_HOME` works without root. The container's details list the volume under **Volumes**; it stays mounted after a reset or a settings change, and the volume settings cannot mount it at a second path or mount another volume at its path.
 
@@ -140,6 +143,8 @@ A `.tar` saved with `docker save` imports the same way, as long as it holds a de
 
 Create a named volume under **Volumes**, then mount it when creating a container. Use an absolute path such as `/workspace/project` or `/opt/game`. Protected system paths, read-only mounts over the desktop's home or configuration and the manager's own data volume, which holds its database, are rejected. **Volumes** labels that volume **Manager data** and offers no file browsing or export for it, and the volume choices of a mount or of a compose's volume parameter leave it out.
 
+**Volumes** lists only the volumes Bilskirnir created, imported or copied, which carry its label; volumes that other software made on the same Docker Engine stay hidden and cannot be mounted or opened. A container that already mounts such a volume keeps it. The installation's `VOLUME_FILTER` setting chooses the label, or shows every volume with `none` ([installation settings](INSTALLATION.md#settings)).
+
 The desktop user runs as UID/GID **1001:1001**. Existing volumes need permissions that allow this user to work with their files.
 
 **Export archive** on a volume's row downloads its files as a `.tar.gz`, and **Import volume** unpacks such an archive, or a `.tar`, into a new volume of the name you choose, for a backup or a move to another installation. An import never replaces an existing volume, and its files belong to the desktop user. **Jobs** shows both transfers.
@@ -158,11 +163,11 @@ A volume that a compose created for one container says so under its name on **Vo
 
 Drop files onto a running container card, the connected desktop or the upload dialog. You can also select **Upload files** to use the file picker.
 
-Choose **Downloads** or a writable mounted volume as the destination. You can enter a subfolder and upload multiple files. Each file shows progress and a final status. Failed or cancelled files can be retried. Cancelling the queue keeps files that have already finished.
+The destination starts at the folder you uploaded into last in that container, or **Downloads**. Type another folder, or select **Browse…** to pick one: the list on the left holds the home folder with **Desktop**, **Documents** and **Downloads**, the folders the image's compose names, the writable volumes and the folders used last, and the address field opens any path you type. **New folder** creates a folder in the one that is open. Files can go anywhere in the home folder `/home/desktop`, into a writable volume or into a folder the compose names; folders under a read-only volume and system folders cannot be chosen. A folder that does not exist yet is created by the upload. Symlinks are listed but not followed. You can upload multiple files. Each file shows progress and a final status. Failed or cancelled files can be retried. Cancelling the queue keeps files that have already finished.
 
 Existing files are preserved by default. Select **Replace existing files** when you intend to overwrite them. Uploads run as the desktop user, so a volume must be writable by UID/GID 1001:1001.
 
-Downloads is part of the container filesystem unless you mount it. Use a named volume for files that should survive container deletion. The default limit is 1 GiB per file, configurable with `UPLOAD_MAX_MB`.
+The home folder is part of the container filesystem unless a volume is mounted there. Use a named volume for files that should survive container deletion; the dialog says when the chosen folder is in a volume, which snapshots leave out. The default limit is 1 GiB per file, configurable with `UPLOAD_MAX_MB`.
 
 You can also use Docker's file-copy commands from WSL. Replace `CONTAINER_ID` with your container's ID:
 

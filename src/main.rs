@@ -95,6 +95,10 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/containers/{id}/files/read", post(files::read))
         .route("/api/containers/{id}/files/write", post(files::write))
         .route("/api/containers/{id}/files/list", post(files::list))
+        .route(
+            "/api/containers/{id}/files/mkdir",
+            post(files::make_directory),
+        )
         .route("/api/containers/{id}/files/move", post(files::move_))
         .route("/api/containers/{id}/files/delete", post(files::delete))
         .route("/api/containers/{id}/files/download", get(files::download))

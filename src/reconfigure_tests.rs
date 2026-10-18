@@ -1,7 +1,8 @@
 //! Pins down which settings change in place and which recreate the container, how a partial
 //! request becomes a full set of settings, that a recreated container gets every setting as a
-//! creation flag, from the commit that carries its files, and that a change mounting the
-//! manager's own volume is refused before the desktop stops.
+//! creation flag, from the commit that carries its files, that a change mounting the manager's
+//! own volume is refused before the desktop stops, and that `VOLUME_FILTER` holds only a newly
+//! chosen volume to its label.
 use super::*;
 
 fn spec() -> ContainerSpec {
@@ -361,6 +362,71 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
     );
     let saved: Container = app.db.get(CONTAINERS, "composed").unwrap();
     assert_eq!(saved.spec, env.spec);
+    std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_settings_change_keeps_the_volumes_a_container_mounts_and_filters_new_ones() {
+    let mut app = crate::tests::app(false);
+    let calls = crate::tests::manager_docker(&mut app);
+    std::sync::Arc::get_mut(&mut app)
+        .unwrap()
+        .config
+        .volume_filter = crate::config::volume_filter(None).unwrap();
+    let job = crate::model::Job {
+        id: "settings-job".into(),
+        kind: "settings".into(),
+        resource: None,
+        status: "running".into(),
+        created_at: 0,
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+    };
+    app.db.put("job", "settings-job", &job).unwrap();
+    let container = |id: &str, mounts: Value| {
+        let mut spec = spec();
+        spec.mounts = serde_json::from_value(mounts).unwrap();
+        Container {
+            id: id.into(),
+            container: format!("wsld-{id}"),
+            private_network: format!("wsld-{id}-private"),
+            egress_network: format!("wsld-{id}-egress"),
+            source_image_id: "sha256:source".into(),
+            created_at: 0,
+            spec,
+            last_error: None,
+            desktop: None,
+            working_image: None,
+            setup: None,
+        }
+    };
+    // `outside` carries no label: a container that does not mount it cannot start to.
+    let fresh = container("fresh", json!([]));
+    app.db.put(CONTAINERS, "fresh", &fresh).unwrap();
+    let outside = json!({"mounts": [{"volume": "outside", "target": "/workspace"}]});
+    let error = app
+        .update_container("fresh", request(outside), "settings-job")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Volume not found: outside");
+    let saved: Container = app.db.get(CONTAINERS, "fresh").unwrap();
+    assert_eq!(saved.spec, fresh.spec);
+    // One that mounted it before the filter keeps it, also at another path.
+    let kept = container(
+        "kept",
+        json!([{"volume": "outside", "target": "/workspace", "readonly": false}]),
+    );
+    app.db.put(CONTAINERS, "kept", &kept).unwrap();
+    let moved = json!({"mounts": [{"volume": "outside", "target": "/srv/outside"}]});
+    app.update_container("kept", request(moved), "settings-job")
+        .await
+        .unwrap();
+    let saved: Container = app.db.get(CONTAINERS, "kept").unwrap();
+    assert_eq!(saved.spec.mounts[0].target, "/srv/outside");
     std::fs::remove_dir_all(calls.parent().unwrap()).unwrap();
 }
 

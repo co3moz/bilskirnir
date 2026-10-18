@@ -5,7 +5,6 @@ import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } f
 
 export const LEGACY_IMAGE = "wsl-desktop/ubuntu:24.04"
 const legacyTitle = () => t("images.legacyTitle")
-export const DESKTOP_HOME = "/home/desktop/Downloads"
 
 const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
 
@@ -373,31 +372,6 @@ export function restartNotice(fields: string[], running: boolean) {
       effect: running ? t("restart.effect.running") : t("restart.effect.stopped"),
     }
   )
-}
-
-/** Writable places an upload can go: Downloads unless a read-only volume covers it, and writable volumes. */
-export function uploadLocations(spec: Pick<ContainerSpec, "mounts">) {
-  const covered = (mount: { target: string }) =>
-    DESKTOP_HOME === mount.target || DESKTOP_HOME.startsWith(`${mount.target}/`)
-  const homeReadOnly = spec.mounts.some((mount) => mount.readonly && covered(mount))
-  return [
-    ...(homeReadOnly ? [] : [{ target: DESKTOP_HOME, name: "Downloads" }]),
-    ...spec.mounts
-      .filter((mount) => !mount.readonly)
-      .map((mount) => ({ target: mount.target, name: `${mount.volume} · ${mount.target}` })),
-  ]
-}
-
-/** An upload subfolder stays relative to its destination. */
-export function subfolderError(folder: string) {
-  if (
-    folder &&
-    (folder.startsWith("/") ||
-      folder.includes("\\") ||
-      folder.split("/").some((part) => !part || part === "." || part === ".."))
-  )
-    return t("uploads.subfolderError")
-  return ""
 }
 
 export type ActivityPoint = { date: string; completed: number; failed: number }
