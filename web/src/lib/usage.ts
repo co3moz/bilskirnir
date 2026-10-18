@@ -17,6 +17,8 @@ export type UsageSeries = {
   id: string
   name: string
   cpu_limit: number | null
+  /** The container is deleted; it stays listed, by the name it had, until its samples age out. */
+  removed: boolean
   memory_limit: number | null
   online_cpus: number | null
   samples: UsageSample[]
@@ -56,7 +58,10 @@ function grow<T extends { t: number }>(before: T[] | undefined, added: T[], olde
   return kept.concat(added.filter((sample) => sample.t > last && sample.t >= oldest))
 }
 
-/** The history after one response. A container the response no longer lists was deleted. */
+/**
+ * The history after one response. A deleted container stays listed until its samples age out,
+ * so one the response no longer lists has nothing left in the window.
+ */
 export function mergeUsage(history: UsageHistory | null, report: UsageReport): UsageHistory {
   const latest = Math.max(
     history?.latest ?? 0,

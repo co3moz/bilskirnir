@@ -88,8 +88,7 @@ async fn run(app: Arc<App>, every: Duration) {
             // Streams on a dropped socket end by themselves and are opened again once it is back.
             Err(error) => app.usage.set_error(Some(format!("{error:#}"))),
         }
-        app.usage
-            .prune(|id| records.iter().any(|record| record.id == id));
+        app.usage.prune(&records);
     }
 }
 

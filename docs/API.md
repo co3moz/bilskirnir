@@ -490,14 +490,14 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 ## Resource usage
 
-The manager follows the Docker stats stream of every running container and keeps one sample a second for the last 30 minutes. The history lives in memory only: a manager restart starts it over, a stopped container keeps its samples until they are 30 minutes old, and a deleted container's history goes with it. It needs the Docker Engine socket; when `DOCKER_HOST` names a TCP address instead, there is no history.
+The manager follows the Docker stats stream of every running container and keeps one sample a second for the last 30 minutes. The history lives in memory only: a manager restart starts it over, and stopped and deleted containers keep their samples until they are 30 minutes old. It needs the Docker Engine socket; when `DOCKER_HOST` names a TCP address instead, there is no history.
 
 `GET /api/usage` returns:
 
 - `available` and `error`: whether Docker's running containers can be read right now. The samples already taken stay while it cannot.
 - `interval_ms` (1000) and `window_ms` (1800000).
 - `cursor`: the stamp of the newest sample. Pass it back as `since` to receive only the samples stamped after it; two requests in a row miss nothing.
-- `containers`: each container that has samples, with `id`, `name`, `cpu_limit` (its CPU limit, or `null`), `memory_limit` (bytes, the host's memory when it has no limit), `online_cpus` (the host CPUs it sees) and `samples`. A container stays listed with an empty `samples` while nothing new arrived, so a client can drop the ones that are no longer listed.
+- `containers`: each container that has samples, with `id`, `name`, `cpu_limit` (its CPU limit, or `null`), `removed`, `memory_limit` (bytes, the host's memory when it has no limit), `online_cpus` (the host CPUs it sees) and `samples`. A container stays listed with an empty `samples` while nothing new arrived, so a client can drop the ones that are no longer listed. A deleted container stays listed with `removed: true`, under the name and CPU limit it last had, until its samples age out; it comes after the existing ones.
 - `gpu`: the host's GPU, below.
 
 Each sample has `t`, the Unix time in milliseconds when it was stored, and:
@@ -511,7 +511,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 `gpu.state` is `sampling`, `idle` while no GPU container runs, `unavailable` with a `reason`, or `disabled` when the installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false). Each of `gpu.devices` has `index`, `name`, `memory_total` and samples of `t`, `utilization` (percent) and `memory` (bytes); a figure the driver does not report is `null`. These are the whole GPU's figures, which `scope: "host"` says: WSL gives Linux a paravirtual GPU whose driver reports neither processes nor containers, and Windows applications count too. They come from `nvidia-smi`, so only NVIDIA GPUs report them. While a GPU container runs, the manager runs it in a helper container from its own image that gets the GPU device, no network, no capabilities and a read-only root, and ends with the manager.
 
-`GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started.
+`GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started. A deleted container's ID is still answered while its samples are in the window, and returns 404 once they have aged out.
 
 ## Limits and results
 

@@ -1455,11 +1455,16 @@ try:
         assert "Named volumes and saved images were preserved" in log, log
         assert result["name"] and result["volumes_preserved"] and result["images_preserved"], result
     assert not api("containers")
+    # A deleted container keeps its usage history, marked removed, until its samples age out.
+    kept = next((c for c in api("usage")["containers"] if c["id"] == env_id), None)
+    assert kept and kept["removed"] is True and kept["samples"], kept
+    assert api(f"containers/{env_id}/usage")["removed"] is True
+    assert tool("get_usage", {"container_id": env_id, "seconds": 1800})["structuredContent"]["containers"][0]["removed"] is True
     assert docker("volume", "inspect", share)
     # Without a GPU container the manager stops sampling the GPU, and its helper goes.
     wait_for(lambda: not set(docker("ps", "-aq", "--filter", "label=io.wsl-desktop.usage-helper=true").decode().split()) - foreign_helpers, 30)
     assert api("usage")["gpu"]["state"] == "idle"
-    print("PASS container cleanup preserves volumes", flush=True)
+    print("PASS container cleanup preserves volumes and the deleted containers' usage history", flush=True)
     print("ALL DOCKER ACCEPTANCE CHECKS PASSED", flush=True)
 finally:
     # Discover partial containers even if their failed create response did not return an ID.

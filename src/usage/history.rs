@@ -97,6 +97,14 @@ fn rate<S: Serializer>(value: &f32, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_u64(value.max(0.0).round() as u64)
 }
 
+/// What a container's record said when the collector last saw it, so its samples keep a name
+/// after the record is deleted.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Label {
+    pub name: String,
+    pub cpu_limit: Option<f64>,
+}
+
 #[derive(Debug)]
 pub(crate) struct Series {
     pub samples: Ring<Sample>,
@@ -104,6 +112,9 @@ pub(crate) struct Series {
     pub memory_limit: u64,
     /// The host CPUs the container sees.
     pub online_cpus: u32,
+    /// Empty until the collector has seen the container's record, so samples nobody has a
+    /// record of are never listed.
+    pub label: Option<Label>,
 }
 
 #[derive(Debug)]
@@ -158,6 +169,7 @@ impl Store {
                 samples: Ring::new(),
                 memory_limit: 0,
                 online_cpus: 0,
+                label: None,
             });
         series.memory_limit = measure.memory_limit;
         series.online_cpus = measure.online_cpus;
@@ -188,12 +200,19 @@ impl Store {
         self.gpu_state = GpuState::Sampling;
         self.gpu_reason = None;
     }
-    /// Forget samples older than the window and every container `keep` no longer names.
-    pub(crate) fn prune(&mut self, now: u64, keep: impl Fn(&str) -> bool) {
+    /// Forget samples older than the window and every series left without one. `record` gives
+    /// the label of a container that still has a record. A deleted container keeps the label it
+    /// last had, so its samples stay until they age out; one never seen with a record goes now.
+    pub(crate) fn prune(&mut self, now: u64, record: impl Fn(&str) -> Option<Label>) {
         let oldest = now.saturating_sub(WINDOW_MS);
         self.containers.retain(|id, series| {
             series.samples.prune(oldest);
-            keep(id) && !series.samples.is_empty()
+            match record(id) {
+                Some(label) => series.label = Some(label),
+                None if series.label.is_none() => return false,
+                None => {}
+            }
+            !series.samples.is_empty()
         });
         self.gpus.retain(|_, series| {
             series.samples.prune(oldest);

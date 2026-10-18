@@ -1,5 +1,6 @@
 //! Pins down what the usage history keeps: at most 30 minutes per series, stamps that only grow
-//! so `since` never skips a sample of another container, and no history for a removed container.
+//! so `since` never skips a sample of another container, and a deleted container's history kept
+//! under its last name until it ages out.
 use super::*;
 
 fn measure(cpu: f32) -> Measure {
@@ -65,8 +66,15 @@ fn stamps_keep_growing_when_the_wall_clock_steps_back() {
     assert_eq!(stamps, [5000, 5001]);
 }
 
+fn label(name: &str) -> Option<Label> {
+    Some(Label {
+        name: name.into(),
+        cpu_limit: Some(2.0),
+    })
+}
+
 #[test]
-fn pruning_drops_old_samples_and_removed_containers() {
+fn pruning_keeps_deleted_containers_until_their_samples_age_out() {
     let mut store = Store::default();
     let start = 10 * WINDOW_MS;
     store.record_gpu(
@@ -81,16 +89,34 @@ fn pruning_drops_old_samples_and_removed_containers() {
     );
     store.record("stopped", start, &measure(1.0));
     store.record("running", start, &measure(1.0));
-    store.record("removed", start + 1000, &measure(1.0));
-    store.record("running", start + WINDOW_MS, &measure(2.0));
-    // A stopped container keeps its samples while they are inside the window.
-    store.prune(start + 1000, |id| id != "removed");
-    assert!(store.containers.contains_key("stopped"));
-    assert!(!store.containers.contains_key("removed"));
+    store.record("deleted", start + 1000, &measure(1.0));
+    store.record("foreign", start + 1000, &measure(1.0));
+    // Every container but one another manager owns has a record.
+    store.prune(start + 1000, |id| label(id).filter(|_| id != "foreign"));
+    assert!(
+        !store.containers.contains_key("foreign"),
+        "never had a record"
+    );
+    assert_eq!(store.containers["deleted"].label, label("deleted"));
     assert_eq!(store.gpus.len(), 1);
-    // Once they age out, the series itself goes.
-    store.prune(start + WINDOW_MS + 10, |_| true);
+
+    // Deleted, it keeps its samples and the name it last had; a renamed one takes its new name.
+    store.prune(start + 2000, |id| match id {
+        "deleted" => None,
+        "running" => label("renamed"),
+        _ => label(id),
+    });
+    assert_eq!(store.containers["deleted"].samples.len(), 1);
+    assert_eq!(store.containers["deleted"].label, label("deleted"));
+    assert_eq!(store.containers["running"].label, label("renamed"));
+
+    // Once their samples age out, stopped and deleted series go.
+    store.record("running", start + WINDOW_MS, &measure(2.0));
+    store.prune(start + WINDOW_MS + 1010, |id| {
+        label(id).filter(|_| id != "deleted")
+    });
     assert!(!store.containers.contains_key("stopped"));
+    assert!(!store.containers.contains_key("deleted"));
     assert!(store.gpus.is_empty());
     let running: Vec<f32> = store.containers["running"]
         .samples

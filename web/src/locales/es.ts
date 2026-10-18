@@ -558,6 +558,8 @@ export const es: Messages = {
   "usage.unit.rate": "{size}/s",
   "usage.limit": "Límite",
   "usage.stopped": "Detenido",
+  "usage.deleted": "Eliminado",
+  "usage.deletedName": "{name} (eliminado)",
   "usage.empty":
     "Ningún contenedor se ha ejecutado desde que se inició Bilskirnir. Inicia uno para ver aquí su uso.",
   "usage.noSamples": "Aún no hay muestras. Empiezan en cuanto el contenedor se ejecuta.",

@@ -1,6 +1,6 @@
 //! Pins down the collector's lifecycle: a stream is open exactly while its container runs, a
 //! recreated container is followed under its new Docker ID, and a deleted container's history
-//! goes with its record.
+//! outlives its record, under the name the record had.
 use super::*;
 
 fn running(entries: &[(&str, &str)]) -> BTreeMap<String, Running> {
@@ -132,7 +132,7 @@ mod engine_socket {
     }
 
     #[tokio::test]
-    async fn a_container_is_followed_while_it_runs_and_forgotten_once_deleted() {
+    async fn a_container_is_followed_while_it_runs_and_remembered_once_deleted() {
         let dir = std::env::temp_dir().join(format!(
             "bilskirnir-usage-{}",
             uuid::Uuid::new_v4().simple()
@@ -207,10 +207,20 @@ mod engine_socket {
         *listed.lock().unwrap() = json!([entry]);
         until("samples resume", || samples(&app) > kept).await;
 
-        // Deleted: its history goes.
+        // Deleted: the stream closes and the history stays, labeled with the record it had.
         app.db.remove(CONTAINERS, "a").unwrap();
-        until("the history goes", || samples(&app) == 0).await;
         until("the stream closes", || streams.load(Ordering::SeqCst) == 0).await;
+        let kept = samples(&app);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(samples(&app), kept, "no samples after a delete");
+        assert!(kept >= 3);
+        assert_eq!(
+            app.usage.store().containers["a"]
+                .label
+                .as_ref()
+                .map(|label| label.name.as_str()),
+            Some("A")
+        );
 
         collector.abort();
         server.abort();

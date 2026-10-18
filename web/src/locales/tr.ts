@@ -554,6 +554,8 @@ export const tr: Messages = {
   "usage.unit.rate": "{size}/sn",
   "usage.limit": "Sınır",
   "usage.stopped": "Çalışmıyor",
+  "usage.deleted": "Silindi",
+  "usage.deletedName": "{name} (silindi)",
   "usage.empty":
     "Bilskirnir başladığından beri hiçbir konteyner çalışmadı. Kullanımını burada görmek için bir konteyner başlatın.",
   "usage.noSamples": "Henüz ölçüm yok. Ölçümler konteyner çalışınca başlar.",
