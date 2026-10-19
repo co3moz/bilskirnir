@@ -84,6 +84,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
 | GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image`, `internet` and, when [merged from templates](#merged-templates), its `parts` without their scripts, a compose its parameters without the scripts, an [icon](#image-icons) its version and an image built from templates their ids in `template_ids`. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
+| DELETE | `/api/images/{id}` | [Delete an image](#delete-an-image): a saved image's record with its Docker image, or a catalog image's download. `id` is the list's `id`. Answers at once with `{"id", "name", "deleted": true, "image_removed"}`; `409` while a container was created from it. |
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` or [`parts`](#merged-templates) and optional `description`, `internet`, `compose`, `icon` and `template_id` or `template_ids`; returns a job. |
 | POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
 | POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
@@ -214,6 +215,18 @@ The default user is UID/GID 1001:1001; root execution must be explicit. Bash run
 | `archive` | Loaded from an [image archive](#image-archives). |
 
 The catalog images come first. Their `id` is the catalog ID, such as `ubuntu-xfce`, and a container or a build names one by its `reference`. `image_id` is `null` until the image is downloaded, `downloaded` tells whether Docker has the reference and `available` whether it can be used; `error` explains a downloaded reference whose labels belong to another desktop. `created_at`, `parent_image_id` and `source_container` are `null`. The other kinds are saved records, named by their Docker `image_id`, with `available: false` once Docker no longer has the image. Every kind reports `desktop`, the catalog image it derives from (`catalog_id`) and its session, when its labels say so.
+
+### Delete an image
+
+`DELETE /api/images/{id}` deletes an image, where `id` is the list's `id`. It cannot be undone. What goes depends on the kind:
+
+| Kind | What goes |
+| --- | --- |
+| `build`, `snapshot`, `archive` | The record, and Docker's image with `docker image rm` of the tag Bilskirnir gave it, or of its `image_id` once that tag is gone. Docker removes only the tag while another tag or another image still holds the image. |
+| `import` | Only the record. The image was on the Docker host before it was registered, so Docker keeps it. |
+| `catalog` | Only the download. The image stays listed with `downloaded: false`, and a container, a build or `.../pull` downloads it again. `404` when it is not downloaded. |
+
+The answer comes at once, without a job: `{"id": ..., "name": ..., "deleted": true, "image_removed": true}`, where `image_removed` tells whether Docker deleted the image itself rather than only its tag. Nothing is forced and nothing is pruned, and a refusal deletes nothing. A container created from the image refuses it with `409` and its name, since a reset, a retry and a settings change that recreates the container need that image again; delete the container first. Another saved image of the same Docker image, such as an archive imported on the host it was exported from, keeps it for the container, so either record can go then. Docker's own refusal, for an image another Docker container still uses or one that a tag Bilskirnir did not give it still names, is `409` with Docker's message. So is a delete while a download, a build or another change of the same image runs. Images built or saved from the deleted one keep working: Docker keeps the layers they share with it.
 
 ## Image sizes and layers
 

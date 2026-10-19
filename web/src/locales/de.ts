@@ -162,6 +162,21 @@ export const de: Messages = {
   "images.ownSize": "{size} eigene",
   "images.ownHint":
     "Schichten, die kein anderes Image hier mitgebracht hat. Gemeinsame Schichten werden nur einmal gespeichert.",
+  "images.delete": "Image löschen",
+  "images.deleteDownload": "Download löschen",
+  "images.deleteOf": "{name} löschen",
+  "images.deleteTitle": "{name} löschen?",
+  "images.deleteSaved":
+    "Das Image und sein Eintrag werden gelöscht. Das lässt sich nicht rückgängig machen; exportieren Sie vorher ein Archiv, wenn Sie es noch brauchen könnten.",
+  "images.deleteImport":
+    "Bilskirnir vergisst dieses Image. Docker behält es, da es schon vor der Registrierung auf dem Host war.",
+  "images.deleteCatalog":
+    "Der Download wird gelöscht. Das Image bleibt in der Liste und wird erneut heruntergeladen, wenn ein Container oder ein Image daraus erstellt wird.",
+  "images.deleteUsed":
+    "Aus diesem Image erstellt: {containers}. Ein Container braucht zum Zurücksetzen das Image, aus dem er erstellt wurde; löschen Sie daher zuerst den Container.",
+  "images.deleted": "Image {name} gelöscht.",
+  "images.deletedKept":
+    "Image {name} gelöscht. Docker hat das Image behalten, da ein anderer Tag oder ein anderes Image es noch verwendet.",
   "layers.title": "Image-Schichten",
   "layers.description":
     "Jeder Schritt im Verlauf des Images und die Bytes, die er geschrieben hat. Images teilen ihre gemeinsamen Schichten, und Docker speichert eine geteilte Schicht nur einmal.",

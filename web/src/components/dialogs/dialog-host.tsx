@@ -9,6 +9,7 @@ import { ImportImageDialog } from "./import-dialog"
 import {
   BuildImageDialog,
   DeleteDialog,
+  ImageDeleteDialog,
   SnapshotDialog,
   VolumeCopyDialog,
   VolumeDeleteDialog,
@@ -52,6 +53,8 @@ function render(dialog: Dialog, open: boolean) {
       return <IconDialog {...props} id={dialog.id} />
     case "image":
       return <ImageDrawer {...props} id={dialog.id} />
+    case "image-delete":
+      return <ImageDeleteDialog {...props} id={dialog.id} />
     case "import":
       return <ImportImageDialog {...props} />
     case "volume":

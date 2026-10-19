@@ -3,6 +3,7 @@ import {
   RiArchive2Line,
   RiCloudLine,
   RiCornerDownRightLine,
+  RiDeleteBinLine,
   RiDownloadLine,
   RiFileCopyLine,
   RiHammerLine,
@@ -31,7 +32,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { attempt, exportArchive, exportBuildConfig, runJob } from "@/lib/actions"
 import { composeEntries } from "@/lib/compose"
 import { openDialog } from "@/lib/dialogs"
-import { imageKind, imageSource, imageStatus, imageTree, shortDate } from "@/lib/format"
+import {
+  deletableImage,
+  imageKind,
+  imageSource,
+  imageStatus,
+  imageTree,
+  shortDate,
+} from "@/lib/format"
 import { formatList, t } from "@/lib/i18n"
 import { iconUrl } from "@/lib/icons"
 import { useImages } from "@/lib/queries"
@@ -44,6 +52,28 @@ function composeSummary(compose: NonNullable<ImageItem["compose"]>) {
   return names.length
     ? t("images.compose.asksFor", { names: formatList(names) })
     : t("images.compose.script")
+}
+
+/** Opens the delete dialog: a saved image goes with its record, a catalog image loses its download. */
+function DeleteAction({ image }: { image: ImageItem }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="text-destructive hover:text-destructive"
+          onClick={() => openDialog({ kind: "image-delete", id: image.id })}
+          aria-label={t("images.deleteOf", { name: image.name })}
+        >
+          <RiDeleteBinLine />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {image.kind === "catalog" ? t("images.deleteDownload") : t("images.delete")}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 /** Fetches a catalog image ahead of its first use, a newer release of it, or builds it here. */
@@ -299,6 +329,7 @@ const columns: DataColumn<Row>[] = [
       return (
         <div className="flex justify-end gap-2">
           {catalog ? <CatalogActions image={image} /> : <SavedActions image={image} />}
+          {deletableImage(image) && <DeleteAction image={image} />}
           <Button
             variant="outline"
             size="sm"

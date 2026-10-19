@@ -2,10 +2,13 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
+  deletableImage,
+  deletedNotice,
   downloadProgress,
   containerStatus,
   desktopTitle,
   imageChoices,
+  imageHolders,
   imageSource,
   imageStatus,
   imageTree,
@@ -298,4 +301,44 @@ test("a running container shows its compose setup until the setup completes", ()
   assert.equal(needsAttention(item("completed")), false)
   // Until the desktop answers its health check, it is starting, whatever the setup says.
   assert.equal(containerStatus({ ...item("pending"), health: "starting" }).key, "created")
+})
+
+test("an image offers Delete only with something to delete, and names who holds it", () => {
+  const xfce = catalogImage("xfce:24.04", "XFCE", {
+    image_id: "sha:x",
+    downloaded: true,
+    available: true,
+  })
+  const gnome = catalogImage("gnome:24.04", "GNOME")
+  const build = image({ id: "b", kind: "build", image_id: "sha:b", available: true })
+  const host = image({ id: "h", kind: "import", image_id: "sha:h", available: true })
+  // A catalog image that is not downloaded has no download to delete.
+  assert.equal(deletableImage(xfce), true)
+  assert.equal(deletableImage(gnome), false)
+  assert.equal(deletableImage(build), true)
+  const containers = [
+    { spec: { name: "Editor" }, source_image_id: "sha:b" },
+    { spec: { name: "Runner" }, source_image_id: "sha:b" },
+    { spec: { name: "Plain" }, source_image_id: "sha:x" },
+    { spec: { name: "Hosted" }, source_image_id: "sha:h" },
+  ] as Parameters<typeof imageHolders>[1]
+  const images = [xfce, gnome, build, host]
+  assert.deepEqual(imageHolders(build, containers, images), ["Editor", "Runner"])
+  assert.deepEqual(imageHolders(xfce, containers, images), ["Plain"])
+  assert.deepEqual(imageHolders(gnome, containers, images), [])
+  // An import keeps its Docker image, so a container from it does not hold its record.
+  assert.deepEqual(imageHolders(host, containers, images), [])
+  // An archive of the build imported here keeps the same image, so either record can go.
+  const copy = image({ id: "c", kind: "archive", image_id: "sha:b", available: true })
+  assert.deepEqual(imageHolders(build, containers, [...images, copy]), [])
+  assert.deepEqual(imageHolders(copy, containers, [...images, copy]), [])
+  // A build sharing the catalog image's ID does not keep the catalog download.
+  const same = image({ id: "same", kind: "build", image_id: "sha:x" })
+  assert.deepEqual(imageHolders(xfce, containers, [...images, same]), ["Plain"])
+  // Docker keeps an image another tag or image still holds; the notice says so only then.
+  assert.equal(deletedNotice(build, true), "images.deleted")
+  assert.equal(deletedNotice(build, false), "images.deletedKept")
+  assert.equal(deletedNotice(xfce, false), "images.deletedKept")
+  assert.equal(deletedNotice(host, false), "images.deleted")
+  assert.equal(deletedNotice({ ...build, available: false }, false), "images.deleted")
 })
