@@ -16,6 +16,7 @@ mod files;
 mod gamepad;
 mod icons;
 mod identity;
+mod image_removal;
 mod jobs;
 mod layers;
 mod mcp;
@@ -192,6 +193,7 @@ fn router(app: Arc<App>) -> Router {
                 usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
             )),
         )
+        .route("/api/images/{id}", delete(image_removal::remove))
         .route("/api/images/{id}/pull", post(api::pull_catalog))
         .route("/api/images/{id}/build", post(api::build_catalog))
         .route("/api/images/{id}/archive", get(archives::export))

@@ -160,6 +160,21 @@ export const tr: Messages = {
   "images.ownSize": "{size} kendine ait",
   "images.ownHint":
     "Buradaki başka hiçbir imajın getirmediği katmanlar. İmajlar paylaştıkları katmanları bir kez saklar.",
+  "images.delete": "İmajı sil",
+  "images.deleteDownload": "İndirileni sil",
+  "images.deleteOf": "İmajı sil: {name}",
+  "images.deleteTitle": "İmaj silinsin mi: {name}?",
+  "images.deleteSaved":
+    "İmaj ve kaydı silinir. Bu işlem geri alınamaz; yeniden ihtiyacınız olabilecekse önce bir arşiv dışa aktarın.",
+  "images.deleteImport":
+    "Bilskirnir bu imajı unutur. Kaydedilmeden önce de Docker sunucusunda olduğu için Docker onu tutar.",
+  "images.deleteCatalog":
+    "İndirilen kopya silinir. İmaj listede kalır ve bir konteyner ya da imaj ondan oluşturulurken yeniden indirilir.",
+  "images.deleteUsed":
+    "Bu imajdan oluşturulan konteynerler: {containers}. Bir konteyner sıfırlanmak için oluşturulduğu imaja ihtiyaç duyar; bu yüzden önce konteyneri silin.",
+  "images.deleted": "İmaj silindi: {name}.",
+  "images.deletedKept":
+    "İmaj silindi: {name}. Başka bir etiket ya da imaj hâlâ kullandığı için Docker imajı tuttu.",
   "layers.title": "İmaj katmanları",
   "layers.description":
     "İmajın geçmişindeki her adım ve yazdığı bayt miktarı. İmajlar ortak katmanlarını paylaşır, Docker paylaşılan bir katmanı bir kez saklar.",

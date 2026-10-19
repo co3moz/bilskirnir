@@ -161,6 +161,21 @@ export const fr: Messages = {
   "images.ownSize": "{size} en propre",
   "images.ownHint":
     "Les couches qu'aucune autre image d'ici n'a apportées. Les couches communes ne sont stockées qu'une fois.",
+  "images.delete": "Supprimer l'image",
+  "images.deleteDownload": "Supprimer le téléchargement",
+  "images.deleteOf": "Supprimer {name}",
+  "images.deleteTitle": "Supprimer {name} ?",
+  "images.deleteSaved":
+    "L'image et son enregistrement sont supprimés. Cette action est irréversible ; exportez d'abord une archive si vous pourriez encore en avoir besoin.",
+  "images.deleteImport":
+    "Bilskirnir oublie cette image. Docker la conserve, car elle était déjà sur l'hôte avant son enregistrement.",
+  "images.deleteCatalog":
+    "Le téléchargement est supprimé. L'image reste dans la liste et est de nouveau téléchargée quand un conteneur ou une construction en a besoin.",
+  "images.deleteUsed":
+    "Créés à partir de cette image : {containers}. Un conteneur a besoin de l'image dont il est issu pour être réinitialisé ; supprimez donc d'abord le conteneur.",
+  "images.deleted": "Image {name} supprimée.",
+  "images.deletedKept":
+    "Image {name} supprimée. Docker a conservé l'image, qu'une autre étiquette ou une autre image utilise encore.",
   "layers.title": "Couches de l'image",
   "layers.description":
     "Chaque étape de l'historique de l'image et les octets qu'elle a écrits. Les images partagent leurs couches communes, et Docker ne stocke une couche partagée qu'une fois.",

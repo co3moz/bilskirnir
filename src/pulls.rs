@@ -306,7 +306,8 @@ impl App {
         self.pull_catalog_image(&image, job_id).await.map(drop)
     }
 
-    async fn image_present(&self, reference: &str) -> Result<bool> {
+    /// Whether Docker has `reference`; a Docker that cannot answer is an error, not an absence.
+    pub(crate) async fn image_present(&self, reference: &str) -> Result<bool> {
         match self.inspect("image", reference).await {
             Ok(_) => Ok(true),
             Err(error) => {

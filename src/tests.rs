@@ -354,7 +354,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 66);
+    assert_eq!(tools.len(), 67);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);
@@ -376,11 +376,10 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         compose["inputSchema"]["properties"]["compose"]["anyOf"][0]["required"],
         serde_json::json!(["script"])
     );
-    let delete = tools
-        .iter()
-        .find(|t| t["name"] == "delete_container")
-        .unwrap();
-    assert_eq!(delete["annotations"]["destructiveHint"], true);
+    for name in ["delete_container", "delete_image", "delete_volume"] {
+        let delete = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert_eq!(delete["annotations"]["destructiveHint"], true, "{name}");
+    }
     let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
     assert_eq!(screenshot["annotations"]["readOnlyHint"], true);
     assert!(screenshot["inputSchema"]["properties"]["max_width"].is_object());

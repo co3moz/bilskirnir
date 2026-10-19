@@ -41,7 +41,7 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { closeDialog } from "@/lib/dialogs"
-import { imageChoices, initialImage } from "@/lib/format"
+import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { composeBody, composeDraft, orderSteps, type ComposeDraft } from "@/lib/compose"
@@ -607,6 +607,68 @@ export function VolumeDeleteDialog({ name, ...props }: DialogProps & { name: str
               <RiAlertLine className="text-warning" />
               <AlertDescription>
                 {t("volumes.deleteMounted", { containers: formatList(holders) })}
+              </AlertDescription>
+            </Alert>
+          )}
+          <FieldError>{error}</FieldError>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">{t("common.cancel")}</AlertDialogCancel>
+            <Button type="submit" variant="destructive" disabled={busy || holders.length > 0}>
+              {busy && <Spinner data-icon="inline-start" />}
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/** Deletes an image once confirmed: a saved image with its record, an import's record alone, or a
+ * catalog image's download. An image a container was created from stays, as the manager refuses
+ * it too, so the dialog names those containers instead of offering Delete. */
+export function ImageDeleteDialog({ id, ...props }: DialogProps & { id: string }) {
+  const images = useImages()
+  // The image as the row showed it, so the closing dialog keeps its name once the list drops it.
+  const [image] = React.useState(() => images.data?.find((item) => item.id === id))
+  const containers = useContainers().data ?? []
+  const holders = image ? imageHolders(image, containers, images.data ?? []) : []
+  const name = image?.name ?? id
+  const { busy, error, submit } = useSubmit()
+  return (
+    <AlertDialog {...props}>
+      <AlertDialogContent>
+        <form
+          className="contents"
+          onSubmit={submit(async () => {
+            const result = await api<{ image_removed: boolean }>(
+              `images/${encodeURIComponent(id)}`,
+              undefined,
+              "DELETE"
+            )
+            closeDialog()
+            const notice = image ? deletedNotice(image, result.image_removed) : "images.deleted"
+            toast.success(t(notice, { name }))
+            void refreshAll()
+          })}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="break-all">
+              {t("images.deleteTitle", { name })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {image?.kind === "catalog"
+                ? t("images.deleteCatalog")
+                : image?.kind === "import"
+                  ? t("images.deleteImport")
+                  : t("images.deleteSaved")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {holders.length > 0 && (
+            <Alert>
+              <RiAlertLine className="text-warning" />
+              <AlertDescription>
+                {t("images.deleteUsed", { containers: formatList(holders) })}
               </AlertDescription>
             </Alert>
           )}

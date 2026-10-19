@@ -161,6 +161,21 @@ export const es: Messages = {
   "images.ownSize": "{size} propios",
   "images.ownHint":
     "Capas que ninguna otra imagen de aquí aportó. Las capas en común se guardan una sola vez.",
+  "images.delete": "Eliminar imagen",
+  "images.deleteDownload": "Eliminar descarga",
+  "images.deleteOf": "Eliminar {name}",
+  "images.deleteTitle": "¿Eliminar {name}?",
+  "images.deleteSaved":
+    "Se eliminan la imagen y su registro. No se puede deshacer; exporta antes un archivo comprimido si podrías volver a necesitarla.",
+  "images.deleteImport":
+    "Bilskirnir olvida esta imagen. Docker la conserva, porque ya estaba en el host antes de registrarla.",
+  "images.deleteCatalog":
+    "Se elimina la descarga. La imagen sigue en la lista y se descarga de nuevo cuando un contenedor o una compilación la necesita.",
+  "images.deleteUsed":
+    "Creados a partir de esta imagen: {containers}. Un contenedor necesita la imagen de la que partió para restablecerse, así que elimina primero el contenedor.",
+  "images.deleted": "Se eliminó la imagen {name}.",
+  "images.deletedKept":
+    "Se eliminó la imagen {name}. Docker conservó la imagen porque otra etiqueta u otra imagen todavía la usa.",
   "layers.title": "Capas de la imagen",
   "layers.description":
     "Cada paso del historial de la imagen y los bytes que escribió. Las imágenes comparten las capas que tienen en común, y Docker guarda una capa compartida una sola vez.",

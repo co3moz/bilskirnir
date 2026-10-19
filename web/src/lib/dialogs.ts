@@ -13,6 +13,7 @@ export type Dialog =
   | { kind: "compose"; id: string }
   | { kind: "icon"; id: string }
   | { kind: "image"; id: string }
+  | { kind: "image-delete"; id: string }
   | { kind: "import" }
   | { kind: "volume" }
   | { kind: "volume-files"; name: string }

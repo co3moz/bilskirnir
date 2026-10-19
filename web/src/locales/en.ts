@@ -166,6 +166,21 @@ export const en = {
   "images.size": "Size",
   "images.ownSize": "{size} own",
   "images.ownHint": "Layers no other image here brought. Images store the layers they share once.",
+  "images.delete": "Delete image",
+  "images.deleteDownload": "Delete download",
+  "images.deleteOf": "Delete {name}",
+  "images.deleteTitle": "Delete {name}?",
+  "images.deleteSaved":
+    "The image and its record are deleted. This cannot be undone; export an archive first if you may need it again.",
+  "images.deleteImport":
+    "Bilskirnir forgets this image. Docker keeps it, since it was on the host before it was registered.",
+  "images.deleteCatalog":
+    "The download is deleted. The image stays in the list and downloads again when a container or a build needs it.",
+  "images.deleteUsed":
+    "Created from this image: {containers}. A container needs the image it started from to reset, so delete the container first.",
+  "images.deleted": "Deleted image {name}.",
+  "images.deletedKept":
+    "Deleted image {name}. Docker kept the image, since another tag or image still holds it.",
   "layers.title": "Image layers",
   "layers.description":
     "Each step of the image's history and the bytes it wrote. Images share the layers they have in common, and Docker stores a shared layer once.",

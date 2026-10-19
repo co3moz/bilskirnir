@@ -1,7 +1,14 @@
 import { formatDate, formatList, formatNumber, getLocale, has, plural, t } from "./i18n"
 import { iconUrl } from "./icons"
 import { fileSize } from "./uploads"
-import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } from "./types"
+import type {
+  Container,
+  DownloadProgress,
+  ContainerItem,
+  ContainerSpec,
+  ImageItem,
+  Job,
+} from "./types"
 
 const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
 
@@ -151,6 +158,44 @@ export function imageStatus(image: Pick<ImageItem, "kind" | "available" | "error
  */
 export const imageSource = (image: Pick<ImageItem, "kind" | "reference" | "image_id">) =>
   image.kind === "catalog" ? image.reference : (image.image_id ?? image.reference)
+
+/** Whether an image's row offers Delete: a catalog image only once it is downloaded. */
+export const deletableImage = (image: Pick<ImageItem, "kind" | "downloaded">) =>
+  image.kind !== "catalog" || !!image.downloaded
+
+/**
+ * The names of the containers created from an image: the manager refuses to delete an image a
+ * container starts from, since a reset creates the container from it again. An import keeps its
+ * Docker image, and so does another saved image of the same Docker image, so nothing holds those.
+ */
+export function imageHolders(
+  image: Pick<ImageItem, "id" | "kind" | "image_id">,
+  containers: Pick<Container, "spec" | "source_image_id">[],
+  images: Pick<ImageItem, "id" | "kind" | "image_id">[]
+) {
+  if (image.kind === "import" || !image.image_id) return []
+  const kept = images.some(
+    (other) =>
+      image.kind !== "catalog" &&
+      other.kind !== "catalog" &&
+      other.id !== image.id &&
+      other.image_id === image.image_id
+  )
+  if (kept) return []
+  return containers
+    .filter((container) => container.source_image_id === image.image_id)
+    .map((container) => container.spec.name)
+}
+
+/**
+ * What a deleted image's notice says. Docker keeps an image that another tag or image still holds,
+ * which `removed` reports; an import keeps it by design, and an image that was gone already has
+ * nothing left to keep.
+ */
+export const deletedNotice = (image: Pick<ImageItem, "kind" | "available">, removed: boolean) =>
+  removed || image.kind === "import" || image.available === false
+    ? "images.deleted"
+    : "images.deletedKept"
 
 export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   if (job.log?.trim()) return job.log

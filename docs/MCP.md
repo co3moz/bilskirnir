@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 66 tools:
+The server currently exposes 67 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -88,7 +88,7 @@ The server currently exposes 66 tools:
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
-| Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot` |
+| Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot`, `delete_image` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
 | Operation results | `list_jobs`, `get_job` |
@@ -140,6 +140,8 @@ A compose makes a saved image ask for values, such as an account, when a contain
 ## See what takes disk space
 
 `list_images` gives every image Docker has three sizes in bytes: `size` as Docker reports it, `layers_size` unpacked and `own_size`, the part no other listed image brought. Images share the layers they have in common, so a snapshot's `size` includes its base desktop while its `own_size` is only what the container changed. `get_image_layers` takes an image's `id` from `list_images` and lists the steps of its history, newest first, each with the bytes it wrote, its `instruction` and `from`, the image it came from, so an agent can tell which step of a build script made an image large. The fields are described in [the HTTP API](API.md#image-sizes-and-layers).
+
+`delete_image` takes an image's `id` from `list_images` and deletes it. It cannot be undone, so check the name first. A build, a snapshot or an archive loses its record and Docker deletes the image, unless another tag or another image still holds it; `image_removed` in the result tells which. An `import` was on the Docker host before it was registered, so only its record goes. A catalog image loses only its download and stays listed, so `pull_image` or a new container downloads it again. It answers at once, without a job, and deletes nothing when it refuses: for an image a container was created from, whose name the error gives, since `reset_container` creates the container from that image again, unless another saved image keeps the same Docker image, and for one Docker still uses elsewhere. Snapshots made from a deleted image keep working, because Docker keeps the layers they share with it.
 
 ## Read and write files
 

@@ -311,7 +311,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 65
+    assert len(mcp("tools/list")["tools"]) == 67
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1211,6 +1211,31 @@ try:
     assert not docker("image", "ls", "-q", "--filter", f"label=bilskirnir.test-refused={tag}").strip()
     shutil.rmtree(archive_dir)
     print("PASS snapshot archive export/import keeps metadata and never applies names from an archive", flush=True)
+    # An image goes by itself only while no container starts from it. The archives of the snapshot
+    # name the clone's source too, so each goes with its own tag while the image stays; then the
+    # snapshot itself is refused. An image nothing else holds goes from Docker with its record.
+    def image_refused(record_id):
+        try:
+            api(f"images/{record_id}", method="DELETE")
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read() or b"{}").get("error", "")
+        raise AssertionError(f"DELETE images/{record_id} was accepted")
+    assert api(f"images/{renamed['id']}", method="DELETE") == {"id": renamed["id"], "name": "Renamed archive", "deleted": True, "image_removed": False}
+    assert json.loads(docker("image", "inspect", renamed["reference"], check=False) or b"[]") == []
+    untagged = tool("delete_image", {"image_id": imported["id"]})["structuredContent"]
+    assert untagged == {"id": imported["id"], "name": "snapshot-test", "deleted": True, "image_removed": False}, untagged
+    assert json.loads(docker("image", "inspect", snap["reference"]))[0]["Id"] == snap["image_id"]
+    status, message = image_refused(snap["id"])
+    assert status == 409 and message.startswith('"Clone" was created from this image'), (status, message)
+    refused_tool = tool("delete_image", {"image_id": snap["id"]}, allow_error=True)
+    assert refused_tool["isError"] and '"Clone"' in refused_tool["content"][0]["text"], refused_tool
+    assert image_refused("0123456789abcdef0123456789abcdef")[0] == 404
+    hostile_id = json.loads(docker("image", "inspect", loaded["reference"]))[0]["Id"]
+    assert api(f"images/{loaded['id']}", method="DELETE") == {"id": loaded["id"], "name": "Hostile names", "deleted": True, "image_removed": True}
+    assert json.loads(docker("image", "inspect", hostile_id, check=False) or b"[]") == []
+    listed_images = {image["id"] for image in api("images")}
+    assert snap["id"] in listed_images and not listed_images & {renamed["id"], imported["id"], loaded["id"]}, listed_images
+    print("PASS an image is deleted only while no container needs it, and Docker keeps one another tag holds", flush=True)
     # BuildKit holds a line without its newline until the step ends, so the marker needs one to
     # reach the job log while the script still sleeps.
     slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\necho SLOW_STARTED\nsleep 20\necho SLOW_FINISHED\n"})
