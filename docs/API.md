@@ -87,6 +87,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` and optional `description`, `internet`, `compose`, `icon` and `template_id`; returns a job. |
 | POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
 | POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
+| GET | `/api/images/{id}/layers` | What an image's [disk space](#image-sizes-and-layers) is made of: its sizes and the steps of its history, newest first, each with its size, its instruction and the image it came from. `id` is the list's `id`; `404` when Docker does not have the image. |
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` a script build ran, with the image's `description`, `compose`, `icon` and `template_id` when it has them, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
 | GET, PUT, DELETE | `/api/images/{id}/compose` | Read, set or remove an image's [compose](#composes). `id` is the record's `id`. |
 | GET, PUT, DELETE | `/api/images/{id}/icon` | Read, set or remove a saved image's [icon](#image-icons). |
@@ -213,6 +214,35 @@ The default user is UID/GID 1001:1001; root execution must be explicit. Bash run
 | `archive` | Loaded from an [image archive](#image-archives). |
 
 The catalog images come first. Their `id` is the catalog ID, such as `ubuntu-xfce`, and a container or a build names one by its `reference`. `image_id` is `null` until the image is downloaded, `downloaded` tells whether Docker has the reference and `available` whether it can be used; `error` explains a downloaded reference whose labels belong to another desktop. `created_at`, `parent_image_id` and `source_container` are `null`. The other kinds are saved records, named by their Docker `image_id`, with `available: false` once Docker no longer has the image. Every kind reports `desktop`, the catalog image it derives from (`catalog_id`) and its session, when its labels say so.
+
+## Image sizes and layers
+
+Every image Docker has carries three sizes in bytes, all `null` for an image Docker does not have:
+
+| Field | Size |
+| --- | --- |
+| `size` | The size Docker reports, as `docker image ls` shows it. The containerd image store, the default of Docker 29 and of the WSL package, also counts the compressed copy it keeps of each layer. |
+| `layers_size` | What the image's layers hold unpacked. |
+| `own_size` | The part of `layers_size` that no other listed image brought. Images share the layers they have in common, and Docker stores a shared layer once, so own sizes add up to the space the listed images take without counting a layer twice. |
+
+`GET /api/images/{id}/layers` explains them with the image's history, the newest step first as `docker history` lists it:
+
+```json
+{
+  "id": "5b1e0c9f2a7d4e3b8c6a1f0e9d8c7b6a",
+  "image_id": "sha256:c86959cb711a...",
+  "size": 2630695169,
+  "layers_size": 1977327616,
+  "own_size": 1067704320,
+  "steps": [
+    {"instruction": "LABEL bilskirnir.managed=true", "kind": "config", "size": 0, "created": 1792351597, "layer": false, "from": null, "shared_with": []},
+    {"instruction": "RUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh", "kind": "run", "size": 1067692032, "created": 1792351597, "layer": true, "from": null, "shared_with": []},
+    {"instruction": "ADD file:7121eb4a5ba3... in /", "kind": "add", "size": 87633920, "created": 1790928654, "layer": true, "from": "ubuntu-xfce", "shared_with": ["ubuntu-xfce", "0d4c2b1a9e8f7d6c5b4a3f2e1d0c9b8a"]}
+  ]
+}
+```
+
+`instruction` is the step as a Dockerfile says it, without the shell and build arguments the builder recorded around it, and at most 4 KiB. `kind` is `run`, `copy` or `add` for steps that write files, `config` for settings such as `ENV` or `LABEL`, which write none, and `commit` for a container's files saved by `docker commit`: a snapshot, or a settings change that carried a container's files over to its replacement, named in `comment`. `size` is the bytes the step wrote, unpacked, `created` is in Unix seconds (`null` when Docker records no time), and `layer` tells whether the step wrote one of the image's layers. `from` is the list `id` of the image the step came from, the listed image with the fewest layers that has it, or `null` when it is this image's own; `shared_with` names every other listed image that has it. Steps are compared by the layers below them rather than by their history, so an image built on an earlier build of a catalog image still shares the layers that build has in common with the current one. Docker never changes an image ID's layers or history, so the manager reads them once per image.
 
 ## Image icons
 

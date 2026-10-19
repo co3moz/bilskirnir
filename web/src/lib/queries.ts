@@ -5,7 +5,16 @@ import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
-import type { ContainerItem, ImageItem, Job, Session, Settings, SystemInfo, Volume } from "./types"
+import type {
+  ContainerItem,
+  ImageItem,
+  ImageLayers,
+  Job,
+  Session,
+  Settings,
+  SystemInfo,
+  Volume,
+} from "./types"
 
 const LIST_INTERVAL = 8000
 const JOB_INTERVAL = 2000
@@ -73,6 +82,14 @@ export const useJob = (id: string | undefined) =>
     enabled: !!id,
     refetchInterval: (query) =>
       query.state.data && !jobActive(query.state.data) ? false : JOB_INTERVAL,
+  })
+
+/** What an image's disk space is made of. It changes only when images are added or removed. */
+export const useImageLayers = (id: string) =>
+  useQuery({
+    queryKey: ["images", id, "layers"],
+    queryFn: () => api<ImageLayers>(`images/${encodeURIComponent(id)}/layers`),
+    meta: { quiet: true },
   })
 
 /** The templates page's list, read in the browser from the host the manager names. */

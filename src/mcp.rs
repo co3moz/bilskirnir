@@ -1,6 +1,6 @@
 use crate::{
     App, api, apps, audio, auth, capture, compose, desktop_input, error, exec, files, gamepad,
-    recordings, terminal, transfers, uploads, usage, volumes, waits, windows,
+    layers, recordings, terminal, transfers, uploads, usage, volumes, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -305,6 +305,11 @@ impl BilskirnirMcp {
             }
             "reset_container" => api::reset(state, Path(id.unwrap())).await?.0,
             "list_images" => api::images(state).await?.0,
+            "get_image_layers" => {
+                layers::layers(state, Path(string(&args, "image_id")?))
+                    .await?
+                    .0
+            }
             "import_image" => api::register_image(state, Json(parse(args)?)).await?.0,
             "build_image" => api::build(state, Json(parse(args)?)).await?.0,
             "get_image_compose" => {
@@ -747,9 +752,18 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "list_images",
-            "List every image with its kind: catalog (published with Bilskirnir and downloaded on first use; downloaded tells whether it is here), build, snapshot, import or archive, with ancestry and availability. A saved image's compose is shown without its script.",
+            "List every image with its kind: catalog (published with Bilskirnir and downloaded on first use; downloaded tells whether it is here), build, snapshot, import or archive, with ancestry and availability. A saved image's compose is shown without its script. Sizes are in bytes: size as Docker reports it, layers_size unpacked and own_size, the part no other listed image brought, since images share the layers they have in common.",
             json!({}),
             &[],
+            true,
+            false,
+            false,
+        ),
+        tool(
+            "get_image_layers",
+            "Explain what an image's disk space is made of: its sizes and the steps of its history, newest first, each with the bytes it wrote, its instruction (kind run, copy, add, config or commit) and from, the list id of the image it came from (null when it is this image's own), and shared_with, the other listed images that have it. Use it to see why an image is large and which of its layers other images share.",
+            json!({"image_id":{"type":"string","minLength":1,"description":"An image's id from list_images: a catalog id such as ubuntu-xfce, or a saved image's record id."}}),
+            &["image_id"],
             true,
             false,
             false,

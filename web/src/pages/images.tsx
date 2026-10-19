@@ -35,6 +35,7 @@ import { formatList, t } from "@/lib/i18n"
 import { iconUrl } from "@/lib/icons"
 import { useImages } from "@/lib/queries"
 import type { ImageItem } from "@/lib/types"
+import { fileSize } from "@/lib/uploads"
 
 /** What a compose asks for, in a few words. */
 function composeSummary(compose: NonNullable<ImageItem["compose"]>) {
@@ -196,7 +197,18 @@ const columns: DataColumn<Row>[] = [
             </Tooltip>
           )}
           <div className="flex flex-col gap-0.5">
-            <span className="font-medium">{image.name}</span>
+            {/* Docker's sizes are there once it has the image, and so are its layers. */}
+            {image.size != null ? (
+              <Button
+                variant="link"
+                className="h-auto w-fit p-0 text-left font-medium whitespace-normal text-foreground"
+                onClick={() => openDialog({ kind: "image", id: image.id })}
+              >
+                {image.name}
+              </Button>
+            ) : (
+              <span className="font-medium">{image.name}</span>
+            )}
             {image.description && (
               <span className="line-clamp-2 text-xs text-muted-foreground">
                 {image.description}
@@ -247,6 +259,25 @@ const columns: DataColumn<Row>[] = [
           (row.original.kind === "catalog" ? "" : t("common.unknown"))}
       </span>
     ),
+  }),
+  column.accessor("size", {
+    header: () => t("images.size"),
+    cell: ({ row }) => {
+      const { size, layers_size, own_size } = row.original
+      if (size == null) return null
+      // Only an image that shares layers with another one has a part of its own worth naming.
+      const shares = own_size != null && layers_size != null && own_size < layers_size
+      return (
+        <div className="flex flex-col text-xs whitespace-nowrap">
+          <span className="tabular-nums">{fileSize(size)}</span>
+          {shares && (
+            <span className="text-muted-foreground tabular-nums" title={t("images.ownHint")}>
+              {t("images.ownSize", { size: fileSize(own_size) })}
+            </span>
+          )}
+        </div>
+      )
+    },
   }),
   column.accessor("created_at", {
     header: () => t("table.created"),
