@@ -142,6 +142,60 @@ def png(width, height):
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
 
 
+# Runs in a GPU desktop under gpu-run: an OpenGL window that the window manager maximizes while it
+# takes its events with XCheckIfEvent, as Godot and SDL 2.0.18+ do. It prints the window's size and
+# the size VirtualGL renders it at, which before VirtualGL 3.1.5 stayed the size it was created with.
+GL_RESIZE_PROBE = r'''
+import subprocess, time
+from ctypes import CDLL, CFUNCTYPE, POINTER, Structure, Union, byref, c_char_p, c_int, c_long, c_uint, c_ulong, c_void_p
+class Visual(Structure): _fields_ = [("visual", c_void_p), ("id", c_ulong), ("screen", c_int), ("depth", c_int)]
+class Attributes(Structure): _fields_ = [("unused", c_ulong * 4), ("gravity", c_int * 3), ("planes", c_ulong * 2), ("save_under", c_int), ("event_mask", c_long), ("dont_propagate", c_long), ("override", c_int), ("colormap", c_ulong), ("cursor", c_ulong)]
+class Configure(Structure): _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p), ("event", c_ulong), ("window", c_ulong), ("x", c_int), ("y", c_int), ("width", c_int), ("height", c_int)]
+class Event(Union): _fields_ = [("type", c_int), ("configure", Configure), ("pad", c_long * 24)]
+x11, gl = CDLL("libX11.so.6"), CDLL("libGL.so.1")
+def sig(lib, name, restype, *argtypes):
+    function = getattr(lib, name)
+    function.restype, function.argtypes = restype, list(argtypes)
+match_all = CFUNCTYPE(c_int, c_void_p, POINTER(Event), c_void_p)(lambda display, event, arg: 1)
+sig(x11, "XOpenDisplay", c_void_p, c_char_p)
+sig(x11, "XRootWindow", c_ulong, c_void_p, c_int)
+sig(x11, "XCreateColormap", c_ulong, c_void_p, c_ulong, c_void_p, c_int)
+sig(x11, "XCreateWindow", c_ulong, c_void_p, c_ulong, c_int, c_int, c_uint, c_uint, c_uint, c_int, c_uint, c_void_p, c_ulong, POINTER(Attributes))
+sig(x11, "XMapWindow", c_int, c_void_p, c_ulong)
+sig(x11, "XCheckIfEvent", c_int, c_void_p, POINTER(Event), type(match_all), c_void_p)
+sig(gl, "glXChooseVisual", POINTER(Visual), c_void_p, c_int, POINTER(c_int))
+sig(gl, "glXCreateContext", c_void_p, c_void_p, POINTER(Visual), c_void_p, c_int)
+sig(gl, "glXMakeCurrent", c_int, c_void_p, c_ulong, c_void_p)
+sig(gl, "glXSwapBuffers", None, c_void_p, c_ulong)
+sig(gl, "glXQueryDrawable", None, c_void_p, c_ulong, c_int, POINTER(c_uint))
+display = x11.XOpenDisplay(None)
+visual = gl.glXChooseVisual(display, 0, (c_int * 3)(4, 5, 0))  # GLX_RGBA, GLX_DOUBLEBUFFER
+root = x11.XRootWindow(display, 0)
+attributes = Attributes(event_mask=1 << 17, colormap=x11.XCreateColormap(display, root, visual.contents.visual, 0))  # StructureNotifyMask
+window = x11.XCreateWindow(display, root, 0, 0, 400, 300, 0, visual.contents.depth, 1, visual.contents.visual, 1 << 13 | 1 << 11, byref(attributes))
+x11.XMapWindow(display, window)
+gl.glXMakeCurrent(display, window, gl.glXCreateContext(display, visual, None, 1))
+width, height, event, mapped, maximized, start = 400, 300, Event(), False, False, time.monotonic()
+while time.monotonic() - start < 5:
+    while x11.XCheckIfEvent(display, byref(event), match_all, None):
+        if event.configure.window == window and event.type == 19:  # MapNotify
+            mapped = True
+        if event.configure.window == window and event.type == 22:  # ConfigureNotify
+            width, height = event.configure.width, event.configure.height
+    if mapped and not maximized:
+        subprocess.run(["wmctrl", "-i", "-r", hex(window), "-b", "add,maximized_vert,maximized_horz"], check=True)
+        maximized = True
+    gl.glViewport(0, 0, width, height)
+    gl.glClear(0x4000)  # GL_COLOR_BUFFER_BIT
+    gl.glXSwapBuffers(display, window)
+    time.sleep(0.02)
+drawable = [c_uint(), c_uint()]
+gl.glXQueryDrawable(display, window, 0x801D, byref(drawable[0]))  # GLX_WIDTH
+gl.glXQueryDrawable(display, window, 0x801E, byref(drawable[1]))  # GLX_HEIGHT
+print(f"window={width}x{height} drawable={drawable[0].value}x{drawable[1].value}")
+'''
+
+
 def wait_for(fn, seconds=90):
     deadline, error = time.monotonic() + seconds, None
     while time.monotonic() < deadline:
@@ -1070,7 +1124,12 @@ try:
     hack = mcp_job(tool("exec_container", {"container_id":env_id,"script":chromium}))["log"]
     for line in ["browser=VGL_CHROMEHACK=1", "explicit=VGL_CHROMEHACK=0", "game=0", "started-by-browser=0", "panel=1"]:
         assert line in hack.splitlines(), hack
-    print("PASS independent desktop, hardware OpenGL and virtual audio devices", flush=True)
+    # A maximized OpenGL window is rendered at its new size, also for a program that takes its
+    # events the way Godot's editor does; at the old size its menu bar and top rows went missing.
+    resize = mcp_job(tool("exec_container", {"container_id":env_id,"script":f"gpu-run python3 - <<'PY'\n{GL_RESIZE_PROBE}PY\n"}))["log"]
+    gl_window, gl_drawable = (part.split("=")[1] for part in next(line for line in resize.splitlines() if line.startswith("window=")).split())
+    assert gl_window != "400x300" and gl_drawable == gl_window, resize
+    print("PASS independent desktop, hardware OpenGL, resized OpenGL windows and virtual audio devices", flush=True)
     jpeg = api(f"containers/{env_id}/screenshot", raw=True)
     assert jpeg.startswith(b"\xff\xd8") and len(jpeg) > 1000
     cookie = "; ".join(f"{c.name}={c.value}" for c in cookies)
