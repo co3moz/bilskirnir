@@ -46,7 +46,9 @@ COPY desktop-healthcheck.sh /usr/local/bin/desktop-healthcheck
 RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run
 
 FROM common AS xfce-packages
-RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-terminal \
+# librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon
+# that exists only as SVG stay blank. The GNOME stage installs it too.
+RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-terminal librsvg2-common \
     && rm -rf /var/lib/apt/lists/*
 FROM xfce-packages AS xfce
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
