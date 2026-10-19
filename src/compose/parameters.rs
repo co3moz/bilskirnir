@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 const VALUE_LIMIT: usize = 16_384;
+/// The value that gives a volume parameter no volume, also one whose empty value asks for a
+/// volume of the container's own. Volume names start with a letter or digit, so no volume has it.
+const NO_VOLUME: &str = "-";
 const OPTION_LIMIT: usize = 100;
 const OPTION_VALUE_LIMIT: usize = 1024;
 const DESCRIPTION_LIMIT: usize = 500;
@@ -52,8 +55,8 @@ pub enum Kind {
     /// Any of the options, one per line.
     Choices,
     /// A named volume mounted at the parameter's `path`, or empty for none, or for a volume of
-    /// the container's own with `new_volume`. The script receives the path, and the volume's
-    /// name in a second variable.
+    /// the container's own with `new_volume`, where `-` asks for none. The script receives the
+    /// path, and the volume's name in a second variable.
     Volume,
     /// An absolute folder of the desktop outside its system folders, such as the project an
     /// editor opens. The script creates what it needs there, and uploads may go into it.
@@ -145,7 +148,8 @@ pub struct Parameter {
     /// What the create form says when a value does not match the pattern.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub pattern_message: String,
-    /// A volume parameter left empty gets a volume created for its container, instead of none.
+    /// A volume parameter left empty gets a volume created for its container, instead of none;
+    /// `-` still gives it none, unless it is required.
     #[serde(default, skip_serializing_if = "is_false")]
     pub new_volume: bool,
 }
@@ -451,7 +455,8 @@ impl Parameter {
 
     /// The value a new container gives the script: the one given, otherwise the default. A
     /// boolean without one is `false`, and a volume parameter that creates a volume, left
-    /// empty, names the one `container` gets.
+    /// empty, names the one `container` gets. A volume parameter given `-` has none, which the
+    /// container keeps as an empty value.
     pub(super) fn resolve(
         &self,
         given: Option<&String>,
@@ -462,7 +467,9 @@ impl Parameter {
         if self.kind == Kind::Boolean && value.is_empty() {
             value = "false".into();
         }
-        if value.is_empty()
+        if self.kind == Kind::Volume && value == NO_VOLUME {
+            value.clear();
+        } else if value.is_empty()
             && let Some(volume) = self.new_volume_for(container, step)
         {
             value = volume;

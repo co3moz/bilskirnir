@@ -354,6 +354,80 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
 }
 
 #[test]
+fn a_dash_gives_a_volume_parameter_no_volume() {
+    let container = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+    let dash = NO_VOLUME.to_owned();
+    // Where an empty value asks for the container's own volume, `-` still leaves it without
+    // one, and the container keeps the empty value a parameter without a volume has.
+    let profile = Parameter {
+        name: "BROWSER_PROFILE".into(),
+        ..parameter(
+            json!({"type": "volume", "path": "/home/desktop/.config/chrome-agent", "new_volume": true}),
+        )
+    };
+    profile.validate().unwrap();
+    let none = profile.resolve(Some(&dash), container, None).unwrap();
+    assert_eq!(none, "");
+    assert_eq!(profile.mount(&none), None);
+    assert_eq!(
+        profile.environment(&none),
+        [
+            ("BROWSER_PROFILE".into(), profile.path.clone()),
+            ("BROWSER_PROFILE_VOLUME".into(), String::new()),
+        ]
+    );
+    // A required one has to have a volume, its own or a chosen one.
+    let required = Parameter {
+        required: true,
+        label: "Browser profile".into(),
+        ..profile.clone()
+    };
+    let error = required
+        .resolve(Some(&dash), container, None)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("Choose a volume for Browser profile"),
+        "{error}"
+    );
+    // Any volume parameter reads it as none, also one whose default names a volume.
+    let shared =
+        parameter(json!({"type": "volume", "path": "/opt/unity", "default": "unity-installs"}));
+    assert_eq!(shared.resolve(Some(&dash), container, None).unwrap(), "");
+    assert_eq!(
+        shared.resolve(None, container, None).unwrap(),
+        "unity-installs"
+    );
+    // It is no volume's name, so it cannot be a default, and other types keep it as text.
+    let error = parameter(json!({"type": "volume", "path": "/opt/unity", "default": "-"}))
+        .validate()
+        .unwrap_err();
+    assert!(
+        format!("{error:#}").contains("must name a volume"),
+        "{error:#}"
+    );
+    assert!(crate::model::volume_name(NO_VOLUME).is_err());
+    let text = parameter(json!({}));
+    assert_eq!(text.resolve(Some(&dash), container, None).unwrap(), "-");
+    // The create form sends it, and agents and the guide are told about it.
+    let interface = include_str!("../../web/src/lib/compose.ts");
+    let line = format!("export const WITHOUT_VOLUME = \"{NO_VOLUME}\"");
+    assert!(
+        interface.contains(&line),
+        "web/src/lib/compose.ts must declare {line}"
+    );
+    let mcp = include_str!("../mcp.rs");
+    assert!(
+        mcp.contains(&format!("\\\"{NO_VOLUME}\\\" gives it none")),
+        "the create_container parameters in src/mcp.rs must explain {NO_VOLUME}"
+    );
+    assert!(
+        include_str!("../../docs/API.md").contains(&format!("`\"{NO_VOLUME}\"` for none")),
+        "docs/API.md must explain {NO_VOLUME}"
+    );
+}
+
+#[test]
 fn options_are_short_unique_lines() {
     let with = |options: serde_json::Value| {
         parameter(json!({"type": "choice", "options": options})).validate()

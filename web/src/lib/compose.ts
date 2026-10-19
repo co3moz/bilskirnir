@@ -131,18 +131,23 @@ export const NO_VOLUME = "\u0000none"
  * default of that kind as this value too; the create form sends it as an empty value.
  */
 export const NEW_VOLUME = "\u0000new"
+/**
+ * The value that asks the manager for no volume where an empty one makes a new volume. No
+ * volume's name starts with a dash.
+ */
+export const WITHOUT_VOLUME = "-"
 
 /**
  * What a volume parameter's select offers before the volumes. The form offers no volume unless
- * one is required or an empty value makes a new one, and a new one only when the parameter makes
- * it; the editor of `defaults` offers both.
+ * one is required, and a new one only when the parameter makes it; the editor of `defaults`
+ * offers both.
  */
 export function volumeExtras(
   parameter: Pick<ComposeParameter, "new_volume">,
   { required, defaults }: { required: boolean; defaults: boolean }
 ) {
   return {
-    none: defaults || (!required && !parameter.new_volume),
+    none: defaults || !required,
     fresh: defaults || !!parameter.new_volume,
   }
 }
@@ -156,10 +161,20 @@ export function volumeSelection(
   value: string,
   required: boolean
 ) {
+  if (value === WITHOUT_VOLUME) return NO_VOLUME
   if (value) return value
   if (parameter.new_volume) return NEW_VOLUME
   return required ? "" : NO_VOLUME
 }
+
+/**
+ * The form's value for no volume: empty, unless an empty value makes a new volume. The editor of
+ * `defaults` keeps it empty, since a default of none makes no new volume.
+ */
+export const noVolumeValue = (
+  parameter: Pick<ComposeParameter, "new_volume">,
+  defaults: boolean
+) => (parameter.new_volume && !defaults ? WITHOUT_VOLUME : "")
 
 /** The editor's value for a volume parameter's default: a volume, `""` for none, or NEW_VOLUME. */
 export const volumeDefault = (draft: Pick<ParameterDraft, "default" | "new_volume">) =>
