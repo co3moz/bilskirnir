@@ -3,6 +3,12 @@ import { RiAddLine } from "@remixicon/react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,17 +37,22 @@ import {
   newParameter,
   composeBody,
   composeDraft,
+  stepTitle,
   type ParameterDraft,
   type ComposeDraft,
+  type StepDraft,
 } from "@/lib/compose"
 import type { Compose } from "@/lib/types"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
-import { t } from "@/lib/i18n"
+import { plural, t } from "@/lib/i18n"
 import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
 
-/** The compose editor shared by Build image and Edit compose. */
+/**
+ * The compose editor shared by Build image and Edit compose. A compose of several steps, such as
+ * one merged from templates, shows each step in a section of its own.
+ */
 export function ComposeFields({
   draft,
   onChange,
@@ -49,8 +60,57 @@ export function ComposeFields({
   draft: ComposeDraft
   onChange: (draft: ComposeDraft) => void
 }) {
+  const setStep = (key: number, next: StepDraft) =>
+    onChange({ steps: draft.steps.map((step) => (step.key === key ? next : step)) })
+  if (draft.steps.length === 1) {
+    const [step] = draft.steps
+    return <StepFields draft={step} onChange={(next) => setStep(step.key, next)} />
+  }
+  return (
+    <Accordion type="multiple" className="rounded-2xl border px-4">
+      {draft.steps.map((step) => (
+        <AccordionItem key={step.key} value={String(step.key)}>
+          <AccordionTrigger>
+            <span className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="truncate">{stepTitle(step)}</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {plural(step.parameters.length, {
+                  one: "compose.parameterCount.one",
+                  other: "compose.parameterCount.other",
+                })}
+              </span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="flex flex-col gap-4 px-1">
+            <StepFields draft={step} onChange={(next) => setStep(step.key, next)} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start text-destructive"
+              onClick={() =>
+                onChange({ steps: draft.steps.filter((other) => other.key !== step.key) })
+              }
+            >
+              {t("compose.removeStep", { name: stepTitle(step) })}
+            </Button>
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
+  )
+}
+
+/** One step's parameters, script and how it runs. */
+function StepFields({
+  draft,
+  onChange,
+}: {
+  draft: StepDraft
+  onChange: (draft: StepDraft) => void
+}) {
   const id = React.useId()
-  const set = (patch: Partial<ComposeDraft>) => onChange({ ...draft, ...patch })
+  const set = (patch: Partial<StepDraft>) => onChange({ ...draft, ...patch })
   const setParameter = (key: number, next: ParameterDraft) =>
     set({
       parameters: draft.parameters.map((parameter) => (parameter.key === key ? next : parameter)),

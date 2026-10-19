@@ -442,9 +442,18 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
 /// version, and only the icon route returns the picture.
 pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     let mut value = json!(record);
-    for key in ["build", "compose"] {
+    for (key, list) in [("build", "parts"), ("compose", "steps")] {
         if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
             part.remove("script");
+            for item in part
+                .get_mut(list)
+                .and_then(Value::as_array_mut)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_object_mut)
+            {
+                item.remove("script");
+            }
         }
     }
     if let Some(icon) = &record.icon {
@@ -464,15 +473,22 @@ pub async fn image_config(
             "No build configuration was recorded for this image".into(),
         )
     })?;
+    // One template is named as builds named it before templates could be merged.
+    let (template_id, template_ids) = match record.template_ids.as_slice() {
+        [one] => (Some(one.clone()), Vec::new()),
+        _ => (None, record.template_ids),
+    };
     Ok(Json(BuildImage {
         name: record.name,
         description: record.description,
         base_image: build.base_image,
         internet: build.internet,
         script: build.script,
+        parts: build.parts,
         compose: record.compose,
         icon: record.icon,
-        template_id: record.template_id,
+        template_id,
+        template_ids,
     }))
 }
 #[derive(Deserialize)]
@@ -507,7 +523,7 @@ pub async fn register_image(
         build: None,
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     app.db.put("image", &rec.id, &rec)?;
     Ok(Json(json!(rec)))
@@ -523,26 +539,33 @@ pub struct BuildImage {
     pub base_image: String,
     #[serde(default = "default_true")]
     pub internet: bool,
+    /// The script of a build of one part, run as root on the base.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub script: String,
+    /// Instead of a script, the scripts of templates merged into one build, in the order they
+    /// run, each in a layer of its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<BuildPart>,
     /// The compose the built image gets. Configurations exported before templates were called
     /// composes name it `template`.
     #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
     pub compose: Option<crate::compose::Compose>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<crate::icons::Icon>,
-    /// Set by the templates page, so it can tell which of its templates are installed.
+    /// Set by the templates page, so it can tell which of its templates are installed: one
+    /// template here, several merged into one build in `template_ids`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub template_ids: Vec<String>,
 }
 impl BuildImage {
     fn validate(&self) -> anyhow::Result<()> {
         image_ref(&self.base_image)?;
-        if self.script.len() > 1_000_000
-            || self.name.trim().is_empty()
-            || self.name.chars().count() > 100
-        {
+        if self.name.trim().is_empty() || self.name.chars().count() > 100 {
             anyhow::bail!("Invalid image name or script");
         }
+        build_scripts(&self.script, &self.parts)?;
         if self.description.len() > 4096 {
             anyhow::bail!("An image description must be at most 4096 bytes");
         }
@@ -552,10 +575,25 @@ impl BuildImage {
         if let Some(icon) = &self.icon {
             icon.validate()?;
         }
-        if let Some(id) = &self.template_id {
+        let templates = self.templates();
+        if templates.len() > BUILD_PART_LIMIT {
+            anyhow::bail!("An image is built from at most {BUILD_PART_LIMIT} templates");
+        }
+        for id in &templates {
             template_id(id)?;
         }
         Ok(())
+    }
+
+    /// The templates the image is built from, each once.
+    fn templates(&self) -> Vec<String> {
+        let mut ids = Vec::new();
+        for id in self.template_id.iter().chain(&self.template_ids) {
+            if !ids.contains(id) {
+                ids.push(id.clone());
+            }
+        }
+        ids
     }
 }
 fn default_true() -> bool {
@@ -587,10 +625,34 @@ pub async fn build(
             let dir = app.config.data.join("builds").join(&id);
             tokio::fs::create_dir_all(&dir).await?;
             let script = body.script.replace("\r\n", "\n");
-            tokio::fs::write(dir.join("setup.sh"), &script).await?;
-            let dockerfile = format!(
-                "FROM {base_tag}\nUSER root\nCOPY setup.sh /tmp/bilskirnir-setup.sh\nRUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh\nLABEL bilskirnir.desktop=true\nLABEL {LABEL}=true\n"
-            );
+            let parts = body
+                .parts
+                .iter()
+                .map(|part| BuildPart {
+                    script: part.script.replace("\r\n", "\n"),
+                    ..part.clone()
+                })
+                .collect::<Vec<_>>();
+            // Each part runs in a step of its own, named after it in the build's output, so a
+            // failure says whose script it was and Docker's cache keeps the parts before it.
+            let files = if parts.is_empty() {
+                vec![("setup", script.as_str())]
+            } else {
+                parts
+                    .iter()
+                    .map(|part| (part.id.as_str(), part.script.as_str()))
+                    .collect()
+            };
+            let mut dockerfile = format!("FROM {base_tag}\nUSER root\n");
+            for (name, script) in files {
+                tokio::fs::write(dir.join(format!("{name}.sh")), script).await?;
+                dockerfile.push_str(&format!(
+                    "COPY {name}.sh /tmp/bilskirnir-{name}.sh\nRUN bash /tmp/bilskirnir-{name}.sh && rm /tmp/bilskirnir-{name}.sh\n"
+                ));
+            }
+            dockerfile.push_str(&format!(
+                "LABEL bilskirnir.desktop=true\nLABEL {LABEL}=true\n"
+            ));
             tokio::fs::write(dir.join("Dockerfile"), dockerfile).await?;
             let reference = format!("bilskirnir/custom:{id}");
             let args = vec![
@@ -609,12 +671,25 @@ pub async fn build(
             app.begin_stage(&id, "script")?;
             app.append_log(
                 &id,
-                "Running setup script as root. Mounted volumes are excluded from the image.",
+                &if parts.is_empty() {
+                    "Running setup script as root. Mounted volumes are excluded from the image."
+                        .into()
+                } else {
+                    format!(
+                        "Running the scripts of {} as root, in this order, each in a layer of its own. Mounted volumes are excluded from the image.",
+                        parts
+                            .iter()
+                            .map(|part| part.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                },
             )?;
             app.docker_build_logged(&id, &args).await?;
             // Without BuildKit's markers, the layer stage is skipped rather than guessed.
             app.begin_stage(&id, "image")?;
             let info = app.inspect("image", &reference).await?;
+            let template_ids = body.templates();
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
@@ -630,10 +705,11 @@ pub async fn build(
                     base_image: body.base_image,
                     internet: body.internet,
                     script,
+                    parts,
                 }),
                 compose: body.compose,
                 icon: body.icon,
-                template_id: body.template_id,
+                template_ids,
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))
@@ -704,7 +780,7 @@ pub async fn snapshot(
                 build: None,
                 compose,
                 icon,
-                template_id: None,
+                template_ids: Vec::new(),
             };
             app.db.put("image", &id, &rec)?;
             Ok(image_summary(&rec))

@@ -296,16 +296,91 @@ pub struct ImageRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub icon: Option<crate::icons::Icon>,
-    /// The template on the templates page the image was built from.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template_id: Option<String>,
+    /// The templates on the templates page the image was built from, in the order they ran.
+    /// Records saved before templates could be merged name one as `template_id`.
+    #[serde(
+        default,
+        alias = "template_id",
+        deserialize_with = "one_or_more",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub template_ids: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildConfig {
     /// The base as the request named it: a catalog reference or a local image ID.
     pub base_image: String,
     pub internet: bool,
+    /// The script of a build of one part; empty when it has parts.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub script: String,
+    /// The scripts of a build merged from several templates, in the order they run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<BuildPart>,
+}
+/// One script of a build merged from several templates, run as root in a layer of its own.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildPart {
+    /// Lowercase letters, digits and dashes, unique in the build, such as the template's id.
+    pub id: String,
+    pub name: String,
+    pub script: String,
+}
+pub const BUILD_PART_LIMIT: usize = 8;
+const BUILD_SCRIPT_LIMIT: usize = 1_000_000;
+/// Check what a build runs: one script, or up to eight parts with ids and names of their own.
+pub fn build_scripts(script: &str, parts: &[BuildPart]) -> Result<()> {
+    match (script.trim().is_empty(), parts.is_empty()) {
+        (true, true) => bail!("A build needs a script, or parts with a script each"),
+        (false, false) => bail!("A build has a script or parts, not both"),
+        _ => {}
+    }
+    if parts.len() > BUILD_PART_LIMIT {
+        bail!("A build has at most {BUILD_PART_LIMIT} parts");
+    }
+    if script.len() + parts.iter().map(|part| part.script.len()).sum::<usize>() > BUILD_SCRIPT_LIMIT
+    {
+        bail!("The scripts of a build take at most {BUILD_SCRIPT_LIMIT} bytes together");
+    }
+    let mut ids = std::collections::HashSet::new();
+    for part in parts {
+        if template_id(&part.id).is_err() {
+            bail!(
+                "Each part of a build needs an id of lowercase letters, digits and dashes, at most 64 and not starting with a dash: {:?}",
+                part.id
+            );
+        }
+        if !ids.insert(part.id.as_str()) {
+            bail!("Part ids must be unique: {}", part.id);
+        }
+        if part.name.trim().is_empty()
+            || part.name.chars().count() > 100
+            || part.name.contains(['\n', '\r'])
+        {
+            bail!("Each part of a build needs a name of one line and at most 100 characters");
+        }
+        if part.script.trim().is_empty() {
+            bail!("The part {} has no script", part.name);
+        }
+    }
+    Ok(())
+}
+/// A list that records saved before it could hold several wrote as one value, or left out.
+pub(crate) fn one_or_more<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Vec<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMore {
+        One(String),
+        More(Vec<String>),
+    }
+    Ok(match Option::<OneOrMore>::deserialize(deserializer)? {
+        None => Vec::new(),
+        Some(OneOrMore::One(value)) => vec![value],
+        Some(OneOrMore::More(values)) => values,
+    })
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Application {

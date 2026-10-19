@@ -334,6 +334,9 @@ export const de: Messages = {
   "compose.read.parameters": "Die Parameter der Compose müssen eine Liste sein.",
   "compose.read.root": "Die Root-Einstellung der Compose muss true oder false sein.",
   "compose.read.timeout": "Das Zeitlimit der Compose muss eine Anzahl von Sekunden sein.",
+  "compose.read.step": "ID und Name eines Compose-Schritts müssen Text sein.",
+  "compose.read.steps":
+    "Die Schritte der Compose müssen eine Liste mit mindestens einem Schritt sein.",
   "compose.setup.pending": "Wartet auf den Desktop",
   "compose.setup.running": "Läuft",
   "compose.setup.completed": "Abgeschlossen",
@@ -368,6 +371,13 @@ export const de: Messages = {
     "Wonach ein neuer Container aus diesem Image fragt, und das Skript, das die Werte erhält.",
   "compose.pinned": "Früher erstellte Container behalten die Compose, mit der sie erstellt wurden.",
   "compose.save": "Compose speichern",
+  "compose.parameterCount.one": "{count} Parameter",
+  "compose.parameterCount.other": "{count} Parameter",
+  "compose.removeStep": "{name} entfernen",
+  "compose.valuesHintSteps":
+    "Jeder Teil des Images fragt nach eigenen Werten, und sein Einrichtungsskript erhält nur diese, sobald der Desktop bereit ist. Geheime Werte werden nicht erneut angezeigt.",
+  "compose.stepRunsScript": "Führt sein Einrichtungsskript ohne Werte aus.",
+  "compose.stepWaiting": "Wartet",
   "media.sampleRate": "Dieser Browser unterstützt kein 48-kHz-Audio.",
   "media.audioFailed": "Audioverbindung fehlgeschlagen. Prüfen Sie die Container-Protokolle.",
   "media.microphoneFailed":
@@ -444,6 +454,18 @@ export const de: Messages = {
     "Fügen Sie das JSON ein, das der Export von einem erstellten Image kopiert hat. Es füllt Name, Beschreibung, Symbol, Basis-Image, Skript, Internet-Einstellung und Compose aus, die Sie vor dem Erstellen noch ändern können.",
   "build.config": "Konfiguration",
   "build.load": "Laden",
+  "build.config.part":
+    "Jeder Teil braucht eine ID aus Kleinbuchstaben, Ziffern und Bindestrichen, einen Namen und ein Skript.",
+  "build.config.scriptOrParts":
+    "Die Konfiguration hat sowohl ein Skript als auch Teile; sie darf nur eines davon haben.",
+  "build.fromTemplates":
+    "Zusammengeführt aus {names}. Prüfen Sie jedes Skript vor dem Erstellen: Sie laufen in dieser Reihenfolge als root auf dem Basis-Image.",
+  "build.partsHint":
+    "Das Skript jeder Vorlage läuft als root in einer eigenen Ebene, in dieser Reihenfolge.",
+  "build.partScript": "Build-Skript von {name}",
+  "build.partEarlier": "Früher ausführen",
+  "build.partLater": "Später ausführen",
+  "build.partRemove": "Weglassen",
   "build.config.description": "Die Beschreibung muss ein Text mit höchstens 4096 Bytes sein.",
   "build.config.template":
     "Die Vorlagen-ID darf nur Kleinbuchstaben, Ziffern und Bindestriche enthalten.",
@@ -504,6 +526,18 @@ export const de: Messages = {
   "templates.broken.tags": "höchstens {count} kurze Schlagwörter sind erlaubt",
   "templates.broken.requires": "requires muss eine Version wie 0.5.0 sein",
   "templates.broken.duplicate": "eine andere Vorlage hat dieselbe ID",
+  "templates.merge.start": "Zusammenführen und installieren",
+  "templates.merge.go": "Zusammenführen",
+  "templates.merge.choose": "{name} auswählen",
+  "templates.merge.order": "Schritt {number}",
+  "templates.merge.chosen.one": "{count} Vorlage ausgewählt",
+  "templates.merge.chosen.other": "{count} Vorlagen ausgewählt",
+  "templates.merge.hint":
+    "Wählen Sie zwei oder mehr Vorlagen, die zu einem Image gebaut werden. Ihre Skripte laufen in der gewählten Reihenfolge, und jede fragt beim Erstellen eines Containers nach eigenen Werten.",
+  "templates.merge.twice":
+    "{name} steckt in mehr als einer der gewählten Vorlagen; wählen Sie es nur einmal.",
+  "templates.merge.base":
+    "{name} wurde für {base} erstellt. Das zusammengeführte Image wird auf der Basis der ersten Vorlage gebaut; prüfen Sie, ob sein Skript zu diesem Desktop passt.",
   "nav.jobs": "Aufträge",
   "nav.dashboard": "Dashboard",
   "nav.containers": "Container",

@@ -436,26 +436,34 @@ impl Parameter {
     }
 
     /// The volume a container with this ID gets for a parameter that creates one:
-    /// `bilskirnir-<container>-<name>`, the name in lowercase with dashes for underscores.
-    pub(super) fn new_volume_for(&self, container: &str) -> Option<String> {
+    /// `bilskirnir-<container>-<name>`, the name in lowercase with dashes for underscores, and
+    /// `bilskirnir-<container>-<step>-<name>` for a parameter of a step in a compose of several,
+    /// where another step may ask for the same name.
+    pub(super) fn new_volume_for(&self, container: &str, step: Option<&str>) -> Option<String> {
         self.new_volume.then(|| {
-            format!(
-                "bilskirnir-{container}-{}",
-                self.name.to_ascii_lowercase().replace('_', "-")
-            )
+            let name = self.name.to_ascii_lowercase().replace('_', "-");
+            match step {
+                Some(step) => format!("bilskirnir-{container}-{step}-{name}"),
+                None => format!("bilskirnir-{container}-{name}"),
+            }
         })
     }
 
     /// The value a new container gives the script: the one given, otherwise the default. A
     /// boolean without one is `false`, and a volume parameter that creates a volume, left
     /// empty, names the one `container` gets.
-    pub(super) fn resolve(&self, given: Option<&String>, container: &str) -> Result<String> {
+    pub(super) fn resolve(
+        &self,
+        given: Option<&String>,
+        container: &str,
+        step: Option<&str>,
+    ) -> Result<String> {
         let mut value = given.unwrap_or(&self.default).clone();
         if self.kind == Kind::Boolean && value.is_empty() {
             value = "false".into();
         }
         if value.is_empty()
-            && let Some(volume) = self.new_volume_for(container)
+            && let Some(volume) = self.new_volume_for(container, step)
         {
             value = volume;
         }

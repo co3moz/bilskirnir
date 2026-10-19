@@ -15,11 +15,12 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
-def run(script, parameters=None, secrets=(), timeout_seconds=30):
+def run(script, parameters=None, secrets=(), timeout_seconds=30, mask=()):
     request = {
         "script": script,
         "parameters": parameters or {},
         "secrets": list(secrets),
+        "mask": list(mask),
         "timeout_seconds": timeout_seconds,
     }
     # The manager runs the helper with `python3 -c`, so it must work without its file name.
@@ -56,6 +57,15 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result)
         self.assertEqual(result.stdout, b"dev@example.com|***|\n***")
         self.assertNotIn(b"s3cr3t", result.stdout + result.stderr)
+
+    def test_the_secrets_of_other_steps_are_masked_without_reaching_the_script(self):
+        # An earlier step saved its token in a file; this step prints the file.
+        result = run(
+            'printf "%s|%s" "${TOKEN-unset}" "$(printf other-step-token)"',
+            mask=["other-step-token", ""],
+        )
+        self.assertEqual(result.returncode, 0, result)
+        self.assertEqual(result.stdout, b"unset|***")
 
     def test_a_multiline_secret_is_masked_whole(self):
         result = run('printf "%s" "$LICENSE"', {"LICENSE": "line one\nline two"}, ["LICENSE"])

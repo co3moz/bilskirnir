@@ -82,19 +82,35 @@ export type ComposeParameter = {
   new_volume?: boolean
 }
 
-/** What a new container from an image asks for, and the script that receives it. */
-export type Compose = {
+/** One script of a compose, with the parameters it asks for. */
+export type ComposeStep = {
+  /** Names the step in a compose of several, such as the template it came from. */
+  id?: string
+  /** What the forms call the step; its id when empty. */
+  name?: string
   parameters: ComposeParameter[]
   script: string
   root: boolean
   timeout_seconds: number
 }
 
+/**
+ * What a new container from an image asks for, and the scripts that receive it: one step with
+ * its fields at the top, as composes were before steps, or several in `steps`. Each script
+ * receives only its own step's parameters; with several steps a value goes by `<step>.<NAME>`.
+ */
+export type Compose = ComposeStep | { steps: ComposeStep[] }
+
+/** A compose as image lists show it, without its scripts. */
+export type ListedCompose = Omit<ComposeStep, "script"> | { steps: Omit<ComposeStep, "script">[] }
+
+export type SetupStatus = "pending" | "running" | "completed" | "failed"
+
 export type ContainerSetup = {
-  status: "pending" | "running" | "completed" | "failed"
+  status: SetupStatus
   /** The image record the compose came from. */
   image: string
-  /** Values of the parameters that are not secret. */
+  /** Values of the parameters that are not secret, by the names they go by. */
   parameters: Record<string, string>
   /** Names of the secret parameters, whose values are never returned. */
   secrets: string[]
@@ -103,6 +119,8 @@ export type ContainerSetup = {
   mounts?: Mount[]
   /** The folders its volume and folder parameters name, which take uploads. */
   places?: Place[]
+  /** The steps of a compose of several, in order, and where each stands. */
+  steps?: { id: string; name: string; status: SetupStatus }[]
 }
 
 /** A folder of the desktop that a compose names, by its parameter's label. */
@@ -136,10 +154,14 @@ export type ImageItem = {
   created_at: number | null
   description: string
   desktop?: DesktopInfo | null
-  /** Recorded by script builds; `GET images/{id}/config` adds the script. */
-  build?: Omit<BuildConfig, "name" | "script"> | null
-  /** Lists leave out the setup script; `GET images/{id}/compose` returns it. */
-  compose?: Omit<Compose, "script"> | null
+  /** Recorded by script builds; `GET images/{id}/config` adds the scripts. */
+  build?:
+    | (Omit<BuildConfig, "name" | "script" | "parts"> & {
+        parts?: Omit<BuildPart, "script">[]
+      })
+    | null
+  /** Lists leave out the setup scripts; `GET images/{id}/compose` returns them. */
+  compose?: ListedCompose | null
   /**
    * Whether a container can start from it now, `null` when Docker could not list images. A
    * catalog image that is not downloaded is not available, but downloads when it is used.
@@ -151,24 +173,32 @@ export type ImageItem = {
   error?: string | null
   /** Saved images with an icon: its version; `GET images/{id}/icon` returns the PNG. */
   icon?: string | null
-  /** The templates page template the image was built from. */
-  template_id?: string | null
+  /** The templates page templates the image was built from, in the order they ran. */
+  template_ids?: string[]
 }
+
+/** One template's script in a build merged from several, run in a layer of its own. */
+export type BuildPart = { id: string; name: string; script: string }
 
 /**
  * A build request, which is also what an image's exported configuration holds and what a
- * template on the templates page is.
+ * template on the templates page is. It runs a script, or the parts of templates merged into
+ * one image.
  */
 export type BuildConfig = {
   name: string
   description?: string
   base_image: string
   internet: boolean
-  script: string
+  script?: string
+  parts?: BuildPart[]
   compose?: Compose
   /** A PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL. */
   icon?: string
+  /** One template the image is built from. */
   template_id?: string
+  /** The templates merged into the image, in order. */
+  template_ids?: string[]
 }
 
 /** One line of `docker volume ls --format json`, and whether it is the manager's own. */

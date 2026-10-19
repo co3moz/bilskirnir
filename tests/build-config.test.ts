@@ -24,6 +24,38 @@ test("an exported configuration imports back unchanged, in the form's field orde
   assert.deepEqual(parseBuildConfig(text), config)
 })
 
+test("a merged configuration carries its parts and templates instead of one script", () => {
+  const merged = {
+    name: config.name,
+    base_image: config.base_image,
+    internet: config.internet,
+    parts: [
+      { id: "unity-dev", name: "Unity development", script: "echo unity" },
+      { id: "chrome", name: "Google Chrome", script: "echo chrome" },
+    ],
+    template_ids: ["unity-dev", "chrome"],
+  }
+  const text = formatBuildConfig(merged)
+  assert.deepEqual(Object.keys(JSON.parse(text)), [
+    "name",
+    "base_image",
+    "internet",
+    "parts",
+    "template_ids",
+  ])
+  assert.deepEqual(parseBuildConfig(text), merged)
+  const cases: [unknown, RegExp][] = [
+    [{ parts: [] }, /Each part/],
+    [{ parts: [{ id: "Chrome", name: "Chrome", script: "x" }] }, /Each part/],
+    [{ parts: [{ id: "chrome", name: "", script: "x" }] }, /Each part/],
+    [{ parts: [{ id: "chrome", name: "Chrome", script: " " }] }, /Each part/],
+    [{ script: "x", parts: [{ id: "chrome", name: "Chrome", script: "x" }] }, /only one/],
+    [{ script: "x", template_ids: ["Chrome"] }, /template id/],
+  ]
+  for (const [value, message] of cases)
+    assert.throws(() => parseBuildConfig(JSON.stringify(value)), message, JSON.stringify(value))
+})
+
 test("a configuration needs only its script, and unknown fields are ignored", () => {
   assert.deepEqual(parseBuildConfig('{"script":"echo hi","labels":"from a newer release"}'), {
     script: "echo hi",

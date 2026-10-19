@@ -645,7 +645,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
-                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none; with new_volume, an empty string or no value has the job create a volume for this container, named bilskirnir-CONTAINER_ID-parameter-name."},
+                "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name: with a compose of several steps STEP_ID.NAME, or NAME alone when only one step asks for it. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none; with new_volume, an empty string or no value has the job create a volume for this container, named bilskirnir-CONTAINER_ID-parameter-name, or bilskirnir-CONTAINER_ID-step-id-parameter-name for a step of several."},
                 "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
                 "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
                 "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
@@ -765,13 +765,17 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). An exported build configuration or a template from the dashboard's templates page is a valid request as it is. Returns job_id; get_job lists the build's stages with their times.",
+            "Build a reusable desktop image by running a root shell script, or the scripts of several templates in order (parts), on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). An exported build configuration or a template from the dashboard's templates page is a valid request as it is. Returns job_id; get_job lists the build's stages with their times.",
             json!({
-                "name":text,"description":{"type":"string","maxLength":4096,"default":""},"base_image":text,"script":text,"internet":{"type":"boolean","default":true},"compose":compose_schema(),
+                "name":text,"description":{"type":"string","maxLength":4096,"default":""},"base_image":text,
+                "script":{"type":"string","maxLength":1000000,"description":"The root shell script, for a build without parts."},
+                "parts":{"type":"array","maxItems":8,"description":"Instead of script: the scripts of templates merged into one image, run as root in this order, each in a layer of its own; the scripts take at most 1000000 bytes together.","items":schema(json!({"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Unique in the build, such as the template's id."},"name":{"type":"string","minLength":1,"maxLength":100},"script":{"type":"string","minLength":1}}), &["id","name","script"])},
+                "internet":{"type":"boolean","default":true},"compose":compose_schema(),
                 "icon":{"type":"string","description":"A PNG of at most 256 by 256 pixels as a data:image/png;base64, URL, shown beside the image's name."},
-                "template_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the templates page template the image is built from."}
+                "template_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the templates page template the image is built from."},
+                "template_ids":{"type":"array","maxItems":8,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"description":"The templates merged into the image, in order."}
             }),
-            &["name", "base_image", "script"],
+            &["name", "base_image"],
             false,
             false,
             true,
@@ -972,8 +976,26 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools
 });
 
-/// An image compose, as `build_image` and `set_image_compose` take it.
+/// An image compose, as `build_image` and `set_image_compose` take it: one step, or several.
 fn compose_schema() -> Value {
+    json!({"anyOf": compose_forms()})
+}
+/// The two ways a compose is written: the fields of its one step, or `steps`.
+fn compose_forms() -> [Value; 2] {
+    let mut step = step_schema();
+    step["properties"]["id"] = json!({"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Names the step, such as the template it came from; unique in the compose."});
+    step["properties"]["name"] = json!({"type":"string","maxLength":100,"default":"","description":"What the dashboard calls the step."});
+    step["required"] = json!(["id", "script"]);
+    [
+        step_schema(),
+        schema(
+            json!({"steps":{"type":"array","minItems":1,"maxItems":8,"items":step,"description":"Steps run in order, such as one for every template an image was built from. Each script receives only its own parameters, so steps may ask for the same name; create_container then names a value STEP_ID.NAME, or NAME alone when only one step asks for it. A failed step stops the setup, and a retry or reset runs every step again."}}),
+            &["steps"],
+        ),
+    ]
+}
+/// One step of a compose: its parameters and the script that receives them.
+fn step_schema() -> Value {
     schema(
         json!({
             "parameters":{"type":"array","maxItems":32,"default":[],"items":schema(json!({
@@ -993,7 +1015,7 @@ fn compose_schema() -> Value {
                 "path":{"type":"string","pattern":"^/","description":"volume only, and required there: the absolute folder in the desktop where the chosen volume is mounted, such as /opt/unity. Without a volume the folder stays inside the container. Either way it is created if missing and given to the desktop user while empty, before the script runs."},
                 "pattern":{"type":"string","maxLength":500,"description":"text only: a regular expression in the syntax of Rust's regex crate that a value must match as a whole, such as [0-9.]+:[0-9]+. No lookaround or backreferences, and \\d and \\w match Unicode digits and letters. An empty value is left to required; a default must match."},
                 "pattern_message":{"type":"string","maxLength":200,"description":"text only, with a pattern: the expected format, which the dashboard shows and an error names when a value does not match, such as host:port, for example 192.168.1.20:10080."},
-                "new_volume":{"type":"boolean","default":false,"description":"volume only, without a default: a container whose request leaves the value empty gets a new volume of its own, bilskirnir-CONTAINER_ID-name in lowercase with dashes for underscores, created by its creation job and labeled with its owner, instead of none; required then never fails. A request that names a volume still uses it. Resets, retries and settings changes keep the volume, a snapshot's new containers get their own, and delete_container removes it only with delete_volumes=true."}
+                "new_volume":{"type":"boolean","default":false,"description":"volume only, without a default: a container whose request leaves the value empty gets a new volume of its own, bilskirnir-CONTAINER_ID-name in lowercase with dashes for underscores (bilskirnir-CONTAINER_ID-STEP_ID-name in a compose of several steps), created by its creation job and labeled with its owner, instead of none; required then never fails. A request that names a volume still uses it. Resets, retries and settings changes keep the volume, a snapshot's new containers get their own, and delete_container removes it only with delete_volumes=true."}
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},
@@ -1017,7 +1039,7 @@ fn compose_tools() -> [Tool; 2] {
         tool(
             "set_image_compose",
             "Set or replace a saved image's compose, or remove it with compose=null. Each parameter is an environment variable of the setup script, which runs as the desktop user (root=true to change that) once a new container from the image is ready, again after a reset, and when retry recreates a missing container. Secret parameters are masked in job logs and never returned. Containers already created keep the compose they ran; snapshots keep the compose of their container.",
-            json!({"image_id":image_id,"compose":{"anyOf":[compose_schema(),{"type":"null"}]}}),
+            json!({"image_id":image_id,"compose":{"anyOf":[compose_forms()[0].clone(),compose_forms()[1].clone(),{"type":"null"}]}}),
             &["image_id", "compose"],
             false,
             true,

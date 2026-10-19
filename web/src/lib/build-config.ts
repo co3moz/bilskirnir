@@ -1,10 +1,13 @@
 import { readCompose } from "./compose"
 import { t } from "./i18n"
 import { readIcon } from "./icons"
-import type { BuildConfig } from "./types"
+import type { BuildConfig, BuildPart } from "./types"
 
-/** A pasted configuration: the script is required, the other fields keep the form's value. */
-export type ImportedBuild = Partial<Omit<BuildConfig, "script">> & Pick<BuildConfig, "script">
+/**
+ * A pasted configuration or a template: a script or parts is required, the other fields keep
+ * the form's value. `warnings` are what merging templates noticed; nothing sends them.
+ */
+export type ImportedBuild = Partial<BuildConfig> & { warnings?: string[] }
 
 /** What the manager accepts as a template id: lowercase letters, digits and dashes. */
 export const TEMPLATE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -19,8 +22,10 @@ export function formatBuildConfig({
   base_image,
   internet,
   script,
+  parts,
   compose,
   template_id,
+  template_ids,
   icon,
 }: BuildConfig) {
   return JSON.stringify(
@@ -29,9 +34,10 @@ export function formatBuildConfig({
       ...(description ? { description } : {}),
       base_image,
       internet,
-      script,
+      ...(parts?.length ? { parts } : { script }),
       ...(compose ? { compose } : {}),
       ...(template_id ? { template_id } : {}),
+      ...(template_ids?.length ? { template_ids } : {}),
       ...(icon ? { icon } : {}),
     },
     null,
@@ -50,16 +56,39 @@ export function parseBuildConfig(text: string): ImportedBuild {
   return readBuildConfig(value)
 }
 
+function readPart(value: unknown): BuildPart {
+  const { id, name, script } = (value ?? {}) as Record<string, unknown>
+  if (
+    typeof id !== "string" ||
+    !TEMPLATE_ID.test(id) ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    [...name].length > 100 ||
+    typeof script !== "string" ||
+    !script.trim()
+  )
+    throw new Error(t("build.config.part"))
+  return { id, name, script }
+}
+
 /** Reads a configuration already parsed from JSON, such as a template's. */
 export function readBuildConfig(value: unknown): ImportedBuild {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error(t("build.config.object"))
   const fields = value as Record<string, unknown>
-  const { name, description, base_image, internet, script, icon, template_id } = fields
+  const { name, description, base_image, internet, script, parts, icon, template_id } = fields
+  const { template_ids } = fields
   // Configurations exported before templates were called composes name it `template`.
   const compose = fields.compose ?? fields.template
-  if (typeof script !== "string" || !script.trim()) throw new Error(t("build.config.script"))
-  const config: ImportedBuild = { script }
+  const config: ImportedBuild = {}
+  if (parts !== undefined && parts !== null) {
+    if (!Array.isArray(parts) || !parts.length) throw new Error(t("build.config.part"))
+    if (script) throw new Error(t("build.config.scriptOrParts"))
+    config.parts = parts.map(readPart)
+  } else {
+    if (typeof script !== "string" || !script.trim()) throw new Error(t("build.config.script"))
+    config.script = script
+  }
   if (name !== undefined) {
     if (typeof name !== "string") throw new Error(t("build.config.nameText"))
     if ([...name].length > 100) throw new Error(t("build.config.nameLong"))
@@ -84,6 +113,14 @@ export function readBuildConfig(value: unknown): ImportedBuild {
     if (typeof template_id !== "string" || !TEMPLATE_ID.test(template_id))
       throw new Error(t("build.config.template"))
     config.template_id = template_id
+  }
+  if (template_ids !== undefined && template_ids !== null) {
+    if (
+      !Array.isArray(template_ids) ||
+      template_ids.some((id) => typeof id !== "string" || !TEMPLATE_ID.test(id))
+    )
+      throw new Error(t("build.config.template"))
+    config.template_ids = template_ids as string[]
   }
   return config
 }

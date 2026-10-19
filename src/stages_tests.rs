@@ -356,6 +356,8 @@ esac
                 compose: None,
                 icon: None,
                 template_id: None,
+                template_ids: Vec::new(),
+                parts: Vec::new(),
             };
             let started = crate::api::build(axum::extract::State(app.clone()), axum::Json(body))
                 .await

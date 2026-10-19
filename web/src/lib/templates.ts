@@ -10,8 +10,10 @@
 // Nothing checks a template before the list serves it, so every entry is checked here: one that
 // cannot be offered shows why instead of breaking the page.
 import { readBuildConfig, TEMPLATE_ID, type ImportedBuild } from "./build-config"
+import { composeSteps } from "./compose"
 import { iconFromBlob } from "./icons"
 import { t } from "./i18n"
+import type { BuildPart, ComposeStep } from "./types"
 
 export type Template = {
   id: string
@@ -156,5 +158,71 @@ export async function loadTemplate(list: string, template: Template): Promise<Im
     description: config.description || template.description,
     ...(icon || config.icon ? { icon: icon ?? config.icon } : {}),
     template_id: template.id,
+  }
+}
+
+/** A template with the configuration its Install fills in. */
+export type LoadedTemplate = { template: Template; config: ImportedBuild }
+
+const clip = (text: string, characters: number) => [...text].slice(0, characters).join("")
+
+/** `text` cut to at most `limit` bytes of UTF-8, at a character's end. */
+function clipBytes(text: string, limit: number) {
+  const encoder = new TextEncoder()
+  const characters = [...clip(text, limit)]
+  while (encoder.encode(characters.join("")).length > limit) characters.pop()
+  return characters.join("")
+}
+
+/**
+ * One build of several templates, in the order given. Each template's script runs as a part, in
+ * a layer of its own, and each compose becomes a step of the image's compose, whose script
+ * receives only its own parameters, so two templates may ask for the same name. The image is
+ * built on the first template's base; a template made for another one is a warning, since its
+ * script may expect that desktop. A template merged from others brings its parts and steps.
+ */
+export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
+  const parts: BuildPart[] = []
+  const steps: ComposeStep[] = []
+  const warnings: string[] = []
+  const base = loaded.find(({ config }) => config.base_image)?.config.base_image
+  const add = <T extends { id?: string; name?: string }>(list: T[], item: T) => {
+    if (list.some((other) => other.id === item.id))
+      throw new Error(t("templates.merge.twice", { name: item.name || item.id || "" }))
+    list.push(item)
+  }
+  for (const { template, config } of loaded) {
+    for (const part of config.parts ?? [
+      { id: template.id, name: template.name, script: config.script ?? "" },
+    ])
+      add(parts, part)
+    const own = config.compose ? composeSteps(config.compose) : []
+    for (const step of own)
+      add(
+        steps,
+        own.length > 1 ? step : { ...step, id: template.id, name: step.name || template.name }
+      )
+    if (config.base_image && base && config.base_image !== base)
+      warnings.push(t("templates.merge.base", { name: template.name, base: config.base_image }))
+  }
+  const icon = loaded.find(({ config }) => config.icon)?.config.icon
+  const description = loaded
+    .map(({ template, config }) => config.description || template.description)
+    .filter(Boolean)
+    .join("\n\n")
+  return {
+    name: clip(loaded.map(({ template }) => template.name).join(" + "), 100),
+    description: clipBytes(description, 4096),
+    ...(base ? { base_image: base } : {}),
+    internet: loaded.some(({ config }) => config.internet !== false),
+    parts,
+    ...(steps.length ? { compose: { steps } } : {}),
+    ...(icon ? { icon } : {}),
+    template_ids: [
+      ...new Set(
+        loaded.flatMap(({ template, config }) => [template.id, ...(config.template_ids ?? [])])
+      ),
+    ],
+    ...(warnings.length ? { warnings } : {}),
   }
 }

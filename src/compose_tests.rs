@@ -11,7 +11,9 @@ fn parameter(name: &str) -> Parameter {
 }
 
 fn unity() -> Compose {
-    Compose {
+    Compose::single(Step {
+        id: String::new(),
+        name: String::new(),
         parameters: vec![
             Parameter {
                 label: "Unity email".into(),
@@ -33,7 +35,7 @@ fn unity() -> Compose {
         script: "set -eu\nprintf '%s' \"$UNITY_EMAIL\" > ~/unity-email\r\n".into(),
         root: false,
         timeout_seconds: 600,
-    }
+    })
 }
 
 fn given(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -58,7 +60,7 @@ fn image(id: &str, compose: Option<Compose>) -> ImageRecord {
         build: None,
         compose,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     }
 }
 
@@ -70,18 +72,19 @@ fn a_compose_needs_a_script_and_safe_parameter_names() {
         change(&mut compose);
         compose.validate()
     };
-    assert!(with(&|t| t.script = " \n".into()).is_err());
-    assert!(with(&|t| t.script = "echo \0".into()).is_err());
-    assert!(with(&|t| t.timeout_seconds = 0).is_err());
-    assert!(with(&|t| t.timeout_seconds = 3501).is_err());
+    assert!(with(&|t| t.steps[0].script = " \n".into()).is_err());
+    assert!(with(&|t| t.steps[0].script = "echo \0".into()).is_err());
+    assert!(with(&|t| t.steps[0].timeout_seconds = 0).is_err());
+    assert!(with(&|t| t.steps[0].timeout_seconds = 3501).is_err());
     assert!(
-        with(&|t| t.parameters = (0..33).map(|i| parameter(&format!("P{i}"))).collect()).is_err()
+        with(&|t| t.steps[0].parameters = (0..33).map(|i| parameter(&format!("P{i}"))).collect())
+            .is_err()
     );
-    assert!(with(&|t| t.parameters.push(parameter("UNITY_EMAIL"))).is_err());
-    assert!(with(&|t| t.parameters[0].label = "two\nlines".into()).is_err());
-    assert!(with(&|t| t.parameters[0].default = "x".repeat(16_385)).is_err());
+    assert!(with(&|t| t.steps[0].parameters.push(parameter("UNITY_EMAIL"))).is_err());
+    assert!(with(&|t| t.steps[0].parameters[0].label = "two\nlines".into()).is_err());
+    assert!(with(&|t| t.steps[0].parameters[0].default = "x".repeat(16_385)).is_err());
     // A secret default would sit in the image record, which every image list returns.
-    assert!(with(&|t| t.parameters[1].default = "hunter2".into()).is_err());
+    assert!(with(&|t| t.steps[0].parameters[1].default = "hunter2".into()).is_err());
     for name in [
         "",
         "unity_email",
@@ -99,12 +102,12 @@ fn a_compose_needs_a_script_and_safe_parameter_names() {
         "PYTHONPATH",
     ] {
         assert!(
-            with(&|t| t.parameters[0].name = name.into()).is_err(),
+            with(&|t| t.steps[0].parameters[0].name = name.into()).is_err(),
             "{name:?} was accepted"
         );
     }
-    assert!(with(&|t| t.parameters[0].name = format!("A{}", "B".repeat(64))).is_err());
-    assert!(with(&|t| t.parameters[0].name = "STEAM_2FA_CODE".into()).is_ok());
+    assert!(with(&|t| t.steps[0].parameters[0].name = format!("A{}", "B".repeat(64))).is_err());
+    assert!(with(&|t| t.steps[0].parameters[0].name = "STEAM_2FA_CODE".into()).is_ok());
     // A misspelled field is an error, not a parameter that is silently optional.
     assert!(
         serde_json::from_value::<Compose>(serde_json::json!({
@@ -201,7 +204,7 @@ fn the_container_shows_ordinary_values_and_only_the_names_of_secrets() {
     };
     assert!(!serde_json::to_string(&env).unwrap().contains("hunter2"));
     // The runner gets every value and the names to mask, with the script's line endings fixed.
-    let request = pinned.request();
+    let request = pinned.request(0);
     assert_eq!(request["parameters"]["UNITY_PASSWORD"], "hunter2");
     assert_eq!(request["secrets"], serde_json::json!(["UNITY_PASSWORD"]));
     assert!(!request["script"].as_str().unwrap().contains('\r'));
@@ -214,7 +217,9 @@ fn installs() -> Compose {
         path: path.into(),
         ..parameter(name)
     };
-    Compose {
+    Compose::single(Step {
+        id: String::new(),
+        name: String::new(),
         parameters: vec![
             Parameter {
                 label: "Unity installs".into(),
@@ -227,7 +232,7 @@ fn installs() -> Compose {
         script: "mkdir -p \"$UNITY_HOME/$UNITY_EDITOR\"\n".into(),
         root: false,
         timeout_seconds: 600,
-    }
+    })
 }
 
 fn mount(volume: &str, target: &str) -> Mount {
@@ -247,18 +252,18 @@ fn volume_parameters_need_paths_and_variables_of_their_own() {
         compose.validate().map_err(|e| e.to_string())
     };
     assert!(
-        with(&|c| c.parameters[1].path = "/opt/unity".into())
+        with(&|c| c.steps[0].parameters[1].path = "/opt/unity".into())
             .unwrap_err()
             .contains("/opt/unity is used twice")
     );
     // The volume's own variable would overwrite a parameter of that name.
     assert!(
-        with(&|c| c.parameters[2].name = "UNITY_HOME_VOLUME".into())
+        with(&|c| c.steps[0].parameters[2].name = "UNITY_HOME_VOLUME".into())
             .unwrap_err()
             .contains("carries the volume of UNITY_HOME")
     );
     // Nested folders are separate mounts, as volume settings can be.
-    with(&|c| c.parameters[1].path = "/opt/unity/cache".into()).unwrap();
+    with(&|c| c.steps[0].parameters[1].path = "/opt/unity/cache".into()).unwrap();
 }
 
 #[test]
@@ -279,7 +284,7 @@ fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
     let setup = pinned.setup("img");
     assert_eq!(setup.parameters["UNITY_HOME"], "unity-installs");
     assert_eq!(setup.mounts, pinned.mounts());
-    let request = pinned.request();
+    let request = pinned.request(0);
     assert_eq!(
         request["parameters"],
         json!({
@@ -308,7 +313,7 @@ fn a_volume_parameter_mounts_its_volume_and_the_script_reads_its_path() {
 #[test]
 fn the_folders_a_compose_names_are_offered_and_take_uploads() {
     let mut compose = installs();
-    compose.parameters.push(Parameter {
+    compose.steps[0].parameters.push(Parameter {
         kind: parameters::Kind::Folder,
         label: "Unity project".into(),
         default: "/srv/unity/MyGame".into(),
@@ -441,7 +446,9 @@ fn every_new_container_mounts_the_volumes_its_compose_was_given() {
 
 /// A compose whose workspace is a volume of each container's own, unless one is named.
 fn workspace() -> Compose {
-    Compose {
+    Compose::single(Step {
+        id: String::new(),
+        name: String::new(),
         parameters: vec![Parameter {
             kind: parameters::Kind::Volume,
             path: "/home/desktop/Projects".into(),
@@ -452,7 +459,7 @@ fn workspace() -> Compose {
         script: "ls \"$UNITY_WORKSPACE\"\n".into(),
         root: false,
         timeout_seconds: 600,
-    }
+    })
 }
 
 #[test]
@@ -467,7 +474,10 @@ fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
     assert_eq!(pinned.mounts(), std::slice::from_ref(&own));
     assert_eq!(
         pinned.new_volumes("e"),
-        [("UNITY_WORKSPACE", "bilskirnir-e-unity-workspace")]
+        [(
+            "UNITY_WORKSPACE".to_string(),
+            "bilskirnir-e-unity-workspace"
+        )]
     );
     // The record shows it like a chosen volume, and the script reads it the same way.
     let setup = pinned.setup("img");
@@ -477,7 +487,7 @@ fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
         "bilskirnir-e-unity-workspace"
     );
     assert_eq!(
-        pinned.environment()["UNITY_WORKSPACE_VOLUME"],
+        pinned.environment(0)["UNITY_WORKSPACE_VOLUME"],
         "bilskirnir-e-unity-workspace"
     );
     // Its path is taken like a chosen volume's, so the volume settings cannot use it too.
@@ -546,7 +556,10 @@ async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
     );
     assert_eq!(
         clone.new_volumes("f"),
-        [("UNITY_WORKSPACE", "bilskirnir-f-unity-workspace")]
+        [(
+            "UNITY_WORKSPACE".to_string(),
+            "bilskirnir-f-unity-workspace"
+        )]
     );
     // Sharing the source's volume is still a choice a request can make.
     let (_, shared) = app
@@ -587,11 +600,14 @@ fn data_saved_while_composes_were_templates_keeps_its_compose() {
     let mut record = serde_json::to_value(image("old", None)).unwrap();
     record["template"] = compose.clone();
     let record: ImageRecord = serde_json::from_value(record).unwrap();
-    assert_eq!(record.compose.unwrap().parameters[0].name, "UNITY_EMAIL");
+    assert_eq!(
+        record.compose.unwrap().steps[0].parameters[0].name,
+        "UNITY_EMAIL"
+    );
     let pinned: Pinned =
         serde_json::from_value(json!({"template": compose, "values": {"UNITY_EMAIL": "a"}}))
             .unwrap();
-    assert_eq!(pinned.compose.script, "true");
+    assert_eq!(pinned.compose.steps[0].script, "true");
     let build: crate::api::BuildImage = serde_json::from_value(
         json!({"name": "Unity", "base_image": "sha256:a", "script": "true", "template": compose}),
     )
@@ -648,7 +664,7 @@ async fn compose_routes_keep_the_script_out_of_image_lists() {
         .unwrap_err();
     assert_eq!(missing.0, StatusCode::NOT_FOUND);
     let mut invalid = unity();
-    invalid.parameters[0].name = "PATH".into();
+    invalid.steps[0].parameters[0].name = "PATH".into();
     assert!(
         set(State(app.clone()), Path("unity".into()), Json(invalid))
             .await
@@ -740,10 +756,265 @@ fn the_runner_reads_every_field_the_manager_sends() {
         compose: unity(),
         values: BTreeMap::new(),
     };
-    for key in pinned.request().as_object().unwrap().keys() {
+    for key in pinned.request(0).as_object().unwrap().keys() {
         assert!(
             RUNNER.contains(&format!("\"{key}\"")),
             "setup_runner.py does not read {key}"
         );
     }
+}
+
+/// Two templates merged into one image, each asking for a VERSION of its own.
+fn merged() -> Compose {
+    let version = |default: &str| Parameter {
+        default: default.into(),
+        ..parameter("VERSION")
+    };
+    Compose {
+        steps: vec![
+            Step {
+                id: "chrome".into(),
+                name: "Google Chrome".into(),
+                parameters: vec![
+                    version("stable"),
+                    Parameter {
+                        secret: true,
+                        ..parameter("TOKEN")
+                    },
+                ],
+                script: "echo \"$VERSION\"\n".into(),
+                root: true,
+                timeout_seconds: 60,
+            },
+            Step {
+                id: "vscode".into(),
+                name: "Visual Studio Code".into(),
+                parameters: vec![
+                    version("1.142.0"),
+                    Parameter {
+                        kind: parameters::Kind::Volume,
+                        path: "/home/desktop/Projects".into(),
+                        new_volume: true,
+                        ..parameter("WORKSPACE")
+                    },
+                ],
+                script: "echo \"$VERSION\" \"$WORKSPACE\"\n".into(),
+                root: false,
+                timeout_seconds: 3500,
+            },
+        ],
+    }
+}
+
+#[test]
+fn a_compose_of_one_step_is_written_as_before_steps_and_several_as_steps() {
+    let one = serde_json::to_value(unity()).unwrap();
+    assert!(one.get("steps").is_none() && one["script"].is_string());
+    assert_eq!(serde_json::from_value::<Compose>(one).unwrap(), unity());
+    let several = serde_json::to_value(merged()).unwrap();
+    assert_eq!(
+        several.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["steps"]
+    );
+    assert_eq!(several["steps"][1]["id"], "vscode");
+    assert_eq!(
+        serde_json::from_value::<Compose>(several).unwrap(),
+        merged()
+    );
+    // A misspelled or misplaced field is refused in either form.
+    for refused in [
+        json!({"steps": [{"id": "a", "script": "true"}], "script": "true"}),
+        json!({"steps": [{"id": "a", "script": "true", "rot": true}]}),
+    ] {
+        assert!(
+            serde_json::from_value::<Compose>(refused.clone()).is_err(),
+            "{refused}"
+        );
+    }
+}
+
+#[test]
+fn steps_need_ids_of_their_own_but_may_ask_for_the_same_names() {
+    merged().validate().unwrap();
+    let with = |change: &dyn Fn(&mut Compose)| {
+        let mut compose = merged();
+        change(&mut compose);
+        compose.validate().map_err(|e| e.to_string())
+    };
+    assert!(
+        with(&|c| c.steps[1].id = String::new())
+            .unwrap_err()
+            .contains("needs an id")
+    );
+    assert!(with(&|c| c.steps[1].id = "Code".into()).is_err());
+    assert!(
+        with(&|c| c.steps[1].id = "chrome".into())
+            .unwrap_err()
+            .contains("unique: chrome")
+    );
+    // Two steps cannot mount volumes at one folder.
+    assert!(
+        with(&|c| c.steps[0].parameters.push(Parameter {
+            kind: parameters::Kind::Volume,
+            path: "/home/desktop/Projects".into(),
+            ..parameter("CACHE")
+        }))
+        .unwrap_err()
+        .contains("/home/desktop/Projects is used twice")
+    );
+    // A step's own mistake names the step.
+    assert!(
+        with(&|c| c.steps[1].timeout_seconds = 0)
+            .unwrap_err()
+            .starts_with("Visual Studio Code: ")
+    );
+    // A volume created for a step's parameter is named with the step, within Docker's limit.
+    assert!(
+        with(&|c| {
+            c.steps[1].id = "v".repeat(64);
+            c.steps[1].parameters[1].name = "A_RATHER_LONG_WORKSPACE".into();
+        })
+        .unwrap_err()
+        .contains("128 characters")
+    );
+    let step = merged().steps[0].clone();
+    let many = (0..9)
+        .map(|i| Step {
+            id: format!("s{i}"),
+            ..step.clone()
+        })
+        .collect();
+    assert!(Compose { steps: many }.validate().is_err());
+    assert!(Compose { steps: Vec::new() }.validate().is_err());
+}
+
+#[test]
+fn values_of_several_steps_go_by_their_step_unless_one_step_asks_for_the_name() {
+    let compose = merged();
+    let values = compose
+        .resolve(
+            &given(&[("chrome.VERSION", "beta"), ("TOKEN", "t0k3n")]),
+            "e",
+        )
+        .unwrap();
+    assert_eq!(
+        values,
+        given(&[
+            ("chrome.TOKEN", "t0k3n"),
+            ("chrome.VERSION", "beta"),
+            ("vscode.VERSION", "1.142.0"),
+            ("vscode.WORKSPACE", "bilskirnir-e-vscode-workspace"),
+        ])
+    );
+    let refused =
+        |pairs: &[(&str, &str)]| compose.resolve(&given(pairs), "e").unwrap_err().to_string();
+    assert_eq!(
+        refused(&[("VERSION", "1")]),
+        "Several steps of the image's compose ask for VERSION; name it as chrome.VERSION or vscode.VERSION"
+    );
+    assert!(refused(&[("TOKEN", "a"), ("chrome.TOKEN", "b")]).contains("given twice"));
+    assert!(refused(&[("vscode.TOKEN", "a")]).contains("no parameter vscode.TOKEN"));
+    // A value a step refuses names the step.
+    let mut required = merged();
+    required.steps[1].parameters[0].required = true;
+    required.steps[1].parameters[0].default = String::new();
+    assert_eq!(
+        required.resolve(&given(&[]), "e").unwrap_err().to_string(),
+        "Visual Studio Code: Enter a value for VERSION"
+    );
+}
+
+#[test]
+fn each_step_receives_only_its_own_values_and_the_record_shows_them_by_step() {
+    let compose = merged();
+    let pinned = Pinned {
+        values: compose.resolve(&given(&[("TOKEN", "t0k3n")]), "e").unwrap(),
+        compose,
+    };
+    // The same name reaches each script with its own step's value.
+    assert_eq!(
+        pinned.environment(0),
+        given(&[("TOKEN", "t0k3n"), ("VERSION", "stable")])
+    );
+    assert_eq!(
+        pinned.environment(1),
+        given(&[
+            ("VERSION", "1.142.0"),
+            ("WORKSPACE", "/home/desktop/Projects"),
+            ("WORKSPACE_VOLUME", "bilskirnir-e-vscode-workspace"),
+        ])
+    );
+    let first = pinned.request(0);
+    assert_eq!(first["secrets"], json!(["TOKEN"]));
+    assert_eq!(first["mask"], json!([]));
+    assert_eq!(first["timeout_seconds"], 60);
+    // A later step never gets an earlier step's secret, but its output masks it.
+    let second = pinned.request(1);
+    assert!(second["parameters"].get("TOKEN").is_none());
+    assert_eq!(second["mask"], json!(["t0k3n"]));
+    assert_eq!(
+        pinned.new_volumes("e"),
+        [(
+            "vscode.WORKSPACE".to_string(),
+            "bilskirnir-e-vscode-workspace"
+        )]
+    );
+    let setup = pinned.setup("img");
+    assert_eq!(setup.secrets, ["chrome.TOKEN"]);
+    assert_eq!(setup.parameters["vscode.VERSION"], "1.142.0");
+    assert_eq!(
+        setup.places,
+        [Place {
+            label: "Visual Studio Code · WORKSPACE".into(),
+            path: "/home/desktop/Projects".into(),
+        }]
+    );
+    let steps = setup
+        .steps
+        .iter()
+        .map(|step| (step.id.as_str(), step.name.as_str(), step.status.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        steps,
+        [
+            ("chrome", "Google Chrome", "pending"),
+            ("vscode", "Visual Studio Code", "pending")
+        ]
+    );
+    // A compose of one step shows no steps.
+    let single = Pinned {
+        compose: unity(),
+        values: BTreeMap::new(),
+    };
+    assert!(single.setup("img").steps.is_empty());
+}
+
+#[test]
+fn a_retry_runs_every_step_again_and_a_failure_keeps_the_step_it_stopped_in() {
+    let compose = merged();
+    let pinned = Pinned {
+        values: compose.resolve(&BTreeMap::new(), "e").unwrap(),
+        compose,
+    };
+    let mut env = Container {
+        setup: Some(pinned.setup("img")),
+        ..container()
+    };
+    let statuses = |env: &Container| {
+        env.setup
+            .as_ref()
+            .unwrap()
+            .steps
+            .iter()
+            .map(|step| step.status.clone())
+            .collect::<Vec<_>>()
+    };
+    let steps = &mut env.setup.as_mut().unwrap().steps;
+    steps[0].status = "completed".into();
+    steps[1].status = "running".into();
+    // A restart leaves the step that was running failed.
+    set_status(&mut env, "failed", Some(1));
+    assert_eq!(statuses(&env), ["completed", "failed"]);
+    setup_again(&mut env);
+    assert_eq!(statuses(&env), ["pending", "pending"]);
 }

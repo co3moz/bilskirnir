@@ -1237,7 +1237,7 @@ fn database_round_trip_keeps_snapshot_parent() {
         build: None,
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     db.put("image", "a", &record).unwrap();
     assert_eq!(

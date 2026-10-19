@@ -1,5 +1,11 @@
 //! Image composes: parameters asked for when a container is created from a saved image, and
-//! a setup script that receives them as environment variables once the new desktop is ready.
+//! setup scripts that receive them as environment variables once the new desktop is ready.
+//!
+//! A compose is one or more steps, each a script with the parameters it asks for, such as one
+//! step for every template an image was built from. A step's script receives only its own
+//! parameters, so two steps may ask for the same name: in a compose of several steps a value
+//! goes by `<step>.<NAME>`, and a request may still name it alone when only one step asks for
+//! it. A compose of one step reads, writes and names its values as composes did before steps.
 //!
 //! A compose belongs to an image record. A new container pins a copy of it together with the
 //! values it was given, so editing the image later changes neither what the container ran nor
@@ -13,7 +19,7 @@ use crate::{
     error::{Error, Result},
     model::*,
 };
-use anyhow::{Context, bail};
+use anyhow::{Context, anyhow, bail};
 use axum::{
     Json,
     extract::{Path, State},
@@ -34,13 +40,29 @@ const PATHS: &str = include_str!("setup_paths.py");
 /// The database kind of each container's pinned compose and parameter values.
 const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
+const STEP_LIMIT: usize = 8;
+/// What the scripts of a compose take together.
 const SCRIPT_LIMIT: usize = 1_000_000;
 /// How long a new desktop may take to report ready before its setup is given up.
 const READY_LIMIT: Duration = Duration::from_secs(300);
 
+/// The steps a new container's setup runs, in order. One step that names nothing is written
+/// as composes were before steps: its fields at the top. Several are written as `steps`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Compose {
+    pub steps: Vec<Step>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Compose {
+pub struct Step {
+    /// Names the step in a compose of several, such as the template it came from: lowercase
+    /// letters, digits and dashes. Its values go by `<id>.<NAME>`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
+    /// What the forms call the step; its id when empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
     /// Asked for when a container is created; each one is an environment variable of the script.
     #[serde(default)]
     pub parameters: Vec<Parameter>,
@@ -56,13 +78,60 @@ fn default_timeout() -> u64 {
     600
 }
 
-impl Compose {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        if self.script.trim().is_empty()
-            || self.script.len() > SCRIPT_LIMIT
-            || self.script.contains('\0')
-        {
-            bail!("A compose needs a setup script of 1 to 1000000 bytes without NUL characters");
+/// A compose of several steps as it is written.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Steps<S> {
+    steps: S,
+}
+
+impl Serialize for Compose {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        match self.steps.as_slice() {
+            [step] if step.id.is_empty() && step.name.is_empty() => step.serialize(serializer),
+            steps => Steps { steps }.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Compose {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let value = Value::deserialize(deserializer)?;
+        let steps = if value.get("steps").is_some() {
+            Steps::<Vec<Step>>::deserialize(value)
+                .map_err(D::Error::custom)?
+                .steps
+        } else {
+            vec![Step::deserialize(value).map_err(D::Error::custom)?]
+        };
+        Ok(Self { steps })
+    }
+}
+
+impl Step {
+    /// What messages and forms call the step.
+    pub fn title(&self) -> &str {
+        if self.name.is_empty() {
+            &self.id
+        } else {
+            &self.name
+        }
+    }
+
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.script.trim().is_empty() || self.script.contains('\0') {
+            bail!(
+                "A compose needs a setup script of 1 to {SCRIPT_LIMIT} bytes without NUL characters"
+            );
+        }
+        if self.name.chars().count() > 100 || self.name.contains(['\n', '\r']) {
+            bail!("A step's name is one line of at most 100 characters");
         }
         if !(1..=3500).contains(&self.timeout_seconds) {
             bail!("timeout_seconds must be between 1 and 3500");
@@ -71,23 +140,113 @@ impl Compose {
             bail!("A compose has at most {PARAMETER_LIMIT} parameters");
         }
         let mut names = HashSet::new();
-        let mut paths = HashSet::new();
         for parameter in &self.parameters {
             parameter.validate()?;
             if !names.insert(parameter.name.as_str()) {
                 bail!("Parameter names must be unique: {}", parameter.name);
             }
-            if let Some(variable) = parameter.volume_variable() {
+            if let Some(variable) = parameter.volume_variable()
+                && self.parameters.iter().any(|p| p.name == variable)
+            {
+                bail!(
+                    "{variable} carries the volume of {}, so no parameter can have that name",
+                    parameter.name
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Compose {
+    /// A compose of the one step `step`.
+    #[cfg(test)]
+    pub fn single(step: Step) -> Self {
+        Self { steps: vec![step] }
+    }
+
+    /// Whether values go by `<step>.<NAME>`, as they do with several steps.
+    fn scoped(&self) -> bool {
+        self.steps.len() > 1
+    }
+
+    /// The step a scoped value or volume name carries.
+    fn scope<'a>(&self, step: &'a Step) -> Option<&'a str> {
+        self.scoped().then_some(step.id.as_str())
+    }
+
+    /// The name the value of `parameter` of `step` goes by.
+    fn key(&self, step: &Step, parameter: &Parameter) -> String {
+        match self.scope(step) {
+            Some(scope) => format!("{scope}.{}", parameter.name),
+            None => parameter.name.clone(),
+        }
+    }
+
+    /// Every parameter with its step and the name its value goes by, in order.
+    fn entries(&self) -> impl Iterator<Item = (&Step, &Parameter, String)> {
+        self.steps.iter().flat_map(move |step| {
+            step.parameters
+                .iter()
+                .map(move |parameter| (step, parameter, self.key(step, parameter)))
+        })
+    }
+
+    /// An error of `step`, which names it when there are several.
+    fn within(&self, step: &Step, error: anyhow::Error) -> anyhow::Error {
+        if self.scoped() {
+            anyhow!("{}: {error}", step.title())
+        } else {
+            error
+        }
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.steps.is_empty() || self.steps.len() > STEP_LIMIT {
+            bail!("A compose has 1 to {STEP_LIMIT} steps");
+        }
+        if self
+            .steps
+            .iter()
+            .map(|step| step.script.len())
+            .sum::<usize>()
+            > SCRIPT_LIMIT
+        {
+            bail!(
+                "A compose needs a setup script of 1 to {SCRIPT_LIMIT} bytes without NUL characters"
+            );
+        }
+        let mut ids = HashSet::new();
+        let mut paths = HashSet::new();
+        for step in &self.steps {
+            if (self.scoped() || !step.id.is_empty()) && template_id(&step.id).is_err() {
+                bail!(
+                    "Each step of a compose of several needs an id of lowercase letters, digits and dashes, at most 64 and not starting with a dash: {:?}",
+                    step.id
+                );
+            }
+            if !ids.insert(step.id.as_str()) {
+                bail!("Step ids must be unique: {}", step.id);
+            }
+            step.validate().map_err(|error| self.within(step, error))?;
+            for parameter in step
+                .parameters
+                .iter()
+                .filter(|p| p.volume_variable().is_some())
+            {
                 if !paths.insert(parameter.path.as_str()) {
                     bail!(
                         "Volume parameters need paths of their own: {} is used twice",
                         parameter.path
                     );
                 }
-                if self.parameters.iter().any(|p| p.name == variable) {
+                // Docker names a volume in at most 128 characters; container IDs take 32.
+                let own = parameter.new_volume_for("", self.scope(step));
+                if own.is_some_and(|name| name.len() + 32 > 128) {
                     bail!(
-                        "{variable} carries the volume of {}, so no parameter can have that name",
-                        parameter.name
+                        "{} would name the volumes it creates with more than 128 characters; shorten the step id {} or the parameter name",
+                        self.key(step, parameter),
+                        step.id
                     );
                 }
             }
@@ -98,31 +257,61 @@ impl Compose {
     /// The volumes a container with these values mounts: each volume parameter's volume at its
     /// path, for those given one.
     pub fn mounts(&self, values: &BTreeMap<String, String>) -> Vec<Mount> {
-        self.parameters
-            .iter()
-            .filter_map(|p| p.mount(values.get(&p.name)?))
+        self.entries()
+            .filter_map(|(_, parameter, key)| parameter.mount(values.get(&key)?))
             .collect()
     }
 
-    /// Every parameter's value for the new container `container`: the one given, otherwise the
-    /// default, and for a volume parameter left empty that creates a volume, the one it gets.
+    /// Every parameter's value for the new container `container`, by the name it goes by: the
+    /// one given, otherwise the default, and for a volume parameter left empty that creates a
+    /// volume, the one it gets.
     pub fn resolve(
         &self,
         given: &BTreeMap<String, String>,
         container: &str,
     ) -> anyhow::Result<BTreeMap<String, String>> {
-        if let Some(name) = given
-            .keys()
-            .find(|name| !self.parameters.iter().any(|p| &p.name == *name))
-        {
-            bail!("The image's compose has no parameter {name}");
-        }
+        let given = self.named(given)?;
         let mut values = BTreeMap::new();
-        for parameter in &self.parameters {
-            let value = parameter.resolve(given.get(&parameter.name), container)?;
-            values.insert(parameter.name.clone(), value);
+        for (step, parameter, key) in self.entries() {
+            let value = parameter
+                .resolve(given.get(&key).copied(), container, self.scope(step))
+                .map_err(|error| self.within(step, error))?;
+            values.insert(key, value);
         }
         Ok(values)
+    }
+
+    /// The values a request gives, by the names they go by. A parameter of a compose of several
+    /// steps may also be named alone, when no other step asks for that name.
+    fn named<'a>(
+        &self,
+        given: &'a BTreeMap<String, String>,
+    ) -> anyhow::Result<BTreeMap<String, &'a String>> {
+        let entries = self.entries().collect::<Vec<_>>();
+        let mut named = BTreeMap::new();
+        for (name, value) in given {
+            let key = if entries.iter().any(|(_, _, key)| key == name) {
+                name.clone()
+            } else {
+                let keys = entries
+                    .iter()
+                    .filter(|(_, parameter, _)| &parameter.name == name)
+                    .map(|(_, _, key)| key.as_str())
+                    .collect::<Vec<_>>();
+                match keys.as_slice() {
+                    [key] => key.to_string(),
+                    [] => bail!("The image's compose has no parameter {name}"),
+                    keys => bail!(
+                        "Several steps of the image's compose ask for {name}; name it as {}",
+                        keys.join(" or ")
+                    ),
+                }
+            };
+            if named.insert(key.clone(), value).is_some() {
+                bail!("{key} was given twice");
+            }
+        }
+        Ok(named)
     }
 }
 
@@ -161,7 +350,7 @@ pub struct Setup {
     pub status: String,
     /// The image record whose compose the container was created with.
     pub image: String,
-    /// The values of the parameters that are not secret.
+    /// The values of the parameters that are not secret, by the names they go by.
     pub parameters: BTreeMap<String, String>,
     /// The names of the secret parameters.
     pub secrets: Vec<String>,
@@ -175,14 +364,27 @@ pub struct Setup {
     /// the upload dialog offers them by the parameter's label.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub places: Vec<Place>,
+    /// The steps of a compose of several, in order, and where each stands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<StepStatus>,
 }
 
 /// A folder of the desktop that a compose names, such as the project of an editor it installs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Place {
-    /// The parameter's label, or its name without one.
+    /// The parameter's label, or its name without one, after its step's name when there are
+    /// several steps.
     pub label: String,
     pub path: String,
+}
+
+/// One step of a compose of several, as the container record shows it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StepStatus {
+    pub id: String,
+    pub name: String,
+    /// `pending`, `running`, `completed` or `failed`.
+    pub status: String,
 }
 
 /// The compose a container was created with and every value it was given, secret ones too.
@@ -196,11 +398,12 @@ pub(crate) struct Pinned {
 impl Pinned {
     /// What the container record shows of it.
     pub fn setup(&self, image: &str) -> Setup {
+        let compose = &self.compose;
+        let entries = compose.entries().collect::<Vec<_>>();
         let secret = |name: &String| {
-            self.compose
-                .parameters
+            entries
                 .iter()
-                .any(|p| &p.name == name && p.secret)
+                .any(|(_, parameter, key)| key == name && parameter.secret)
         };
         Setup {
             status: "pending".into(),
@@ -219,12 +422,29 @@ impl Pinned {
                 .collect(),
             finished_at: None,
             mounts: self.mounts(),
-            places: self
-                .compose
-                .parameters
+            places: entries
                 .iter()
-                .filter_map(|p| p.place(self.values.get(&p.name)?))
+                .filter_map(|(step, parameter, key)| {
+                    let mut place = parameter.place(self.values.get(key)?)?;
+                    if compose.scoped() {
+                        place.label = format!("{} · {}", step.title(), place.label);
+                    }
+                    Some(place)
+                })
                 .collect(),
+            steps: if compose.scoped() {
+                compose
+                    .steps
+                    .iter()
+                    .map(|step| StepStatus {
+                        id: step.id.clone(),
+                        name: step.title().into(),
+                        status: "pending".into(),
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
         }
     }
     pub fn mounts(&self) -> Vec<Mount> {
@@ -232,51 +452,63 @@ impl Pinned {
     }
     /// The volumes the container `container` gets of its own, as `(parameter, volume)`: those
     /// of the parameters that create one and were left empty, so their value names it.
-    pub fn new_volumes(&self, container: &str) -> Vec<(&str, &str)> {
+    pub fn new_volumes(&self, container: &str) -> Vec<(String, &str)> {
         self.compose
-            .parameters
-            .iter()
-            .filter_map(|p| {
-                let value = self.values.get(&p.name)?;
-                (p.new_volume_for(container).as_ref() == Some(value))
-                    .then_some((p.name.as_str(), value.as_str()))
+            .entries()
+            .filter_map(|(step, parameter, key)| {
+                let value = self.values.get(&key)?;
+                let own = parameter.new_volume_for(container, self.compose.scope(step));
+                (own.as_ref() == Some(value)).then_some((key, value.as_str()))
             })
             .collect()
     }
-    /// The paths of the volume parameters, which the desktop user is given before the script
-    /// runs, whether a volume was mounted there or not.
+    /// The paths of the volume parameters, which the desktop user is given before the first
+    /// script runs, whether a volume was mounted there or not.
     pub fn paths(&self) -> Vec<&str> {
         self.compose
-            .parameters
-            .iter()
-            .filter(|p| p.volume_variable().is_some())
-            .map(|p| p.path.as_str())
+            .entries()
+            .filter(|(_, parameter, _)| parameter.volume_variable().is_some())
+            .map(|(_, parameter, _)| parameter.path.as_str())
             .collect()
     }
-    /// The script's variables: every parameter's value, a volume parameter's as its path and
-    /// volume.
-    pub fn environment(&self) -> BTreeMap<String, String> {
-        self.compose
-            .parameters
+    /// The variables of step `index`'s script: its own parameters' values, a volume
+    /// parameter's as its path and volume.
+    pub fn environment(&self, index: usize) -> BTreeMap<String, String> {
+        let step = &self.compose.steps[index];
+        step.parameters
             .iter()
-            .filter_map(|p| Some(p.environment(self.values.get(&p.name)?)))
+            .filter_map(|p| Some(p.environment(self.values.get(&self.compose.key(step, p))?)))
             .flatten()
             .collect()
     }
-    /// The setup runner's request on stdin, which keeps values out of command lines.
-    pub fn request(&self) -> Value {
-        let secrets = self
-            .compose
+    /// The setup runner's request for step `index` on stdin, which keeps values out of command
+    /// lines. The secrets of the other steps are masked too, in case this script prints
+    /// something an earlier one saved.
+    pub fn request(&self, index: usize) -> Value {
+        let step = &self.compose.steps[index];
+        let secrets = step
             .parameters
             .iter()
             .filter(|p| p.secret)
             .map(|p| &p.name)
             .collect::<Vec<_>>();
+        let mask = self
+            .compose
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(other, _)| *other != index)
+            .flat_map(|(_, other)| other.parameters.iter().map(move |p| (other, p)))
+            .filter(|(_, p)| p.secret)
+            .filter_map(|(other, p)| self.values.get(&self.compose.key(other, p)))
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
         json!({
-            "script": self.compose.script.replace("\r\n", "\n"),
-            "parameters": self.environment(),
+            "script": step.script.replace("\r\n", "\n"),
+            "parameters": self.environment(index),
             "secrets": secrets,
-            "timeout_seconds": self.compose.timeout_seconds,
+            "mask": mask,
+            "timeout_seconds": step.timeout_seconds,
         })
     }
 }
@@ -391,28 +623,69 @@ impl App {
                 .await
                 .context("The folders of the compose's volume parameters could not be prepared")?;
         }
-        let root = pinned.compose.root;
-        let user = if root { "root" } else { "1001:1001" };
-        let names = pinned.environment().into_keys().collect::<Vec<_>>();
-        self.append_log(
-            job_id,
-            &format!(
-                "Running the compose setup as {user} (timeout: {} seconds). Parameters: {}.",
-                pinned.compose.timeout_seconds,
-                if names.is_empty() {
-                    "none".into()
+        let count = pinned.compose.steps.len();
+        for (index, step) in pinned.compose.steps.iter().enumerate() {
+            let user = if step.root { "root" } else { "1001:1001" };
+            let names = pinned.environment(index).into_keys().collect::<Vec<_>>();
+            let which = if count > 1 {
+                format!("step {} of {count}, {}, ", index + 1, step.title())
+            } else {
+                String::new()
+            };
+            self.append_log(
+                job_id,
+                &format!(
+                    "Running the compose setup {which}as {user} (timeout: {} seconds). Parameters: {}.",
+                    step.timeout_seconds,
+                    if names.is_empty() {
+                        "none".into()
+                    } else {
+                        names.join(", ")
+                    }
+                ),
+            )?;
+            self.set_step(&env.id, index, "running")?;
+            let mut args = crate::exec::desktop_exec(user, step.root);
+            args.extend([
+                container.clone(),
+                "python3".into(),
+                "-c".into(),
+                RUNNER.into(),
+            ]);
+            let input = serde_json::to_vec(&pinned.request(index))?;
+            let outcome = self.docker_logged_input(job_id, &args, Some(input)).await;
+            self.set_step(
+                &env.id,
+                index,
+                if outcome.is_ok() {
+                    "completed"
                 } else {
-                    names.join(", ")
+                    "failed"
+                },
+            )?;
+            outcome.with_context(|| {
+                if count > 1 {
+                    format!("The compose step {} failed", step.title())
+                } else {
+                    "The compose setup failed".into()
                 }
-            ),
-        )?;
-        let mut args = crate::exec::desktop_exec(user, root);
-        args.extend([container, "python3".into(), "-c".into(), RUNNER.into()]);
-        let input = serde_json::to_vec(&pinned.request())?;
-        self.docker_logged_input(job_id, &args, Some(input))
-            .await
-            .context("The compose setup failed")?;
+            })?;
+        }
         self.append_log(job_id, "Compose setup completed.")?;
+        Ok(())
+    }
+
+    /// Record where step `index` of a container's compose stands, for a compose of several.
+    fn set_step(&self, id: &str, index: usize, status: &str) -> anyhow::Result<()> {
+        let mut env: Container = self.db.get(CONTAINERS, id)?;
+        if let Some(step) = env
+            .setup
+            .as_mut()
+            .and_then(|setup| setup.steps.get_mut(index))
+        {
+            step.status = status.into();
+            self.db.put(CONTAINERS, id, &env)?;
+        }
         Ok(())
     }
 
@@ -457,10 +730,19 @@ impl App {
     }
 }
 
+/// Record where the setup stands. A setup that starts or waits to start again runs every
+/// step again, and one that failed leaves the step it stopped in failed.
 fn set_status(env: &mut Container, status: &str, finished_at: Option<u64>) {
     if let Some(setup) = env.setup.as_mut() {
         setup.status = status.into();
         setup.finished_at = finished_at;
+        for step in &mut setup.steps {
+            match status {
+                "pending" | "running" => step.status = "pending".into(),
+                "failed" if step.status == "running" => step.status = "failed".into(),
+                _ => {}
+            }
+        }
     }
 }
 
