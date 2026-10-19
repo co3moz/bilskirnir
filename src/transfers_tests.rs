@@ -496,7 +496,7 @@ fn tracing_never_records_a_token() {
 }
 
 /// A running container `e` behind a stand-in Docker CLI: an upload is written to `uploaded`,
-/// and a download reads the five bytes `hello`.
+/// a download's `file_ops.py stat` probe finds a five-byte file and its stream reads `hello`.
 #[cfg(unix)]
 fn docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -506,7 +506,7 @@ fn docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"bilskirnir.managed\":\"true\",\"bilskirnir.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ $# -eq 10 ]; then echo '{{\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"bilskirnir.managed\":\"true\",\"bilskirnir.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ \"$8\" = stat ]; then echo '{{\"type\":\"file\",\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
     )

@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     tags: ['v*']
-    paths:
+    paths: &code
       - '.github/workflows/publish.yml'
       - 'Dockerfile'
       - '.dockerignore'
@@ -28,14 +28,21 @@ on:
       - 'tests/**'
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'
+  # A pull request runs only the checks, on the same paths; every publishing job is limited to
+  # master and the tags.
+  pull_request:
+    branches: [master]
+    paths: *code
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer commit on a pull request cancels the run of the older one, which only checks. A publish
+# is never cancelled.
 concurrency:
   group: publish-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
@@ -57,7 +64,8 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
       # The compiled dependencies, keyed by the toolchain and the manifests. Only master saves them,
-      # a tag run reads master's, since the image builds share the repository's cache space.
+      # a tag or pull request run reads master's, since the image builds share the repository's
+      # cache space.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
