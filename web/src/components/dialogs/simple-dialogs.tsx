@@ -48,6 +48,7 @@ import { composeBody, composeDraft, orderSteps, type ComposeDraft } from "@/lib/
 import type { BuildPart } from "@/lib/types"
 import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
 import { BuildParts } from "./build-parts"
+import { BuildServers } from "./build-servers"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ComposeFields } from "./compose-dialog"
@@ -222,6 +223,8 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
   const [compose, setCompose] = React.useState<ComposeDraft | null>(
     config?.compose ? composeDraft(config.compose) : null
   )
+  // Desktop MCP servers the configuration declares; they are shown, never typed in here.
+  const [servers, setServers] = React.useState(config?.mcp ?? [])
   const [importing, setImporting] = React.useState(false)
   const parameterCount =
     compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
@@ -266,6 +269,7 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
     setParts(config.parts ?? null)
     if (config.script !== undefined) setScript(config.script)
     setCompose(config.compose ? composeDraft(config.compose) : null)
+    setServers(config.mcp ?? [])
     if (config.base_image !== undefined) {
       setWanted(config.base_image)
       setBase(undefined)
@@ -290,6 +294,7 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                 ...(parts ? { parts } : { script }),
                 internet,
                 ...(compose ? { compose: composeBody(compose) } : {}),
+                ...(servers.length ? { mcp: servers } : {}),
                 ...(icon ? { icon } : {}),
                 ...(templateIds.length
                   ? parts
@@ -378,6 +383,12 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                   <AlertDescription>{warning}</AlertDescription>
                 </Alert>
               ))}
+              {servers.length > 0 && (
+                <BuildServers
+                  servers={servers}
+                  onRemove={(name) => setServers(servers.filter((server) => server.name !== name))}
+                />
+              )}
               <Tabs defaultValue="build">
                 <TabsList>
                   <TabsTrigger value="build">

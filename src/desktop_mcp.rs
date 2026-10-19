@@ -1,0 +1,90 @@
+//! MCP servers running inside desktops, and the scoped MCP endpoints that publish them.
+//!
+//! A desktop declares its MCP servers in JSON files, one per server: the image in
+//! `/etc/bilskirnir/mcp.d`, which a build writes from a template's declarations, and the desktop
+//! user in `~/.config/bilskirnir/mcp`, at any time. The manager watches both folders in every
+//! running desktop and keeps the tool list it last read from each server, so the list is known
+//! while the container is stopped too. A server is started only through `docker exec` as the
+//! desktop user: a program speaks MCP on its stdio, and a Streamable HTTP server on the desktop's
+//! loopback is reached through an adapter run the same way. No port is published and the
+//! desktop's network is not involved.
+//!
+//! `/mcp` stays the administrator's channel. An endpoint at `/mcp/<name>` gives an agent the
+//! container tools of the scopes it was granted, bound to its containers, and the tools of their
+//! desktop servers, with a bearer token of its own that opens nothing else.
+mod client;
+mod endpoints;
+mod gateway;
+mod registry;
+mod scopes;
+mod servers;
+mod watch;
+
+pub(crate) use endpoints::{
+    automatic_endpoint, create_endpoint, delete_endpoint, endpoint_tools, endpoints, revoke_token,
+    scopes_list, token, update_endpoint,
+};
+pub(crate) use gateway::endpoint;
+pub(crate) use registry::{Declaration, check_declarations, write_declarations};
+pub(crate) use servers::{
+    all_servers, container_servers, refresh_server, register_server, unregister_server,
+};
+pub(crate) use watch::spawn;
+
+use crate::App;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
+
+/// What the manager holds in memory about desktop servers and endpoints.
+pub struct DesktopMcp {
+    /// The containers whose declarations are watched now, by record id.
+    watchers: Mutex<HashSet<String>>,
+    /// Servers whose tools are being read, by record key.
+    fetching: Mutex<HashSet<String>>,
+    /// The connections endpoints hold to desktop servers.
+    pool: client::Pool,
+    /// The end of each server's stderr, by record key.
+    logs: Mutex<HashMap<String, String>>,
+    /// The names of endpoints whose tool list changed, for the agents connected to them.
+    changes: tokio::sync::broadcast::Sender<String>,
+    /// The MCP service of each endpoint that was reached, with what ends its sessions.
+    services: Mutex<HashMap<String, gateway::Service>>,
+}
+impl Default for DesktopMcp {
+    fn default() -> Self {
+        Self {
+            watchers: Mutex::default(),
+            fetching: Mutex::default(),
+            pool: client::Pool::default(),
+            logs: Mutex::default(),
+            changes: tokio::sync::broadcast::channel(64).0,
+            services: Mutex::default(),
+        }
+    }
+}
+
+/// Forget a deleted container: its server records and connections, the endpoint created with
+/// it, and its grants on other endpoints.
+pub(crate) fn forget_container(app: &App, container_id: &str) -> anyhow::Result<()> {
+    for record in app
+        .db
+        .list::<registry::ServerRecord>(registry::SERVERS)?
+        .into_iter()
+        .filter(|record| record.container_id == container_id)
+    {
+        app.db.remove(
+            registry::SERVERS,
+            &registry::ServerRecord::key(container_id, &record.name),
+        )?;
+    }
+    app.desktop_mcp
+        .pool
+        .retain(|(_, container, _)| container != container_id);
+    endpoints::forget_container(app, container_id)
+}
+
+#[cfg(test)]
+#[path = "desktop_mcp_tests.rs"]
+mod tests;

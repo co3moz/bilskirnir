@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 67 tools:
+The server currently exposes 75 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -91,6 +91,7 @@ The server currently exposes 67 tools:
 | Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot`, `delete_image` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
+| MCP servers in desktops and endpoints | `list_mcp_servers`, `register_mcp_server`, `remove_mcp_server`, `list_mcp_endpoints`, `create_mcp_endpoint`, `update_mcp_endpoint`, `delete_mcp_endpoint`, `create_mcp_endpoint_token` |
 | Operation results | `list_jobs`, `get_job` |
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
@@ -258,9 +259,70 @@ A link is a credential of its own:
 
 Links come only from `create_transfer`, so with MCP disabled the route answers `404`. Accepting the MCP token on the HTTP API itself would have been simpler, but it would put a long-lived administrator credential into curl commands and shell history, where a leak reaches every route for as long as the token is configured.
 
+## MCP servers inside a desktop
+
+A desktop can run MCP servers of its own: a browser automation server attached to its Chrome, an editor's server, or one you write for a project, such as a Chrome extension you are developing. Each is declared in a JSON file named after it, in one of two folders:
+
+| Folder | Who writes it | Source |
+| --- | --- | --- |
+| `/etc/bilskirnir/mcp.d/NAME.json` | The image: a template's or build's `mcp` declarations, or its script. | `image` |
+| `~/.config/bilskirnir/mcp/NAME.json` | The desktop user, at any time: `bilskirnir-mcp add`, the dashboard's MCP page or `register_mcp_server`. | `container` |
+
+The desktop user's declaration of a name replaces the image's. A declaration is either a program that speaks MCP on stdio or a Streamable HTTP server already listening on the desktop's loopback:
+
+```json
+{"description": "Playwright attached to the desktop's Chrome",
+ "command": "playwright-mcp", "args": ["--cdp-endpoint", "http://127.0.0.1:9223"],
+ "env": {"PLAYWRIGHT_BROWSERS_PATH": "0"}, "cwd": "/home/desktop"}
+```
+
+```json
+{"url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}
+```
+
+Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. Inside the desktop, `bilskirnir-mcp` writes the desktop user's files:
+
+```bash
+bilskirnir-mcp add x --description "My extension's helper" -- node /home/desktop/ext/mcp.js
+bilskirnir-mcp add api --url http://127.0.0.1:8931/mcp --header 'Authorization: Bearer ${API_TOKEN}'
+bilskirnir-mcp list
+bilskirnir-mcp remove x
+```
+
+The manager watches both folders in every running desktop. A new or changed server is started once to read its tool list, which is kept, so its tools stay listed while the container is stopped. `list_mcp_servers` reports each server's `state`: `ready`, `pending` while its tools are read, `error` with the reason, or `stopped` while the container does not run, with the end of its stderr in `log`. A server that sends `notifications/tools/list_changed` has its list read again.
+
+A server is never published on a port and never reached over the desktop's network. The manager runs it with `docker exec` as the desktop user, with `DISPLAY`, `HOME` and a `PATH` that includes `~/.local/bin`: a stdio program directly, an HTTP server through a small adapter inside the desktop that connects to its loopback address, so a server that listens on `127.0.0.1` only works, and its own `Authorization` header is sent. Root is never used. A server whose declaration the image carries cannot be removed from a container, only left out of an endpoint.
+
+## MCP endpoints for one agent
+
+`/mcp` is the administrator's channel: whoever holds its token can create, change and delete containers and run scripts as root. An agent that should only drive a desktop's browser, or a project's own MCP server, gets an endpoint instead, at `/mcp/NAME` on the same address. An endpoint covers one or several containers, and for each the scopes and desktop servers chosen for it:
+
+| Scope | Tools, bound to that container |
+| --- | --- |
+| `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `wait_for_condition` |
+| `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input` |
+| `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
+| `files_read` | `list_files`, `read_file`, `download_file` |
+| `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file` |
+| `commands` | `exec_container` and the terminal tools, as the desktop user; with `sudo` enabled for the container that is root inside it |
+| `media` | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts`, `capture_audio`, `inject_audio` |
+| `power` | `container_action` |
+
+`get_job` comes with `commands` or `power`, for the jobs of the endpoint's own containers. No scope creates, changes, resets, snapshots or deletes a container, and none reaches images, volumes, other containers or root. The desktop servers are `all`, including those declared later, or a list of names.
+
+Tools keep their names and lose `container_id`: an endpoint of one container is bound to it, and on an endpoint of several each tool takes `container`, one of the aliases of the containers granted its scope. A desktop server's tools are named `SERVER__TOOL`, or `ALIAS__SERVER__TOOL` on an endpoint of several containers, at most 64 characters, and their descriptions start with the container and server. Their annotations, such as `readOnlyHint`, come from inside the desktop and are left out, so a client asks before running them as it would for any tool. When a server is added, removed or changes its tools, the endpoint sends `notifications/tools/list_changed`: on the stream a session of protocol `2025-11-25` or earlier opens, and on `subscriptions/listen` for `2026-07-28`. Agents on one endpoint share each server's connection, and so its state, such as a browser's pages; another endpoint has its own. A connection unused for 10 minutes is closed.
+
+Every new container gets an endpoint of its own unless `create_container` is given `"mcp_endpoint": false`: named after the container, with every scope but `commands`, all its desktop servers and no token yet. Deleting the container deletes it. Other endpoints are made with `create_mcp_endpoint`, or on the dashboard's MCP page, and outlive their containers: a deleted container only leaves their grants.
+
+An endpoint opens with its own bearer token or the administrator's MCP token. `create_mcp_endpoint` and `create_mcp_endpoint_token` return the token once; the manager keeps only its hash, and a new token ends the old one and its sessions. The endpoint's token opens nothing else: not `/mcp`, not the HTTP API, not the desktop ports. The endpoints follow `MCP_ENABLED` and the Host and Origin checks of `/mcp`, and with `MCP_AUTH_MODE=none` they need no token either. A client connects to an endpoint as to `/mcp`:
+
+```bash
+claude mcp add --transport http chrome-dev http://localhost:8080/mcp/chrome-dev --header "Authorization: Bearer ENDPOINT_TOKEN"
+```
+
 ## Reach a server inside the desktop
 
-A program in the desktop may serve its own API: an MCP server of the Unity editor, a test runner endpoint, a debug server. Its ports are not published, but the manager forwards HTTP and WebSocket requests to the ports a container's `ports` setting lists, at `/api/containers/CONTAINER_ID/ports/PORT/` followed by the service's own path. Set `ports` with `create_container` or `update_container`, such as `"ports": [8090]`; it is empty by default, and a change applies without restarting the desktop. The server must listen on the desktop's network, such as on `0.0.0.0`, not on `127.0.0.1` only, which the manager cannot reach.
+For an MCP server, prefer a declaration and an endpoint, described above: they need no port and work with servers that listen on `127.0.0.1` only. A program in the desktop may serve its own API: an MCP server of the Unity editor, a test runner endpoint, a debug server. Its ports are not published, but the manager forwards HTTP and WebSocket requests to the ports a container's `ports` setting lists, at `/api/containers/CONTAINER_ID/ports/PORT/` followed by the service's own path. Set `ports` with `create_container` or `update_container`, such as `"ports": [8090]`; it is empty by default, and a change applies without restarting the desktop. The server must listen on the desktop's network, such as on `0.0.0.0`, not on `127.0.0.1` only, which the manager cannot reach.
 
 The route takes the same bearer token as `/mcp`. An MCP server listening on port 8090 at `/mcp` inside the desktop is therefore a second MCP server for a remote agent:
 

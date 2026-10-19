@@ -8,6 +8,7 @@ import {
   RiListCheck3,
   RiComputerLine,
   RiPlugLine,
+  RiBookletLine,
 } from "@remixicon/react"
 
 import { NavContainers } from "@/components/nav-containers"
@@ -34,6 +35,7 @@ const navMain = [
   { page: "images", icon: <RiStackLine /> },
   { page: "templates", icon: <RiApps2Line /> },
   { page: "volumes", icon: <RiDatabase2Line /> },
+  { page: "mcp", icon: <RiPlugLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
@@ -41,9 +43,9 @@ const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = () => [
   { title: t("nav.documentation"), url: `${repository}#readme`, icon: <RiBookOpenLine /> },
   {
-    title: t("nav.mcp"),
+    title: t("nav.mcpGuide"),
     url: `${repository}/blob/master/docs/MCP.md`,
-    icon: <RiPlugLine />,
+    icon: <RiBookletLine />,
   },
 ]
 

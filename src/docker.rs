@@ -562,6 +562,7 @@ impl App {
         self.remove_container_records(&env.id)?;
         self.forget_pinned(&env.id)?;
         self.db.remove(CONTAINERS, &env.id)?;
+        crate::desktop_mcp::forget_container(self, &env.id)?;
         self.append_log(
             job_id,
             &if removed.deleted.is_empty() {

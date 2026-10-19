@@ -254,6 +254,85 @@ def stdio_tool(name, arguments=None):
     return response
 
 
+def endpoint_post(name, token, message, session=None):
+    headers = {"Content-Type":"application/json","Accept":"application/json, text/event-stream","MCP-Protocol-Version":"2025-11-25","Authorization":f"Bearer {token}"}
+    if session:
+        headers["Mcp-Session-Id"] = session
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp/{name}", data=json.dumps(message).encode(), headers=headers)
+    with urllib.request.urlopen(request, timeout=180) as response:
+        body = response.read().decode()
+        replies = [json.loads(line[5:]) for line in body.splitlines() if line.startswith("data:") and line[5:].strip()]
+        return response.headers.get("Mcp-Session-Id"), (json.loads(body) if body.strip().startswith("{") else (replies[-1] if replies else None))
+
+
+def endpoint_session(name, token):
+    session, reply = endpoint_post(name, token, {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"endpoint-acceptance","version":"1"}}})
+    assert reply["result"]["capabilities"]["tools"]["listChanged"] is True, reply
+    endpoint_post(name, token, {"jsonrpc":"2.0","method":"notifications/initialized"}, session)
+    return session
+
+
+def endpoint_call(name, token, session, method, params=None):
+    _, reply = endpoint_post(name, token, {"jsonrpc":"2.0","id":2,"method":method,"params":params or {}}, session)
+    assert "error" not in reply and not reply["result"].get("isError"), reply
+    return reply["result"]
+
+
+# A desktop MCP server on stdio: one echo tool that reports who runs it.
+ECHO_SERVER = r'''import json, os, sys
+for line in sys.stdin:
+    message = json.loads(line)
+    if "id" not in message:
+        continue
+    method = message["method"]
+    if method == "initialize":
+        result = {"protocolVersion": message["params"]["protocolVersion"], "capabilities": {"tools": {}}, "serverInfo": {"name": "echo", "version": "1"}}
+    elif method == "tools/list":
+        result = {"tools": [{"name": "echo", "description": "Echo text", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}]}
+    elif method == "tools/call":
+        text = "echo: %s uid=%d display=%s" % (message["params"]["arguments"]["text"], os.getuid(), os.environ.get("DISPLAY"))
+        result = {"content": [{"type": "text", "text": text}]}
+    else:
+        print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32601, "message": method}}), flush=True)
+        continue
+    print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}), flush=True)
+'''
+# The same tool from a Streamable HTTP server that listens on 127.0.0.1 only and needs a header.
+ECHO_HTTP_SERVER = r'''import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+class Handler(BaseHTTPRequestHandler):
+    def reply(self, status, body=None, session=False):
+        data = json.dumps(body).encode() if body is not None else b""
+        self.send_response(status)
+        if body is not None:
+            self.send_header("Content-Type", "application/json")
+        if session:
+            self.send_header("Mcp-Session-Id", "acceptance")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+    def do_POST(self):
+        if self.headers.get("X-Test") != "yes":
+            return self.reply(401, {"error": "header missing"})
+        message = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if "id" not in message:
+            return self.reply(202)
+        method = message["method"]
+        if method == "initialize":
+            result = {"protocolVersion": message["params"]["protocolVersion"], "capabilities": {"tools": {}}, "serverInfo": {"name": "echo-http", "version": "1"}}
+        elif method == "tools/list":
+            result = {"tools": [{"name": "echo", "description": "Echo text", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}}}]}
+        else:
+            result = {"content": [{"type": "text", "text": "echo: %s header=%s" % (message["params"]["arguments"]["text"], self.headers.get("X-Test"))}]}
+        self.reply(200, {"jsonrpc": "2.0", "id": message["id"], "result": result}, session=method == "initialize")
+    def do_GET(self):
+        self.reply(405)
+    def do_DELETE(self):
+        self.reply(200)
+ThreadingHTTPServer(("127.0.0.1", 8931), Handler).serve_forever()
+'''
+
+
 def mcp_job(response, success=True):
     jid = response["structuredContent"]["job_id"]
     result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
@@ -1033,6 +1112,50 @@ try:
     tool("stop_application",{"container_id":env_id,"application_id":served})
     mcp_job(tool("update_container",{"container_id":env_id,"ports":[]}))
     print("PASS a listed port of a running desktop is proxied for the MCP token, not the session", flush=True)
+    # MCP servers inside the desktop: a stdio program registered through the administrator's tool,
+    # an HTTP server on the desktop's loopback registered with bilskirnir-mcp, both reached through
+    # a scoped endpoint whose token opens nothing else.
+    tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo.py","data":ECHO_SERVER})
+    tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo_http.py","data":ECHO_HTTP_SERVER})
+    http_server = tool("launch_application",{"container_id":env_id,"command":"python3","args":["/home/desktop/mcp/echo_http.py"],"name":"mcp http test"})["structuredContent"]["application_id"]
+    registered = tool("register_mcp_server",{"container_id":env_id,"name":"echo","command":"python3","args":["/home/desktop/mcp/echo.py"]})["structuredContent"]
+    assert registered["state"] == "ready" and [t["name"] for t in registered["tools"]] == ["echo"], registered
+    docker("exec","--user","1001:1001",container,"bilskirnir-mcp","add","api","--url","http://127.0.0.1:8931/mcp","--header","X-Test: yes")
+    def server_ready(name):
+        servers = tool("list_mcp_servers",{"container_id":env_id})["structuredContent"]["items"]
+        found = next((s for s in servers if s["name"] == name), None)
+        return found if found and found["state"] == "ready" else None
+    api_server = wait_for(lambda: server_ready("api"), 60)
+    assert api_server["source"] == "container" and api_server["headers"] == ["X-Test"] and "yes" not in json.dumps(api_server), api_server
+    endpoints = tool("list_mcp_endpoints")["structuredContent"]["items"]
+    own = [e for e in endpoints if e["automatic"] and e["grants"][0]["container_id"] == env_id]
+    assert own and own[0]["has_token"] is False, endpoints
+    created = tool("create_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all"}]})["structuredContent"]
+    scoped = created["token"]
+    session = endpoint_session("acceptance-mcp", scoped)
+    offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
+    assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container"}, offered
+    echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"echo__echo","arguments":{"text":"hi"}})
+    assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0", echoed
+    echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"api__echo","arguments":{"text":"over http"}})
+    assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
+    shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
+    assert shot["content"][0]["type"] == "image" and shot["structuredContent"]["width"] == 320, shot
+    try:
+        mcp("tools/list", token=scoped); raise AssertionError("an endpoint token opened the administrator's channel")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401
+    tool("remove_mcp_server",{"container_id":env_id,"name":"echo"})
+    offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
+    assert "echo__echo" not in offered and "api__echo" in offered, offered
+    assert tool("remove_mcp_server",{"container_id":env_id,"name":"api"})["structuredContent"]["removed"]
+    tool("delete_mcp_endpoint",{"name":"acceptance-mcp"})
+    try:
+        endpoint_session("acceptance-mcp", scoped); raise AssertionError("a deleted endpoint answered")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404
+    tool("stop_application",{"container_id":env_id,"application_id":http_server})
+    print("PASS desktop MCP servers are reached through a scoped endpoint as the desktop user", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"

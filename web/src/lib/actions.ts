@@ -47,7 +47,7 @@ export async function showLog(title: string, path: string) {
 
 /** Copies text. Browsers keep the clipboard API from plain HTTP pages, such as a LAN address, so
  * a hidden field and the older copy command stand in there. */
-async function copyText(text: string) {
+export async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
     return true

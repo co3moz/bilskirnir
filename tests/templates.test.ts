@@ -246,3 +246,38 @@ test("a merge warns about another base and refuses a template it already has", (
     ["chrome-and-code", "chrome", "vscode", "unity"]
   )
 })
+
+const chromeServer = { name: "chrome", command: "chrome-mcp", args: ["--port", "${PORT}"] }
+const xServer = { name: "x", url: "http://127.0.0.1:9000/mcp" }
+
+test("a merge writes every template's desktop MCP servers into the image, each name once", () => {
+  const merged = mergeTemplates([
+    { template: chrome, config: { script: "a", mcp: [chromeServer] } },
+    { template: unity, config: { script: "b" } },
+    { template: vscode, config: { script: "c", mcp: [xServer] } },
+  ])
+  assert.deepEqual(merged.mcp, [chromeServer, xServer])
+  assert.equal(
+    "mcp" in mergeTemplates([{ template: unity, config: { script: "b" } }]),
+    false,
+    "a merge without servers declares none"
+  )
+  assert.throws(
+    () =>
+      mergeTemplates([
+        { template: chrome, config: { script: "a", mcp: [chromeServer] } },
+        { template: vscode, config: { script: "c", mcp: [xServer, { ...chromeServer }] } },
+      ]),
+    /Google Chrome and VS Code both declare the desktop MCP server chrome/
+  )
+})
+
+test("a list entry names the desktop MCP servers its image declares, and nothing else", () => {
+  const [entry] = readTemplateList({
+    templates: [{ ...unity, mcp: ["chrome", "x", "Not A Name", 5] }],
+  }).templates
+  assert.deepEqual(entry.mcp, ["chrome", "x"])
+  assert.equal("mcp" in readTemplateList({ templates: [unity] }).templates[0], false)
+  // A malformed list of names leaves the card without one, not the template out of the list.
+  assert.equal(readTemplateList({ templates: [{ ...unity, mcp: "chrome" }] }).templates.length, 1)
+})

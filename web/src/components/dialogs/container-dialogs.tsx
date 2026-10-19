@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/accordion"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -42,7 +44,8 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
-import { plural, t } from "@/lib/i18n"
+import { formatList, plural, t } from "@/lib/i18n"
+import { imageServers } from "@/lib/mcp"
 import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { composeEntries, composeFor, composeSteps, parameterBody, stepTitle } from "@/lib/compose"
 import type { ImageItem, SettingsPreview } from "@/lib/types"
@@ -160,6 +163,8 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
   const compose = composeFor(images, chosen)
   // Values typed for one image are kept while another is chosen, and sent only for its own fields.
   const [values, setValues] = React.useState<Record<string, string>>({})
+  const servers = imageServers(images, chosen)
+  const [endpoint, setEndpoint] = React.useState(true)
   const { busy, error, submit } = useSubmit()
   const id = React.useId()
 
@@ -174,6 +179,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
               image: chosen,
               ...specBody(draft),
               ...(compose ? { parameters: parameterBody(compose, values) } : {}),
+              mcp_endpoint: endpoint,
             })
           )}
         >
@@ -209,8 +215,26 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                {servers.length > 0 && (
+                  <FieldDescription className="text-xs">
+                    {t("images.mcpServers", { names: formatList(servers) })}
+                  </FieldDescription>
+                )}
               </Field>
               {compose && <ComposeValues compose={compose} values={values} onChange={setValues} />}
+              <Field orientation="horizontal" className="items-start">
+                <Checkbox
+                  id={`${id}-endpoint`}
+                  checked={endpoint}
+                  onCheckedChange={(checked) => setEndpoint(checked === true)}
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor={`${id}-endpoint`}>{t("create.mcpEndpoint")}</FieldLabel>
+                  <FieldDescription className="text-xs">
+                    {t("create.mcpEndpointHint")}
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
             </FieldGroup>
             <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
           </div>

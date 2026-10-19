@@ -147,3 +147,39 @@ test("a configuration carries the image's compose both ways", () => {
     /compose has no setup script/
   )
 })
+
+test("a configuration carries the desktop MCP servers it writes into the image", () => {
+  const mcp = [
+    {
+      name: "chrome",
+      description: "Chrome DevTools",
+      command: "npx",
+      args: ["-y", "chrome-devtools-mcp@latest"],
+      env: { CHROME_PATH: "${CHROME}" },
+    },
+    {
+      name: "x",
+      url: "http://127.0.0.1:${PORT}/mcp",
+      headers: { Authorization: "Bearer ${TOKEN}" },
+    },
+  ]
+  const text = formatBuildConfig({ ...config, mcp })
+  assert.deepEqual(Object.keys(JSON.parse(text)), [
+    "name",
+    "base_image",
+    "internet",
+    "script",
+    "mcp",
+  ])
+  assert.deepEqual(parseBuildConfig(text), { ...config, mcp })
+  // Without servers the copy stays the plain build request, and an empty list is no list.
+  assert.equal("mcp" in JSON.parse(formatBuildConfig({ ...config, mcp: [] })), false)
+  assert.equal("mcp" in parseBuildConfig(JSON.stringify({ ...config, mcp: [] })), false)
+  const cases: [unknown, RegExp][] = [
+    [{ ...config, mcp: { name: "x" } }, /list of servers/],
+    [{ ...config, mcp: [{ name: "x" }] }, /either a command or a URL/],
+    [{ ...config, mcp: [mcp[0], mcp[0]] }, /chrome is declared twice/],
+  ]
+  for (const [value, message] of cases)
+    assert.throws(() => parseBuildConfig(JSON.stringify(value)), message, JSON.stringify(value))
+})

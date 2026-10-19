@@ -558,6 +558,15 @@ impl App {
             .map(|pinned| pinned.compose)
     }
 
+    /// Every value a container's compose was given, secret ones too, by the names they go by.
+    /// Empty without a compose.
+    pub(crate) fn compose_values(&self, container_id: &str) -> BTreeMap<String, String> {
+        self.db
+            .get::<Pinned>(PINNED, container_id)
+            .map(|pinned| pinned.values)
+            .unwrap_or_default()
+    }
+
     pub(crate) fn save_pinned(&self, container_id: &str, pinned: &Pinned) -> anyhow::Result<()> {
         self.db.put(PINNED, container_id, pinned)
     }

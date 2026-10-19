@@ -5,11 +5,16 @@ import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
+import { endpointApi } from "./mcp"
 import type {
   ContainerItem,
+  DesktopServer,
+  EndpointTool,
   ImageItem,
   ImageLayers,
   Job,
+  McpEndpoint,
+  McpScopes,
   Session,
   Settings,
   SystemInfo,
@@ -92,6 +97,38 @@ export const useImageLayers = (id: string) =>
     meta: { quiet: true },
   })
 
+/** Every container's desktop MCP servers, as the manager last read them. */
+export const useMcpServers = (poll = true) =>
+  useQuery({
+    queryKey: ["mcp", "servers"],
+    queryFn: () => api<{ items: DesktopServer[] }>("mcp/servers").then((data) => data.items),
+    refetchInterval: poll ? LIST_INTERVAL : false,
+  })
+
+export const useMcpEndpoints = (poll = true) =>
+  useQuery({
+    queryKey: ["mcp", "endpoints"],
+    queryFn: () => api<{ items: McpEndpoint[] }>(endpointApi()).then((data) => data.items),
+    refetchInterval: poll ? LIST_INTERVAL : false,
+  })
+
+/** The tools an endpoint exposes, exactly as an agent there sees them. */
+export const useEndpointTools = (name: string) =>
+  useQuery({
+    queryKey: ["mcp", "endpoints", name, "tools"],
+    queryFn: () =>
+      api<{ items: EndpointTool[] }>(`${endpointApi(name)}/tools`).then((data) => data.items),
+    meta: { quiet: true },
+  })
+
+/** The scopes a grant can have; they change only with the manager's release. */
+export const useMcpScopes = () =>
+  useQuery({
+    queryKey: ["mcp", "scopes"],
+    queryFn: () => api<McpScopes>("mcp/scopes"),
+    staleTime: Infinity,
+  })
+
 /** The templates page's list, read in the browser from the host the manager names. */
 export const useTemplates = (list: string | null | undefined) =>
   useQuery({
@@ -102,4 +139,5 @@ export const useTemplates = (list: string | null | undefined) =>
     meta: { quiet: true },
   })
 
+/** The desktop MCP servers a template declares, for its card. */
 export const refreshAll = () => queryClient.invalidateQueries()

@@ -1,6 +1,7 @@
 import { readCompose } from "./compose"
 import { t } from "./i18n"
 import { readIcon } from "./icons"
+import { readServerDeclarations } from "./mcp"
 import type { BuildConfig, BuildPart } from "./types"
 
 /**
@@ -24,6 +25,7 @@ export function formatBuildConfig({
   script,
   parts,
   compose,
+  mcp,
   template_id,
   template_ids,
   icon,
@@ -36,6 +38,7 @@ export function formatBuildConfig({
       internet,
       ...(parts?.length ? { parts } : { script }),
       ...(compose ? { compose } : {}),
+      ...(mcp?.length ? { mcp } : {}),
       ...(template_id ? { template_id } : {}),
       ...(template_ids?.length ? { template_ids } : {}),
       ...(icon ? { icon } : {}),
@@ -77,7 +80,7 @@ export function readBuildConfig(value: unknown): ImportedBuild {
     throw new Error(t("build.config.object"))
   const fields = value as Record<string, unknown>
   const { name, description, base_image, internet, script, parts, icon, template_id } = fields
-  const { template_ids } = fields
+  const { template_ids, mcp } = fields
   // Configurations exported before templates were called composes name it `template`.
   const compose = fields.compose ?? fields.template
   const config: ImportedBuild = {}
@@ -108,6 +111,10 @@ export function readBuildConfig(value: unknown): ImportedBuild {
     config.internet = internet
   }
   if (compose !== undefined && compose !== null) config.compose = readCompose(compose)
+  if (mcp !== undefined && mcp !== null) {
+    const servers = readServerDeclarations(mcp)
+    if (servers.length) config.mcp = servers
+  }
   if (icon !== undefined && icon !== null) config.icon = readIcon(icon)
   if (template_id !== undefined && template_id !== null) {
     if (typeof template_id !== "string" || !TEMPLATE_ID.test(template_id))

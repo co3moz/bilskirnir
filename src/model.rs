@@ -317,6 +317,9 @@ pub struct BuildConfig {
     /// The scripts of a build merged from several templates, in the order they run.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parts: Vec<BuildPart>,
+    /// The desktop MCP servers the build declared in the image, in `/etc/bilskirnir/mcp.d`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp: Vec<crate::desktop_mcp::Declaration>,
 }
 /// One script of a build merged from several templates, run as root in a layer of its own.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

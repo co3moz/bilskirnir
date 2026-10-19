@@ -29,11 +29,11 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
 | POST | `/api/login` | Sign in with `username` and `password`. |
 | POST | `/api/logout` | Sign out. |
-| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is. |
+| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
-| POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. |
+| POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. `mcp_endpoint: false` leaves out its own [MCP endpoint](#desktop-mcp-servers-and-endpoints). |
 | GET | `/api/containers/{id}` | One container's configuration, state and health. |
 | POST | `/api/containers/{id}/action` | Start, stop or restart; returns a job. |
 | POST | `/api/containers/{id}/retry` | Retry partial setup or a compose setup that did not finish; returns a job. |
@@ -82,10 +82,10 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/containers/{id}/files/delete` | Delete a file, symlink or directory. |
 | GET | `/api/containers/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
-| GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image`, `internet` and, when [merged from templates](#merged-templates), its `parts` without their scripts, a compose its parameters without the scripts, an [icon](#image-icons) its version and an image built from templates their ids in `template_ids`. |
+| GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image`, `internet` and, when [merged from templates](#merged-templates), its `parts` without their scripts, a compose its parameters without the scripts, an [icon](#image-icons) its version and an image built from templates their ids in `template_ids`. `mcp_servers` names the [desktop MCP servers](#desktop-mcp-servers-and-endpoints) its builds declared. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
 | DELETE | `/api/images/{id}` | [Delete an image](#delete-an-image): a saved image's record with its Docker image, or a catalog image's download. `id` is the list's `id`. Answers at once with `{"id", "name", "deleted": true, "image_removed"}`; `409` while a container was created from it. |
-| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` or [`parts`](#merged-templates) and optional `description`, `internet`, `compose`, `icon` and `template_id` or `template_ids`; returns a job. |
+| POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` or [`parts`](#merged-templates) and optional `description`, `internet`, `compose`, `icon`, `template_id` or `template_ids` and `mcp`, the [desktop MCP servers](#desktop-mcp-servers-and-endpoints) the image declares; returns a job. |
 | POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
 | POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
 | GET | `/api/images/{id}/layers` | What an image's [disk space](#image-sizes-and-layers) is made of: its sizes and the steps of its history, newest first, each with its size, its instruction and the image it came from. `id` is the list's `id`; `404` when Docker does not have the image. |
@@ -111,6 +111,16 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/volumes/{name}/copy` | Copy the volume's files into a new volume named by `name`; returns a job. |
 | GET, PUT, POST | `/api/transfers/{token}` | Run the one upload, download, import or export a [transfer link](#transfer-links) authorizes; needs no session. |
 | Any | `/api/containers/{id}/ports/{port}/{path}` | HTTP or WebSocket to a [port inside the desktop](#desktop-ports) that its `ports` setting lists; needs the MCP token, not a session. |
+| GET | `/api/mcp/servers` | Every container's [desktop MCP servers](#desktop-mcp-servers-and-endpoints) as last seen, in `items`. |
+| GET, POST | `/api/containers/{id}/mcp/servers` | Read a running desktop's servers again and list them, or register one of source `container` and read its tools. |
+| DELETE | `/api/containers/{id}/mcp/servers/{name}` | Remove a server the desktop user registered; `409` for one the image declares. |
+| POST | `/api/containers/{id}/mcp/servers/{name}/refresh` | Start the server again and read its tools. |
+| GET | `/api/mcp/scopes` | The scopes an endpoint can grant, with their tools, and the `default` a container's own endpoint gets. |
+| GET, POST | `/api/mcp/endpoints` | List the MCP endpoints, or create one from `name` and `grants`; creating returns its `token` once. |
+| PUT, DELETE | `/api/mcp/endpoints/{name}` | Replace an endpoint's `grants`, or delete it and end its sessions. |
+| POST, DELETE | `/api/mcp/endpoints/{name}/token` | Create or replace an endpoint's token, returned once, or revoke it. |
+| GET | `/api/mcp/endpoints/{name}/tools` | The tools the endpoint offers, as its agents see them. |
+| Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
@@ -487,6 +497,28 @@ curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/
 ```
 
 The token replaces the cookie and the `X-Bilskirnir-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
+
+## Desktop MCP servers and endpoints
+
+A desktop declares MCP servers in `/etc/bilskirnir/mcp.d/NAME.json`, which an image build writes, and in `~/.config/bilskirnir/mcp/NAME.json`, which the desktop user writes; [the MCP guide](MCP.md#mcp-servers-inside-a-desktop) describes the files and how the manager runs them. A server as the routes list it:
+
+```json
+{"container_id": "...", "container_name": "Chrome dev", "name": "chrome", "source": "image",
+ "description": "", "transport": "stdio", "command": "playwright-mcp", "args": ["--cdp-endpoint", "http://127.0.0.1:9223"],
+ "cwd": null, "env": [], "url": null, "headers": [], "state": "ready", "error": null,
+ "tools": [{"name": "browser_navigate", "description": "Navigate to a URL"}], "tools_at": 1760900000, "log": ""}
+```
+
+`env` and `headers` are names only; their values, which may hold credentials, are never returned. `state` is `ready`, `pending`, `error` or `stopped`. Registering takes the declaration with its `name`, such as `{"name": "x", "command": "node", "args": ["/home/desktop/ext/mcp.js"]}` or `{"name": "api", "url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}`, needs a running container, and answers once the server's tools were read or its error is known. A build takes the same declarations in `mcp`, at most 16 with names of their own; `/api/images/{id}/config` returns them and the image list names them in `mcp_servers`, with those of the images it was built or snapshotted from.
+
+An endpoint is created with:
+
+```json
+{"name": "chrome-dev",
+ "grants": [{"container_id": "...", "alias": "chrome-dev", "scopes": ["view", "input", "files_read"], "servers": "all"}]}
+```
+
+`alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.
 
 ## Desktop ports
 

@@ -115,6 +115,7 @@ impl ArchiveInfo {
         info.build = info.build.filter(|build| {
             image_ref(&build.base_image).is_ok()
                 && build_scripts(&build.script, &build.parts).is_ok()
+                && crate::desktop_mcp::check_declarations(&build.mcp).is_ok()
         });
         info.compose = info.compose.filter(|compose| compose.validate().is_ok());
         info.template_ids.retain(|id| template_id(id).is_ok());

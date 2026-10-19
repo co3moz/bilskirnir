@@ -9,6 +9,7 @@ mod compose;
 mod config;
 mod db;
 mod desktop_input;
+mod desktop_mcp;
 mod docker;
 mod error;
 mod exec;
@@ -40,7 +41,7 @@ use axum::{
     Router,
     http::{HeaderValue, header},
     middleware,
-    routing::{any, delete, get, post},
+    routing::{any, delete, get, post, put},
 };
 use std::{
     collections::HashMap,
@@ -68,6 +69,8 @@ pub struct App {
     transfers: transfers::Links,
     /// The layers and history of the listed images, read once per image ID.
     layers: layers::Cache,
+    /// Desktop MCP servers, their connections and the services of the MCP endpoints.
+    desktop_mcp: desktop_mcp::DesktopMcp,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -242,6 +245,36 @@ fn router(app: Arc<App>) -> Router {
                 app.config.upload_limit as usize,
             )),
         )
+        .route("/api/mcp/servers", get(desktop_mcp::all_servers))
+        .route("/api/mcp/scopes", get(desktop_mcp::scopes_list))
+        .route(
+            "/api/mcp/endpoints",
+            get(desktop_mcp::endpoints).post(desktop_mcp::create_endpoint),
+        )
+        .route(
+            "/api/mcp/endpoints/{name}",
+            put(desktop_mcp::update_endpoint).delete(desktop_mcp::delete_endpoint),
+        )
+        .route(
+            "/api/mcp/endpoints/{name}/token",
+            post(desktop_mcp::token).delete(desktop_mcp::revoke_token),
+        )
+        .route(
+            "/api/mcp/endpoints/{name}/tools",
+            get(desktop_mcp::endpoint_tools),
+        )
+        .route(
+            "/api/containers/{id}/mcp/servers",
+            get(desktop_mcp::container_servers).post(desktop_mcp::register_server),
+        )
+        .route(
+            "/api/containers/{id}/mcp/servers/{name}",
+            delete(desktop_mcp::unregister_server),
+        )
+        .route(
+            "/api/containers/{id}/mcp/servers/{name}/refresh",
+            post(desktop_mcp::refresh_server),
+        )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
@@ -258,6 +291,8 @@ fn router(app: Arc<App>) -> Router {
                     .unwrap_or(usize::MAX),
             )),
         )
+        // An MCP endpoint takes its own token or the administrator's, never the dashboard's cookie.
+        .route("/mcp/{name}", any(desktop_mcp::endpoint))
         // The MCP token opens a desktop's proxied ports, never the dashboard's cookie.
         .route("/api/containers/{id}/ports/{port}", any(proxy::proxy))
         .route("/api/containers/{id}/ports/{port}/", any(proxy::proxy))
@@ -365,8 +400,10 @@ async fn main() -> anyhow::Result<()> {
         usage: usage::Usage::default(),
         transfers: transfers::Links::default(),
         layers: layers::Cache::default(),
+        desktop_mcp: desktop_mcp::DesktopMcp::default(),
     });
     usage::spawn(app.clone());
+    desktop_mcp::spawn(app.clone());
     let reconcile = app.clone();
     let cleanup = app.clone();
     tokio::spawn(async move {

@@ -4,7 +4,15 @@ import assert from "node:assert/strict"
 import { href, parseRoute } from "../web/src/lib/route"
 
 test("page links survive a reload and unknown pages fall back to the dashboard", () => {
-  for (const page of ["dashboard", "containers", "images", "templates", "volumes", "jobs"] as const)
+  for (const page of [
+    "dashboard",
+    "containers",
+    "images",
+    "templates",
+    "volumes",
+    "mcp",
+    "jobs",
+  ] as const)
     assert.deepEqual(parseRoute(href({ page })), { page })
   assert.deepEqual(parseRoute(""), { page: "dashboard" })
   assert.deepEqual(parseRoute("#/settings"), { page: "dashboard" })

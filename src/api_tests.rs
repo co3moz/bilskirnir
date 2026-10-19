@@ -28,6 +28,7 @@ fn unity_tools() -> BuildConfig {
         internet: false,
         script: "set -eu\napt-get install -y git\n".into(),
         parts: Vec::new(),
+        mcp: Vec::new(),
     }
 }
 
@@ -49,6 +50,7 @@ async fn configuration_is_the_request_that_built_the_image() {
         internet: false,
         script: unity_tools().script,
         parts: Vec::new(),
+        mcp: Vec::new(),
         compose: None,
         icon: Some(crate::icons::sample(256, 256)),
         // One template is named as before templates could be merged, so older releases read it.

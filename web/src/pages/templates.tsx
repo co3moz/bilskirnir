@@ -4,6 +4,7 @@ import {
   RiApps2Line,
   RiCheckLine,
   RiHammerLine,
+  RiPlugLine,
   RiRefreshLine,
   RiSearchLine,
   RiStackLine,
@@ -36,7 +37,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { openDialog } from "@/lib/dialogs"
-import { formatNumber, plural, t } from "@/lib/i18n"
+import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { useImages, useSettings, useTemplates } from "@/lib/queries"
 import {
   allTags,
@@ -72,6 +73,7 @@ function TemplateCard({
   onChoose: () => void
 }) {
   const [busy, setBusy] = React.useState(false)
+  const servers = template.mcp ?? []
   const supported = buildable(template, version)
   const install = async () => {
     setBusy(true)
@@ -127,10 +129,16 @@ function TemplateCard({
           ))}
         </div>
       </CardHeader>
-      <CardContent className="flex-1">
+      <CardContent className="flex flex-1 flex-col gap-2">
         <CardDescription className="line-clamp-4 whitespace-pre-line">
           {template.description || t("templates.noDescription")}
         </CardDescription>
+        {servers.length > 0 && (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <RiPlugLine className="mt-px size-3.5 shrink-0" aria-hidden />
+            {t("images.mcpServers", { names: formatList(servers) })}
+          </p>
+        )}
       </CardContent>
       <CardFooter className="flex-wrap justify-between gap-2">
         {choosing ? (

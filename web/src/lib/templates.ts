@@ -13,7 +13,7 @@ import { readBuildConfig, TEMPLATE_ID, type ImportedBuild } from "./build-config
 import { composeSteps } from "./compose"
 import { iconFromBlob } from "./icons"
 import { t } from "./i18n"
-import type { BuildPart, ComposeStep } from "./types"
+import type { BuildPart, ComposeStep, ServerDeclaration } from "./types"
 
 export type Template = {
   id: string
@@ -22,6 +22,8 @@ export type Template = {
   tags: string[]
   /** The oldest Bilskirnir release that can build it, such as `0.5.0`. */
   requires?: string
+  /** The names of the desktop MCP servers an image built from it declares. */
+  mcp?: string[]
 }
 
 /** A list entry the page cannot offer, and why. */
@@ -31,12 +33,20 @@ export type TemplateList = { templates: Template[]; broken: BrokenTemplate[] }
 
 const VERSION = /^\d+\.\d+\.\d+$/
 const TAG_LIMIT = 8
+const SERVER_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
 
 /** Reads one list entry, or throws why it cannot be offered. */
 function readTemplate(value: unknown): Template {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error(t("templates.broken.entry"))
-  const { id, name, description = "", tags = [], requires } = value as Record<string, unknown>
+  const {
+    id,
+    name,
+    description = "",
+    tags = [],
+    requires,
+    mcp = [],
+  } = value as Record<string, unknown>
   if (typeof id !== "string" || !TEMPLATE_ID.test(id)) throw new Error(t("templates.broken.id"))
   if (typeof name !== "string" || !name.trim() || [...name].length > 100)
     throw new Error(t("templates.broken.name"))
@@ -50,12 +60,19 @@ function readTemplate(value: unknown): Template {
     throw new Error(t("templates.broken.tags", { count: TAG_LIMIT }))
   if (requires !== undefined && (typeof requires !== "string" || !VERSION.test(requires)))
     throw new Error(t("templates.broken.requires"))
+  // Only names, for the card; the declarations come with the template's configuration.
+  const servers = Array.isArray(mcp)
+    ? mcp.filter(
+        (server): server is string => typeof server === "string" && SERVER_NAME.test(server)
+      )
+    : []
   return {
     id,
     name: name.trim(),
     description: description.trim(),
     tags: (tags as string[]).map((tag) => tag.trim()),
     ...(requires ? { requires } : {}),
+    ...(servers.length ? { mcp: servers } : {}),
   }
 }
 
@@ -180,10 +197,15 @@ function clipBytes(text: string, limit: number) {
  * receives only its own parameters, so two templates may ask for the same name. The image is
  * built on the first template's base; a template made for another one is a warning, since its
  * script may expect that desktop. A template merged from others brings its parts and steps.
+ * The desktop MCP servers they declare are all written into the image, so two templates may not
+ * declare one name.
  */
 export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
   const parts: BuildPart[] = []
   const steps: ComposeStep[] = []
+  const servers: ServerDeclaration[] = []
+  // Which template brought each server, to name both when another declares it again.
+  const owners = new Map<string, string>()
   const warnings: string[] = []
   const base = loaded.find(({ config }) => config.base_image)?.config.base_image
   const add = <T extends { id?: string; name?: string }>(list: T[], item: T) => {
@@ -202,6 +224,15 @@ export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
         steps,
         own.length > 1 ? step : { ...step, id: template.id, name: step.name || template.name }
       )
+    for (const server of config.mcp ?? []) {
+      const owner = owners.get(server.name)
+      if (owner !== undefined)
+        throw new Error(
+          t("templates.merge.mcpTwice", { name: server.name, first: owner, second: template.name })
+        )
+      owners.set(server.name, template.name)
+      servers.push(server)
+    }
     if (config.base_image && base && config.base_image !== base)
       warnings.push(t("templates.merge.base", { name: template.name, base: config.base_image }))
   }
@@ -217,6 +248,7 @@ export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
     internet: loaded.some(({ config }) => config.internet !== false),
     parts,
     ...(steps.length ? { compose: { steps } } : {}),
+    ...(servers.length ? { mcp: servers } : {}),
     ...(icon ? { icon } : {}),
     template_ids: [
       ...new Set(

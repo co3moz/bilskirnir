@@ -6,7 +6,7 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
 
 The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
@@ -15,6 +15,8 @@ The **Dashboard** sums up the host: how many containers exist and run, jobs in p
 ## Create and connect
 
 Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone and a virtual gamepad device for agents on or off; hover or focus one to see what it does. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
+
+**Create an MCP endpoint**, on by default, gives the new container an endpoint of its own at `/mcp/<name>`, where an agent reaches only this container and the MCP servers running in it; see [MCP servers and endpoints](#mcp-servers-and-endpoints).
 
 After creation finishes, select **Connect**. The card preview is a screenshot; the connected desktop accepts keyboard and mouse input. Use the container's actions menu or its details panel to stop, restart, change settings, inspect or delete it. A desktop's address, such as `#/desktop/<id>`, can be bookmarked.
 
@@ -78,6 +80,14 @@ To have several templates in one image, such as Unity development with Google Ch
 A template you have built shows **Installed**, also when it was merged with others, and **Install again** builds another image from its current version. A template that needs a newer Bilskirnir says which release it needs instead of offering **Install**. Your browser reads the list directly from GitHub, so it needs internet access, and the page sends no request until you open it. An installation can point the page at another list or turn it off with `TEMPLATES_URL`; see [the installation guide](INSTALLATION.md#settings).
 
 **Import image** with its **Docker image** tab registers a compatible image that is already present in the host Docker Engine. It does not turn an arbitrary server image into a desktop. An image removed from Docker cannot be used to create another container until it is available again.
+
+## MCP servers and endpoints
+
+A desktop can run MCP servers of its own, such as a browser automation server a template brings, or one you write while developing a Chrome extension. The **MCP** page shows them under **Desktop servers**, grouped by container: where each came from (**Image** for a template's, **Added** for one added later), its state, its tools and the end of its output. **Add server** registers one in a running container: a command that speaks MCP on stdio, or the address of an HTTP server listening inside the desktop. Inside the desktop, `bilskirnir-mcp add NAME -- COMMAND ARGS` does the same from a terminal. Bilskirnir starts a server as the desktop user only when its tools are needed and never opens a port for it. A value such as `${API_TOKEN}` in its arguments or headers is filled in from the container's compose values.
+
+**Endpoints** lists the addresses agents connect to instead of the administrator's `/mcp`: each covers one or several containers, and for each only the groups of tools you tick, such as screenshots, mouse and keyboard or files, and its servers, all of them or the ones you pick. Deleting or changing containers is never among them. **New endpoint** creates one and shows its token once, with a command to paste into an MCP client; **Create token** or **Replace token** makes a new one and ends the old. A container's own endpoint, made when it was created, has no token until you create one; the administrator's MCP token opens every endpoint. [The MCP guide](MCP.md#mcp-endpoints-for-one-agent) lists every scope's tools.
+
+A template can declare its MCP servers, which **Install** shows with its script, so every container from the image has them.
 
 ## Save a container as a snapshot
 
