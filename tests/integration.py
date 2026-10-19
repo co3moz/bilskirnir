@@ -689,6 +689,10 @@ try:
     mounted = subprocess.run(["docker", "exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "--mount", "--propagation", "unchanged", "mount", "-t", "tmpfs", "tmpfs", "/mnt"], capture_output=True)
     assert mounted.returncode != 0, mounted
     print("PASS user namespaces for browser sandboxes, mount still refused", flush=True)
+    # Chinese, Japanese and Korean text shows as text, not boxes, also in screenshots agents read.
+    for language in ("zh-cn", "ja", "ko"):
+        assert b"Noto Sans CJK" in docker("exec", container, "fc-match", f"sans-serif:lang={language}"), language
+    print("PASS CJK fonts for Chinese, Japanese and Korean text", flush=True)
     default_exec = mcp_job(stdio_tool("exec_container", {"container_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
     assert "1001" in default_exec["log"] and default_exec["result"]["user"] == "1001:1001"
     root_exec = mcp_job(tool("exec_container", {"container_id":env_id,"root":True,"script":"id -u\ninstall -m 644 /home/desktop/agent-marker /opt/agent-install"}))
