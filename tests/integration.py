@@ -1704,6 +1704,8 @@ try:
     before = listed_names()
     # A request refused before its job leaves no volume behind.
     assert refused("containers", {**own_base, "name": "own-refused", "mounts": [{"volume": share, "target": "/home/desktop/Projects"}]}) == 400
+    # "-" asks for no volume, which a required parameter refuses before anything is created.
+    assert refused("containers", {**own_base, "name": "own-none", "parameters": {"WORK_SPACE": "-"}}) == 400
     assert listed_names() == before
     created = api("containers", {**own_base, "name": "Own workspace"})
     own = job(created)["container_id"]
