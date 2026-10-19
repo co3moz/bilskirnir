@@ -72,7 +72,7 @@ pub async fn read(
     split_path(&body.path)?;
     if body.limit == 0 || body.limit > FILE_LIMIT || body.offset > i64::MAX as u64 {
         return Err(anyhow::anyhow!(
-            "Read limit must be 1–524288 bytes; offset must fit a signed 64-bit integer"
+            "Read limit must be 1 to 524288 bytes; offset must fit a signed 64-bit integer"
         )
         .into());
     }
@@ -187,7 +187,7 @@ const FILE_OPS: &str = include_str!("file_ops.py");
 pub struct ListFiles {
     /// Canonical absolute directory path.
     pub path: String,
-    /// Maximum number of entries to return (1–2000).
+    /// Maximum number of entries to return (1 to 2000).
     #[serde(default = "list_limit")]
     pub limit: usize,
 }
@@ -224,7 +224,7 @@ impl ListFiles {
     pub fn validate(&self) -> anyhow::Result<()> {
         crate::apps::directory(&self.path)?;
         if self.limit == 0 || self.limit > 2000 {
-            bail!("limit must be 1–2000");
+            bail!("limit must be 1 to 2000");
         }
         Ok(())
     }
@@ -381,7 +381,7 @@ pub fn download_url(id: &str, path: &str) -> String {
 pub struct Download {
     /// Canonical absolute path of a regular file.
     pub path: String,
-    /// Maximum bytes to return (1–5242880).
+    /// Maximum bytes to return (1 to 5242880).
     #[serde(default = "download_limit")]
     pub max_bytes: usize,
 }
@@ -443,7 +443,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
     if body.max_bytes == 0 || body.max_bytes > 5 * 1024 * 1024 {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "max_bytes must be 1–5242880".into(),
+            "max_bytes must be 1 to 5242880".into(),
         ));
     }
     let lock = app.resource_lock(&format!("container:{id}"));

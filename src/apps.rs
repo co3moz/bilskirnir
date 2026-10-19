@@ -43,7 +43,7 @@ pub struct Launch {
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Stop {
-    /// Seconds between SIGTERM and SIGKILL (0–60).
+    /// Seconds between SIGTERM and SIGKILL (0 to 60).
     #[serde(default = "grace")]
     pub grace_seconds: u64,
 }
@@ -53,7 +53,7 @@ fn grace() -> u64 {
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Logs {
-    /// Number of bytes from the end of the log (1–1048576).
+    /// Number of bytes from the end of the log (1 to 1048576).
     #[serde(default = "tail")]
     pub tail_bytes: usize,
 }
@@ -63,7 +63,7 @@ fn tail() -> usize {
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Metrics {
-    /// Sampling window in milliseconds (100–10000).
+    /// Sampling window in milliseconds (100 to 10000).
     #[serde(default = "duration")]
     pub duration_ms: u64,
 }
@@ -72,7 +72,7 @@ fn duration() -> u64 {
 }
 fn text(value: &str, what: &str, limit: usize) -> anyhow::Result<()> {
     if value.is_empty() || value.len() > limit || value.chars().any(char::is_control) {
-        bail!("{what} must be 1–{limit} bytes without control characters");
+        bail!("{what} must be 1 to {limit} bytes without control characters");
     }
     Ok(())
 }
@@ -109,7 +109,7 @@ impl Launch {
         if let Some(name) = &self.name
             && (name.trim().is_empty() || name.chars().count() > 100)
         {
-            bail!("Application name must be 1–100 characters");
+            bail!("Application name must be 1 to 100 characters");
         }
         if self.env.len() > 50 {
             bail!("At most 50 environment variables are supported");
@@ -326,7 +326,7 @@ pub async fn application_logs(
     if tail_bytes == 0 || tail_bytes > LOG_LIMIT {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            format!("tail_bytes must be 1–{LOG_LIMIT}"),
+            format!("tail_bytes must be 1 to {LOG_LIMIT}"),
         ));
     }
     let record = record(app, id, application)?;
@@ -398,7 +398,7 @@ pub async fn sample_metrics(
     if !(100..=10_000).contains(&duration_ms) {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "duration_ms must be 100–10000".into(),
+            "duration_ms must be 100 to 10000".into(),
         ));
     }
     let record = record(app, id, application)?;

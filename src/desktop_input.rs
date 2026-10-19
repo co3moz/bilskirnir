@@ -189,7 +189,7 @@ pub(crate) fn keysym(key: &str) -> anyhow::Result<u32> {
         name if name.starts_with('f') => {
             let n: u32 = name[1..].parse().context("Unknown key name")?;
             if !(1..=12).contains(&n) {
-                bail!("Function keys must be F1–F12");
+                bail!("Function keys must be F1 to F12");
             }
             0xffbd + n
         }
@@ -255,7 +255,7 @@ impl Planner {
     }
     fn keys(keys: &[String]) -> anyhow::Result<Vec<u32>> {
         if keys.is_empty() || keys.len() > 8 {
-            bail!("A key action needs 1–8 keys");
+            bail!("A key action needs 1 to 8 keys");
         }
         let symbols = keys
             .iter()
@@ -307,7 +307,7 @@ pub(crate) fn plan(
     start: Option<(u16, u16)>,
 ) -> anyhow::Result<Planned> {
     if actions.is_empty() || actions.len() > 100 {
-        bail!("Send 1–100 desktop actions");
+        bail!("Send 1 to 100 desktop actions");
     }
     let mut p = Planner {
         width,
@@ -336,7 +336,7 @@ pub(crate) fn plan(
                     "Relative movement needs a known pointer position; move or click with coordinates first",
                 )?;
                 if !(1..=50).contains(steps) {
-                    bail!("Relative movement steps must be 1–50");
+                    bail!("Relative movement steps must be 1 to 50");
                 }
                 if *duration_ms > 2000 {
                     bail!("Relative movement duration must be at most 2000 milliseconds");
@@ -358,7 +358,7 @@ pub(crate) fn plan(
             } => {
                 p.check(*x, *y)?;
                 if !(1..=3).contains(count) {
-                    bail!("Click count must be 1–3");
+                    bail!("Click count must be 1 to 3");
                 }
                 for _ in 0..*count {
                     p.pointer(p.mask | button.mask(), *x, *y, 40);
@@ -386,7 +386,7 @@ pub(crate) fn plan(
                 p.check(*from_x, *from_y)?;
                 p.check(*to_x, *to_y)?;
                 if !(100..=2000).contains(duration_ms) {
-                    bail!("Drag duration must be 100–2000 milliseconds");
+                    bail!("Drag duration must be 100 to 2000 milliseconds");
                 }
                 let pressed = p.mask | button.mask();
                 p.pointer(pressed, *from_x, *from_y, 0);
@@ -411,7 +411,7 @@ pub(crate) fn plan(
             } => {
                 p.check(*x, *y)?;
                 if !(1..=50).contains(steps) {
-                    bail!("Scroll steps must be 1–50");
+                    bail!("Scroll steps must be 1 to 50");
                 }
                 let wheel = match direction {
                     Direction::Up => 8,

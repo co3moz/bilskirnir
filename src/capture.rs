@@ -20,7 +20,7 @@ use std::{sync::Arc, time::Duration};
 /// Screenshot options shared by the HTTP route, the MCP tool and act-and-observe.
 #[derive(Default, Deserialize, JsonSchema)]
 pub struct Capture {
-    /// Scale the image down to this width when the capture is wider (16–7680). Omit for full
+    /// Scale the image down to this width when the capture is wider (16 to 7680). Omit for full
     /// desktop resolution, where pixel coordinates match desktop_input.
     #[serde(default)]
     pub max_width: Option<u32>,
@@ -53,7 +53,7 @@ impl Capture {
         if let Some(width) = self.max_width
             && !(16..=7680).contains(&width)
         {
-            bail!("max_width must be 16–7680");
+            bail!("max_width must be 16 to 7680");
         }
         self.region()?;
         if let Some(window) = &self.window_id {
@@ -225,7 +225,7 @@ pub async fn save(
 #[serde(deny_unknown_fields)]
 pub struct Observe {
     pub actions: Vec<Action>,
-    /// Milliseconds to wait after the input before capturing (0–10000).
+    /// Milliseconds to wait after the input before capturing (0 to 10000).
     #[serde(default = "settle")]
     pub settle_ms: u64,
     #[serde(default)]

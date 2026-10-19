@@ -53,7 +53,7 @@ pub struct GamepadInput {
 impl GamepadInput {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.actions.is_empty() || self.actions.len() > 100 {
-            bail!("Send 1–100 gamepad actions");
+            bail!("Send 1 to 100 gamepad actions");
         }
         let mut delay = 0;
         for action in &self.actions {

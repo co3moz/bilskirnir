@@ -565,7 +565,7 @@ pub async fn register_image(
 ) -> Result<Json<Value>> {
     image_ref(&body.reference)?;
     if body.name.trim().is_empty() || body.name.chars().count() > 100 {
-        return Err(anyhow::anyhow!("Image name must be 1–100 characters").into());
+        return Err(anyhow::anyhow!("Image name must be 1 to 100 characters").into());
     }
     let _guard = app.operations.lock().await;
     let info = app.inspect("image", &body.reference).await?;
