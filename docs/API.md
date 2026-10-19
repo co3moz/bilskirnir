@@ -121,7 +121,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST, DELETE | `/api/mcp/endpoints/{name}/token` | Create or replace an endpoint's token, returned once, or revoke it. |
 | GET | `/api/mcp/endpoints/{name}/tools` | The tools the endpoint offers, as its agents see them. |
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
-| GET | `/api/jobs` | Latest 100 job summaries. |
+| GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
 

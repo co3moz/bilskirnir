@@ -36,6 +36,15 @@ impl Db {
         )?;
         Ok(())
     }
+    /// Remove the finished jobs beyond the newest `keep`. A job still running or queued stays
+    /// whatever its age; its end is what marks it finished.
+    pub fn prune_jobs(&self, keep: usize) -> Result<usize> {
+        let removed = self.0.lock().unwrap().execute(
+            "DELETE FROM records WHERE kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)",
+            params![keep as i64],
+        )?;
+        Ok(removed)
+    }
     pub fn jobs_summary(&self) -> Result<Vec<crate::model::Job>> {
         let conn = self.0.lock().unwrap();
         // Strip potentially large logs in SQLite, before allocating/deserializing rows.
@@ -44,3 +53,7 @@ impl Db {
         rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
     }
 }
+
+#[cfg(test)]
+#[path = "db_tests.rs"]
+mod tests;

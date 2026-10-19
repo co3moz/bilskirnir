@@ -373,7 +373,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::fs::create_dir_all(&config.data).await?;
     uploads::cleanup_temporary_files(&config.data).await?;
     let db = db::Db::open(&config.data.join("state.sqlite"))?;
+    // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
+    db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
+    let mut interrupted_builds = Vec::new();
     for mut job in db.list::<model::Job>("job")? {
         if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
@@ -383,6 +386,9 @@ async fn main() -> anyhow::Result<()> {
             job.log.push_str("\nService restarted. The Docker operation may have continued; check resources before retrying.\n");
             job.trim_log();
             db.put("job", &job.id, &job)?;
+            if job.kind == "build" {
+                interrupted_builds.push(job.id);
+            }
         }
     }
     compose::mark_interrupted(&db)?;
@@ -409,14 +415,10 @@ async fn main() -> anyhow::Result<()> {
     let reconcile = app.clone();
     let cleanup = app.clone();
     tokio::spawn(async move {
-        if let Ok(jobs) = cleanup.db.list::<model::Job>("job") {
-            for job in jobs
-                .into_iter()
-                .filter(|j| j.kind == "build" && j.status != "running" && j.status != "queued")
-            {
-                if let Err(e) = cleanup.cleanup_build(&job.id).await {
-                    tracing::debug!("Previous build cleanup {}: {e:#}", job.id);
-                }
+        // A build that ended cleaned up after itself; only one the restart cut short did not.
+        for id in interrupted_builds {
+            if let Err(e) = cleanup.cleanup_build(&id).await {
+                tracing::debug!("Interrupted build cleanup {id}: {e:#}");
             }
         }
     });
