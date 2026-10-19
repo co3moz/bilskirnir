@@ -538,6 +538,56 @@ async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
 
+/// A debug build reserves stack in a function's frame for every future it awaits, and the MCP
+/// dispatch awaits dozens in one match. Once that took most of a tokio worker's 2 MiB, so a debug
+/// manager aborted on screenshot. The whole /mcp call, down to running Docker, must fit in half.
+#[test]
+fn mcp_screenshot_fits_in_half_a_worker_stack() {
+    let app = mcp_app();
+    let env = model::Container {
+        id: "test-id".into(),
+        container: "test-container".into(),
+        private_network: "test-private".into(),
+        egress_network: "test-egress".into(),
+        source_image_id: "sha256:test".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    // A stack overflow aborts the test binary and names this thread. The call needs under 512 KiB
+    // on Linux and 768 KiB on Windows; with Docker's read chunks in arrays it overflowed 2 MiB.
+    std::thread::Builder::new()
+        .name("mcp-screenshot-in-1-mib".into())
+        .stack_size(1024 * 1024)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let (_, body) = mcp_request(
+                        app,
+                        "tools/call",
+                        serde_json::json!({"name":"screenshot","arguments":{"container_id":"test-id","max_width":320}}),
+                    )
+                    .await;
+                    // The test has no Docker, so the call ends where it would run the first command.
+                    assert_eq!(body["result"]["isError"], true, "{body}");
+                    assert!(
+                        body.to_string().contains("Could not start Docker CLI"),
+                        "{body}"
+                    );
+                })
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
 #[test]
 fn file_paths_and_vnc_actions_reject_invalid_requests() {
     for path in [
