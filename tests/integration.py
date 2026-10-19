@@ -693,6 +693,10 @@ try:
     for language in ("zh-cn", "ja", "ko"):
         assert b"Noto Sans CJK" in docker("exec", container, "fc-match", f"sans-serif:lang={language}"), language
     print("PASS CJK fonts for Chinese, Japanese and Korean text", flush=True)
+    # GdkPixbuf draws SVG, so XFCE's default wallpaper and icons that exist only as SVG are not blank.
+    loaders = docker("exec", container, "sh", "-c", "cat /usr/lib/*/gdk-pixbuf-2.0/2.10.0/loaders.cache")
+    assert b'"image/svg+xml"' in loaders, loaders
+    print("PASS SVG images load in the desktop", flush=True)
     default_exec = mcp_job(stdio_tool("exec_container", {"container_id":env_id,"script":"id -u\nprintf agent-install > /home/desktop/agent-marker"}))
     assert "1001" in default_exec["log"] and default_exec["result"]["user"] == "1001:1001"
     root_exec = mcp_job(tool("exec_container", {"container_id":env_id,"root":True,"script":"id -u\ninstall -m 644 /home/desktop/agent-marker /opt/agent-install"}))
