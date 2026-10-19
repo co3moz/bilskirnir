@@ -54,5 +54,5 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/bilskirnir"]
 # The same release as a label, which `bilskirnir update` in the WSL package reads to download the
 # desktop images this manager would. Declared last so it leaves the cache of the layers above alone.
 ARG BILSKIRNIR_RELEASE
-LABEL io.wsl-desktop.release="${BILSKIRNIR_RELEASE}"
+LABEL bilskirnir.release="${BILSKIRNIR_RELEASE}"
 

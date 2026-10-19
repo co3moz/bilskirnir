@@ -1,5 +1,5 @@
 //! Volumes created for one container: a compose's volume parameter with `new_volume`, left
-//! empty, gets `wsld-<container>-<parameter>`, which the container's creation job creates and
+//! empty, gets `bilskirnir-<container>-<parameter>`, which the container's creation job creates and
 //! labels with its owner. A listing names that owner, or says it was deleted, and deleting the
 //! container removes them too when asked, but never one that another container mounts.
 use crate::{
@@ -11,9 +11,9 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 
 /// The label naming the container a volume was created for, as on its containers and networks.
-pub(crate) const OWNER: &str = "io.wsl-desktop.environment";
+pub(crate) const OWNER: &str = "bilskirnir.environment";
 /// The label naming the compose parameter a volume was created for.
-pub(crate) const PARAMETER: &str = "io.wsl-desktop.parameter";
+pub(crate) const PARAMETER: &str = "bilskirnir.parameter";
 
 /// The labels a volume for `container`'s `parameter` gets beside those of every volume the
 /// manager creates.

@@ -38,7 +38,7 @@ impl App {
     pub async fn owned(&self, env: &Container) -> Result<Value> {
         let info = self.inspect("container", &env.container).await?;
         if info["Config"]["Labels"][LABEL] != "true"
-            || info["Config"]["Labels"]["io.wsl-desktop.environment"] != env.id
+            || info["Config"]["Labels"]["bilskirnir.environment"] != env.id
         {
             bail!("Container ownership does not match");
         }
@@ -64,7 +64,7 @@ impl App {
     }
     pub fn check_network(env: &Container, info: &Value, internal: bool) -> Result<()> {
         if info["Labels"][LABEL] != "true"
-            || info["Labels"]["io.wsl-desktop.environment"] != env.id
+            || info["Labels"]["bilskirnir.environment"] != env.id
             || info["Internal"] != internal
             || info["Driver"] != "bridge"
         {
@@ -81,10 +81,10 @@ impl App {
             "network",
             "create",
             "--label",
-            "io.wsl-desktop.managed=true",
+            "bilskirnir.managed=true",
             "--label",
         ];
-        let owner = format!("io.wsl-desktop.environment={}", env.id);
+        let owner = format!("bilskirnir.environment={}", env.id);
         args.push(&owner);
         if internal {
             args.push("--internal");
@@ -129,7 +129,7 @@ impl App {
             .as_ref()
             .context("Set MANAGER_CONTAINER; the service must run in Docker")?;
         let manager_info = self.inspect("container", manager).await?;
-        if manager_info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+        if manager_info["Config"]["Labels"]["bilskirnir.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
         // Cheap checks come before a catalog image download that can take minutes.
@@ -144,7 +144,7 @@ impl App {
             .inspect("image", &spec.image)
             .await
             .context("Image not available. Build or pull it first")?;
-        if image["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+        if image["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
             bail!("Image must be derived from a Bilskirnir desktop image");
         }
         let image_id = image["Id"].as_str().context("Missing image ID")?;
@@ -181,15 +181,15 @@ impl App {
             .cloned()
             .collect::<Vec<_>>();
         image_volumes_mounted(&image, &all_mounts)?;
-        let container = format!("wsld-{id}");
+        let container = format!("bilskirnir-{id}");
         let mut spec = spec;
         // A container from a snapshot gets an identity of its own, not the source container's.
         crate::identity::assign(&mut spec, &container);
         let env = Container {
             id: id.into(),
             container,
-            private_network: format!("wsld-{id}-private"),
-            egress_network: format!("wsld-{id}-egress"),
+            private_network: format!("bilskirnir-{id}-private"),
+            egress_network: format!("bilskirnir-{id}-egress"),
             source_image_id: image_id.into(),
             spec,
             created_at: now(),
@@ -234,7 +234,7 @@ impl App {
             .as_deref()
             .context("MANAGER_CONTAINER is required")?;
         let info = self.inspect("container", manager).await?;
-        if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.manager"] != "true" {
             bail!("Manager label does not match");
         }
         let existing = self.optional_inspect("container", &env.container).await?;
@@ -344,7 +344,7 @@ impl App {
             "--label",
             &format!("{LABEL}=true"),
             "--label",
-            &format!("io.wsl-desktop.environment={}", env.id),
+            &format!("bilskirnir.environment={}", env.id),
             "--shm-size",
             &format!("{}m", env.spec.shm_mb),
             "--tmpfs",
@@ -462,7 +462,7 @@ impl App {
         let container_id = container.as_ref().and_then(|v| v["Id"].as_str());
         let manager_info = if let Some(name) = &self.config.manager {
             let m = self.inspect("container", name).await?;
-            if m["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+            if m["Config"]["Labels"]["bilskirnir.manager"] != "true" {
                 bail!("Manager ownership does not match");
             }
             Some(m)
@@ -606,7 +606,7 @@ impl App {
             .as_deref()
             .context("MANAGER_CONTAINER is required")?;
         let info = self.inspect("container", manager).await?;
-        if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.manager"] != "true" {
             bail!("Manager label does not match");
         }
         crate::volumes::refuse_manager_volumes(&info, &env.mounts())?;
@@ -775,18 +775,15 @@ impl App {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        // Legacy tags are retained only for cleanup of jobs created before the rename.
-        for namespace in ["bilskirnir", "wsl-desktop"] {
-            let tag = format!("{namespace}/build-base:{id}");
-            let names = self
-                .docker(&["image", "ls", "--format", "{{.Repository}}:{{.Tag}}", &tag])
-                .await?;
-            if String::from_utf8_lossy(&names)
-                .lines()
-                .any(|name| name == tag)
-            {
-                self.docker(&["image", "rm", &tag]).await?;
-            }
+        let tag = format!("bilskirnir/build-base:{id}");
+        let names = self
+            .docker(&["image", "ls", "--format", "{{.Repository}}:{{.Tag}}", &tag])
+            .await?;
+        if String::from_utf8_lossy(&names)
+            .lines()
+            .any(|name| name == tag)
+        {
+            self.docker(&["image", "rm", &tag]).await?;
         }
         Ok(())
     }

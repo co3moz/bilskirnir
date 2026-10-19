@@ -46,7 +46,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
 | `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
-| `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `io.wsl-desktop.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
+| `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `bilskirnir.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 
@@ -137,7 +137,7 @@ A manager restart marks unfinished jobs as interrupted. Build scripts are not re
 
 Use **Retry setup** for a container that failed during creation or startup. If its container still exists, Bilskirnir keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
 
-A settings change that needs a new container renames the old one to `wsld-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name. Rename it back with `docker rename wsld-ID-previous wsld-ID` before using **Retry setup**, or remove it once its files are no longer needed; another settings change refuses to start while it exists.
+A settings change that needs a new container renames the old one to `bilskirnir-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name. Rename it back with `docker rename bilskirnir-ID-previous bilskirnir-ID` before using **Retry setup**, or remove it once its files are no longer needed; another settings change refuses to start while it exists.
 
 Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Bilskirnir does not silently replace a missing volume with an empty one.
 
@@ -161,8 +161,6 @@ If file uploads report a permission error, check that the chosen volume is writa
 
 Before replacing an older Compose deployment, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The current default is `bilskirnir-data`. Remove the old manager deployment without deleting that volume, then start Bilskirnir using it. Existing containers can keep running while the manager is replaced.
 
-You may see `wsld-*` resource names or `io.wsl-desktop.*` Docker labels. These identifiers are retained so existing containers, snapshots and database records continue to work. They do not indicate a different product.
-
 If locally built desktop images still use older tags, retag them rather than rebuilding:
 
 ```bash
@@ -170,4 +168,4 @@ docker image tag bilskirnir/ubuntu-xfce:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-x
 docker image tag bilskirnir/ubuntu-gnome:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
 ```
 
-For images tagged `wsl-desktop/ubuntu-*`, substitute that existing source tag on the left. Saved container image IDs do not change when you add a tag.
+Saved container image IDs do not change when you add a tag.

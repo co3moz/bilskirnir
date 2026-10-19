@@ -69,7 +69,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080" # Use 0.0.0.0 instead for LAN access.
     labels:
-      io.wsl-desktop.manager: "true"
+      bilskirnir.manager: "true"
     environment:
       MANAGER_CONTAINER: bilskirnir-manager
       AUTH_MODE: password # Use none to disable login.

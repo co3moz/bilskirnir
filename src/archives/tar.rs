@@ -698,7 +698,7 @@ fn rebuild_index(data: &[u8]) -> Result<Vec<u8>> {
 fn check_desktop(config: &[u8]) -> Result<()> {
     let config: Value = serde_json::from_slice(config)
         .context("The archive's image configuration is not valid JSON")?;
-    if config["config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+    if config["config"]["Labels"]["bilskirnir.desktop"] != "true" {
         bail!("The archive does not contain a Bilskirnir desktop image");
     }
     Ok(())

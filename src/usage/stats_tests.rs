@@ -135,7 +135,7 @@ fn block_io_operations_are_matched_in_either_case() {
 #[test]
 fn a_stopped_containers_empty_message_is_not_a_reading() {
     // Docker keeps a stream open after a stop and sends only the name and ID each second.
-    let empty = json!({"read": "0001-01-01T00:00:00Z", "name": "/wsld-a", "id": "a", "cpu_stats": {"cpu_usage": {"total_usage": 0}, "throttling_data": {}}, "memory_stats": {}});
+    let empty = json!({"read": "0001-01-01T00:00:00Z", "name": "/bilskirnir-a", "id": "a", "cpu_stats": {"cpu_usage": {"total_usage": 0}, "throttling_data": {}}, "memory_stats": {}});
     assert_eq!(reading(&empty), None);
     let mut zero = message("2026-10-16T09:30:00Z", 0, 0, (0, 0), (0, 0));
     assert_eq!(reading(&zero), None);

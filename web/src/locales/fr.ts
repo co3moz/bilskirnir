@@ -125,7 +125,6 @@ export const fr: Messages = {
   "containers.dockerName": "Nom Docker",
   "containers.image": "Image",
   "containers.noMounts": "Aucun volume monté.",
-  "images.legacyTitle": "Ubuntu 24.04 · XFCE léger (ancienne version)",
   "images.kind.catalog": "Catalogue",
   "images.kind.build": "Construction",
   "images.kind.snapshot": "Instantané",

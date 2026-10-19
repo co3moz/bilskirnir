@@ -397,7 +397,7 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
         return Ok(());
     };
     let m = app.inspect("container", manager).await?;
-    if m["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+    if m["Config"]["Labels"]["bilskirnir.manager"] != "true" {
         anyhow::bail!("Missing manager label");
     }
     for mut env in app.db.list::<model::Container>(model::CONTAINERS)? {

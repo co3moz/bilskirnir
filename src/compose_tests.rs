@@ -463,22 +463,22 @@ fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
         compose: workspace(),
         values,
     };
-    let own = mount("wsld-e-unity-workspace", "/home/desktop/Projects");
+    let own = mount("bilskirnir-e-unity-workspace", "/home/desktop/Projects");
     assert_eq!(pinned.mounts(), std::slice::from_ref(&own));
     assert_eq!(
         pinned.new_volumes("e"),
-        [("UNITY_WORKSPACE", "wsld-e-unity-workspace")]
+        [("UNITY_WORKSPACE", "bilskirnir-e-unity-workspace")]
     );
     // The record shows it like a chosen volume, and the script reads it the same way.
     let setup = pinned.setup("img");
     assert_eq!(setup.mounts, std::slice::from_ref(&own));
     assert_eq!(
         setup.parameters["UNITY_WORKSPACE"],
-        "wsld-e-unity-workspace"
+        "bilskirnir-e-unity-workspace"
     );
     assert_eq!(
         pinned.environment()["UNITY_WORKSPACE_VOLUME"],
-        "wsld-e-unity-workspace"
+        "bilskirnir-e-unity-workspace"
     );
     // Its path is taken like a chosen volume's, so the volume settings cannot use it too.
     assert!(check_mounts(&[mount("projects", "/home/desktop/Projects")], &[own]).is_err());
@@ -507,7 +507,7 @@ fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
         setup: Some(pinned.setup("img")),
         ..container()
     };
-    let flag = "--mount type=volume,src=wsld-e-unity-workspace,dst=/home/desktop/Projects";
+    let flag = "--mount type=volume,src=bilskirnir-e-unity-workspace,dst=/home/desktop/Projects";
     assert!(app.container_args(&env).join(" ").contains(flag));
     // A reset or a retry that recreates a missing container runs the setup again with it.
     setup_again(&mut env);
@@ -539,11 +539,14 @@ async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
         .unwrap();
     assert_eq!(
         clone.mounts(),
-        [mount("wsld-f-unity-workspace", "/home/desktop/Projects")]
+        [mount(
+            "bilskirnir-f-unity-workspace",
+            "/home/desktop/Projects"
+        )]
     );
     assert_eq!(
         clone.new_volumes("f"),
-        [("UNITY_WORKSPACE", "wsld-f-unity-workspace")]
+        [("UNITY_WORKSPACE", "bilskirnir-f-unity-workspace")]
     );
     // Sharing the source's volume is still a choice a request can make.
     let (_, shared) = app
@@ -551,7 +554,7 @@ async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
             "g",
             "sha256:snap",
             "sha256:snap",
-            &given(&[("UNITY_WORKSPACE", "wsld-e-unity-workspace")]),
+            &given(&[("UNITY_WORKSPACE", "bilskirnir-e-unity-workspace")]),
         )
         .unwrap()
         .unwrap();
@@ -716,9 +719,9 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
 fn container() -> Container {
     Container {
         id: "e".into(),
-        container: "wsld-e".into(),
-        private_network: "wsld-e-private".into(),
-        egress_network: "wsld-e-egress".into(),
+        container: "bilskirnir-e".into(),
+        private_network: "bilskirnir-e-private".into(),
+        egress_network: "bilskirnir-e-egress".into(),
         source_image_id: "sha256:unity".into(),
         created_at: 1,
         spec: serde_json::from_value(serde_json::json!({"name": "Unity", "image": "sha256:unity"}))

@@ -17,7 +17,7 @@ export async function api<T = unknown>(
     method,
     credentials: "same-origin",
     // The manager refuses state changes without this header; it stands in for a CSRF token.
-    headers: { "Content-Type": "application/json", "X-Wsld-Request": "1" },
+    headers: { "Content-Type": "application/json", "X-Bilskirnir-Request": "1" },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
   if (response.status === 401 && path !== "login") {

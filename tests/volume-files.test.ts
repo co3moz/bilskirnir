@@ -117,12 +117,12 @@ test("a volume shows where its compose mounts it, and only its owner may delete 
   })
   const mount = (volume: string) => ({ volume, target: `/${volume}`, readonly: false })
   const containers = [
-    container("e", ["projects"], ["wsld-e-workspace"]),
-    container("b", [], ["wsld-e-workspace"]),
+    container("e", ["projects"], ["bilskirnir-e-workspace"]),
+    container("b", [], ["bilskirnir-e-workspace"]),
   ]
   // The compose's mount counts as much as a volume setting does.
   assert.deepEqual(
-    volumeUsers("wsld-e-workspace", containers).map((user) => [user.id, user.compose]),
+    volumeUsers("bilskirnir-e-workspace", containers).map((user) => [user.id, user.compose]),
     [
       ["e", true],
       ["b", true],
@@ -146,17 +146,17 @@ test("a volume shows where its compose mounts it, and only its owner may delete 
   assert.deepEqual(
     ownedVolumes(
       [
-        owned("wsld-e-workspace", "e"),
+        owned("bilskirnir-e-workspace", "e"),
         owned("projects"),
-        owned("wsld-e-cache", "e"),
+        owned("bilskirnir-e-cache", "e"),
         owned("x", "b"),
       ],
       "e"
     ),
-    ["wsld-e-cache", "wsld-e-workspace"]
+    ["bilskirnir-e-cache", "bilskirnir-e-workspace"]
   )
   // An older manager sends no owner, so nothing is offered for deletion.
-  assert.deepEqual(ownedVolumes([{ Name: "wsld-e-workspace" }], "e"), [])
+  assert.deepEqual(ownedVolumes([{ Name: "bilskirnir-e-workspace" }], "e"), [])
 })
 
 test("a volume any container mounts names each of those containers once", () => {
@@ -187,7 +187,7 @@ test("a volume any container mounts names each of those containers once", () => 
   assert.deepEqual(volumeHolders("projects", containers), ["Unity", "Build", "Build"])
   assert.deepEqual(volumeHolders("saves", containers), ["Other"])
   // An orphan, such as one whose owner was deleted without it, is held by nobody.
-  assert.deepEqual(volumeHolders("wsld-gone-cache", containers), [])
+  assert.deepEqual(volumeHolders("bilskirnir-gone-cache", containers), [])
 })
 
 test("downloads name the volume and the path in the query", () => {

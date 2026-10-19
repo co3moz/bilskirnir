@@ -31,7 +31,13 @@ fn after<'a>(args: &'a [String], flag: &str) -> &'a str {
 #[test]
 fn a_helper_reaches_nothing_but_the_volume() {
     for access in [Access::Read, Access::Write, Access::Archive] {
-        let args = helper_args(&volume(), access, "wsld-volume-test", false, &command());
+        let args = helper_args(
+            &volume(),
+            access,
+            "bilskirnir-volume-test",
+            false,
+            &command(),
+        );
         let joined = args.join(" ");
         assert_eq!(&args[..2], ["run", "--rm"]);
         assert_eq!(after(&args, "--network"), "none");
@@ -214,13 +220,13 @@ async fn the_volume_list_marks_what_the_manager_mounts() {
 fn a_filter_reads_labels_as_dockers_label_filter() {
     use serde_json::json;
     let volume = |labels: Value| json!({"Name": "v", "Labels": labels});
-    let managed = volume(json!({"io.wsl-desktop.managed": "true", "team": ""}));
+    let managed = volume(json!({"bilskirnir.managed": "true", "team": ""}));
     let compose = volume(json!({"com.docker.compose.project": "db"}));
     let bare = volume(Value::Null);
     for volume in [&managed, &compose, &bare] {
         assert!(listed(None, volume));
     }
-    let default = Some("io.wsl-desktop.managed=true");
+    let default = Some("bilskirnir.managed=true");
     assert!(listed(default, &managed));
     assert!(!listed(default, &compose));
     assert!(!listed(default, &bare));
@@ -236,14 +242,14 @@ fn a_filter_reads_labels_as_dockers_label_filter() {
 fn every_volume_the_manager_creates_is_one_its_filter_lists() {
     for filter in [
         None,
-        Some("io.wsl-desktop.managed=true"),
-        Some("io.wsl-desktop.managed"),
+        Some("bilskirnir.managed=true"),
+        Some("bilskirnir.managed"),
         Some("team"),
         Some("team="),
         Some("com.example.team=unity"),
     ] {
         let labels = labels(filter);
-        assert_eq!(labels[0], "io.wsl-desktop.managed=true");
+        assert_eq!(labels[0], "bilskirnir.managed=true");
         // As `docker volume create --label` sets them: a bare key gets an empty value.
         let set = labels
             .iter()
@@ -321,7 +327,7 @@ async fn a_volume_filter_hides_and_refuses_what_it_leaves_out() {
     assert!(
         std::fs::read_to_string(&calls)
             .unwrap()
-            .starts_with("volume ls --filter label=io.wsl-desktop.managed=true --format")
+            .starts_with("volume ls --filter label=bilskirnir.managed=true --format")
     );
     // Named in a request, a volume the filter leaves out is as missing as one that never was.
     let refused = app.open_volume("outside").await.err().unwrap();
@@ -363,7 +369,7 @@ async fn post(app: Arc<App>, uri: &str, body: serde_json::Value) -> (StatusCode,
                 .uri(uri)
                 .header("host", "localhost:8080")
                 .header("content-type", "application/json")
-                .header("x-wsld-request", "1")
+                .header("x-bilskirnir-request", "1")
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )

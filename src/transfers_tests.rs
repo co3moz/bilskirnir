@@ -15,13 +15,13 @@ fn download(path: &str) -> Operation {
     }
 }
 
-/// The container `e` as the manager records it, running in Docker as `wsld-e`.
+/// The container `e` as the manager records it, running in Docker as `bilskirnir-e`.
 fn container(app: &App) {
     let env = model::Container {
         id: "e".into(),
-        container: "wsld-e".into(),
-        private_network: "wsld-e-private".into(),
-        egress_network: "wsld-e-egress".into(),
+        container: "bilskirnir-e".into(),
+        private_network: "bilskirnir-e-private".into(),
+        egress_network: "bilskirnir-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(json!({"name": "Work", "image": "example/desktop:1"}))
@@ -416,7 +416,7 @@ async fn a_link_is_neither_a_session_nor_a_bearer_token() {
     let (status, _, _) = send(
         &app,
         request("GET", "/api/containers")
-            .header("cookie", format!("wsld_session={token}"))
+            .header("cookie", format!("bilskirnir_session={token}"))
             .body(Body::empty())
             .unwrap(),
     )
@@ -506,7 +506,7 @@ fn docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"io.wsl-desktop.managed\":\"true\",\"io.wsl-desktop.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ $# -eq 10 ]; then echo '{{\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"bilskirnir.managed\":\"true\",\"bilskirnir.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ $# -eq 10 ]; then echo '{{\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
     )

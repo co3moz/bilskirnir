@@ -56,7 +56,7 @@ fn pax(records: &[(&str, &str)]) -> Vec<u8> {
 
 fn config(labelled: bool) -> Vec<u8> {
     let labels = if labelled {
-        json!({"io.wsl-desktop.desktop": "true"})
+        json!({"bilskirnir.desktop": "true"})
     } else {
         json!({})
     };

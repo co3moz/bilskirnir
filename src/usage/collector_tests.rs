@@ -140,7 +140,7 @@ mod engine_socket {
         std::fs::create_dir_all(&dir).unwrap();
         let socket = dir.join("docker.sock");
         let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-        let entry = json!({"Id": DOCKER_ID, "Names": ["/wsld-a"], "Labels": {"io.wsl-desktop.managed": "true", "io.wsl-desktop.environment": "a"}});
+        let entry = json!({"Id": DOCKER_ID, "Names": ["/bilskirnir-a"], "Labels": {"bilskirnir.managed": "true", "bilskirnir.environment": "a"}});
         let listed = Arc::new(Mutex::new(json!([entry])));
         let streams = Arc::new(AtomicUsize::new(0));
         let server = tokio::spawn(engine(listener, listed.clone(), streams.clone()));
@@ -149,9 +149,9 @@ mod engine_socket {
         Arc::get_mut(&mut app).unwrap().config.docker_socket = Some(socket);
         let record = crate::model::Container {
             id: "a".into(),
-            container: "wsld-a".into(),
-            private_network: "wsld-a-private".into(),
-            egress_network: "wsld-a-egress".into(),
+            container: "bilskirnir-a".into(),
+            private_network: "bilskirnir-a-private".into(),
+            egress_network: "bilskirnir-a-egress".into(),
             source_image_id: "sha256:base".into(),
             created_at: 1,
             spec: serde_json::from_value::<ContainerSpec>(

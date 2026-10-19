@@ -131,7 +131,6 @@ export const en = {
   "containers.image": "Image",
   "containers.noMounts": "No volumes mounted.",
 
-  "images.legacyTitle": "Ubuntu 24.04 · Lightweight XFCE (legacy)",
   "images.kind.catalog": "Catalog",
   "images.kind.build": "Build",
   "images.kind.snapshot": "Snapshot",

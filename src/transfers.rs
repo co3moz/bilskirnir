@@ -6,7 +6,7 @@
 //! one operation and its arguments, which expires a few minutes later and lives only in memory.
 //! The request that presents it runs the same handler a dashboard request would, with its locks,
 //! limits, job and progress. The token takes the place of both the session cookie and the
-//! `X-Wsld-Request` header: that header guards against requests a browser sends with ambient
+//! `X-Bilskirnir-Request` header: that header guards against requests a browser sends with ambient
 //! cookies, and a secret in the URL is nothing a browser adds on its own.
 //!
 //! Accepting the MCP token on the whole HTTP API would be simpler, but it would put a long-lived

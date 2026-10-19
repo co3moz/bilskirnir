@@ -43,7 +43,7 @@ pub(crate) fn running(records: &[Container], listed: &Value) -> BTreeMap<String,
         let Some(docker_id) = container["Id"].as_str() else {
             continue;
         };
-        let owner = container["Labels"]["io.wsl-desktop.environment"].as_str();
+        let owner = container["Labels"]["bilskirnir.environment"].as_str();
         let Some(record) = records
             .iter()
             .find(|record| Some(record.id.as_str()) == owner)

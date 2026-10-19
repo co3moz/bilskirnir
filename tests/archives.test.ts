@@ -144,7 +144,7 @@ test("an archive uploads with its details and resolves with the job", async () =
   assert.equal(request.url.searchParams.get("size"), "10")
   assert.equal(request.url.searchParams.get("name"), details.name)
   assert.equal(request.url.searchParams.get("description"), details.description)
-  assert.equal(request.headers["X-Wsld-Request"], "1")
+  assert.equal(request.headers["X-Bilskirnir-Request"], "1")
   assert.equal(request.headers["Content-Type"], "application/octet-stream")
   request.upload.onprogress({ loaded: 4 })
   assert.equal(upload.loaded, 4)

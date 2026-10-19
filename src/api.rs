@@ -490,7 +490,7 @@ pub async fn register_image(
     }
     let _guard = app.operations.lock().await;
     let info = app.inspect("image", &body.reference).await?;
-    if info["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+    if info["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
         return Err(anyhow::anyhow!("A desktop-compatible image is required").into());
     }
     let rec = ImageRecord {
@@ -575,7 +575,7 @@ pub async fn build(
             app.begin_stage(&id, "base")?;
             app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
-            if base["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+            if base["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");
             }
             let parent = base["Id"]
@@ -589,7 +589,7 @@ pub async fn build(
             let script = body.script.replace("\r\n", "\n");
             tokio::fs::write(dir.join("setup.sh"), &script).await?;
             let dockerfile = format!(
-                "FROM {base_tag}\nUSER root\nCOPY setup.sh /tmp/wsld-setup.sh\nRUN bash /tmp/wsld-setup.sh && rm /tmp/wsld-setup.sh\nLABEL io.wsl-desktop.desktop=true\nLABEL {LABEL}=true\n"
+                "FROM {base_tag}\nUSER root\nCOPY setup.sh /tmp/bilskirnir-setup.sh\nRUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh\nLABEL bilskirnir.desktop=true\nLABEL {LABEL}=true\n"
             );
             tokio::fs::write(dir.join("Dockerfile"), dockerfile).await?;
             let reference = format!("bilskirnir/custom:{id}");

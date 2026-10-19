@@ -120,7 +120,7 @@ async fn a_service_sees_no_credential_of_the_manager() {
         get_request(&format!("/api/containers/e/ports/{port}/echo/a%20b?x=1"))
             .method("POST")
             .header("authorization", format!("Bearer {TOKEN}"))
-            .header("cookie", "wsld_session=dashboard; theme=dark")
+            .header("cookie", "bilskirnir_session=dashboard; theme=dark")
             .header("origin", "http://localhost:8080")
             .header("connection", "keep-alive, x-hop")
             .header("x-hop", "connection only")
@@ -149,7 +149,7 @@ async fn a_service_sees_no_credential_of_the_manager() {
     let response = call(
         proxy,
         get_request(&format!("/api/containers/e/ports/{port}/"))
-            .header("cookie", "wsld_session=dashboard")
+            .header("cookie", "bilskirnir_session=dashboard")
             .body(Body::empty())
             .unwrap(),
     )
@@ -169,7 +169,7 @@ async fn an_answer_is_sandboxed_and_sets_nothing_on_the_dashboards_origin() {
                 (header::LOCATION, location),
                 (
                     header::SET_COOKIE,
-                    "wsld_session=planted; Path=/".to_owned(),
+                    "bilskirnir_session=planted; Path=/".to_owned(),
                 ),
                 (
                     HeaderName::from_static("clear-site-data"),
@@ -377,9 +377,9 @@ async fn an_mcp_client_calls_a_tool_of_an_mcp_server_in_the_desktop() {
 fn container(app: &App, ports: &[u16]) {
     let env = model::Container {
         id: "e".into(),
-        container: "wsld-e".into(),
-        private_network: "wsld-e-private".into(),
-        egress_network: "wsld-e-egress".into(),
+        container: "bilskirnir-e".into(),
+        private_network: "bilskirnir-e-private".into(),
+        egress_network: "bilskirnir-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(
@@ -427,7 +427,7 @@ async fn only_the_mcp_token_opens_a_listed_port() {
     let (code, _) = status(
         &app,
         "/api/containers/e/ports/8000/",
-        &[("cookie", "wsld_session=dashboard")],
+        &[("cookie", "bilskirnir_session=dashboard")],
     )
     .await;
     assert_eq!(code, StatusCode::UNAUTHORIZED);
@@ -520,9 +520,9 @@ fn docker(app: &mut Arc<App>, state: &Value) -> std::path::PathBuf {
 fn inspected(running: bool) -> Value {
     json!([{
         "Id": "c0ffee",
-        "Config": {"Labels": {"io.wsl-desktop.managed": "true", "io.wsl-desktop.environment": "e"}},
+        "Config": {"Labels": {"bilskirnir.managed": "true", "bilskirnir.environment": "e"}},
         "State": {"Running": running},
-        "NetworkSettings": {"Networks": {"wsld-e-private": {"IPAddress": "127.0.0.1"}}}
+        "NetworkSettings": {"Networks": {"bilskirnir-e-private": {"IPAddress": "127.0.0.1"}}}
     }])
 }
 

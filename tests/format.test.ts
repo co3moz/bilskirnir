@@ -116,7 +116,6 @@ test("image choices distinguish GNOME, XFCE and unavailable images", () => {
   )
   assert.deepEqual([choices[2].disabled, choices[2].label], [true, "Ubuntu · Other"])
   assert.equal(choices[3].label, "My game · Ubuntu · GNOME")
-  assert.ok(imageChoices([], "wsl-desktop/ubuntu:24.04")[0].label.includes("Lightweight XFCE"))
 })
 
 test("catalog images are images: listed, started and nested like the others", () => {
@@ -278,7 +277,7 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
 test("a running container shows its compose setup until the setup completes", () => {
   const item = (status?: ContainerSetup["status"], last_error?: string): ContainerItem => ({
     id: "e",
-    container: "wsld-e",
+    container: "bilskirnir-e",
     source_image_id: "sha256:a",
     created_at: 0,
     spec: {} as ContainerItem["spec"],
