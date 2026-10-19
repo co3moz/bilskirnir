@@ -302,6 +302,10 @@ pub(crate) fn helper_args(
         name,
         "--label",
         "bilskirnir.volume-helper=true",
+        // The helper streams whole archives through its stdout; the json-file driver would copy them
+        // into its container log until --rm removes it.
+        "--log-driver",
+        "none",
         "--network",
         "none",
         "--read-only",
