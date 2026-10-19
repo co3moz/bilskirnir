@@ -12,7 +12,7 @@ mod collector;
 mod engine;
 mod gpu;
 mod history;
-mod stats;
+pub(crate) mod stats;
 
 use crate::{
     App,

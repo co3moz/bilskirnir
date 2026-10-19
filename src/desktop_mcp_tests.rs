@@ -2,13 +2,13 @@
 //! for its scopes and nothing more, the names its tools get, and that an endpoint's token opens
 //! that endpoint and no other route.
 use super::{
-    client::exec_args,
+    client::{Exec, exec_args},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
         loopback_url, substitute,
     },
-    scopes::{Scope, Target, bound_tool, catalog, exposed_name},
+    scopes::{Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed},
     *,
 };
 use crate::{
@@ -291,10 +291,14 @@ fn a_server_runs_as_the_desktop_user_and_header_values_stay_off_the_command_line
         args: vec!["--headless".into()],
         ..stdio("playwright-mcp")
     };
-    let (args, first) = exec_args("abc", &spec).unwrap();
+    let Exec { args, env, first } = exec_args("abc", &spec).unwrap();
     assert!(first.is_none());
     assert_eq!(&args[..4], ["exec", "-i", "--user", "1001:1001"]);
-    assert!(args.contains(&"BROWSER=chrome".to_owned()));
+    // The variable is named on the command line and its value travels in the CLI's environment,
+    // which may hold a compose secret.
+    assert!(args.contains(&"BROWSER".to_owned()));
+    assert!(!args.iter().any(|a| a.contains("chrome")));
+    assert_eq!(env, [("BROWSER".to_owned(), "chrome".to_owned())]);
     assert!(
         args.iter()
             .any(|a| a.starts_with("PATH=/home/desktop/.local/bin:"))
@@ -306,7 +310,7 @@ fn a_server_runs_as_the_desktop_user_and_header_values_stay_off_the_command_line
         headers: BTreeMap::from([("Authorization".into(), "Bearer hunter2".into())]),
         ..Default::default()
     };
-    let (args, first) = exec_args("abc", &http).unwrap();
+    let Exec { args, first, .. } = exec_args("abc", &http).unwrap();
     assert!(!args.iter().any(|a| a.contains("hunter2")));
     let first: Value = serde_json::from_slice(&first.unwrap()).unwrap();
     assert_eq!(first["headers"]["Authorization"], "Bearer hunter2");
@@ -925,4 +929,110 @@ fn every_route_and_tool_is_documented() {
             scope.id()
         );
     }
+}
+
+#[tokio::test]
+async fn a_scoped_endpoint_reports_no_host_gpu() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    app.usage.record(
+        "c1",
+        &crate::usage::stats::Measure {
+            cpu: 0.5,
+            memory: 1 << 20,
+            memory_limit: 0,
+            online_cpus: 4,
+            disk_read: 0.0,
+            disk_write: 0.0,
+            net_rx: 0.0,
+            net_tx: 0.0,
+        },
+    );
+    let Json(created) = create_endpoint(
+        State(app.clone()),
+        Json(
+            serde_json::from_value(json!({"name":"chrome-dev","grants":[{"container_id":"c1","scopes":["view"],"servers":"all"}]}))
+                .unwrap(),
+        ),
+    )
+    .await
+    .unwrap();
+    let token = created["token"].as_str().unwrap().to_owned();
+    let session = open_session(&app, "/mcp/chrome-dev", &token).await;
+    let (status, _, body) = call(
+        app.clone(),
+        "/mcp/chrome-dev",
+        Some(&token),
+        Some(&session),
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_usage","arguments":{}}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let result = &body["result"];
+    assert_ne!(result["isError"], true, "{body}");
+    let usage = &result["structuredContent"];
+    assert!(usage["containers"].is_array(), "{body}");
+    // The host GPU is outside what the grant of one container covers, in both forms.
+    assert!(usage.get("gpu").is_none(), "{body}");
+    assert!(
+        !serde_json::to_string(&result["content"])
+            .unwrap()
+            .contains("\"gpu\"")
+    );
+}
+
+#[test]
+fn two_tools_that_clean_to_one_name_are_both_listed() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "s", &["a.b", "a_b", "plain"]);
+    let one = endpoint("one", vec![grant("c1", "chrome-dev", &[])]);
+    let offered = names(&app, &one);
+    assert!(offered.contains(&"s__a_b".to_owned()), "{offered:?}");
+    assert!(offered.contains(&"s__plain".to_owned()), "{offered:?}");
+    let hashed = exposed_name_hashed(&["s", "a_b"]);
+    assert!(hashed.starts_with("s__a_b_") && hashed.len() == "s__a_b_".len() + 6);
+    assert!(offered.contains(&hashed), "{offered:?}");
+    assert_eq!(offered.len(), 3);
+    // The hash tail comes from the raw parts, so it does not change with the clean name.
+    assert_ne!(exposed_name_hashed(&["s", "a.b"]), hashed);
+}
+
+#[tokio::test]
+async fn an_endpoints_existence_is_told_only_to_a_caller_with_a_token() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    app.db
+        .put(
+            ENDPOINTS,
+            "chrome-dev",
+            &endpoint(
+                "chrome-dev",
+                vec![grant("c1", "chrome-dev", &[Scope::View])],
+            ),
+        )
+        .unwrap();
+    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}});
+    // Without a token, a name that exists and one that does not answer the same.
+    for name in ["/mcp/chrome-dev", "/mcp/missing"] {
+        let (status, _, _) = call(app.clone(), name, None, None, initialize.clone()).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{name}");
+        let (status, _, _) = call(
+            app.clone(),
+            name,
+            Some("not-a-token"),
+            None,
+            initialize.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{name}");
+    }
+    let (status, _, _) = call(app.clone(), "/mcp/missing", Some(ADMIN), None, initialize).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

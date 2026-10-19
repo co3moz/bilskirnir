@@ -15,6 +15,8 @@ pub(crate) const IMAGE_FOLDER: &str = "/etc/bilskirnir/mcp.d";
 const ARGUMENT_LIMIT: usize = 100;
 const VARIABLE_LIMIT: usize = 50;
 const HEADER_LIMIT: usize = 20;
+/// The most a server listing may be: both folders' files at the helper's limits, escaped.
+const LISTING_LIMIT: usize = 32 << 20;
 /// A build declares at most this many servers.
 pub(crate) const DECLARATION_LIMIT: usize = 16;
 /// The variables the desktop sets for every server, which a declaration cannot change.
@@ -425,10 +427,22 @@ pub(crate) fn watch_args(container: &str) -> Vec<String> {
 impl App {
     /// The servers a running desktop declares now.
     pub(crate) async fn read_servers(&self, container: &str) -> Result<Vec<Found>> {
-        let output = self
-            .docker_args(&helper_args(container, false, &["list"]))
-            .await?;
-        found(&serde_json::from_slice(&output).context("The desktop's server listing is invalid")?)
+        // The helper lists up to 64 files of 64 KiB from each of the two folders, escaped as
+        // JSON, which the 4 MiB of an ordinary Docker call cannot hold.
+        let output = process::capture(
+            self.command(&helper_args(container, false, &["list"])),
+            Duration::from_secs(120),
+            LISTING_LIMIT,
+            process::Overflow::Reject,
+        )
+        .await?;
+        if !output.status.success() {
+            bail!("Docker: {}", String::from_utf8_lossy(&output.stderr).trim());
+        }
+        found(
+            &serde_json::from_slice(&output.stdout)
+                .context("The desktop's server listing is invalid")?,
+        )
     }
     /// Write the desktop user's declaration of a server, replacing one of the same name.
     pub(crate) async fn write_server(

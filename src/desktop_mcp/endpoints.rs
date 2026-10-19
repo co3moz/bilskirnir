@@ -287,9 +287,10 @@ pub async fn create_endpoint(
     Json(body): Json<CreateEndpoint>,
 ) -> Result<Json<Value>> {
     endpoint_name(&body.name)?;
-    let grants = grants(&app, body.grants)?;
     let lock = app.resource_lock("mcp-endpoints");
     let _guard = lock.lock().await;
+    // Under the lock, so a container deleted meanwhile cannot be granted.
+    let grants = grants(&app, body.grants)?;
     if app.db.get::<Endpoint>(ENDPOINTS, &body.name).is_ok() {
         return Err(Error(
             StatusCode::CONFLICT,
@@ -316,9 +317,9 @@ pub async fn update_endpoint(
     Path(name): Path<String>,
     Json(body): Json<UpdateEndpoint>,
 ) -> Result<Json<Value>> {
-    let grants = grants(&app, body.grants)?;
     let lock = app.resource_lock("mcp-endpoints");
     let _guard = lock.lock().await;
+    let grants = grants(&app, body.grants)?;
     let mut endpoint = load(&app, &name)?;
     endpoint.grants = grants;
     app.db.put(ENDPOINTS, &name, &endpoint)?;

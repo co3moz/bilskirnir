@@ -145,6 +145,16 @@ pub(crate) struct Entry {
 /// The name an agent sees: the parts joined with `__`, in the characters MCP clients accept and
 /// at most 64 of them, shortened with a hash of the whole when longer.
 pub(crate) fn exposed_name(parts: &[&str]) -> String {
+    exposed(parts, false)
+}
+
+/// The exposed name with the hash tail whatever its length, for a name another tool already
+/// took: `a.b` and `a_b` on one server both clean to `a_b`, and the tail tells them apart.
+pub(crate) fn exposed_name_hashed(parts: &[&str]) -> String {
+    exposed(parts, true)
+}
+
+fn exposed(parts: &[&str], hashed: bool) -> String {
     let joined = parts.join("__");
     let clean: String = joined
         .chars()
@@ -156,12 +166,12 @@ pub(crate) fn exposed_name(parts: &[&str]) -> String {
             }
         })
         .collect();
-    if clean.len() <= 64 {
+    if clean.len() <= 64 && !hashed {
         return clean;
     }
     let hash = Blake2s256::digest(joined.as_bytes());
     let suffix: String = hash[..3].iter().map(|b| format!("{b:02x}")).collect();
-    format!("{}_{suffix}", &clean[..57])
+    format!("{}_{suffix}", &clean[..clean.len().min(57)])
 }
 
 /// A Bilskirnir tool as an endpoint offers it: bound to its one container, or taking `container`
@@ -276,13 +286,18 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
                 && grant.servers.includes(&record.name)
         }) {
             for tool in &record.tools {
-                let name = if single {
-                    exposed_name(&[&record.name, &tool.name])
+                let parts: Vec<&str> = if single {
+                    vec![&record.name, &tool.name]
                 } else {
-                    exposed_name(&[&grant.alias, &record.name, &tool.name])
+                    vec![&grant.alias, &record.name, &tool.name]
                 };
+                let mut name = exposed_name(&parts);
+                // Two tools that clean to one name both stay listed, the later one marked apart.
                 if entries.iter().any(|entry| entry.tool.name == name) {
-                    continue;
+                    name = exposed_name_hashed(&parts);
+                    if entries.iter().any(|entry| entry.tool.name == name) {
+                        continue;
+                    }
                 }
                 entries.push(Entry {
                     tool: server_tool(tool, name, &container, &grant.container_id, &record.name),
