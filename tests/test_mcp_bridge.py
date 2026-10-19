@@ -20,6 +20,7 @@ class BridgeTest(unittest.TestCase):
     def setUp(self):
         self.requests = []
         self.authorization = "Bearer test-secret"
+        self.session_id = None
         received = self.requests
         test = self
 
@@ -48,6 +49,8 @@ class BridgeTest(unittest.TestCase):
                 if stream:
                     data = b"event: message\ndata: " + data + b"\n\n"
                 self.send_response(200)
+                if test.session_id:
+                    self.send_header("Mcp-Session-Id", test.session_id)
                 self.send_header("Content-Type", "text/event-stream" if stream else "application/json")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
@@ -104,6 +107,24 @@ class BridgeTest(unittest.TestCase):
         output, _ = self.invoke(b"{\n" + b"x" * bridge.REQUEST_LIMIT + b"\n")
         self.assertEqual([m["error"]["code"] for m in output], [-32700, -32600])
         self.assertEqual(self.requests, [])
+
+    def test_the_session_an_endpoint_assigns_is_named_on_every_later_request(self):
+        # A scoped endpoint answers initialize with a session id that every later request must
+        # carry; /mcp assigns none, and then no header is sent.
+        self.session_id = "session-1"
+        lines = (b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'
+                 b'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n'
+                 b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
+        replies, _ = self.invoke(lines)
+        self.assertEqual(sorted(reply["id"] for reply in replies), [1, 2])
+        by_method = {message["method"]: headers for message, headers in self.requests}
+        self.assertNotIn("Mcp-Session-Id", by_method["initialize"])
+        self.assertEqual(by_method["tools/list"].get("Mcp-Session-Id"), "session-1")
+        self.assertEqual(by_method["notifications/initialized"].get("Mcp-Session-Id"), "session-1")
+        self.requests.clear()
+        self.session_id = None
+        self.invoke(lines)
+        self.assertTrue(all("Mcp-Session-Id" not in headers for _, headers in self.requests))
 
     def test_a_tokenless_manager_gets_no_authorization_header(self):
         self.authorization = None

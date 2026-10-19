@@ -50,7 +50,7 @@ For clients that use an `mcpServers` configuration:
 
 Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
-MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly.
+MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent): give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`.
 
 ### Broken responses from localhost on Windows
 
