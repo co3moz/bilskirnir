@@ -9,6 +9,10 @@ use crate::{App, model::*};
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value, json};
 
+/// What refuses a job while the container an interrupted settings change set aside may hold the
+/// only copy of the files, which a record from before the commit was saved first cannot rule out.
+pub(crate) const PREVIOUS_LEFT: &str = "is left from an interrupted settings change; rename it back to the container's name, or check its files and remove it, before changing settings or retrying";
+
 /// Settings an existing container accepts. The image is not one of them: a reset recreates
 /// the desktop from its image, and a snapshot can start a new container.
 const EDITABLE: &[&str] = &[
@@ -264,9 +268,13 @@ impl App {
             .await?
             .is_some()
         {
-            bail!(
-                "{previous} is left from an interrupted settings change; check its files and remove it before changing settings again"
-            );
+            // The container just inspected is the replacement an interrupted change created
+            // from its commit, so the one set aside has nothing it lacks. Without the commit on
+            // record, the container set aside may hold the only copy of the files.
+            if env.working_image.is_none() {
+                bail!("{previous} {PREVIOUS_LEFT}");
+            }
+            self.remove_previous(&env, job_id).await?;
         }
         self.plan_stages(job_id, &crate::stages::RECREATE_STAGES)?;
         if running {
@@ -312,12 +320,17 @@ impl App {
                 return Err(error);
             }
         };
+        let before = env.clone();
         let earlier = env.working_image.replace(WorkingImage {
             image_id,
             reference: reference.clone(),
         });
         env.spec = spec;
         crate::identity::adopt(&mut env, Some(info));
+        // The files are in the commit and in the container set aside from here on, so the record
+        // says so before anything is created: a retry after an interruption then creates the
+        // container from the commit instead of an empty one from the source image.
+        self.db.put(CONTAINERS, &env.id, &env)?;
         self.begin_stage(job_id, "create")?;
         let replaced = async {
             self.docker_args(&self.container_args(&env)).await?;
@@ -350,6 +363,9 @@ impl App {
             if running {
                 self.docker(&["start", &old_id]).await?;
             }
+            // Only once the previous container is back under its name; until then the record
+            // keeps naming the commit, which a retry can still create a container from.
+            self.db.put(CONTAINERS, &before.id, &before)?;
             let _ = self.docker(&["image", "rm", &reference]).await;
             return Err(error);
         }
@@ -373,6 +389,38 @@ impl App {
                 "Recreated the stopped container with the new settings. Its files were kept; start it to use them."
             },
         )?;
+        Ok(())
+    }
+
+    /// Remove the container an interrupted settings change set aside, once its replacement
+    /// stands or the container's files go anyway. Nothing but that container is touched: it
+    /// must carry this container's labels, and only the commit it was created from loses its
+    /// tag, unless the record still names that commit.
+    pub(crate) async fn remove_previous(&self, env: &Container, job_id: &str) -> Result<()> {
+        let previous = format!("{}-previous", env.container);
+        let Some(info) = self.optional_inspect("container", &previous).await? else {
+            return Ok(());
+        };
+        if info["Config"]["Labels"][LABEL] != "true"
+            || info["Config"]["Labels"]["bilskirnir.environment"] != env.id.as_str()
+        {
+            bail!("{previous} was not created for this container; check and remove it by hand");
+        }
+        let id = info["Id"].as_str().context("Missing container ID")?;
+        self.docker(&["rm", "--force", id]).await?;
+        self.append_log(
+            job_id,
+            &format!("Removed {previous}, which an interrupted settings change had set aside."),
+        )?;
+        if let Some(image) = info["Config"]["Image"].as_str()
+            && image.starts_with("bilskirnir/container:")
+            && env
+                .working_image
+                .as_ref()
+                .is_none_or(|working| working.reference != image)
+        {
+            let _ = self.docker(&["image", "rm", image]).await;
+        }
         Ok(())
     }
 
