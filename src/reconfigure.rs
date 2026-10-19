@@ -287,6 +287,9 @@ impl App {
                     "commit".into(),
                     "--change".into(),
                     format!("LABEL {LABEL}=true"),
+                    // Snapshots taken later keep this layer, and their history says what it is.
+                    "--message".into(),
+                    format!("Bilskirnir settings change of {}", env.spec.name),
                     old_id.clone(),
                     reference.clone(),
                 ],

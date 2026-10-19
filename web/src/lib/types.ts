@@ -175,6 +175,41 @@ export type ImageItem = {
   icon?: string | null
   /** The templates page templates the image was built from, in the order they ran. */
   template_ids?: string[]
+  /** Bytes as Docker reports them; `null` when Docker does not have the image. */
+  size?: number | null
+  /** What the image's layers hold unpacked. */
+  layers_size?: number | null
+  /** The part of `layers_size` no other listed image brought. */
+  own_size?: number | null
+}
+
+/** One step of an image's history, as `GET images/{id}/layers` lists it. */
+export type ImageStep = {
+  /** The step as a Dockerfile says it; empty for a commit that recorded no command. */
+  instruction: string
+  kind: "run" | "copy" | "add" | "config" | "commit"
+  /** Bytes the step wrote, unpacked. */
+  size: number
+  /** Unix seconds. */
+  created: number | null
+  /** A commit's message, such as the snapshot it saved. */
+  comment?: string
+  /** Whether the step wrote one of the image's layers. */
+  layer: boolean
+  /** The list ID of the image the step came from; `null` for the image's own. */
+  from: string | null
+  /** The list IDs of the other images that have the step. */
+  shared_with: string[]
+}
+
+/** What an image's disk space is made of; its steps are the newest first. */
+export type ImageLayers = {
+  id: string
+  image_id: string
+  size: number
+  layers_size: number
+  own_size: number
+  steps: ImageStep[]
 }
 
 /** One template's script in a build merged from several, run in a layer of its own. */

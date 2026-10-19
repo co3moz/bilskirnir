@@ -402,8 +402,14 @@ pub async fn diagnostics(
         json!({"output":String::from_utf8_lossy(&bytes),"gpu_requested":env.spec.gpu}),
     ))
 }
-/// Every image: the catalog first, then the saved images.
+/// Every image: the catalog first, then the saved images, each with its sizes.
 pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    let mut list = image_list(&app).await?;
+    crate::layers::add_sizes(&app, &mut list).await;
+    Ok(Json(json!(list)))
+}
+/// Every image as lists show it, before its sizes are added.
+pub(crate) async fn image_list(app: &Arc<App>) -> Result<Vec<Value>> {
     let records = app.db.list::<ImageRecord>("image")?;
     let listed = app
         .docker(&["image", "ls", "-a", "--no-trunc", "--format", "{{.ID}}"])
@@ -433,9 +439,7 @@ pub async fn images(State(app): State<Arc<App>>) -> Result<Json<Value>> {
         value["available"] = json!(available);
         value
     });
-    Ok(Json(json!(
-        catalog.into_iter().chain(saved).collect::<Vec<_>>()
-    )))
+    Ok(catalog.into_iter().chain(saved).collect())
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
 /// megabyte, so only the configuration and compose routes return them; an icon is named by its
@@ -752,6 +756,9 @@ pub async fn snapshot(
                     "commit".into(),
                     "--change".into(),
                     format!("LABEL {LABEL}=true"),
+                    // The image's history says what this layer holds.
+                    "--message".into(),
+                    format!("Bilskirnir snapshot of {}", env.spec.name),
                     container["Id"]
                         .as_str()
                         .context("Missing container ID")?

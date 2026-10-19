@@ -16,6 +16,7 @@ import {
 } from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
 import { IconDialog } from "./icon-dialog"
+import { ImageDrawer } from "./image-drawer"
 import { UploadDialog } from "./upload-dialog"
 import { VolumeBrowser } from "./volume-browser"
 import { VolumeImportDialog } from "./volume-import-dialog"
@@ -49,6 +50,8 @@ function render(dialog: Dialog, open: boolean) {
       return <ComposeDialog {...props} id={dialog.id} />
     case "icon":
       return <IconDialog {...props} id={dialog.id} />
+    case "image":
+      return <ImageDrawer {...props} id={dialog.id} />
     case "import":
       return <ImportImageDialog {...props} />
     case "volume":
