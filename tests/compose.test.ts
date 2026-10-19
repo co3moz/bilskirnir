@@ -15,7 +15,11 @@ import {
   sliderValue,
   composeBody,
   composeDraft,
+  composeEntries,
   composeFor,
+  composeSteps,
+  orderSteps,
+  setupGroups,
   toggleChoice,
   volumeChoices,
   volumeDefault,
@@ -82,7 +86,7 @@ test("the compose comes from a record of the chosen image, as the manager picks 
     { ...record("same"), reference: "a" },
     { ...record("same", { ...unity, root: true }), reference: "b" },
   ]
-  assert.equal(composeFor(shared, "sha256:same")?.root, true)
+  assert.equal(composeSteps(composeFor(shared, "sha256:same")!)[0].root, true)
 })
 
 test("the create form sends a value for every parameter, the default when left alone", () => {
@@ -108,9 +112,9 @@ test("the create form sends a value for every parameter, the default when left a
 test("a compose survives the editor unchanged, and a secret loses its default", () => {
   assert.deepEqual(composeBody(composeDraft(unity)), unity)
   const draft = composeDraft(unity)
-  draft.parameters[2] = { ...draft.parameters[2], secret: true, name: " TOKEN " }
+  draft.steps[0].parameters[2] = { ...draft.steps[0].parameters[2], secret: true, name: " TOKEN " }
   const body = composeBody(draft)
-  assert.deepEqual(body.parameters[2], {
+  assert.deepEqual(composeSteps(body)[0].parameters[2], {
     name: "TOKEN",
     label: "Branch",
     description: "",
@@ -121,8 +125,11 @@ test("a compose survives the editor unchanged, and a secret loses its default", 
   })
   // A new compose starts with a script skeleton and the manager's defaults.
   const fresh = composeDraft()
-  assert.deepEqual([fresh.parameters, fresh.root, fresh.timeout_seconds], [[], false, "600"])
-  assert.match(fresh.script, /set -euo pipefail/)
+  assert.deepEqual(
+    [fresh.steps[0].parameters, fresh.steps[0].root, fresh.steps[0].timeout_seconds],
+    [[], false, "600"]
+  )
+  assert.match(fresh.steps[0].script, /set -euo pipefail/)
 })
 
 test("a pasted compose fills in what it leaves out and says what is wrong", () => {
@@ -254,9 +261,12 @@ const installs: ComposeParameter = {
 test("a volume parameter keeps its path through the editor and a pasted configuration", () => {
   const compose = { ...unity, parameters: [...typed, installs] }
   assert.deepEqual(composeBody(composeDraft(compose)), compose)
-  assert.deepEqual(readCompose({ script: "true", parameters: [installs] }).parameters, [installs])
+  assert.deepEqual(
+    composeSteps(readCompose({ script: "true", parameters: [installs] }))[0].parameters,
+    [installs]
+  )
   // Only a volume parameter sends a path, though the draft keeps it while the type changes.
-  const [draft] = composeDraft({ ...unity, parameters: [installs] }).parameters
+  const [draft] = composeDraft({ ...unity, parameters: [installs] }).steps[0].parameters
   const text = withType(draft, "text")
   assert.equal("path" in draftParameter(text), false)
   assert.equal(draftParameter(withType(text, "volume")).path, "/opt/unity")
@@ -279,10 +289,13 @@ test("a folder parameter is plain text the editor and a pasted configuration kee
   }
   const compose = { ...unity, parameters: [installs, project] }
   assert.deepEqual(composeBody(composeDraft(compose)), compose)
-  assert.deepEqual(readCompose({ script: "true", parameters: [project] }).parameters, [project])
+  assert.deepEqual(
+    composeSteps(readCompose({ script: "true", parameters: [project] }))[0].parameters,
+    [project]
+  )
   assert.equal(displayOf({ type: "folder" }), "input")
   // A secret text parameter turned into a folder is no longer secret, and its default goes.
-  const [draft] = composeDraft({ ...unity, parameters: [typed[0]] }).parameters
+  const [draft] = composeDraft({ ...unity, parameters: [typed[0]] }).steps[0].parameters
   const folder = draftParameter(withType({ ...draft, secret: true }, "folder"))
   assert.equal(folder.secret, false)
   assert.equal(folder.default, "")
@@ -316,13 +329,17 @@ const workspace: ComposeParameter = {
 }
 
 test("the editor offers a new volume for each container as a default of its own", () => {
-  const [draft] = composeDraft({ ...unity, parameters: [workspace] }).parameters
+  const [draft] = composeDraft({ ...unity, parameters: [workspace] }).steps[0].parameters
   assert.equal(volumeDefault(draft), NEW_VOLUME)
   // It survives the editor and a pasted configuration, and is sent only when set.
-  assert.deepEqual(composeBody(composeDraft({ ...unity, parameters: [workspace] })).parameters, [
-    workspace,
-  ])
-  assert.deepEqual(readCompose({ script: "true", parameters: [workspace] }).parameters, [workspace])
+  assert.deepEqual(
+    composeSteps(composeBody(composeDraft({ ...unity, parameters: [workspace] })))[0].parameters,
+    [workspace]
+  )
+  assert.deepEqual(
+    composeSteps(readCompose({ script: "true", parameters: [workspace] }))[0].parameters,
+    [workspace]
+  )
   // The three defaults: none, a volume by name, and a new one, which clears a named default.
   const none = withVolumeDefault(draft, "")
   assert.deepEqual([none.new_volume, none.default, volumeDefault(none)], [false, "", ""])
@@ -377,14 +394,14 @@ test("every type survives the editor unchanged", () => {
 })
 
 test("a new type starts over without the fields the old one had", () => {
-  const [, threads, , , flavor] = composeDraft({ ...unity, parameters: typed }).parameters
+  const [, threads, , , flavor] = composeDraft({ ...unity, parameters: typed }).steps[0].parameters
   const text = withType(threads, "text")
   assert.deepEqual([text.display, text.default], ["input", ""])
   // Bounds stay in the draft, but a text parameter does not send them.
   assert.equal("min" in draftParameter(text), false)
   const many = draftParameter(withType(flavor, "choices"))
   assert.deepEqual([many.display, many.options, many.allow_custom], [undefined, flavors, undefined])
-  const secret = withType({ ...composeDraft(unity).parameters[1] }, "number")
+  const secret = withType({ ...composeDraft(unity).steps[0].parameters[1] }, "number")
   assert.equal(draftParameter(secret).secret, false)
   // A choice starts with one empty option to fill in.
   const choice = withType(text, "choice")
@@ -393,7 +410,8 @@ test("a new type starts over without the fields the old one had", () => {
 })
 
 test("removing an option drops a default that picked it", () => {
-  const [, , , , flavor, toppings] = composeDraft({ ...unity, parameters: typed }).parameters
+  const [, , , , flavor, toppings] = composeDraft({ ...unity, parameters: typed }).steps[0]
+    .parameters
   const vanillaOnly = (draft: typeof flavor) => [draft.options[0]]
   assert.equal(withOptions(toppings, vanillaOnly(toppings)).default, "")
   assert.equal(
@@ -431,7 +449,8 @@ test("a pattern the browser cannot read is left to the manager", () => {
 })
 
 test("a pattern stays with text parameters through the editor", () => {
-  const [, , , , , , accelerator] = composeDraft({ ...unity, parameters: typed }).parameters
+  const [, , , , , , accelerator] = composeDraft({ ...unity, parameters: typed }).steps[0]
+    .parameters
   assert.deepEqual(draftParameter(accelerator), typed[6])
   // Another type sends no pattern, though the draft keeps it while the type changes.
   const number = withType(accelerator, "number")
@@ -465,7 +484,7 @@ test("form values are written the way the script reads them", () => {
 
 test("a pasted compose keeps typed fields and refuses shapes the manager would", () => {
   const pasted = readCompose({ script: "true", parameters: typed })
-  assert.deepEqual(pasted.parameters, typed)
+  assert.deepEqual(composeSteps(pasted)[0].parameters, typed)
   const cases: [unknown, RegExp][] = [
     [{ name: "A", type: "select" }, /unknown type/],
     [{ name: "A", type: "text", display: "slider" }, /cannot be shown/],
@@ -475,4 +494,81 @@ test("a pasted compose keeps typed fields and refuses shapes the manager would",
   ]
   for (const [parameter, message] of cases)
     assert.throws(() => readCompose({ script: "true", parameters: [parameter] }), message)
+})
+
+/** Two templates merged into one image, each asking for a VERSION of its own. */
+const merged: Compose = {
+  steps: [
+    {
+      id: "chrome",
+      name: "Google Chrome",
+      parameters: [{ ...unity.parameters[2], name: "VERSION", default: "stable" }],
+      script: 'echo "$VERSION"',
+      root: true,
+      timeout_seconds: 60,
+    },
+    {
+      id: "vscode",
+      name: "Visual Studio Code",
+      parameters: [{ ...unity.parameters[2], name: "VERSION", default: "1.142.0" }],
+      script: 'echo "$VERSION"',
+      root: false,
+      timeout_seconds: 3500,
+    },
+  ],
+}
+
+test("values of several steps go by their step, so two steps may ask for one name", () => {
+  assert.deepEqual(
+    composeEntries(merged).map((entry) => entry.key),
+    ["chrome.VERSION", "vscode.VERSION"]
+  )
+  // A compose of one step names its values as composes did before steps.
+  assert.deepEqual(
+    composeEntries(unity).map((entry) => entry.key),
+    ["UNITY_EMAIL", "UNITY_PASSWORD", "BRANCH"]
+  )
+  assert.deepEqual(parameterBody(merged, { "vscode.VERSION": "1.143.0" }), {
+    "chrome.VERSION": "stable",
+    "vscode.VERSION": "1.143.0",
+  })
+})
+
+test("a compose of several steps survives the editor and is written as steps", () => {
+  assert.deepEqual(composeBody(composeDraft(merged)), merged)
+  // One step that names nothing goes back to the form composes had before steps.
+  assert.deepEqual(composeBody(composeDraft(unity)), unity)
+  const named = { steps: [composeSteps(merged)[0]] }
+  assert.deepEqual(composeBody(composeDraft(named)), named)
+  assert.deepEqual(readCompose(JSON.parse(JSON.stringify(merged))), merged)
+  assert.throws(() => readCompose({ steps: [] }), /steps/)
+  assert.throws(() => readCompose({ steps: [{ id: 5, script: "true" }] }), /step/)
+  assert.throws(() => readCompose({ steps: [{ id: "a" }] }), /setup script/)
+})
+
+test("steps follow the order of the parts they came with", () => {
+  const steps = [{ id: "a" }, { id: "own" }, { id: "b" }]
+  assert.deepEqual(
+    orderSteps(steps, ["b", "a"]).map((step) => step.id),
+    ["b", "a", "own"]
+  )
+})
+
+test("a container's setup values are shown by the step that asked for them", () => {
+  const steps = [
+    { id: "chrome", name: "Google Chrome", status: "completed" as const },
+    { id: "chrome-dev", name: "Chrome Dev", status: "failed" as const },
+  ]
+  const groups = setupGroups({
+    parameters: { "chrome.VERSION": "stable", "chrome-dev.VERSION": "dev" },
+    secrets: ["chrome-dev.TOKEN"],
+    steps,
+  })
+  assert.deepEqual(groups, [
+    { step: steps[0], values: [["VERSION", "stable"]], secrets: [] },
+    { step: steps[1], values: [["VERSION", "dev"]], secrets: ["TOKEN"] },
+  ])
+  assert.deepEqual(setupGroups({ parameters: { A: "1" }, secrets: ["B"] }), [
+    { values: [["A", "1"]], secrets: ["B"] },
+  ])
 })

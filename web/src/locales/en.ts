@@ -370,6 +370,8 @@ export const en = {
   "compose.read.parameters": "The compose's parameters must be a list.",
   "compose.read.root": "The compose's root setting must be true or false.",
   "compose.read.timeout": "The compose's timeout must be a number of seconds.",
+  "compose.read.step": "A compose step's id and name must be text.",
+  "compose.read.steps": "The compose's steps must be a list of at least one step.",
   "compose.setup.pending": "Waits for the desktop",
   "compose.setup.running": "Running",
   "compose.setup.completed": "Completed",
@@ -403,6 +405,13 @@ export const en = {
     "What a new container from this image asks for, and the script that receives it.",
   "compose.pinned": "Containers created earlier keep the compose they were created with.",
   "compose.save": "Save compose",
+  "compose.parameterCount.one": "{count} parameter",
+  "compose.parameterCount.other": "{count} parameters",
+  "compose.removeStep": "Remove {name}",
+  "compose.valuesHintSteps":
+    "Each part of the image asks for its own values, and its setup script receives only those once the desktop is ready. Secret values are not shown again.",
+  "compose.stepRunsScript": "Runs its setup script without values.",
+  "compose.stepWaiting": "Waiting",
 
   "media.sampleRate": "This browser does not support 48 kHz audio.",
   "media.audioFailed": "Audio connection failed. Check the container logs.",
@@ -482,6 +491,17 @@ export const en = {
     "Paste the JSON that Export copied from a built image. It fills in the name, description, icon, base image, script, internet setting and compose, which you can still change before building.",
   "build.config": "Configuration",
   "build.load": "Load",
+  "build.config.part":
+    "Each part needs an id of lowercase letters, digits and dashes, a name and a script.",
+  "build.config.scriptOrParts":
+    "The configuration has both a script and parts; it can have only one of them.",
+  "build.fromTemplates":
+    "Merged from {names}. Review every script before building: they run as root on the base image, in this order.",
+  "build.partsHint": "Each template's script runs as root in a layer of its own, in this order.",
+  "build.partScript": "Build script of {name}",
+  "build.partEarlier": "Run earlier",
+  "build.partLater": "Run later",
+  "build.partRemove": "Leave out",
   "build.config.description": "The description must be text of at most 4096 bytes.",
   "build.config.template": "The template id must use lowercase letters, digits and dashes.",
   "build.fromTemplate":
@@ -540,6 +560,18 @@ export const en = {
   "templates.broken.tags": "tags must be at most {count} short texts",
   "templates.broken.requires": "requires must be a version such as 0.5.0",
   "templates.broken.duplicate": "another template has the same id",
+  "templates.merge.start": "Merge and install",
+  "templates.merge.go": "Merge",
+  "templates.merge.choose": "Choose {name}",
+  "templates.merge.order": "Step {number}",
+  "templates.merge.chosen.one": "{count} template chosen",
+  "templates.merge.chosen.other": "{count} templates chosen",
+  "templates.merge.hint":
+    "Choose two or more templates to build into one image. Their scripts run in the order you choose them, and each asks for its own values when a container is created.",
+  "templates.merge.twice":
+    "{name} is in more than one of the chosen templates; choose it only once.",
+  "templates.merge.base":
+    "{name} was made for {base}. The merged image is built on the first template's base, so check that its script suits that desktop.",
 
   "nav.jobs": "Jobs",
   "nav.dashboard": "Dashboard",

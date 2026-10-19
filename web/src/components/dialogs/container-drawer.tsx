@@ -30,7 +30,7 @@ import { openDialog } from "@/lib/dialogs"
 import { containerStatus, date, desktopTitle } from "@/lib/format"
 import { formatNumber, rich, t } from "@/lib/i18n"
 import { useContainers, useImages } from "@/lib/queries"
-import { setupLabel } from "@/lib/compose"
+import { setupGroups, setupLabel } from "@/lib/compose"
 import type { ContainerSetup } from "@/lib/types"
 import { SideDrawer, type DialogProps } from "./side-drawer"
 
@@ -218,25 +218,44 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
                   label={setupLabel({ status: setupStatus })}
                 />
               </div>
-              {Object.keys(setup.parameters).length + setup.secrets.length > 0 && (
-                <dl className="grid grid-cols-2 gap-4">
-                  {Object.entries(setup.parameters).map(([name, value]) => (
-                    <Fact key={name} label={name}>
-                      {/* Several choices arrive one per line. */}
-                      <span className="whitespace-pre-wrap">
-                        {value || (
-                          <span className="text-muted-foreground">{t("compose.empty")}</span>
-                        )}
-                      </span>
-                    </Fact>
-                  ))}
-                  {setup.secrets.map((name) => (
-                    <Fact key={name} label={name}>
-                      <span className="text-muted-foreground">{t("compose.secret")}</span>
-                    </Fact>
-                  ))}
-                </dl>
-              )}
+              {/* A compose of several steps shows each step, where it stands and its values. */}
+              {setupGroups(setup).map(({ step, values, secrets }) => (
+                <div key={step?.id ?? ""} className="flex flex-col gap-3">
+                  {step && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-sm font-medium">{step.name}</h4>
+                      <StatusBadge
+                        state={step.status}
+                        tone={setupTone[step.status]}
+                        label={
+                          step.status === "pending"
+                            ? t("compose.stepWaiting")
+                            : setupLabel({ status: step.status })
+                        }
+                      />
+                    </div>
+                  )}
+                  {values.length + secrets.length > 0 && (
+                    <dl className="grid grid-cols-2 gap-4">
+                      {values.map(([name, value]) => (
+                        <Fact key={name} label={name}>
+                          {/* Several choices arrive one per line. */}
+                          <span className="whitespace-pre-wrap">
+                            {value || (
+                              <span className="text-muted-foreground">{t("compose.empty")}</span>
+                            )}
+                          </span>
+                        </Fact>
+                      ))}
+                      {secrets.map((name) => (
+                        <Fact key={name} label={name}>
+                          <span className="text-muted-foreground">{t("compose.secret")}</span>
+                        </Fact>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              ))}
               {running && setupStatus === "failed" && (
                 <Button
                   variant="outline"

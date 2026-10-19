@@ -144,6 +144,16 @@ git push
 
 The wiki has no review or checks before a push reaches every installation, which reads the list within about five minutes. Open **Templates** after pushing: an entry the page cannot offer is listed under the cards with the reason, and **Install** reports a template file that does not fill the build form. Every installation's browser fetches these files, and a template's script runs as root in the build, so treat a change to the wiki as a release. The first page of the wiki has to be created on GitHub before the repository can be cloned.
 
+**Merge and install** builds a template together with others, so write every template to work beside them. A merged build runs each template's build script in a layer of its own, in the order the user chose, and each compose as a step whose script receives only its own parameters; [the API guide](API.md#merged-templates) has the details. That leaves the files the scripts share:
+
+- Start from `apt-get update` and end with `rm -rf /var/lib/apt/lists/*`, since another template may have cleaned up before yours runs.
+- Change shared files by adding to them, and check before adding, so a second run or another template's copy of the same software finds them as it expects. Never remove or replace what another template may have put there.
+- Give a panel launcher its own plugin id: the `vscode` template takes `plugin-23`, so a new one takes the next free number rather than reusing one a template already checks for.
+- Keep the template's compose volume paths its own, such as `/home/desktop/workspace` only for the template that owns that workspace: two steps cannot mount volumes at one path.
+- Name the template's base image as the others do. A merge builds on the first template's base and warns about any other.
+
+A template exported from a merged image has `parts` and `template_ids`, and can be listed like any other; choosing it together with one of the templates it holds is refused.
+
 ## Check a change
 
 For the frontend, with Bun 1.4 or later:

@@ -136,7 +136,7 @@ async fn a_failed_export_breaks_the_download_and_fails_its_job() {
         build: None,
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     app.db.put("image", &record.id, &record).unwrap();
     let response = crate::router(app.clone())
@@ -245,6 +245,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
         internet: false,
         script: "apt-get install -y git\n".into(),
+        parts: Vec::new(),
     };
     let record = ImageRecord {
         id: "built".into(),
@@ -260,7 +261,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         build: Some(build.clone()),
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -272,11 +273,39 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
     let refused = serde_json::to_vec(&refused).unwrap();
     let info = ArchiveInfo::read(Some(&refused)).unwrap();
     assert!(info.build.is_none() && info.name == "Tools");
+    // A build merged from templates keeps its parts; parts the build route refuses are dropped.
+    let merged = BuildConfig {
+        base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
+        internet: true,
+        script: String::new(),
+        parts: ["unity-dev", "chrome"]
+            .map(|id| crate::model::BuildPart {
+                id: id.into(),
+                name: id.into(),
+                script: format!("echo {id}\n"),
+            })
+            .to_vec(),
+    };
+    let written = serde_json::to_vec(&ArchiveInfo::of(&ImageRecord {
+        build: Some(merged.clone()),
+        ..record
+    }))
+    .unwrap();
+    assert_eq!(
+        ArchiveInfo::read(Some(&written)).unwrap().build,
+        Some(merged)
+    );
+    let mut refused: Value = serde_json::from_slice(&written).unwrap();
+    refused["build"]["parts"][1]["id"] = json!("unity-dev");
+    let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
+    assert!(info.build.is_none());
 }
 
 #[test]
 fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
-    let compose = Compose {
+    let compose = Compose::single(crate::compose::Step {
+        id: String::new(),
+        name: String::new(),
         // A choice carries the most fields a parameter has, and text its own pattern.
         parameters: vec![
             serde_json::from_value(json!({
@@ -293,7 +322,7 @@ fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
         script: "printf '%s' \"$UNITY_EDITOR\" > ~/unity-editor\n".into(),
         root: false,
         timeout_seconds: 600,
-    };
+    });
     let record = ImageRecord {
         id: "snap".into(),
         name: "Unity project".into(),
@@ -308,7 +337,7 @@ fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
         build: None,
         compose: Some(compose.clone()),
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     assert_eq!(
@@ -338,17 +367,24 @@ fn an_icon_and_template_travel_with_the_archive_and_unusable_ones_are_dropped() 
         build: None,
         compose: None,
         icon: Some(crate::icons::sample(256, 256)),
-        template_id: Some("unity".into()),
+        template_ids: vec!["unity".into()],
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&record)).unwrap();
     let info = ArchiveInfo::read(Some(&written)).unwrap();
     assert_eq!(info.icon, record.icon);
-    assert_eq!(info.template_id.as_deref(), Some("unity"));
+    assert_eq!(info.template_ids, ["unity"]);
     // A picture or an id this release cannot use costs the archive nothing else.
     let mut refused: Value = serde_json::from_slice(&written).unwrap();
     refused["icon"] = json!("data:image/webp;base64,UklGRg==");
-    refused["template_id"] = json!("Unity 6");
+    refused["template_ids"] = json!(["Unity 6", "chrome"]);
     let info = ArchiveInfo::read(Some(&serde_json::to_vec(&refused).unwrap())).unwrap();
-    assert!(info.icon.is_none() && info.template_id.is_none());
+    assert!(info.icon.is_none());
+    assert_eq!(info.template_ids, ["chrome"]);
     assert_eq!(info.name, "Unity 6");
+    // Archives from before templates could be merged name one template on its own.
+    let mut older: Value = serde_json::from_slice(&written).unwrap();
+    older.as_object_mut().unwrap().remove("template_ids");
+    older["template_id"] = json!("unity");
+    let info = ArchiveInfo::read(Some(&serde_json::to_vec(&older).unwrap())).unwrap();
+    assert_eq!(info.template_ids, ["unity"]);
 }

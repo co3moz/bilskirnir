@@ -357,6 +357,8 @@ export const tr: Messages = {
   "compose.read.parameters": "Compose parametreleri bir liste olmalı.",
   "compose.read.root": "Compose'un root ayarı true veya false olmalı.",
   "compose.read.timeout": "Compose'un zaman aşımı saniye cinsinden bir sayı olmalı.",
+  "compose.read.step": "Bir Compose adımının kimliği ve adı metin olmalı.",
+  "compose.read.steps": "Compose'un adımları en az bir adımlık bir liste olmalı.",
   "compose.setup.pending": "Masaüstünü bekliyor",
   "compose.setup.running": "Çalışıyor",
   "compose.setup.completed": "Tamamlandı",
@@ -390,6 +392,13 @@ export const tr: Messages = {
     "Bu imajdan oluşturulan yeni bir konteynerin istediği değerler ve bunları alan betik.",
   "compose.pinned": "Daha önce oluşturulan konteynerler, oluşturuldukları compose'u korur.",
   "compose.save": "Compose'u kaydet",
+  "compose.parameterCount.one": "{count} parametre",
+  "compose.parameterCount.other": "{count} parametre",
+  "compose.removeStep": "{name} adımını kaldır",
+  "compose.valuesHintSteps":
+    "İmajın her parçası kendi değerlerini ister ve kurulum betiği masaüstü hazır olduğunda yalnızca bunları alır. Gizli değerler bir daha gösterilmez.",
+  "compose.stepRunsScript": "Kurulum betiğini değer almadan çalıştırır.",
+  "compose.stepWaiting": "Bekliyor",
   "media.sampleRate": "Bu tarayıcı 48 kHz sesi desteklemiyor.",
   "media.audioFailed": "Ses bağlantısı başarısız oldu. Konteyner loglarını kontrol edin.",
   "media.microphoneFailed": "Mikrofon bağlantısı başarısız oldu. Konteyner loglarını kontrol edin.",
@@ -465,6 +474,17 @@ export const tr: Messages = {
     "Oluşturulmuş bir imajdan dışa aktarma ile kopyalanan JSON'u yapıştırın. Ad, açıklama, simge, temel imaj, betik, internet ayarı ve compose alanlarını doldurur; oluşturmadan önce bunları yine de değiştirebilirsiniz.",
   "build.config": "Yapılandırma",
   "build.load": "Yükle",
+  "build.config.part":
+    "Her parçanın küçük harf, rakam ve tireden oluşan bir kimliği, bir adı ve bir betiği olmalı.",
+  "build.config.scriptOrParts":
+    "Yapılandırmada hem betik hem parçalar var; yalnızca biri olabilir.",
+  "build.fromTemplates":
+    "{names} birleştirildi. Oluşturmadan önce her betiği gözden geçirin: temel imaj üzerinde bu sırayla root olarak çalışırlar.",
+  "build.partsHint": "Her şablonun betiği bu sırayla, kendi katmanında root olarak çalışır.",
+  "build.partScript": "{name} derleme betiği",
+  "build.partEarlier": "Daha önce çalıştır",
+  "build.partLater": "Daha sonra çalıştır",
+  "build.partRemove": "Çıkar",
   "build.config.description": "Açıklama en fazla 4096 baytlık bir metin olmalı.",
   "build.config.template": "Şablon kimliği küçük harf, rakam ve tire kullanmalı.",
   "build.fromTemplate":
@@ -523,6 +543,18 @@ export const tr: Messages = {
   "templates.broken.tags": "etiketler en fazla {count} kısa metin olmalı",
   "templates.broken.requires": "requires 0.5.0 gibi bir sürüm olmalı",
   "templates.broken.duplicate": "aynı kimliğe sahip başka bir şablon var",
+  "templates.merge.start": "Birleştir ve yükle",
+  "templates.merge.go": "Birleştir",
+  "templates.merge.choose": "{name} şablonunu seç",
+  "templates.merge.order": "{number}. adım",
+  "templates.merge.chosen.one": "{count} şablon seçildi",
+  "templates.merge.chosen.other": "{count} şablon seçildi",
+  "templates.merge.hint":
+    "Tek bir imajda birleştirilecek iki ya da daha fazla şablon seçin. Betikleri seçtiğiniz sırayla çalışır ve her biri container oluşturulurken kendi değerlerini ister.",
+  "templates.merge.twice":
+    "{name} seçilen şablonların birden fazlasında var; yalnızca bir kez seçin.",
+  "templates.merge.base":
+    "{name}, {base} için hazırlandı. Birleştirilen imaj ilk şablonun temeli üzerinde oluşturulur; betiğinin o masaüstüne uyduğunu kontrol edin.",
   "nav.jobs": "İşler",
   "nav.dashboard": "Gösterge paneli",
   "nav.containers": "Konteynerler",

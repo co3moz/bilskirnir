@@ -360,6 +360,8 @@ export const es: Messages = {
   "compose.read.parameters": "Los parámetros del Compose deben ser una lista.",
   "compose.read.root": "El ajuste root del Compose debe ser true o false.",
   "compose.read.timeout": "El tiempo límite del Compose debe ser un número de segundos.",
+  "compose.read.step": "El id y el nombre de un paso del Compose deben ser texto.",
+  "compose.read.steps": "Los pasos del Compose deben ser una lista de al menos un paso.",
   "compose.setup.pending": "Espera al escritorio",
   "compose.setup.running": "En ejecución",
   "compose.setup.completed": "Completada",
@@ -393,6 +395,13 @@ export const es: Messages = {
     "Lo que pide un contenedor nuevo de esta imagen y el script que lo recibe.",
   "compose.pinned": "Los contenedores creados antes conservan el Compose con el que se crearon.",
   "compose.save": "Guardar Compose",
+  "compose.parameterCount.one": "{count} parámetro",
+  "compose.parameterCount.other": "{count} parámetros",
+  "compose.removeStep": "Quitar {name}",
+  "compose.valuesHintSteps":
+    "Cada parte de la imagen pide sus propios valores, y su script de configuración recibe solo esos cuando el escritorio está listo. Los valores secretos no se vuelven a mostrar.",
+  "compose.stepRunsScript": "Ejecuta su script de configuración sin valores.",
+  "compose.stepWaiting": "En espera",
   "media.sampleRate": "Este navegador no admite audio a 48 kHz.",
   "media.audioFailed": "Falló la conexión de audio. Revisa los registros del contenedor.",
   "media.microphoneFailed": "Falló la conexión del micrófono. Revisa los registros del contenedor.",
@@ -468,6 +477,18 @@ export const es: Messages = {
     "Pega el JSON que Exportar copió de una imagen compilada. Rellena el nombre, la descripción, el icono, la imagen base, el script, el ajuste de Internet y el Compose, que aún puedes cambiar antes de compilar.",
   "build.config": "Configuración",
   "build.load": "Cargar",
+  "build.config.part":
+    "Cada parte necesita un id de minúsculas, dígitos y guiones, un nombre y un script.",
+  "build.config.scriptOrParts":
+    "La configuración tiene un script y partes a la vez; solo puede tener uno de ellos.",
+  "build.fromTemplates":
+    "Combinada a partir de {names}. Revise cada script antes de construir: se ejecutan como root sobre la imagen base, en este orden.",
+  "build.partsHint":
+    "El script de cada plantilla se ejecuta como root en una capa propia, en este orden.",
+  "build.partScript": "Script de construcción de {name}",
+  "build.partEarlier": "Ejecutar antes",
+  "build.partLater": "Ejecutar después",
+  "build.partRemove": "Omitir",
   "build.config.description": "La descripción debe ser un texto de 4096 bytes como máximo.",
   "build.config.template": "El id de la plantilla solo puede usar minúsculas, dígitos y guiones.",
   "build.fromTemplate":
@@ -527,6 +548,18 @@ export const es: Messages = {
   "templates.broken.tags": "las etiquetas deben ser como máximo {count} textos cortos",
   "templates.broken.requires": "requires debe ser una versión como 0.5.0",
   "templates.broken.duplicate": "otra plantilla tiene el mismo id",
+  "templates.merge.start": "Combinar e instalar",
+  "templates.merge.go": "Combinar",
+  "templates.merge.choose": "Elegir {name}",
+  "templates.merge.order": "Paso {number}",
+  "templates.merge.chosen.one": "{count} plantilla elegida",
+  "templates.merge.chosen.other": "{count} plantillas elegidas",
+  "templates.merge.hint":
+    "Elija dos o más plantillas para construir una sola imagen. Sus scripts se ejecutan en el orden en que las elige, y cada una pide sus propios valores al crear un contenedor.",
+  "templates.merge.twice":
+    "{name} está en más de una de las plantillas elegidas; elíjalo solo una vez.",
+  "templates.merge.base":
+    "{name} se hizo para {base}. La imagen combinada se construye sobre la base de la primera plantilla, así que compruebe que su script sirve para ese escritorio.",
   "nav.jobs": "Tareas",
   "nav.dashboard": "Panel",
   "nav.containers": "Contenedores",

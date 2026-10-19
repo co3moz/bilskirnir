@@ -1,6 +1,7 @@
 import { afterEach, test } from "bun:test"
 import assert from "node:assert/strict"
 
+import { composeSteps } from "../web/src/lib/compose"
 import { dataUrlBytes, iconUrl, readIcon } from "../web/src/lib/icons"
 import {
   allTags,
@@ -8,6 +9,7 @@ import {
   compareVersions,
   loadTemplate,
   matches,
+  mergeTemplates,
   readTemplateList,
   templateFile,
 } from "../web/src/lib/templates"
@@ -156,4 +158,91 @@ test("a template that cannot fill the build form names itself in the error", asy
   )
   serve({})
   await assert.rejects(loadTemplate(LIST, unity), /HTTP 404/)
+})
+
+const BASE = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"
+const step = (name: string, script: string) => ({
+  parameters: [
+    { name, label: "", description: "", type: "text" as const, required: false },
+    { name: "VERSION", label: "", description: "", type: "text" as const, required: false },
+  ].map((parameter) => ({ ...parameter, secret: false, default: "" })),
+  script,
+  root: false,
+  timeout_seconds: 600,
+})
+const chrome = { id: "chrome", name: "Google Chrome", description: "Chrome.", tags: [] }
+const vscode = { id: "vscode", name: "VS Code", description: "", tags: [] }
+
+test("merging templates runs each script as a part and each compose as a step", () => {
+  const merged = mergeTemplates([
+    {
+      template: unity,
+      config: {
+        base_image: BASE,
+        script: "install unity",
+        internet: true,
+        compose: step("WORKSPACE", "setup unity"),
+        icon: "data:image/png;base64,AA==",
+        template_id: "unity",
+      },
+    },
+    { template: chrome, config: { base_image: BASE, script: "install chrome", internet: false } },
+    {
+      template: vscode,
+      config: {
+        base_image: BASE,
+        script: "install code",
+        internet: false,
+        compose: step("GIT_NAME", "setup code"),
+      },
+    },
+  ])
+  assert.deepEqual(merged.parts, [
+    { id: "unity", name: "Unity Hub", script: "install unity" },
+    { id: "chrome", name: "Google Chrome", script: "install chrome" },
+    { id: "vscode", name: "VS Code", script: "install code" },
+  ])
+  // Both composes ask for VERSION, which is fine: each step's script gets its own.
+  assert.deepEqual(
+    composeSteps(merged.compose!).map((step) => [step.id, step.name, step.script]),
+    [
+      ["unity", "Unity Hub", "setup unity"],
+      ["vscode", "VS Code", "setup code"],
+    ]
+  )
+  assert.equal(merged.name, "Unity Hub + Google Chrome + VS Code")
+  assert.equal(merged.description, "Unity Hub with a volume for editors.\n\nChrome.")
+  assert.equal(merged.base_image, BASE)
+  assert.equal(merged.internet, true)
+  assert.equal(merged.icon, "data:image/png;base64,AA==")
+  assert.deepEqual(merged.template_ids, ["unity", "chrome", "vscode"])
+  assert.equal(merged.warnings, undefined)
+})
+
+test("a merge warns about another base and refuses a template it already has", () => {
+  const merged = mergeTemplates([
+    { template: chrome, config: { base_image: BASE, script: "a" } },
+    { template: vscode, config: { base_image: "example/gnome:1", script: "b" } },
+  ])
+  assert.equal(merged.base_image, BASE)
+  assert.match(merged.warnings?.[0] ?? "", /VS Code was made for example\/gnome:1/)
+  // A template merged from others brings its parts, so choosing one of them again is refused.
+  const both = {
+    template: { ...chrome, id: "chrome-and-code", name: "Chrome and Code" },
+    config: {
+      parts: [
+        { id: "chrome", name: "Google Chrome", script: "a" },
+        { id: "vscode", name: "VS Code", script: "b" },
+      ],
+      template_ids: ["chrome", "vscode"],
+    },
+  }
+  assert.throws(
+    () => mergeTemplates([both, { template: chrome, config: { script: "a" } }]),
+    /Google Chrome is in more than one/
+  )
+  assert.deepEqual(
+    mergeTemplates([both, { template: unity, config: { script: "c" } }]).template_ids,
+    ["chrome-and-code", "chrome", "vscode", "unity"]
+  )
 })

@@ -44,8 +44,10 @@ import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
-import { composeBody, composeDraft, type ComposeDraft } from "@/lib/compose"
+import { composeBody, composeDraft, orderSteps, type ComposeDraft } from "@/lib/compose"
+import type { BuildPart } from "@/lib/types"
 import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
+import { BuildParts } from "./build-parts"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ComposeFields } from "./compose-dialog"
@@ -191,6 +193,14 @@ apt-get update
 apt-get install -y git build-essential
 rm -rf /var/lib/apt/lists/*`
 
+/** The templates a configuration is built from: the one it names, or those merged into it. */
+const templatesOf = (config?: ImportedBuild) =>
+  config?.template_ids?.length
+    ? config.template_ids
+    : config?.template_id
+      ? [config.template_id]
+      : []
+
 /** Builds an image from a script, or from a configuration a template or a paste filled in. */
 export function BuildImageDialog({ config, ...props }: DialogProps & { config?: ImportedBuild }) {
   const settings = useSettings().data
@@ -200,16 +210,45 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
   const [description, setDescription] = React.useState(config?.description ?? "")
   const [icon, setIcon] = React.useState(config?.icon)
   const [iconError, setIconError] = React.useState<string>()
-  const [templateId, setTemplateId] = React.useState(config?.template_id)
+  const [templateIds, setTemplateIds] = React.useState(() => templatesOf(config))
+  const [warnings, setWarnings] = React.useState(config?.warnings ?? [])
   // The base the user chose, and the one a loaded configuration named.
   const [base, setBase] = React.useState<string | undefined>()
   const [wanted, setWanted] = React.useState(config?.base_image)
   const [script, setScript] = React.useState(config?.script ?? DEFAULT_SCRIPT)
+  // Templates merged into one build run as parts instead of one script.
+  const [parts, setParts] = React.useState(config?.parts ?? null)
   const [internet, setInternet] = React.useState(config?.internet ?? true)
   const [compose, setCompose] = React.useState<ComposeDraft | null>(
     config?.compose ? composeDraft(config.compose) : null
   )
   const [importing, setImporting] = React.useState(false)
+  const parameterCount =
+    compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
+
+  // A part's setup step goes with it: it moves along, and leaves when the part does.
+  const moveParts = (next: BuildPart[]) => {
+    setParts(next)
+    setCompose(
+      (current) =>
+        current && {
+          steps: orderSteps(
+            current.steps,
+            next.map((part) => part.id)
+          ),
+        }
+    )
+  }
+  const removePart = (index: number) => {
+    const removed = parts?.[index]
+    if (!parts || !removed) return
+    setParts(parts.filter((_, other) => other !== index))
+    setTemplateIds((ids) => ids.filter((id) => id !== removed.id))
+    setCompose((current) => {
+      const steps = current?.steps.filter((step) => step.id !== removed.id) ?? []
+      return steps.length ? { steps } : null
+    })
+  }
   const usable = choices.some((choice) => choice.value === wanted && !choice.disabled)
   const chosen = base ?? (usable ? wanted : initialImage(choices, settings?.base_image))
   // The base a loaded configuration named when this host cannot build on it.
@@ -222,8 +261,10 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
     if (config.description !== undefined) setDescription(config.description)
     if (config.icon !== undefined) setIcon(config.icon)
     if (config.internet !== undefined) setInternet(config.internet)
-    setTemplateId(config.template_id)
-    setScript(config.script)
+    setTemplateIds(templatesOf(config))
+    setWarnings(config.warnings ?? [])
+    setParts(config.parts ?? null)
+    if (config.script !== undefined) setScript(config.script)
     setCompose(config.compose ? composeDraft(config.compose) : null)
     if (config.base_image !== undefined) {
       setWanted(config.base_image)
@@ -246,18 +287,28 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                 name,
                 ...(description.trim() ? { description } : {}),
                 base_image: chosen,
-                script,
+                ...(parts ? { parts } : { script }),
                 internet,
                 ...(compose ? { compose: composeBody(compose) } : {}),
                 ...(icon ? { icon } : {}),
-                ...(templateId ? { template_id: templateId } : {}),
+                ...(templateIds.length
+                  ? parts
+                    ? { template_ids: templateIds }
+                    : { template_id: templateIds[0] }
+                  : {}),
               })
             )}
           >
             <DialogHeader>
               <DialogTitle>{t("images.build")}</DialogTitle>
               <DialogDescription>
-                {templateId ? t("build.fromTemplate") : t("build.description")}
+                {parts
+                  ? t("build.fromTemplates", {
+                      names: formatList(parts.map((part) => part.name)),
+                    })
+                  : templateIds.length
+                    ? t("build.fromTemplate")
+                    : t("build.description")}
               </DialogDescription>
             </DialogHeader>
             <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
@@ -321,31 +372,57 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                   </AlertDescription>
                 </Alert>
               )}
+              {warnings.map((warning) => (
+                <Alert key={warning}>
+                  <RiAlertLine className="text-warning" />
+                  <AlertDescription>{warning}</AlertDescription>
+                </Alert>
+              ))}
               <Tabs defaultValue="build">
                 <TabsList>
-                  <TabsTrigger value="build">{t("build.script")}</TabsTrigger>
+                  <TabsTrigger value="build">
+                    {t("build.script")}
+                    {parts ? ` · ${formatNumber(parts.length)}` : ""}
+                  </TabsTrigger>
                   <TabsTrigger value="compose">
                     {t("compose.name")}
-                    {compose?.parameters.length
-                      ? ` · ${formatNumber(compose.parameters.length)}`
-                      : ""}
+                    {parameterCount ? ` · ${formatNumber(parameterCount)}` : ""}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="build">
                   <FieldGroup>
-                    <Field>
-                      <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
-                      <Textarea
-                        id={`${field}-script`}
-                        rows={12}
-                        required
-                        spellCheck={false}
-                        value={script}
-                        onChange={(event) => setScript(event.target.value)}
-                        className="max-h-[500px] overflow-y-auto font-mono text-xs"
+                    {parts ? (
+                      <BuildParts
+                        parts={parts}
+                        onChange={(index, next) =>
+                          setParts(
+                            parts.map((part, other) =>
+                              other === index ? { ...part, script: next } : part
+                            )
+                          )
+                        }
+                        onMove={(index, by) => {
+                          const next = [...parts]
+                          ;[next[index], next[index + by]] = [next[index + by], next[index]]
+                          moveParts(next)
+                        }}
+                        onRemove={removePart}
                       />
-                      <FieldDescription>{t("build.scriptHint")}</FieldDescription>
-                    </Field>
+                    ) : (
+                      <Field>
+                        <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
+                        <Textarea
+                          id={`${field}-script`}
+                          rows={12}
+                          required
+                          spellCheck={false}
+                          value={script}
+                          onChange={(event) => setScript(event.target.value)}
+                          className="max-h-[500px] overflow-y-auto font-mono text-xs"
+                        />
+                        <FieldDescription>{t("build.scriptHint")}</FieldDescription>
+                      </Field>
+                    )}
                     <Field orientation="horizontal">
                       <Switch
                         id={`${field}-internet`}

@@ -6,6 +6,7 @@ import type {
   ParameterType,
   Compose,
   ComposeParameter,
+  ComposeStep,
   Volume,
 } from "./types"
 import { t } from "./i18n"
@@ -55,15 +56,39 @@ export function composeFor(records: WithCompose[], value?: string) {
   )
 }
 
+type StepFields = Pick<ComposeStep, "id" | "name" | "parameters">
+
+/** A compose's steps: its one step, or the several it lists. */
+export const composeSteps = <S extends StepFields>(compose: S | { steps: S[] }): S[] =>
+  "steps" in compose ? compose.steps : [compose]
+
+/** What the forms call a step. */
+export const stepTitle = (step: Pick<ComposeStep, "id" | "name">) => step.name || step.id || ""
+
+/**
+ * Every parameter of a compose with its step and the name its value goes by: the parameter's
+ * own name, or `<step>.<NAME>` in a compose of several steps, where two steps may ask for one.
+ */
+export function composeEntries<S extends StepFields>(compose: S | { steps: S[] }) {
+  const steps = composeSteps(compose)
+  return steps.flatMap((step) =>
+    step.parameters.map((parameter) => ({
+      step,
+      parameter,
+      key: steps.length > 1 ? `${step.id}.${parameter.name}` : parameter.name,
+    }))
+  )
+}
+
 /** The values a create request sends: one for every parameter, its default when left alone. */
 export function parameterBody(
-  compose: Pick<Compose, "parameters"> | null | undefined,
+  compose: StepFields | { steps: StepFields[] } | null | undefined,
   values: Record<string, string>
 ) {
   return Object.fromEntries(
-    (compose?.parameters ?? []).map((parameter) => [
-      parameter.name,
-      values[parameter.name] ?? parameter.default,
+    (compose ? composeEntries(compose) : []).map(({ parameter, key }) => [
+      key,
+      values[key] ?? parameter.default,
     ])
   )
 }
@@ -209,12 +234,17 @@ export type ParameterDraft = {
   pattern_message: string
   new_volume: boolean
 }
-export type ComposeDraft = {
+/** A step as the editor holds it; `id` and `name` stay as the compose named them. */
+export type StepDraft = {
+  key: number
+  id: string
+  name: string
   parameters: ParameterDraft[]
   script: string
   root: boolean
   timeout_seconds: string
 }
+export type ComposeDraft = { steps: StepDraft[] }
 
 let draftKey = 0
 
@@ -341,23 +371,50 @@ export function draftParameter(draft: ParameterDraft): ComposeParameter {
   }
 }
 
-export function composeDraft(compose?: Compose | null): ComposeDraft {
+function stepDraft(step?: ComposeStep): StepDraft {
   return {
-    parameters: (compose?.parameters ?? []).map(parameterDraft),
-    script: compose?.script ?? DEFAULT_SETUP,
-    root: compose?.root ?? false,
-    timeout_seconds: String(compose?.timeout_seconds ?? 600),
+    key: ++draftKey,
+    id: step?.id ?? "",
+    name: step?.name ?? "",
+    parameters: (step?.parameters ?? []).map(parameterDraft),
+    script: step?.script ?? DEFAULT_SETUP,
+    root: step?.root ?? false,
+    timeout_seconds: String(step?.timeout_seconds ?? 600),
   }
 }
 
-/** The compose a draft describes. */
-export function composeBody(draft: ComposeDraft): Compose {
+export function composeDraft(compose?: Compose | null): ComposeDraft {
+  return { steps: compose ? composeSteps(compose).map(stepDraft) : [stepDraft()] }
+}
+
+function draftStep(draft: StepDraft): ComposeStep {
   return {
+    ...(draft.id ? { id: draft.id } : {}),
+    ...(draft.name ? { name: draft.name } : {}),
     parameters: draft.parameters.map(draftParameter),
     script: draft.script,
     root: draft.root,
     timeout_seconds: Number(draft.timeout_seconds),
   }
+}
+
+/** The compose a draft describes: one step as composes were before steps, or several. */
+export function composeBody(draft: ComposeDraft): Compose {
+  const steps = draft.steps.map(draftStep)
+  const [only] = steps
+  return steps.length === 1 && !only.id && !only.name ? only : { steps }
+}
+
+/** Steps put in the order of `ids`, such as the parts of a build; others keep their place after. */
+export function orderSteps<S extends Pick<ComposeStep, "id">>(steps: S[], ids: string[]) {
+  const rank = (step: S) => {
+    const index = ids.indexOf(step.id ?? "")
+    return index < 0 ? ids.length : index
+  }
+  return steps
+    .map((step, index) => ({ step, index }))
+    .sort((a, b) => rank(a.step) - rank(b.step) || a.index - b.index)
+    .map(({ step }) => step)
 }
 
 const TYPES = Object.keys(DISPLAYS) as ParameterType[]
@@ -417,22 +474,64 @@ function readParameter(value: unknown): ComposeParameter {
   return read
 }
 
-/** A pasted configuration's compose, or the reason it cannot be one. */
-export function readCompose(value: unknown): Compose {
+function readStep(value: unknown): ComposeStep {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error(t("compose.read.object"))
   const {
+    id = "",
+    name = "",
     parameters = [],
     script,
     root = false,
     timeout_seconds = 600,
   } = value as Record<string, unknown>
+  if (typeof id !== "string" || typeof name !== "string") throw new Error(t("compose.read.step"))
   if (typeof script !== "string" || !script.trim()) throw new Error(t("compose.read.script"))
   if (!Array.isArray(parameters)) throw new Error(t("compose.read.parameters"))
   if (typeof root !== "boolean") throw new Error(t("compose.read.root"))
   if (typeof timeout_seconds !== "number") throw new Error(t("compose.read.timeout"))
-  return { parameters: parameters.map(readParameter), script, root, timeout_seconds }
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    parameters: parameters.map(readParameter),
+    script,
+    root,
+    timeout_seconds,
+  }
+}
+
+/** A pasted configuration's compose, or the reason it cannot be one. */
+export function readCompose(value: unknown): Compose {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new Error(t("compose.read.object"))
+  if (!("steps" in value)) return readStep(value)
+  const { steps } = value as { steps: unknown }
+  if (!Array.isArray(steps) || !steps.length) throw new Error(t("compose.read.steps"))
+  return { steps: steps.map(readStep) }
 }
 
 export const setupLabel = (setup: Pick<ContainerSetup, "status">) =>
   t(`compose.setup.${setup.status}`)
+
+type SetupStep = NonNullable<ContainerSetup["steps"]>[number]
+
+/**
+ * A container's setup values by the step that asked for them, each by the name its step's script
+ * reads; a compose of one step has one group without a step.
+ */
+export function setupGroups(
+  setup: Pick<ContainerSetup, "parameters" | "secrets" | "steps">
+): { step?: SetupStep; values: [string, string][]; secrets: string[] }[] {
+  const steps = setup.steps ?? []
+  if (!steps.length) return [{ values: Object.entries(setup.parameters), secrets: setup.secrets }]
+  // Step ids hold no dot, so `<step>.` names exactly that step's values.
+  const own = (step: SetupStep) => (name: string) =>
+    name.startsWith(`${step.id}.`) ? [name.slice(step.id.length + 1)] : []
+  return steps.map((step) => ({
+    step,
+    values: Object.entries(setup.parameters).flatMap(([name, value]) =>
+      own(step)(name).map((short): [string, string] => [short, value])
+    ),
+    secrets: setup.secrets.flatMap(own(step)),
+  }))
+}

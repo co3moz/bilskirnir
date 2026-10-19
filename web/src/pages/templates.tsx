@@ -6,7 +6,9 @@ import {
   RiHammerLine,
   RiRefreshLine,
   RiSearchLine,
+  RiStackLine,
 } from "@remixicon/react"
+import { cn } from "cn"
 import { toast } from "sonner"
 
 import { ImageIcon } from "@/components/image-icon"
@@ -14,6 +16,7 @@ import { PageBody, SectionHeading } from "@/components/page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Card,
   CardContent,
@@ -33,29 +36,40 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { openDialog } from "@/lib/dialogs"
-import { plural, t } from "@/lib/i18n"
+import { formatNumber, plural, t } from "@/lib/i18n"
 import { useImages, useSettings, useTemplates } from "@/lib/queries"
 import {
   allTags,
   buildable,
   loadTemplate,
   matches,
+  mergeTemplates,
   templateFile,
   type BrokenTemplate,
   type Template,
 } from "@/lib/templates"
 
-/** One template: its icon, what it is, whether an image was built from it, and Install. */
+/**
+ * One template: its icon, what it is, whether an image was built from it, and Install. While
+ * templates are chosen for a merge, the whole card chooses it and shows where it comes in.
+ */
 function TemplateCard({
   list,
   template,
   version,
   installed,
+  choosing,
+  order,
+  onChoose,
 }: {
   list: string
   template: Template
   version: string
   installed: number
+  choosing: boolean
+  /** Where it comes in the merge, from 1; 0 when it is not chosen. */
+  order: number
+  onChoose: () => void
 }) {
   const [busy, setBusy] = React.useState(false)
   const supported = buildable(template, version)
@@ -70,15 +84,41 @@ function TemplateCard({
       setBusy(false)
     }
   }
+  const choosable = choosing && supported
   return (
-    <Card size="sm">
-      <CardHeader className="grid-cols-[auto_1fr] items-center gap-x-3">
+    <Card
+      size="sm"
+      data-chosen={order > 0 || undefined}
+      onClick={choosable ? onChoose : undefined}
+      className={cn(
+        choosable && "cursor-pointer transition-shadow hover:ring-foreground/25",
+        choosing && !supported && "opacity-60",
+        order > 0 && "ring-2 ring-primary hover:ring-primary"
+      )}
+    >
+      <CardHeader
+        className={cn(
+          "items-center gap-x-3",
+          choosing ? "grid-cols-[auto_1fr_auto]" : "grid-cols-[auto_1fr]"
+        )}
+      >
         <ImageIcon
           src={templateFile(list, template.id, "png")}
           fallback={RiApps2Line}
           className="row-span-2 size-14 rounded-xl"
         />
         <CardTitle className="break-words">{template.name}</CardTitle>
+        {choosing && (
+          <Checkbox
+            checked={order > 0}
+            disabled={!supported}
+            onCheckedChange={onChoose}
+            // The card chooses it too; one click must not choose it twice.
+            onClick={(event) => event.stopPropagation()}
+            aria-label={t("templates.merge.choose", { name: template.name })}
+            className="row-span-2 self-start"
+          />
+        )}
         <div className="flex flex-wrap gap-1">
           {template.tags.map((tag) => (
             <Badge key={tag} variant="outline" className="text-muted-foreground">
@@ -93,7 +133,22 @@ function TemplateCard({
         </CardDescription>
       </CardContent>
       <CardFooter className="flex-wrap justify-between gap-2">
-        {installed ? (
+        {choosing ? (
+          <>
+            {order > 0 ? (
+              <Badge variant="secondary" className="tabular-nums">
+                {t("templates.merge.order", { number: formatNumber(order) })}
+              </Badge>
+            ) : (
+              <span />
+            )}
+            {!supported && (
+              <Badge variant="outline" className="border-warning/40 text-warning">
+                {t("templates.requires", { version: template.requires ?? "" })}
+              </Badge>
+            )}
+          </>
+        ) : installed ? (
           <Badge variant="outline" className="border-success/40 text-success">
             <RiCheckLine data-icon="inline-start" />
             {plural(installed, {
@@ -104,7 +159,7 @@ function TemplateCard({
         ) : (
           <span />
         )}
-        {supported ? (
+        {choosing ? null : supported ? (
           <Button
             size="sm"
             variant={installed ? "outline" : "default"}
@@ -164,8 +219,42 @@ export function TemplatesPage() {
   const shown = all.filter(
     (template) => matches(template, search) && (!tag || template.tags.includes(tag))
   )
-  const installed = (id: string) => images.filter((image) => image.template_id === id).length
+  const installed = (id: string) =>
+    images.filter((image) => image.template_ids?.includes(id)).length
   const source = list ? new URL(list).host : ""
+  const version = settings?.version ?? "0.0.0"
+  const mergeable = all.filter((template) => buildable(template, version)).length >= 2
+  // Choosing templates to merge: their ids in the order they were chosen, which is the order
+  // their scripts run in.
+  const [choosing, setChoosing] = React.useState(false)
+  const [chosen, setChosen] = React.useState<string[]>([])
+  const [merging, setMerging] = React.useState(false)
+  const choose = (id: string) =>
+    setChosen((ids) => (ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id]))
+  const stopChoosing = () => {
+    setChoosing(false)
+    setChosen([])
+  }
+  const merge = async () => {
+    if (!list) return
+    setMerging(true)
+    try {
+      const templates = chosen.flatMap((id) => all.filter((template) => template.id === id))
+      const loaded = await Promise.all(
+        templates.map(async (template) => ({
+          template,
+          config: await loadTemplate(list, template),
+        }))
+      )
+      // The build form shows every script the merge runs before anything is built.
+      openDialog({ kind: "build", config: mergeTemplates(loaded) })
+      stopChoosing()
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setMerging(false)
+    }
+  }
 
   return (
     <PageBody>
@@ -173,21 +262,44 @@ export function TemplatesPage() {
         title={t("templates.title")}
         description={list ? t("templates.description", { source }) : undefined}
       >
-        {list && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={templates.isFetching}
-            onClick={() => void templates.refetch()}
-          >
-            {templates.isFetching ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <RiRefreshLine data-icon="inline-start" />
-            )}
-            {t("templates.refresh")}
-          </Button>
-        )}
+        {list &&
+          (choosing ? (
+            <>
+              <Button variant="outline" size="sm" onClick={stopChoosing}>
+                {t("common.cancel")}
+              </Button>
+              <Button size="sm" disabled={chosen.length < 2 || merging} onClick={merge}>
+                {merging ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <RiStackLine data-icon="inline-start" />
+                )}
+                {t("templates.merge.go")}
+              </Button>
+            </>
+          ) : (
+            <>
+              {mergeable && (
+                <Button variant="outline" size="sm" onClick={() => setChoosing(true)}>
+                  <RiStackLine data-icon="inline-start" />
+                  {t("templates.merge.start")}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={templates.isFetching}
+                onClick={() => void templates.refetch()}
+              >
+                {templates.isFetching ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <RiRefreshLine data-icon="inline-start" />
+                )}
+                {t("templates.refresh")}
+              </Button>
+            </>
+          ))}
       </SectionHeading>
       {!list ? (
         <Empty className="mx-4 border lg:mx-6">
@@ -260,6 +372,18 @@ export function TemplatesPage() {
               )}
             </div>
           )}
+          {choosing && (
+            <Alert>
+              <RiStackLine />
+              <AlertTitle>
+                {plural(chosen.length, {
+                  one: "templates.merge.chosen.one",
+                  other: "templates.merge.chosen.other",
+                })}
+              </AlertTitle>
+              <AlertDescription>{t("templates.merge.hint")}</AlertDescription>
+            </Alert>
+          )}
           {all.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
@@ -277,8 +401,11 @@ export function TemplatesPage() {
                   key={template.id}
                   list={list}
                   template={template}
-                  version={settings?.version ?? "0.0.0"}
+                  version={version}
                   installed={installed(template.id)}
+                  choosing={choosing}
+                  order={chosen.indexOf(template.id) + 1}
+                  onChoose={() => choose(template.id)}
                 />
               ))}
             </div>

@@ -492,7 +492,7 @@ esac
         build: None,
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     app.db.put("image", "snap", &record).unwrap();
     dir

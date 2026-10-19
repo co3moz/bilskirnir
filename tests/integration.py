@@ -120,7 +120,11 @@ client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies)
 
 
 def api(path, body=None, method=None, raw=False, anonymous=False):
-    if path == "images/build" and body:
+    if path == "images/build" and body and "parts" in body:
+        # Every later part's layer builds on the first, so marking it keeps the run's own.
+        first, *rest = body["parts"]
+        body = {**body, "parts": [{**first, "script": f"# acceptance run {tag}\n" + first["script"]}, *rest]}
+    elif path == "images/build" and body:
         body = {**body, "script": f"# acceptance run {tag}\n" + body["script"]}
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{path}", data=None if body is None else json.dumps(body).encode(), method=method, headers={"Content-Type": "application/json", "X-Bilskirnir-Request": "1"})
     opener = urllib.request.build_opener() if anonymous else client
@@ -606,7 +610,7 @@ try:
     assert api(f"images/{built['id']}/config") == {**build_request, "script": f"# acceptance run {tag}\n" + build_request["script"]}
     assert "script" not in next(image for image in api("images") if image["id"] == built["id"])["build"]
     # Lists name the icon by a version, and the icon route returns the picture itself.
-    assert built["template_id"] == "acceptance" and len(built["icon"]) == 16, built
+    assert built["template_ids"] == ["acceptance"] and len(built["icon"]) == 16, built
     assert api(f"images/{built['id']}/icon?v={built['icon']}", raw=True) == icon_png
     print("PASS custom script image, offline build, persisted build log and exported configuration", flush=True)
     # A compose asks for values when a container is created and hands them to its setup script.
@@ -646,6 +650,39 @@ try:
     assert secret not in json.dumps(described) and secret not in json.dumps(api("containers"))
     assert described["setup"] | {"finished_at": None} == {"status": "completed", "image": built["id"], "parameters": {"FLAVOR": "vanilla", "GREETING": "hello"}, "secrets": ["TOKEN"], "finished_at": None}, described
     print("PASS image compose asks for values, runs its setup as the desktop user and never returns a secret", flush=True)
+    # Templates merged into one image: each part's script runs in a layer of its own in order,
+    # and each compose step receives only its own values, although both ask for VERSION.
+    merged_request = {"name": "merged-templates", "base_image": xfce["reference"], "internet": False, "template_ids": ["first", "second"],
+        "parts": [{"id": "first", "name": "First", "script": "set -eu\nprintf first > /opt/merged-order\n"}, {"id": "second", "name": "Second", "script": "set -eu\nprintf ' second' >> /opt/merged-order\n"}],
+        "compose": {"steps": [
+            {"id": "first", "name": "First", "parameters": [{"name": "VERSION", "default": "1"}, {"name": "TOKEN", "secret": True}], "script": "set -eu\nprintf '%s|%s' \"$VERSION\" \"${OTHER-unset}\" > ~/first-step\nprintf '%s' \"$TOKEN\" > ~/first-token\n"},
+            {"id": "second", "name": "Second", "parameters": [{"name": "VERSION", "default": "2"}, {"name": "OTHER"}], "script": "set -eu\nprintf '%s|%s' \"$VERSION\" \"${TOKEN-unset}\" > ~/second-step\necho \"saved $(cat ~/first-token)\"\n"}]}}
+    for invalid in [{**merged_request, "script": "true"}, {**merged_request, "parts": [merged_request["parts"][0]] * 2}, {**merged_request, "compose": {"steps": [{**step, "id": "first"} for step in merged_request["compose"]["steps"]]}}]:
+        assert refused("images/build", invalid) == 400, invalid
+    merged_job = api("images/build", merged_request)
+    merged_image = job(merged_job)
+    assert merged_image["template_ids"] == ["first", "second"] and merged_image["build"]["parts"] == [{"id": "first", "name": "First"}, {"id": "second", "name": "Second"}], merged_image
+    assert "script" not in json.dumps(merged_image["compose"]), merged_image["compose"]
+    assert "Running the scripts of First, Second as root" in api(f"jobs/{merged_job['job_id']}")["log"]
+    exported = api(f"images/{merged_image['id']}/config")
+    assert exported["parts"][1] == merged_request["parts"][1] and "script" not in exported and exported["template_ids"] == ["first", "second"], exported
+    merged_base = {"image": merged_image["image_id"], "internet": False}
+    assert refused("containers", {**merged_base, "name": "merged-ambiguous", "parameters": {"VERSION": "3"}}) == 400
+    merged_secret = f"merged-{tag}"
+    created = api("containers", {**merged_base, "name": "Merged", "parameters": {"second.VERSION": "two", "TOKEN": merged_secret, "OTHER": "x"}})
+    merged_id = job(created)["container_id"]
+    container_ids.append(merged_id)
+    ready(f"bilskirnir-{merged_id}")
+    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/opt/merged-order") == b"first second"
+    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/home/desktop/first-step") == b"1|unset"
+    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/home/desktop/second-step") == b"two|unset"
+    merged_log = api(f"jobs/{created['job_id']}")["log"]
+    # The second step never gets the first one's secret, and its output masks what the first saved.
+    assert "step 1 of 2, First" in merged_log and "step 2 of 2, Second" in merged_log and "saved ***" in merged_log and merged_secret not in merged_log, merged_log
+    merged_setup = api(f"containers/{merged_id}")["setup"]
+    assert merged_setup["parameters"] == {"first.VERSION": "1", "second.OTHER": "x", "second.VERSION": "two"} and merged_setup["secrets"] == ["first.TOKEN"], merged_setup
+    assert [(step["id"], step["name"], step["status"]) for step in merged_setup["steps"]] == [("first", "First", "completed"), ("second", "Second", "completed")], merged_setup
+    print("PASS templates merged into one image run their parts and setup steps in order, each step with its own values", flush=True)
     # Browser and Electron sandboxes start in a new user namespace. The desktop's seccomp profile
     # allows that and nothing else Docker reserves for CAP_SYS_ADMIN, such as mount(2).
     assert docker("exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "true") == b""
@@ -1098,7 +1135,7 @@ try:
     assert snap["desktop"]["catalog_id"] == "ubuntu-xfce"
     assert snap["parent_image_id"] == built["image_id"] and "build" not in snap
     # A snapshot keeps the icon of the image its container came from, but no template.
-    assert snap["icon"] == built["icon"] and "template_id" not in snap, snap
+    assert snap["icon"] == built["icon"] and "template_ids" not in snap, snap
     try:
         api(f"images/{snap['id']}/config"); raise AssertionError("snapshot exported a build configuration")
     except urllib.error.HTTPError as error:

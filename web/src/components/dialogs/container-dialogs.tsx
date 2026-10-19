@@ -3,6 +3,12 @@ import { RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { ImageChoiceItem } from "@/components/image-icon"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,9 +42,9 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
-import { t } from "@/lib/i18n"
+import { plural, t } from "@/lib/i18n"
 import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
-import { parameterBody, composeFor } from "@/lib/compose"
+import { composeEntries, composeFor, composeSteps, parameterBody, stepTitle } from "@/lib/compose"
 import type { ImageItem, SettingsPreview } from "@/lib/types"
 import type { DialogProps } from "./side-drawer"
 import { identityBody, identityDraft, IdentityFields, type IdentityDraft } from "./identity-fields"
@@ -66,7 +72,11 @@ export function useSubmit() {
 
 const scrollBody = "-mx-4 flex max-h-[min(36rem,70vh)] flex-col gap-5 overflow-y-auto px-4 py-1"
 
-/** The values an image's compose asks for, filled in with its defaults. */
+/**
+ * The values an image's compose asks for, filled in with its defaults. A compose of several
+ * steps, such as one merged from templates, asks for each step's values in a section of its own,
+ * since two steps may ask for the same name.
+ */
 function ComposeValues({
   compose,
   values,
@@ -76,24 +86,64 @@ function ComposeValues({
   values: Record<string, string>
   onChange: (values: Record<string, string>) => void
 }) {
-  if (!compose.parameters.length)
-    return <FieldDescription>{t("compose.runsScript")}</FieldDescription>
-  return (
-    <FieldSet>
-      <FieldLegend variant="label">{t("compose.name")}</FieldLegend>
-      <FieldDescription className="text-xs">{t("compose.valuesHint")}</FieldDescription>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {compose.parameters.map((parameter) => (
+  const steps = composeSteps(compose)
+  const entries = composeEntries(compose)
+  if (!entries.length) return <FieldDescription>{t("compose.runsScript")}</FieldDescription>
+  const fields = (step: (typeof steps)[number]) => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {entries
+        .filter((entry) => entry.step === step)
+        .map(({ parameter, key }) => (
           <ParameterField
-            key={`${parameter.name}-${parameter.type}`}
+            key={`${key}-${parameter.type}`}
             parameter={parameter}
-            value={values[parameter.name] ?? parameter.default}
-            onChange={(value) => onChange({ ...values, [parameter.name]: value })}
+            value={values[key] ?? parameter.default}
+            onChange={(value) => onChange({ ...values, [key]: value })}
             hints
             createVolumes
           />
         ))}
-      </div>
+    </div>
+  )
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">{t("compose.name")}</FieldLegend>
+      <FieldDescription className="text-xs">
+        {steps.length > 1 ? t("compose.valuesHintSteps") : t("compose.valuesHint")}
+      </FieldDescription>
+      {steps.length > 1 ? (
+        // Every section starts open, so no required value is hidden.
+        <Accordion
+          type="multiple"
+          defaultValue={steps.map((_, index) => String(index))}
+          className="rounded-2xl border px-4"
+        >
+          {steps.map((step, index) => (
+            <AccordionItem key={index} value={String(index)}>
+              <AccordionTrigger>
+                <span className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="truncate">{stepTitle(step)}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {plural(step.parameters.length, {
+                      one: "compose.parameterCount.one",
+                      other: "compose.parameterCount.other",
+                    })}
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="px-1">
+                {step.parameters.length ? (
+                  fields(step)
+                ) : (
+                  <FieldDescription>{t("compose.stepRunsScript")}</FieldDescription>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      ) : (
+        fields(steps[0])
+      )}
     </FieldSet>
   )
 }

@@ -18,7 +18,7 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
         build,
         compose: None,
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     }
 }
 
@@ -27,6 +27,7 @@ fn unity_tools() -> BuildConfig {
         base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
         internet: false,
         script: "set -eu\napt-get install -y git\n".into(),
+        parts: Vec::new(),
     }
 }
 
@@ -36,7 +37,7 @@ async fn configuration_is_the_request_that_built_the_image() {
     let built = ImageRecord {
         description: "Git for Unity projects".into(),
         icon: Some(crate::icons::sample(256, 256)),
-        template_id: Some("unity".into()),
+        template_ids: vec!["unity".into()],
         ..record("a", "build", Some(unity_tools()))
     };
     app.db.put("image", "a", &built).unwrap();
@@ -47,9 +48,12 @@ async fn configuration_is_the_request_that_built_the_image() {
         base_image: unity_tools().base_image,
         internet: false,
         script: unity_tools().script,
+        parts: Vec::new(),
         compose: None,
         icon: Some(crate::icons::sample(256, 256)),
+        // One template is named as before templates could be merged, so older releases read it.
         template_id: Some("unity".into()),
+        template_ids: Vec::new(),
     };
     assert_eq!(config, expected);
     // What the interface copies is a body the build route accepts as it is.
@@ -94,6 +98,98 @@ fn a_build_request_checks_its_description_icon_and_template() {
         assert!(body.validate().is_err(), "{refused}");
     }
     assert!(request(json!({"icon": "data:image/gif;base64,R0lGODlh"})).is_err());
+}
+
+#[test]
+fn a_merged_build_has_parts_instead_of_a_script() {
+    let part = |id: &str| json!({"id": id, "name": id, "script": "true"});
+    let request = |extra: Value| {
+        let mut body = json!({"name": "Unity and Chrome", "base_image": "ubuntu:24.04"});
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value::<BuildImage>(body)
+            .unwrap()
+            .validate()
+    };
+    request(json!({
+        "parts": [part("unity-dev"), part("chrome")],
+        "template_ids": ["unity-dev", "chrome"]
+    }))
+    .unwrap();
+    for refused in [
+        json!({}),
+        json!({"script": "true", "parts": [part("chrome")]}),
+        json!({"parts": [part("chrome"), part("chrome")]}),
+        json!({"parts": [part("Chrome")]}),
+        json!({"parts": [{"id": "chrome", "name": "", "script": "true"}]}),
+        json!({"parts": [{"id": "chrome", "name": "Chrome", "script": " \n"}]}),
+        json!({"parts": (0..9).map(|i| part(&format!("p{i}"))).collect::<Vec<_>>()}),
+        json!({"script": "true", "template_ids": ["Chrome"]}),
+    ] {
+        assert!(request(refused.clone()).is_err(), "{refused}");
+    }
+}
+
+#[tokio::test]
+async fn a_merged_build_exports_its_parts_and_lists_leave_every_script_out() {
+    let app = crate::tests::app(false);
+    let part = |id: &str, name: &str| BuildPart {
+        id: id.into(),
+        name: name.into(),
+        script: format!("echo {id}\n"),
+    };
+    let merged = BuildConfig {
+        script: String::new(),
+        parts: vec![
+            part("unity-dev", "Unity development"),
+            part("chrome", "Google Chrome"),
+        ],
+        ..unity_tools()
+    };
+    let compose = serde_json::from_value(json!({"steps": [
+        {"id": "unity-dev", "script": "echo setup unity"},
+        {"id": "vscode", "script": "echo setup code"}
+    ]}))
+    .unwrap();
+    let built = ImageRecord {
+        template_ids: vec!["unity-dev".into(), "chrome".into()],
+        compose: Some(compose),
+        ..record("m", "build", Some(merged.clone()))
+    };
+    app.db.put("image", "m", &built).unwrap();
+    let Json(config) = image_config(State(app.clone()), Path("m".into()))
+        .await
+        .unwrap();
+    assert_eq!(config.parts, merged.parts);
+    assert_eq!(config.template_ids, ["unity-dev", "chrome"]);
+    let exported = serde_json::to_value(&config).unwrap();
+    assert!(exported.get("script").is_none() && exported.get("template_id").is_none());
+    config.validate().unwrap();
+    let Json(listed) = images(State(app)).await.unwrap();
+    let listed = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|image| image["id"] == "m")
+        .unwrap();
+    assert!(!listed.to_string().contains("echo "), "{listed}");
+    assert_eq!(
+        listed["build"]["parts"][1],
+        json!({"id": "chrome", "name": "Google Chrome"})
+    );
+    assert_eq!(listed["template_ids"], json!(["unity-dev", "chrome"]));
+}
+
+#[test]
+fn records_from_before_merged_templates_name_their_template_alone() {
+    let mut older = json!(record("a", "build", Some(unity_tools())));
+    older["template_id"] = json!("unity");
+    let read: ImageRecord = serde_json::from_value(older).unwrap();
+    assert_eq!(read.template_ids, ["unity"]);
+    // A build of one script is written as it was before parts.
+    let written = serde_json::to_value(unity_tools()).unwrap();
+    assert!(written.get("parts").is_none() && written["script"].is_string());
 }
 
 #[tokio::test]

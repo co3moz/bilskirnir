@@ -21,7 +21,7 @@ fn record(id: &str, icon: Option<Icon>) -> ImageRecord {
         build: None,
         compose: None,
         icon,
-        template_id: None,
+        template_ids: Vec::new(),
     }
 }
 

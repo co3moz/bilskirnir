@@ -185,14 +185,14 @@ fn a_folder_is_a_canonical_desktop_folder_outside_the_system_ones() {
         default: String::new(),
         ..project.clone()
     };
-    assert_eq!(optional.resolve(None, "e").unwrap(), "");
+    assert_eq!(optional.resolve(None, "e", None).unwrap(), "");
     let required = Parameter {
         required: true,
         ..optional
     };
     assert!(
         required
-            .resolve(None, "e")
+            .resolve(None, "e", None)
             .unwrap_err()
             .to_string()
             .contains("Enter a value")
@@ -243,13 +243,13 @@ fn a_volume_parameter_takes_a_volume_and_gives_the_script_its_path() {
         assert!(unity.check(invalid).is_err(), "{invalid:?}");
     }
     // No volume is a choice of its own, unless one is required.
-    assert_eq!(unity.resolve(None, "e").unwrap(), "");
+    assert_eq!(unity.resolve(None, "e", None).unwrap(), "");
     let required = Parameter {
         required: true,
         ..unity.clone()
     };
     assert_eq!(
-        required.resolve(None, "e").unwrap_err().to_string(),
+        required.resolve(None, "e", None).unwrap_err().to_string(),
         "Choose a volume for Unity installs"
     );
     // The script reads the path either way, and the volume beside it.
@@ -292,10 +292,12 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
     workspace.validate().unwrap();
     // Left empty, the value names the container's own volume, so required never fails.
     let container = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
-    let own = workspace.resolve(None, container).unwrap();
+    let own = workspace.resolve(None, container, None).unwrap();
     assert_eq!(own, format!("bilskirnir-{container}-unity-workspace"));
     assert_eq!(
-        workspace.resolve(Some(&String::new()), container).unwrap(),
+        workspace
+            .resolve(Some(&String::new()), container, None)
+            .unwrap(),
         own
     );
     // Within Docker's rules for a name, also for the longest parameter name.
@@ -305,14 +307,14 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
         ..workspace.clone()
     };
     longest.validate().unwrap();
-    let name = longest.new_volume_for(container).unwrap();
+    let name = longest.new_volume_for(container, None).unwrap();
     assert!(name.len() == 108 && name.ends_with("-b-bc"), "{name}");
     crate::model::volume_name(&name).unwrap();
     // Another container gets another volume; a volume given by name is still used as it is.
-    assert_ne!(workspace.resolve(None, "other").unwrap(), own);
+    assert_ne!(workspace.resolve(None, "other", None).unwrap(), own);
     assert_eq!(
         workspace
-            .resolve(Some(&"projects".into()), container)
+            .resolve(Some(&"projects".into()), container, None)
             .unwrap(),
         "projects"
     );
@@ -322,8 +324,8 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
         required: false,
         ..workspace.clone()
     };
-    assert_eq!(none.resolve(None, container).unwrap(), "");
-    assert_eq!(none.new_volume_for(container), None);
+    assert_eq!(none.resolve(None, container, None).unwrap(), "");
+    assert_eq!(none.new_volume_for(container, None), None);
     // Only a volume parameter asks for one, and a default would keep the empty value away.
     for (invalid, reason) in [
         (
@@ -430,23 +432,26 @@ fn numbers_are_plain_decimals_within_their_range_and_steps() {
 #[test]
 fn a_value_left_out_becomes_what_the_script_would_expect() {
     let toggle = parameter(json!({"type": "boolean"}));
-    assert_eq!(toggle.resolve(None, "e").unwrap(), "false");
-    assert_eq!(toggle.resolve(Some(&"true".into()), "e").unwrap(), "true");
-    assert!(toggle.resolve(Some(&"yes".into()), "e").is_err());
+    assert_eq!(toggle.resolve(None, "e", None).unwrap(), "false");
+    assert_eq!(
+        toggle.resolve(Some(&"true".into()), "e", None).unwrap(),
+        "true"
+    );
+    assert!(toggle.resolve(Some(&"yes".into()), "e", None).is_err());
     let on = parameter(json!({"type": "boolean", "default": "true"}));
-    assert_eq!(on.resolve(None, "e").unwrap(), "true");
+    assert_eq!(on.resolve(None, "e", None).unwrap(), "true");
     // A required boolean is an agreement: it has to be turned on.
     let agree = parameter(json!({"type": "boolean", "required": true, "label": "Accept"}));
     assert_eq!(
         agree
-            .resolve(Some(&"false".into()), "e")
+            .resolve(Some(&"false".into()), "e", None)
             .unwrap_err()
             .to_string(),
         "Turn on Accept"
     );
     let pick = parameter(json!({"type": "choice", "options": flavors(), "required": true}));
     assert!(
-        pick.resolve(None, "e")
+        pick.resolve(None, "e", None)
             .unwrap_err()
             .to_string()
             .starts_with("Choose a value")
@@ -454,14 +459,14 @@ fn a_value_left_out_becomes_what_the_script_would_expect() {
     let count = parameter(json!({"type": "number", "required": true}));
     assert!(
         count
-            .resolve(Some(&String::new()), "e")
+            .resolve(Some(&String::new()), "e", None)
             .unwrap_err()
             .to_string()
             .starts_with("Enter")
     );
     // An optional value can stay empty, whatever its type.
     let optional = parameter(json!({"type": "choice", "options": flavors()}));
-    assert_eq!(optional.resolve(None, "e").unwrap(), "");
+    assert_eq!(optional.resolve(None, "e", None).unwrap(), "");
 }
 
 #[test]
@@ -484,7 +489,7 @@ fn choices_take_their_options_and_other_text_only_when_allowed() {
         assert!(many.check(invalid).is_err(), "{invalid:?}");
     }
     let required = parameter(json!({"type": "choices", "options": flavors(), "required": true}));
-    assert!(required.resolve(Some(&String::new()), "e").is_err());
+    assert!(required.resolve(Some(&String::new()), "e", None).is_err());
     // Text is one line unless the form shows a text area for it.
     assert!(parameter(json!({})).check("a\nb").is_err());
     assert!(
@@ -642,15 +647,18 @@ fn a_pattern_has_to_match_the_whole_value() {
 #[test]
 fn an_empty_value_is_left_to_required_and_a_default_must_match() {
     let port = parameter(json!({"label": "Port", "pattern": "[0-9]+"}));
-    assert_eq!(port.resolve(None, "e").unwrap(), "");
-    assert_eq!(port.resolve(Some(&String::new()), "e").unwrap(), "");
+    assert_eq!(port.resolve(None, "e", None).unwrap(), "");
+    assert_eq!(port.resolve(Some(&String::new()), "e", None).unwrap(), "");
     let required = parameter(json!({"label": "Port", "pattern": "[0-9]+", "required": true}));
     assert_eq!(
-        required.resolve(None, "e").unwrap_err().to_string(),
+        required.resolve(None, "e", None).unwrap_err().to_string(),
         "Enter a value for Port"
     );
-    assert!(required.resolve(Some(&"80a".into()), "e").is_err());
-    assert_eq!(required.resolve(Some(&"80".into()), "e").unwrap(), "80");
+    assert!(required.resolve(Some(&"80a".into()), "e", None).is_err());
+    assert_eq!(
+        required.resolve(Some(&"80".into()), "e", None).unwrap(),
+        "80"
+    );
     parameter(json!({"pattern": "[0-9]+", "default": "8080"}))
         .validate()
         .unwrap();
@@ -671,7 +679,7 @@ fn a_secret_value_stays_out_of_the_pattern_error() {
     }));
     token.validate().unwrap();
     let error = token
-        .resolve(Some(&"hunter2-not-a-token".into()), "e")
+        .resolve(Some(&"hunter2-not-a-token".into()), "e", None)
         .unwrap_err();
     let error = format!("{error:#} {error:?}");
     assert!(!error.contains("hunter2"), "{error}");
@@ -680,7 +688,7 @@ fn a_secret_value_stays_out_of_the_pattern_error() {
         "{error}"
     );
     let valid = format!("ghp_{}", "a".repeat(36));
-    assert_eq!(token.resolve(Some(&valid), "e").unwrap(), valid);
+    assert_eq!(token.resolve(Some(&valid), "e", None).unwrap(), valid);
 }
 
 #[test]

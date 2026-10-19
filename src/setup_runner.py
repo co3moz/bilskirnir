@@ -1,9 +1,10 @@
 """Run a container's compose setup script, started by the manager through docker exec.
 
-Reads one JSON request from stdin: the script, the parameter values, the names of the secret
-parameters and the time limit. Each parameter becomes an environment variable of the script,
-which runs with fail-on-error and stdin closed. Its output is streamed back with every secret
-value replaced by ***, and the exit status is the script's.
+Reads one JSON request from stdin: the script of one compose step, its parameter values, the
+names of its secret parameters, the secret values of the compose's other steps and the time
+limit. Each parameter becomes an environment variable of the script, which runs with
+fail-on-error and stdin closed. Its output is streamed back with every secret value replaced
+by ***, and the exit status is the script's.
 """
 
 import json
@@ -69,6 +70,8 @@ def main():
     request = json.loads(sys.stdin.buffer.read(REQUEST_LIMIT))
     values = {str(k): str(v) for k, v in request.get("parameters", {}).items()}
     secrets = [values.get(name, "").encode() for name in request.get("secrets", [])]
+    # Another step's secret never reaches this script, but a file an earlier step wrote may.
+    secrets += [str(value).encode() for value in request.get("mask", [])]
     timeout = int(request.get("timeout_seconds", 600))
     environment = dict(os.environ)
     environment.update(values)

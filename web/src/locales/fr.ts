@@ -361,6 +361,8 @@ export const fr: Messages = {
   "compose.read.parameters": "Les paramètres du Compose doivent être une liste.",
   "compose.read.root": "Le réglage root du Compose doit valoir true ou false.",
   "compose.read.timeout": "Le délai du Compose doit être un nombre de secondes.",
+  "compose.read.step": "L'identifiant et le nom d'une étape du Compose doivent être du texte.",
+  "compose.read.steps": "Les étapes du Compose doivent être une liste d'au moins une étape.",
   "compose.setup.pending": "En attente du bureau",
   "compose.setup.running": "En cours",
   "compose.setup.completed": "Terminée",
@@ -395,6 +397,13 @@ export const fr: Messages = {
   "compose.pinned":
     "Les conteneurs créés auparavant conservent le Compose avec lequel ils ont été créés.",
   "compose.save": "Enregistrer le Compose",
+  "compose.parameterCount.one": "{count} paramètre",
+  "compose.parameterCount.other": "{count} paramètres",
+  "compose.removeStep": "Retirer {name}",
+  "compose.valuesHintSteps":
+    "Chaque partie de l'image demande ses propres valeurs, et son script de configuration ne reçoit que celles-ci une fois le bureau prêt. Les valeurs secrètes ne sont plus affichées.",
+  "compose.stepRunsScript": "Exécute son script de configuration sans valeurs.",
+  "compose.stepWaiting": "En attente",
   "media.sampleRate": "Ce navigateur ne prend pas en charge l'audio à 48 kHz.",
   "media.audioFailed": "Échec de la connexion audio. Consultez les journaux du conteneur.",
   "media.microphoneFailed":
@@ -471,6 +480,18 @@ export const fr: Messages = {
     "Collez le JSON qu'Exporter a copié depuis une image construite. Il remplit le nom, la description, l'icône, l'image de base, le script, le réglage Internet et le Compose, que vous pouvez encore modifier avant la construction.",
   "build.config": "Configuration",
   "build.load": "Charger",
+  "build.config.part":
+    "Chaque partie a besoin d'un identifiant en minuscules, chiffres et tirets, d'un nom et d'un script.",
+  "build.config.scriptOrParts":
+    "La configuration a à la fois un script et des parties ; elle ne peut avoir que l'un des deux.",
+  "build.fromTemplates":
+    "Fusionnée à partir de {names}. Relisez chaque script avant la construction : ils s'exécutent en root sur l'image de base, dans cet ordre.",
+  "build.partsHint":
+    "Le script de chaque modèle s'exécute en root dans sa propre couche, dans cet ordre.",
+  "build.partScript": "Script de construction de {name}",
+  "build.partEarlier": "Exécuter plus tôt",
+  "build.partLater": "Exécuter plus tard",
+  "build.partRemove": "Retirer",
   "build.config.description": "La description doit être un texte de 4096 octets au plus.",
   "build.config.template":
     "L'identifiant du modèle ne peut contenir que des minuscules, des chiffres et des tirets.",
@@ -532,6 +553,18 @@ export const fr: Messages = {
   "templates.broken.tags": "les étiquettes doivent être au plus {count} textes courts",
   "templates.broken.requires": "requires doit être une version comme 0.5.0",
   "templates.broken.duplicate": "un autre modèle a le même identifiant",
+  "templates.merge.start": "Fusionner et installer",
+  "templates.merge.go": "Fusionner",
+  "templates.merge.choose": "Choisir {name}",
+  "templates.merge.order": "Étape {number}",
+  "templates.merge.chosen.one": "{count} modèle choisi",
+  "templates.merge.chosen.other": "{count} modèles choisis",
+  "templates.merge.hint":
+    "Choisissez deux modèles ou plus à construire en une seule image. Leurs scripts s'exécutent dans l'ordre choisi, et chacun demande ses propres valeurs à la création d'un conteneur.",
+  "templates.merge.twice":
+    "{name} figure dans plusieurs des modèles choisis ; choisissez-le une seule fois.",
+  "templates.merge.base":
+    "{name} a été conçu pour {base}. L'image fusionnée est construite sur la base du premier modèle ; vérifiez que son script convient à ce bureau.",
   "nav.jobs": "Tâches",
   "nav.dashboard": "Tableau de bord",
   "nav.containers": "Conteneurs",

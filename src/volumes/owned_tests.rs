@@ -225,7 +225,7 @@ async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_r
         build: None,
         compose: Some(compose),
         icon: None,
-        template_id: None,
+        template_ids: Vec::new(),
     };
     app.db.put("image", "ws", &record).unwrap();
     job(&app, "create-job");

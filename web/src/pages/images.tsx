@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { attempt, exportArchive, exportBuildConfig, runJob } from "@/lib/actions"
+import { composeEntries } from "@/lib/compose"
 import { openDialog } from "@/lib/dialogs"
 import { imageKind, imageSource, imageStatus, imageTree, shortDate } from "@/lib/format"
 import { formatList, t } from "@/lib/i18n"
@@ -39,7 +40,7 @@ import { fileSize } from "@/lib/uploads"
 
 /** What a compose asks for, in a few words. */
 function composeSummary(compose: NonNullable<ImageItem["compose"]>) {
-  const names = compose.parameters.map((parameter) => parameter.name)
+  const names = composeEntries(compose).map((entry) => entry.key)
   return names.length
     ? t("images.compose.asksFor", { names: formatList(names) })
     : t("images.compose.script")

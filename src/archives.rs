@@ -14,7 +14,7 @@ use crate::{
     error::{Error, Result},
     icons::Icon,
     jobs,
-    model::{BuildConfig, ImageRecord, image_ref, now, template_id},
+    model::{BuildConfig, ImageRecord, build_scripts, image_ref, now, template_id},
     process::{self, Overflow},
 };
 use anyhow::{Context, anyhow, bail};
@@ -78,8 +78,14 @@ pub(crate) struct ArchiveInfo {
         skip_serializing_if = "Option::is_none"
     )]
     pub icon: Option<Icon>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template_id: Option<String>,
+    /// Archives exported before templates could be merged name one as `template_id`.
+    #[serde(
+        default,
+        alias = "template_id",
+        deserialize_with = "crate::model::one_or_more",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub template_ids: Vec<String>,
 }
 
 impl ArchiveInfo {
@@ -96,7 +102,7 @@ impl ArchiveInfo {
             build: record.build.clone(),
             compose: record.compose.clone(),
             icon: record.icon.clone(),
-            template_id: record.template_id.clone(),
+            template_ids: record.template_ids.clone(),
         }
     }
 
@@ -107,10 +113,11 @@ impl ArchiveInfo {
             .filter(|info| info.format == FORMAT)?;
         // A configuration the build route would refuse is not one worth keeping.
         info.build = info.build.filter(|build| {
-            image_ref(&build.base_image).is_ok() && build.script.len() <= 1_000_000
+            image_ref(&build.base_image).is_ok()
+                && build_scripts(&build.script, &build.parts).is_ok()
         });
         info.compose = info.compose.filter(|compose| compose.validate().is_ok());
-        info.template_id = info.template_id.filter(|id| template_id(id).is_ok());
+        info.template_ids.retain(|id| template_id(id).is_ok());
         Some(info)
     }
 }
@@ -496,7 +503,7 @@ impl App {
             build: metadata.as_ref().and_then(|info| info.build.clone()),
             compose: metadata.as_ref().and_then(|info| info.compose.clone()),
             icon: metadata.as_ref().and_then(|info| info.icon.clone()),
-            template_id: metadata.and_then(|info| info.template_id),
+            template_ids: metadata.map(|info| info.template_ids).unwrap_or_default(),
         };
         self.db.put("image", id, &record)?;
         if record.build.is_some() {
