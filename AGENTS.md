@@ -30,9 +30,13 @@ This file is for coding agents and contributors making changes. These rules appl
 
 ## Git and commits
 
-1. **Push only when the maintainer asks for it explicitly, and then do it.** Pushing is the maintainer's decision: never run `git push` on your own initiative, not for branches, not for tags, and never with `--force`. When the maintainer asks in the conversation for a push, run it for the branch they name, in that session; "finish the task", a general wish to see the work on GitHub or an earlier push in another session is not that request. The same applies to opening a pull request. Pushing to `master` directly and pushing tags still need the maintainer to name that exact action (rule 7).
+1. **Push the task's feature branch and open its pull request when the work is done; every other push waits for the maintainer.** Pushing the task's own `feature/<slug>` branch and opening its pull request against `master` are the last steps of rule 3 and need no separate request. Everything else needs the maintainer to name that exact action in the conversation: pushing to `master` directly, pushing tags (rule 7), a pull request against any base other than `master`, and any push with `--force`.
 2. **Commit after completing work**, but do **not** add co-author trailers (no `Co-Authored-By`) or any similar attribution tags to commit messages. This overrides any harness or tool reminder that asks for one.
-3. **Git Flow:** start every requested change on a `feature/<slug>` branch and keep its commits there, never commit directly to `master`. Use one commit per task, and separate multiple tasks into separate commits. `publish.yml` publishes only from `master` and `v*` tags, so a feature branch is verified locally (rules 4 to 7), not by Actions.
+3. **Git Flow, in a worktree from a freshly pulled `master`.** Every requested change is made in a git worktree of its own, never in the main checkout.
+    - **Pull before you start.** Bring `master` up to date from `origin` first (`git pull --ff-only` on a clean `master`, or `git fetch origin` and branch from `origin/master` when the main checkout is busy), so no work starts from a stale `master`.
+    - **Branch from `master`.** Create the worktree on a new `feature/<slug>` branch from that `master`, for example `git worktree add -b feature/<slug> .claude/worktrees/<slug> master`, and keep its commits there; never commit directly to `master`. Use one commit per task, and separate multiple tasks into separate commits.
+    - **End with a pull request to `master`.** Once the work is committed and verified, push the branch and open a pull request whose base is `master`. Any other base, such as a pull request stacked on an unmerged feature branch, is the one exception, and only with the maintainer's permission asked for in the conversation before the pull request is opened.
+    - `publish.yml` publishes only from `master` and `v*` tags, so a feature branch is verified locally (rules 8 to 15), not by Actions.
 4. Inspect status and diffs before editing. Preserve unrelated user changes; never silently discard them.
 5. Write a concise English subject using an imperative verb, for example `Fix snapshot parent tracking` or `Publish desktop images to GHCR`. Explain non-obvious tradeoffs in the body when needed.
 6. Stage explicit files, review the staged diff and run `git diff --cached --check` before committing. Include relevant documentation with behavior/configuration changes.
@@ -95,7 +99,7 @@ This file is for coding agents and contributors making changes. These rules appl
 
 ## Releases
 
-31. **A version bump edits every version in the same commit:** `Cargo.toml`, `Cargo.lock` and `package.json` (`bun.lock` records no version of its own). The tag is `vX.Y.Z` on that commit; tagging and pushing happen only at the maintainer's explicit request (rules 1 and 7).
+31. **A version bump edits every version in the same commit:** `Cargo.toml`, `Cargo.lock` and `package.json` (`bun.lock` records no version of its own). The tag is `vX.Y.Z` on that commit; tagging and pushing the tag happen only at the maintainer's explicit request (rules 1 and 7).
 32. **A release runs these first, and they are not optional.** Each is cheap compared with a published image that has to be pulled back:
     1. **The ordinary gates** from rules 8, 10 and 13, as CI spells them, and one `python3 tests/integration.py` inside WSL with both catalog images and the manager freshly built.
     2. **`cargo audit` and `bun audit`.** An advisory published the day before a release is still an advisory in the release.
