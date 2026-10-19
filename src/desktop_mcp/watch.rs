@@ -210,6 +210,13 @@ pub(super) async fn fetch(app: &Arc<App>, container_id: &str, name: &str) {
     if record.spec != read.spec {
         return;
     }
+    keep_tools(&mut record, tools);
+    let _ = app.db.put(SERVERS, &key, &record);
+    announce(app, container_id);
+}
+
+/// What a server's record keeps of a read of its tools: the list, or why there is none.
+fn keep_tools(record: &mut ServerRecord, tools: anyhow::Result<Vec<rmcp::model::Tool>>) {
     match tools {
         Ok(tools) => {
             record.tools = tools;
@@ -222,11 +229,14 @@ pub(super) async fn fetch(app: &Arc<App>, container_id: &str, name: &str) {
             record.error = Some(format!("{error:#}"));
         }
     }
-    let _ = app.db.put(SERVERS, &key, &record);
-    announce(app, container_id);
 }
 
-/// A server said its tools changed: read them through the connection that heard it.
+/// How long a server's tools are left alone after it said they changed, so a burst of
+/// notifications is one read.
+const REREAD_AFTER: Duration = Duration::from_secs(1);
+
+/// A server said its tools changed: read them through the connection that heard it. One read
+/// runs per server; a notification during it asks for one more read, never for one each.
 pub(super) fn reread_tools(
     app: Arc<App>,
     container_id: &str,
@@ -234,21 +244,43 @@ pub(super) fn reread_tools(
     peer: Peer<RoleClient>,
 ) {
     let key = ServerRecord::key(container_id, server);
+    {
+        let mut rereads = app.desktop_mcp.rereads.lock().unwrap();
+        if let Some(again) = rereads.get_mut(&key) {
+            *again = true;
+            return;
+        }
+        rereads.insert(key.clone(), false);
+    }
     let container_id = container_id.to_owned();
     tokio::spawn(async move {
-        let Ok(Ok(tools)) =
-            tokio::time::timeout(Duration::from_secs(60), peer.list_all_tools()).await
-        else {
-            return;
-        };
-        let Ok(mut record) = app.db.get::<ServerRecord>(SERVERS, &key) else {
-            return;
-        };
-        record.tools = tools;
-        record.tools_at = Some(now());
-        record.error = None;
-        let _ = app.db.put(SERVERS, &key, &record);
-        announce(&app, &container_id);
+        loop {
+            tokio::time::sleep(REREAD_AFTER).await;
+            let tools = match tokio::time::timeout(
+                Duration::from_secs(60),
+                client::list_tools(&peer),
+            )
+            .await
+            {
+                Ok(tools) => tools,
+                Err(_) => Err(anyhow::anyhow!(
+                    "The server did not list its tools in a minute"
+                )),
+            };
+            if let Ok(mut record) = app.db.get::<ServerRecord>(SERVERS, &key) {
+                keep_tools(&mut record, tools);
+                let _ = app.db.put(SERVERS, &key, &record);
+                announce(&app, &container_id);
+            }
+            let mut rereads = app.desktop_mcp.rereads.lock().unwrap();
+            match rereads.get_mut(&key) {
+                Some(again) if *again => *again = false,
+                _ => {
+                    rereads.remove(&key);
+                    return;
+                }
+            }
+        }
     });
 }
 
