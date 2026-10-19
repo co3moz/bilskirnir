@@ -20,7 +20,10 @@ pub(crate) async fn read_limited(
     overflow: Overflow,
 ) -> Result<Vec<u8>> {
     let mut result = Vec::new();
-    let mut chunk = [0; 8192];
+    // On the heap: as an array it would sit twice in the future of every Docker command, and a
+    // debug build reserves room for such a future in its caller's stack frame, in the MCP
+    // dispatch once for every arm of its match (mcp_screenshot_fits_in_half_a_worker_stack).
+    let mut chunk = vec![0; 8192];
     loop {
         let n = read.read(&mut chunk).await?;
         if n == 0 {
