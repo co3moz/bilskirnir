@@ -17,6 +17,7 @@ mod gamepad;
 mod icons;
 mod identity;
 mod jobs;
+mod layers;
 mod mcp;
 mod media;
 mod model;
@@ -64,6 +65,8 @@ pub struct App {
     usage: usage::Usage,
     /// One-time transfer links issued over MCP and not used yet.
     transfers: transfers::Links,
+    /// The layers and history of the listed images, read once per image ID.
+    layers: layers::Cache,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -193,6 +196,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/images/{id}/build", post(api::build_catalog))
         .route("/api/images/{id}/archive", get(archives::export))
         .route("/api/images/{id}/config", get(api::image_config))
+        .route("/api/images/{id}/layers", get(layers::layers))
         .route(
             "/api/images/{id}/icon",
             get(icons::get).put(icons::set).delete(icons::remove),
@@ -358,6 +362,7 @@ async fn main() -> anyhow::Result<()> {
         archives: Arc::new(tokio::sync::Semaphore::new(2)),
         usage: usage::Usage::default(),
         transfers: transfers::Links::default(),
+        layers: layers::Cache::default(),
     });
     usage::spawn(app.clone());
     let reconcile = app.clone();

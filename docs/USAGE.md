@@ -93,6 +93,10 @@ The image tree follows Docker ancestry. A snapshot is based on the image that or
 
 An image that declares a Docker `VOLUME` needs an explicit named-volume mount for that path when you create a container. This makes it clear which files will be excluded from snapshots.
 
+## See what takes disk space
+
+**Images** shows each image's size as Docker reports it. Images share the layers they have in common, and Docker keeps a shared layer once, so a snapshot's size includes its whole base desktop while what it adds is often much smaller; for an image that shares layers, that part is shown under the size as **own**. Select a downloaded image's name to see what its space is made of: the steps of its history, newest first, grouped by the image they came from, each with the bytes it wrote and the command, copied files or setting behind it. A snapshot's own step holds the files that changed in its container, and a script build's largest step is usually its setup script; files a step deletes still take space in the earlier step that wrote them. Steps that only change settings write nothing and stay hidden until you show them. With the containerd image store, which Docker 29 and the WSL package use, Docker also keeps a compressed copy of each layer, and the size it reports includes those copies.
+
 ## Ask for values when a container is created
 
 A compose makes an image ask for a few values each time a container is created from it, such as the account to sign in with, and runs a short setup script with them before the container is yours. Under **Images**, select **Edit compose**, the compose button on the row of a snapshot, script build or imported image. Add a parameter for each value:
