@@ -126,3 +126,42 @@ where
     });
     Ok((id, outcome))
 }
+
+/// How long a request waits for a resource a job holds before answering that it is busy.
+pub(crate) const HOLD_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+impl App {
+    /// Hold a resource for the length of a request. A job such as a script, an upload or an
+    /// export can hold a container or a volume for an hour; a request waits a few seconds for
+    /// it and then answers 409, instead of hanging its client for the job's length.
+    pub(crate) async fn hold(&self, resource: &str) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+        self.hold_for(resource, HOLD_WAIT).await
+    }
+    async fn hold_for(
+        &self,
+        resource: &str,
+        wait: std::time::Duration,
+    ) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+        let lock = self.resource_lock(resource);
+        tokio::time::timeout(wait, lock.lock_owned())
+            .await
+            .map_err(|_| {
+                let what = match resource.split_once(':') {
+                    Some(("container", _)) => "the container",
+                    Some(("volume", _)) => "the volume",
+                    Some(("image", _)) => "the image",
+                    _ => "this resource",
+                };
+                crate::error::Error(
+                    axum::http::StatusCode::CONFLICT,
+                    format!(
+                        "Another operation on {what} is still running; retry when it has finished"
+                    ),
+                )
+            })
+    }
+}
+
+#[cfg(test)]
+#[path = "jobs_tests.rs"]
+mod tests;

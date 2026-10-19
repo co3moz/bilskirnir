@@ -884,8 +884,7 @@ pub async fn create_volume(
     Json(body): Json<Volume>,
 ) -> Result<Json<Value>> {
     volume_name(&body.name)?;
-    let lock = app.resource_lock(&format!("volume:{}", body.name));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("volume:{}", body.name)).await?;
     app.new_volume(&body.name).await?;
     Ok(Json(json!({"name":body.name})))
 }

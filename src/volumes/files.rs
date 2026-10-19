@@ -99,8 +99,7 @@ impl App {
         name: &str,
         work: impl AsyncFnOnce(&Volume) -> Result<T>,
     ) -> Result<T> {
-        let lock = self.resource_lock(&format!("volume:{name}"));
-        let _guard = lock.lock().await;
+        let _guard = self.hold(&format!("volume:{name}")).await?;
         let volume = self.open_volume(name).await?;
         work(&volume).await
     }

@@ -27,7 +27,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Method | Path | Result or purpose |
 | --- | --- | --- |
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
-| POST | `/api/login` | Sign in with `username` and `password`. |
+| POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
 | GET | `/api/system` | Docker connection and host summary. |
@@ -642,7 +642,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs. A request that needs a container, volume or image a job holds, such as a running script, an upload or an export, waits five seconds for it and then answers 409 instead of waiting for the job.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

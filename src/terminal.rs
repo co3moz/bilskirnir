@@ -139,8 +139,7 @@ fn describe(record: &Terminal, status: Value) -> Value {
 }
 pub async fn open_terminal(app: &Arc<App>, id: &str, body: &OpenTerminal) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let info = running(app, id).await?;
     let home = if body.root { "/root" } else { "/home/desktop" };
     let record = Terminal {

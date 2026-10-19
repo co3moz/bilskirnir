@@ -76,8 +76,7 @@ pub async fn read(
         )
         .into());
     }
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -136,8 +135,7 @@ pub async fn write(
         return Err(anyhow::anyhow!("File writes are limited to 512 KiB").into());
     }
     let size = data.len();
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -251,8 +249,7 @@ impl DeleteFile {
     }
 }
 async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -446,8 +443,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
             "max_bytes must be 1 to 5242880".into(),
         ));
     }
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let container = running_container(app, id).await?;
     let args = [
         "exec",
@@ -492,8 +488,7 @@ pub async fn download(
     token: auth::Session,
 ) -> Result<Response> {
     let (_, name) = split_path(&query.path)?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let container = running_container(&app, &id).await?;
     let cid = container["Id"].as_str().context("Missing container ID")?;
     let entry = file_ops(&app, cid, &["stat", &query.path]).await?;

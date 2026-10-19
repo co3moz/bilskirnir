@@ -22,8 +22,7 @@ use std::sync::Arc;
 /// volume in one quick call, and a refusal reaches the caller as its status instead of a job log.
 pub async fn remove(State(app): State<Arc<App>>, Path(name): Path<String>) -> Result<Json<Value>> {
     volume_name(&name)?;
-    let lock = app.resource_lock(&format!("volume:{name}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("volume:{name}")).await?;
     app.delete_volume(&name).await?;
     Ok(Json(json!({"name": name, "deleted": true})))
 }

@@ -803,8 +803,7 @@ pub async fn remove(State(app): State<Arc<App>>, Path(id): Path<String>) -> Resu
 }
 
 async fn replace(app: &App, id: &str, compose: Option<Compose>) -> Result<Json<Value>> {
-    let lock = app.resource_lock(&format!("image:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("image:{id}")).await?;
     let mut record: ImageRecord = app.db.get("image", id)?;
     record.compose = compose;
     app.db.put("image", id, &record)?;
