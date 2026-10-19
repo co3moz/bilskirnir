@@ -395,23 +395,34 @@ impl std::error::Error for Rejected {}
 /// One regular file as a USTAR entry, padded to whole blocks. Names must fit the header.
 pub(crate) fn entry(name: &str, data: &[u8], mtime: u64) -> Vec<u8> {
     assert!(name.len() <= 100, "entry name too long");
+    let mut out = header(name, b'0', 0o644, 0, data.len() as u64, mtime).to_vec();
+    out.extend_from_slice(data);
+    out.resize(out.len() + padding(data.len() as u64) as usize, 0);
+    out
+}
+
+/// A folder as a USTAR entry, owned by `owner` as user and group, or none when its name does not
+/// fit the header. A time the header cannot hold becomes the latest it can.
+pub(crate) fn directory(name: &str, mode: u32, owner: u32, mtime: u64) -> Option<[u8; BLOCK]> {
+    let mode = u64::from(mode & 0o7777);
+    (name.len() <= 100).then(|| header(name, b'5', mode, owner.into(), 0, mtime.min(0o77777777777)))
+}
+
+fn header(name: &str, typeflag: u8, mode: u64, owner: u64, size: u64, mtime: u64) -> [u8; BLOCK] {
     let mut header = [0u8; BLOCK];
     header[..name.len()].copy_from_slice(name.as_bytes());
-    octal(&mut header[100..108], 0o644);
-    octal(&mut header[108..116], 0);
-    octal(&mut header[116..124], 0);
-    octal(&mut header[124..136], data.len() as u64);
+    octal(&mut header[100..108], mode);
+    octal(&mut header[108..116], owner);
+    octal(&mut header[116..124], owner);
+    octal(&mut header[124..136], size);
     octal(&mut header[136..148], mtime);
-    header[156] = b'0';
+    header[156] = typeflag;
     header[257..263].copy_from_slice(b"ustar\0");
     header[263..265].copy_from_slice(b"00");
     header[148..156].fill(b' ');
     let sum: u32 = header.iter().map(|byte| u32::from(*byte)).sum();
     header[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
-    let mut out = header.to_vec();
-    out.extend_from_slice(data);
-    out.resize(out.len() + padding(data.len() as u64) as usize, 0);
-    out
+    header
 }
 
 fn octal(field: &mut [u8], value: u64) {
@@ -442,7 +453,7 @@ pub(crate) fn size(field: &[u8]) -> Result<u64> {
 }
 
 /// Go's `parseNumeric`: base-256 when the high bit is set, otherwise octal.
-fn numeric(field: &[u8]) -> Result<i64> {
+pub(crate) fn numeric(field: &[u8]) -> Result<i64> {
     if field[0] & 0x80 == 0 {
         return octal_value(field);
     }

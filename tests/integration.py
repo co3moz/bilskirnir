@@ -104,6 +104,7 @@ device_copy_volume = f"bilskirnir-test-device-copy-{tag}"
 linked_volume = f"bilskirnir-test-linked-{tag}"
 installs_volume = f"bilskirnir-test-installs-{tag}"
 cache_volume = f"bilskirnir-test-cache-{tag}"
+settings_volume = f"bilskirnir-test-settings-{tag}"
 absent_volume = f"bilskirnir-test-absent-{tag}"
 outside_volume = f"bilskirnir-test-outside-{tag}"
 password = uuid.uuid4().hex
@@ -1657,7 +1658,7 @@ try:
     # A volume parameter mounts the volume chosen for it at its path whenever the container is
     # created; without one the path stays in the container. Either way the desktop user owns the
     # folder before the setup script runs, which reads the path and the volume's name.
-    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}, {"name": "UNITY_PROJECT", "type": "folder", "label": "Unity project", "default": "/home/desktop/UnityProjects/MyGame"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\nmkdir -p \"$UNITY_PROJECT\"\n"}
+    volume_compose = {"parameters": [{"name": "UNITY_HOME", "type": "volume", "path": "/unity-install-location", "required": True}, {"name": "UNITY_CACHE", "type": "volume", "path": "/home/desktop/Unity/Cache"}, {"name": "UNITY_SETTINGS", "type": "volume", "path": "/home/desktop/.config/unity3d"}, {"name": "UNITY_PROJECT", "type": "folder", "label": "Unity project", "default": "/home/desktop/UnityProjects/MyGame"}], "script": "set -eu\nprintf '%s|%s|%s|%s|%s' \"$UNITY_HOME\" \"$UNITY_HOME_VOLUME\" \"$UNITY_CACHE\" \"$UNITY_CACHE_VOLUME\" \"$(id -u)\" > \"$UNITY_HOME/unity_v1\"\nprintf cached > \"$UNITY_CACHE/marker\"\nmkdir -p \"$UNITY_PROJECT\"\n"}
     for parameters in [[{"name": "UNITY_HOME", "type": "volume"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/tmp/unity"}], [{"name": "UNITY_HOME", "type": "volume", "path": "/opt/../etc"}], [*volume_compose["parameters"], {"name": "UNITY_HOME_VOLUME"}], [{"name": "UNITY_PROJECT", "type": "folder", "default": "/etc/projects"}]]:
         assert refused(f"images/{built['id']}/compose", {**volume_compose, "parameters": parameters}, "PUT") == 400, parameters
     installs_image = job(api("images/build", {"name": "volume-parameters", "base_image": xfce["reference"], "internet": False, "script": f"# volume parameters {tag}\ntrue\n", "compose": volume_compose}))
@@ -1688,7 +1689,7 @@ try:
     assert api(f"containers/{kept}")["setup"]["mounts"] == [{"volume": installs_volume, "target": "/unity-install-location", "readonly": False}]
     # The folders the compose names take uploads, a volume parameter's outside the home too, and
     # the record lists them for the upload dialog.
-    assert api(f"containers/{kept}")["setup"]["places"] == [{"label": "UNITY_HOME", "path": "/unity-install-location"}, {"label": "UNITY_CACHE", "path": "/home/desktop/Unity/Cache"}, {"label": "Unity project", "path": "/home/desktop/UnityProjects/MyGame"}]
+    assert api(f"containers/{kept}")["setup"]["places"] == [{"label": "UNITY_HOME", "path": "/unity-install-location"}, {"label": "UNITY_CACHE", "path": "/home/desktop/Unity/Cache"}, {"label": "UNITY_SETTINGS", "path": "/home/desktop/.config/unity3d"}, {"label": "Unity project", "path": "/home/desktop/UnityProjects/MyGame"}]
     assert docker("exec", kept_container, "stat", "-c", "%U", "/home/desktop/UnityProjects/MyGame") == b"desktop\n"
     assert upload(kept, "asset.txt", b"asset", destination="/unity-install-location/Assets")["path"] == "/unity-install-location/Assets/asset.txt"
     assert docker("exec", kept_container, "stat", "-c", "%U", "/unity-install-location/Assets/asset.txt") == b"desktop\n"
@@ -1713,19 +1714,23 @@ try:
     assert docker("exec", kept_container, "cat", "/unity-install-location/extra") == b"kept"
     assert subprocess.run(["docker", "exec", kept_container, "test", "-e", "/home/desktop/Unity/Cache/extra"]).returncode != 0
     assert docker("exec", kept_container, "cat", "/home/desktop/Unity/Cache/marker") == b"cached"
-    # A volume created for the cache, as the dashboard does inline, and the installs shared with
-    # the first container. Docker makes the folder above the cache, which the desktop user gets.
+    # Volumes created for the cache and the settings, as the dashboard does inline, and the
+    # installs shared with the first container. Docker makes the folders above the cache and the
+    # settings, which the desktop user gets; the session needs ~/.config before the setup runs,
+    # so a root-owned one would leave XFCE without its settings and the desktop never ready.
     api("volumes", {"name": cache_volume})
-    shared = job(api("containers", {**base, "name": "Shared installs", "parameters": {"UNITY_HOME": installs_volume, "UNITY_CACHE": cache_volume}}))["container_id"]
+    api("volumes", {"name": settings_volume})
+    shared = job(api("containers", {**base, "name": "Shared installs", "parameters": {"UNITY_HOME": installs_volume, "UNITY_CACHE": cache_volume, "UNITY_SETTINGS": settings_volume}}))["container_id"]
     container_ids.append(shared)
     ready(f"bilskirnir-{shared}")
-    assert volume_mounts(f"bilskirnir-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume}
+    assert volume_mounts(f"bilskirnir-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume, "/home/desktop/.config/unity3d": settings_volume}
     assert docker("exec", f"bilskirnir-{shared}", "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache|{cache_volume}|1001".encode()
-    assert docker("exec", f"bilskirnir-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache") == b"desktop\ndesktop\n"
+    assert docker("exec", f"bilskirnir-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache", "/home/desktop/.config", "/home/desktop/.config/unity3d") == b"desktop\ndesktop\ndesktop\ndesktop\n"
+    assert docker("exec", f"bilskirnir-{shared}", "pgrep", "-u", "desktop", "-x", "xfconfd")
     for eid in [kept, shared]:
         job(api(f"containers/{eid}", method="DELETE"))
         container_ids.remove(eid)
-    assert docker("volume", "inspect", installs_volume) and docker("volume", "inspect", cache_volume)
+    assert docker("volume", "inspect", installs_volume) and docker("volume", "inspect", cache_volume) and docker("volume", "inspect", settings_volume)
     print("PASS volume parameters mount the chosen volume, keep it across settings and reset, and give the desktop user its folder", flush=True)
     # A volume parameter with new_volume gives each container a volume of its own: the creation
     # job makes it with its owner's labels, a reset and a settings change keep it, a snapshot's
@@ -1951,7 +1956,7 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,absent_volume,outside_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,settings_volume,absent_volume,outside_volume]: docker("volume","rm",name,check=False)
     # A volume created for one of this run's containers goes only while its label names that container.
     for name in own_volumes:
         info=inspect_cleanup("volume",name)

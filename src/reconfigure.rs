@@ -322,6 +322,7 @@ impl App {
         let replaced = async {
             self.docker_args(&self.container_args(&env)).await?;
             self.write_machine_id(&env).await?;
+            self.hand_over_mount_parents(&env).await?;
             if env.spec.internet {
                 self.connect_network(&env, &env.egress_network, &env.container)
                     .await?;
