@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11-utils x11-xserver-utils x11-apps xdotool wmctrl imagemagick sudo tini curl ca-certificates python3 \
     at-spi2-core python3-pyatspi \
     pulseaudio pulseaudio-utils mesa-utils mesa-utils-extra libgl1-mesa-dri libegl1 \
-    mesa-vulkan-drivers vulkan-tools fonts-dejavu fonts-noto-color-emoji locales \
+    mesa-vulkan-drivers vulkan-tools fonts-dejavu fonts-noto-color-emoji fonts-noto-cjk locales \
     && locale-gen en_US.UTF-8 && rm -rf /var/lib/apt/lists/*
 RUN curl -fL --retry 3 "https://github.com/VirtualGL/virtualgl/releases/download/${VIRTUALGL_VERSION}/virtualgl_${VIRTUALGL_VERSION}_amd64.deb" -o /tmp/virtualgl.deb \
     && apt-get update && apt-get install -y /tmp/virtualgl.deb && rm /tmp/virtualgl.deb && rm -rf /var/lib/apt/lists/*

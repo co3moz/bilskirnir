@@ -689,6 +689,10 @@ try:
     mounted = subprocess.run(["docker", "exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "--mount", "--propagation", "unchanged", "mount", "-t", "tmpfs", "tmpfs", "/mnt"], capture_output=True)
     assert mounted.returncode != 0, mounted
     print("PASS user namespaces for browser sandboxes, mount still refused", flush=True)
+    # Chinese, Japanese and Korean text shows as text, not boxes, also in screenshots agents read.
+    for language in ("zh-cn", "ja", "ko"):
+        assert b"Noto Sans CJK" in docker("exec", container, "fc-match", f"sans-serif:lang={language}"), language
+    print("PASS CJK fonts for Chinese, Japanese and Korean text", flush=True)
     # GdkPixbuf draws SVG, so XFCE's default wallpaper and icons that exist only as SVG are not blank.
     loaders = docker("exec", container, "sh", "-c", "cat /usr/lib/*/gdk-pixbuf-2.0/2.10.0/loaders.cache")
     assert b'"image/svg+xml"' in loaders, loaders
