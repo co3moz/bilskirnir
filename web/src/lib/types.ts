@@ -181,6 +181,8 @@ export type ImageItem = {
   layers_size?: number | null
   /** The part of `layers_size` no other listed image brought. */
   own_size?: number | null
+  /** The desktop MCP servers the image declares, which every container from it has. */
+  mcp_servers?: string[]
 }
 
 /** One step of an image's history, as `GET images/{id}/layers` lists it. */
@@ -234,6 +236,8 @@ export type BuildConfig = {
   template_id?: string
   /** The templates merged into the image, in order. */
   template_ids?: string[]
+  /** Desktop MCP servers written into the image, which every container from it has. */
+  mcp?: ServerDeclaration[]
 }
 
 /** One line of `docker volume ls --format json`, and whether it is the manager's own. */
@@ -307,6 +311,8 @@ export type Settings = {
   templates_url: string | null
   /** The label a volume needs to be listed and mounted, or `null` when every volume is. */
   volume_filter: string | null
+  /** Whether MCP endpoints answer agents (MCP_ENABLED). */
+  mcp_enabled: boolean
 }
 
 export type SystemInfo = {
@@ -323,3 +329,93 @@ export type Session = { auth_enabled: boolean; authenticated: boolean }
 export type JobStarted = { job_id: string }
 
 export type SettingsPreview = { container_id: string; live: string[]; restart: string[] }
+
+/** What an MCP endpoint lets an agent do in one container, beside its desktop MCP servers. */
+export type McpScope =
+  "view" | "input" | "applications" | "files_read" | "files_write" | "commands" | "media" | "power"
+
+export type McpTool = { name: string; description: string }
+
+/**
+ * An MCP server running inside a container: declared by its image (`image`), or registered in
+ * the running desktop (`container`). Environment variables and headers are listed by name only.
+ */
+export type DesktopServer = {
+  container_id: string
+  container_name: string
+  name: string
+  source: "image" | "container"
+  description: string
+  transport: "stdio" | "http"
+  command: string | null
+  args: string[]
+  cwd: string | null
+  env: string[]
+  url: string | null
+  headers: string[]
+  /** `pending` before its tools were read, `stopped` while the container is not running. */
+  state: "ready" | "error" | "pending" | "stopped"
+  error: string | null
+  tools: McpTool[]
+  /** Unix seconds. */
+  tools_at: number | null
+  /** The end of the server's standard error, which may be empty. */
+  log: string
+}
+
+/**
+ * A desktop MCP server to register, or one an image declares: a command, or the URL of a server
+ * that listens inside the desktop. Values may name compose values as `${NAME}`.
+ */
+export type ServerRequest = {
+  name: string
+  description?: string
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  cwd?: string
+  url?: string
+  headers?: Record<string, string>
+}
+
+/** A desktop MCP server a build writes into its image. */
+export type ServerDeclaration = ServerRequest
+
+/** One container an MCP endpoint reaches, and what it may do there. */
+export type McpGrant = {
+  container_id: string
+  container_name: string
+  alias: string
+  scopes: McpScope[]
+  /** The desktop MCP servers whose tools it includes: all, also later ones, or these. */
+  servers: "all" | string[]
+}
+
+export type GrantRequest = Omit<McpGrant, "container_name" | "alias"> & { alias?: string }
+
+/** A scoped MCP door at `/mcp/<name>` with a bearer token of its own. */
+export type McpEndpoint = {
+  name: string
+  /** `/mcp/<name>`, relative to the dashboard's origin. */
+  path: string
+  /** Created with its container. */
+  automatic: boolean
+  has_token: boolean
+  token_created_at: number | null
+  created_at: number
+  grants: McpGrant[]
+  tool_count: number
+}
+
+/** A token is returned once, when it is created or replaced. */
+export type EndpointToken = { endpoint: McpEndpoint; token: string }
+
+/** A tool as an endpoint exposes it. */
+export type EndpointTool = McpTool & {
+  source: "bilskirnir" | "server"
+  container_id: string
+  server: string | null
+}
+
+/** The scopes and the Bilskirnir tools in each; `default` is what a new grant starts with. */
+export type McpScopes = { scopes: { id: McpScope; tools: string[] }[]; default: McpScope[] }

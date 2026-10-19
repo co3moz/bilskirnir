@@ -265,6 +265,14 @@ const columns: DataColumn<Row>[] = [
             {t("compose.name")}
           </Badge>
         )}
+        {!!row.original.mcp_servers?.length && (
+          <Badge
+            variant="outline"
+            title={t("images.mcpServers", { names: formatList(row.original.mcp_servers) })}
+          >
+            MCP
+          </Badge>
+        )}
       </div>
     ),
   }),

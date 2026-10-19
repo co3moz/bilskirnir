@@ -18,6 +18,7 @@ import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
+import { McpPage } from "@/pages/mcp"
 import { TemplatesPage } from "@/pages/templates"
 import { VolumesPage } from "@/pages/volumes"
 
@@ -32,6 +33,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   images: ImagesPage,
   templates: TemplatesPage,
   volumes: VolumesPage,
+  mcp: McpPage,
   jobs: JobsPage,
 }
 

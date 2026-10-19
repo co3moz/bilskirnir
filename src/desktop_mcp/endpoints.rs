@@ -1,0 +1,467 @@
+//! MCP endpoints: which containers an endpoint covers, with which scopes and desktop servers, and
+//! the token that opens it.
+use super::{
+    registry::{server_name, slug},
+    scopes::{Scope, catalog, describe},
+};
+use crate::{
+    App,
+    error::{Error, Result, missing},
+    model::{Container, now},
+};
+use anyhow::bail;
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
+use blake2::{Blake2s256, Digest};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde_json::{Value, json};
+use std::sync::Arc;
+use subtle::ConstantTimeEq;
+
+/// The database kind of endpoints, by name.
+pub(crate) const ENDPOINTS: &str = "mcp-endpoint";
+const GRANT_LIMIT: usize = 16;
+
+/// Which desktop servers of a container an endpoint offers.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Servers {
+    /// Every one, also those declared later.
+    All,
+    /// These, by name.
+    Named(Vec<String>),
+}
+impl Servers {
+    pub fn includes(&self, name: &str) -> bool {
+        match self {
+            Servers::All => true,
+            Servers::Named(names) => names.iter().any(|n| n == name),
+        }
+    }
+}
+impl Serialize for Servers {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            Servers::All => serializer.serialize_str("all"),
+            Servers::Named(names) => names.serialize(serializer),
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Servers {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        match Value::deserialize(deserializer)? {
+            Value::String(all) if all == "all" => Ok(Servers::All),
+            names @ Value::Array(_) => serde_json::from_value(names)
+                .map(Servers::Named)
+                .map_err(D::Error::custom),
+            _ => Err(D::Error::custom(
+                "servers is \"all\" or a list of server names",
+            )),
+        }
+    }
+}
+
+/// One container of an endpoint.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Grant {
+    pub container_id: String,
+    /// The container's name on the endpoint, which its tools take when it covers several.
+    pub alias: String,
+    pub scopes: Vec<Scope>,
+    pub servers: Servers,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct Endpoint {
+    /// Its path: `/mcp/<name>`.
+    pub name: String,
+    /// Created with its container, and deleted with it.
+    #[serde(default)]
+    pub automatic: bool,
+    pub grants: Vec<Grant>,
+    /// The hash of its token. Without one only the administrator's MCP token opens it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_created_at: Option<u64>,
+    pub created_at: u64,
+}
+impl Endpoint {
+    /// Whether `token` is this endpoint's, compared in constant time.
+    pub fn opens(&self, token: &str) -> bool {
+        self.token_hash
+            .as_ref()
+            .is_some_and(|hash| bool::from(hash.as_bytes().ct_eq(hashed(token).as_bytes())))
+    }
+}
+
+/// A token's hash. Tokens are random, so a fast hash is enough to keep them out of the database.
+fn hashed(token: &str) -> String {
+    Blake2s256::digest(token.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+/// A new token: 244 random bits, as a session's.
+fn new_token() -> String {
+    format!(
+        "bsk_{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    )
+}
+
+/// An endpoint's name: lowercase letters, digits and dashes, at most 48.
+pub(crate) fn endpoint_name(name: &str) -> anyhow::Result<()> {
+    if !slug(name, 48) {
+        bail!(
+            "An endpoint name is lowercase letters, digits and dashes, at most 48, not starting with a dash"
+        );
+    }
+    Ok(())
+}
+/// A name made of a container's name, as `slug` takes it, or `fallback` when nothing is left.
+pub(crate) fn slug_of(name: &str, limit: usize, fallback: &str) -> String {
+    let mut out = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let mut out: String = out.chars().take(limit).collect();
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() { fallback.into() } else { out }
+}
+/// `base`, or `base-2`, `base-3`... when `taken` says it is in use, within `limit` characters.
+fn unique(base: &str, limit: usize, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.into();
+    }
+    (2..)
+        .map(|n| {
+            let suffix = format!("-{n}");
+            let head: String = base.chars().take(limit - suffix.len()).collect();
+            format!("{}{suffix}", head.trim_end_matches('-'))
+        })
+        .find(|candidate| !taken(candidate))
+        .unwrap()
+}
+
+/// A grant as a request names it; the alias defaults to the container's name.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct GrantRequest {
+    pub container_id: String,
+    #[serde(default)]
+    pub alias: Option<String>,
+    pub scopes: Vec<Scope>,
+    pub servers: Servers,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CreateEndpoint {
+    pub name: String,
+    pub grants: Vec<GrantRequest>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct UpdateEndpoint {
+    pub grants: Vec<GrantRequest>,
+}
+
+/// Check grants and give each an alias: one per container, of existing containers.
+pub(crate) fn grants(app: &App, requested: Vec<GrantRequest>) -> anyhow::Result<Vec<Grant>> {
+    if requested.is_empty() || requested.len() > GRANT_LIMIT {
+        bail!("An endpoint covers 1 to {GRANT_LIMIT} containers");
+    }
+    let mut out: Vec<Grant> = Vec::new();
+    for request in requested {
+        let container = app
+            .container(&request.container_id)
+            .map_err(|_| anyhow::anyhow!("Container not found: {}", request.container_id))?;
+        if out.iter().any(|g| g.container_id == request.container_id) {
+            bail!("An endpoint names each container once");
+        }
+        let alias = match request.alias {
+            Some(alias) => {
+                if !slug(&alias, 24) {
+                    bail!(
+                        "A container's alias is lowercase letters, digits and dashes, at most 24: {alias:?}"
+                    );
+                }
+                alias
+            }
+            None => unique(&slug_of(&container.spec.name, 24, "desktop"), 24, |a| {
+                out.iter().any(|g| g.alias == a)
+            }),
+        };
+        if out.iter().any(|g| g.alias == alias) {
+            bail!("Each container of an endpoint needs its own alias: {alias}");
+        }
+        let mut scopes = Vec::new();
+        for scope in request.scopes {
+            if !scopes.contains(&scope) {
+                scopes.push(scope);
+            }
+        }
+        if let Servers::Named(names) = &request.servers {
+            if names.len() > 64 {
+                bail!("An endpoint names at most 64 servers of a container");
+            }
+            for name in names {
+                server_name(name)?;
+            }
+        }
+        out.push(Grant {
+            container_id: request.container_id,
+            alias,
+            scopes,
+            servers: request.servers,
+        });
+    }
+    Ok(out)
+}
+
+/// An endpoint as the dashboard and the administrator's tools show it: never its token.
+pub(crate) fn summary(app: &App, endpoint: &Endpoint) -> Value {
+    json!({
+        "name": endpoint.name,
+        "path": format!("/mcp/{}", endpoint.name),
+        "automatic": endpoint.automatic,
+        "has_token": endpoint.token_hash.is_some(),
+        "token_created_at": endpoint.token_created_at,
+        "created_at": endpoint.created_at,
+        "grants": endpoint.grants.iter().map(|grant| json!({
+            "container_id": grant.container_id,
+            "container_name": app.container(&grant.container_id).map(|c| c.spec.name).unwrap_or_default(),
+            "alias": grant.alias,
+            "scopes": grant.scopes,
+            "servers": grant.servers,
+        })).collect::<Vec<_>>(),
+        "tool_count": catalog(app, endpoint).len(),
+    })
+}
+
+fn load(app: &App, name: &str) -> Result<Endpoint> {
+    app.db.get(ENDPOINTS, name).map_err(|_| missing())
+}
+
+/// Tell the agents of the endpoints covering `container_id` that their tools changed.
+pub(crate) fn announce(app: &App, container_id: &str) {
+    for endpoint in app.db.list::<Endpoint>(ENDPOINTS).unwrap_or_default() {
+        if endpoint
+            .grants
+            .iter()
+            .any(|grant| grant.container_id == container_id)
+        {
+            let _ = app.desktop_mcp.changes.send(endpoint.name);
+        }
+    }
+}
+
+/// End what an endpoint holds open after it changed or went away.
+fn release(app: &App, name: &str) {
+    app.desktop_mcp
+        .pool
+        .retain(|(endpoint, _, _)| endpoint != name);
+    let _ = app.desktop_mcp.changes.send(name.to_owned());
+}
+
+pub async fn endpoints(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    let mut items: Vec<Endpoint> = app.db.list(ENDPOINTS)?;
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(Json(
+        json!({"items": items.iter().map(|e| summary(&app, e)).collect::<Vec<_>>()}),
+    ))
+}
+
+pub async fn create_endpoint(
+    State(app): State<Arc<App>>,
+    Json(body): Json<CreateEndpoint>,
+) -> Result<Json<Value>> {
+    endpoint_name(&body.name)?;
+    let grants = grants(&app, body.grants)?;
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    if app.db.get::<Endpoint>(ENDPOINTS, &body.name).is_ok() {
+        return Err(Error(
+            StatusCode::CONFLICT,
+            format!("An MCP endpoint named {} exists", body.name),
+        ));
+    }
+    let token = new_token();
+    let endpoint = Endpoint {
+        name: body.name,
+        automatic: false,
+        grants,
+        token_hash: Some(hashed(&token)),
+        token_created_at: Some(now()),
+        created_at: now(),
+    };
+    app.db.put(ENDPOINTS, &endpoint.name, &endpoint)?;
+    Ok(Json(
+        json!({"endpoint": summary(&app, &endpoint), "token": token}),
+    ))
+}
+
+pub async fn update_endpoint(
+    State(app): State<Arc<App>>,
+    Path(name): Path<String>,
+    Json(body): Json<UpdateEndpoint>,
+) -> Result<Json<Value>> {
+    let grants = grants(&app, body.grants)?;
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    let mut endpoint = load(&app, &name)?;
+    endpoint.grants = grants;
+    app.db.put(ENDPOINTS, &name, &endpoint)?;
+    release(&app, &name);
+    Ok(Json(summary(&app, &endpoint)))
+}
+
+pub async fn delete_endpoint(
+    State(app): State<Arc<App>>,
+    Path(name): Path<String>,
+) -> Result<Json<Value>> {
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    load(&app, &name)?;
+    app.db.remove(ENDPOINTS, &name)?;
+    release(&app, &name);
+    app.desktop_mcp.close_service(&name);
+    Ok(Json(json!({"deleted": true, "name": name})))
+}
+
+/// Create or replace an endpoint's token; the old one stops working at once.
+pub async fn token(State(app): State<Arc<App>>, Path(name): Path<String>) -> Result<Json<Value>> {
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    let mut endpoint = load(&app, &name)?;
+    let token = new_token();
+    endpoint.token_hash = Some(hashed(&token));
+    endpoint.token_created_at = Some(now());
+    app.db.put(ENDPOINTS, &name, &endpoint)?;
+    // Sessions opened with the old token end with it.
+    app.desktop_mcp.close_service(&name);
+    Ok(Json(
+        json!({"endpoint": summary(&app, &endpoint), "token": token}),
+    ))
+}
+
+pub async fn revoke_token(
+    State(app): State<Arc<App>>,
+    Path(name): Path<String>,
+) -> Result<Json<Value>> {
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    let mut endpoint = load(&app, &name)?;
+    endpoint.token_hash = None;
+    endpoint.token_created_at = None;
+    app.db.put(ENDPOINTS, &name, &endpoint)?;
+    app.desktop_mcp.close_service(&name);
+    Ok(Json(summary(&app, &endpoint)))
+}
+
+pub async fn endpoint_tools(
+    State(app): State<Arc<App>>,
+    Path(name): Path<String>,
+) -> Result<Json<Value>> {
+    let endpoint = load(&app, &name)?;
+    let items = catalog(&app, &endpoint)
+        .into_iter()
+        .map(|entry| {
+            let (source, container, server) = match &entry.target {
+                super::scopes::Target::Server {
+                    container_id,
+                    server,
+                    ..
+                } => ("server", json!(container_id), json!(server)),
+                super::scopes::Target::Bilskirnir { containers, .. } => (
+                    "bilskirnir",
+                    json!(if containers.len() == 1 {
+                        Some(&containers[0].1)
+                    } else {
+                        None
+                    }),
+                    Value::Null,
+                ),
+                super::scopes::Target::Job { .. } => ("bilskirnir", Value::Null, Value::Null),
+            };
+            json!({
+                "name": entry.tool.name,
+                "description": entry.tool.description,
+                "source": source,
+                "container_id": container,
+                "server": server,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(Json(json!({"items": items})))
+}
+
+pub async fn scopes_list() -> Json<Value> {
+    Json(describe())
+}
+
+/// Give a new container an endpoint of its own, named after it, with the default scopes, all its
+/// desktop servers and no token yet. Returns its name.
+pub(crate) async fn automatic_endpoint(app: &App, container: &Container) -> anyhow::Result<String> {
+    let lock = app.resource_lock("mcp-endpoints");
+    let _guard = lock.lock().await;
+    let taken = app
+        .db
+        .list::<Endpoint>(ENDPOINTS)?
+        .into_iter()
+        .map(|e| e.name)
+        .collect::<Vec<_>>();
+    let name = unique(&slug_of(&container.spec.name, 48, "desktop"), 48, |n| {
+        taken.iter().any(|t| t == n)
+    });
+    let endpoint = Endpoint {
+        name: name.clone(),
+        automatic: true,
+        grants: vec![Grant {
+            container_id: container.id.clone(),
+            alias: slug_of(&container.spec.name, 24, "desktop"),
+            scopes: Scope::DEFAULT.to_vec(),
+            servers: Servers::All,
+        }],
+        token_hash: None,
+        token_created_at: None,
+        created_at: now(),
+    };
+    app.db.put(ENDPOINTS, &name, &endpoint)?;
+    Ok(name)
+}
+
+/// Remove a deleted container from every endpoint, and its own endpoint with it.
+pub(crate) fn forget_container(app: &App, container_id: &str) -> anyhow::Result<()> {
+    for mut endpoint in app.db.list::<Endpoint>(ENDPOINTS)? {
+        if !endpoint
+            .grants
+            .iter()
+            .any(|grant| grant.container_id == container_id)
+        {
+            continue;
+        }
+        endpoint
+            .grants
+            .retain(|grant| grant.container_id != container_id);
+        if endpoint.automatic && endpoint.grants.is_empty() {
+            app.db.remove(ENDPOINTS, &endpoint.name)?;
+            app.desktop_mcp.close_service(&endpoint.name);
+        } else {
+            // An endpoint left without containers keeps its name and token for new grants.
+            app.db.put(ENDPOINTS, &endpoint.name, &endpoint)?;
+        }
+        release(app, &endpoint.name);
+    }
+    Ok(())
+}

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { ImportedBuild } from "./build-config"
+import type { EndpointToken } from "./types"
 
 export type Dialog =
   | { kind: "create"; image?: string }
@@ -23,6 +24,12 @@ export type Dialog =
   | { kind: "volume-delete"; name: string }
   | { kind: "job"; id: string }
   | { kind: "log"; title: string; text: string; status?: string }
+  | { kind: "mcp-endpoint"; name?: string }
+  | { kind: "mcp-token"; token: EndpointToken }
+  | { kind: "mcp-endpoint-confirm"; name: string; action: "replace" | "revoke" | "delete" }
+  | { kind: "mcp-tools"; name: string }
+  | { kind: "mcp-server"; container?: string }
+  | { kind: "mcp-server-remove"; container: string; name: string }
 
 type State = { dialog: Dialog | null; open: boolean; seq: number }
 

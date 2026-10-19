@@ -16,6 +16,9 @@ import {
   VolumeDialog,
 } from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
+import { EndpointDialog } from "./endpoint-dialog"
+import { EndpointConfirmDialog, ServerRemoveDialog, TokenDialog, ToolsDialog } from "./mcp-dialogs"
+import { ServerDialog } from "./server-dialog"
 import { IconDialog } from "./icon-dialog"
 import { ImageDrawer } from "./image-drawer"
 import { UploadDialog } from "./upload-dialog"
@@ -74,5 +77,17 @@ function render(dialog: Dialog, open: boolean) {
       return <JobDrawer {...props} id={dialog.id} />
     case "log":
       return <LogDialog {...props} title={dialog.title} text={dialog.text} status={dialog.status} />
+    case "mcp-endpoint":
+      return <EndpointDialog {...props} name={dialog.name} />
+    case "mcp-token":
+      return <TokenDialog {...props} token={dialog.token} />
+    case "mcp-endpoint-confirm":
+      return <EndpointConfirmDialog {...props} name={dialog.name} action={dialog.action} />
+    case "mcp-tools":
+      return <ToolsDialog {...props} name={dialog.name} />
+    case "mcp-server":
+      return <ServerDialog {...props} container={dialog.container} />
+    case "mcp-server-remove":
+      return <ServerRemoveDialog {...props} container={dialog.container} name={dialog.name} />
   }
 }

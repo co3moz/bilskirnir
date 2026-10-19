@@ -1,4 +1,5 @@
 import * as React from "react"
+import { RiPlugLine } from "@remixicon/react"
 
 import { cn } from "cn"
 
@@ -188,6 +189,12 @@ export function ImageDrawer({ id, ...props }: DialogProps & { id: string }) {
         </DrawerDescription>
       </DrawerHeader>
       <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+        {!!image?.mcp_servers?.length && (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <RiPlugLine className="mt-px size-3.5 shrink-0" aria-hidden />
+            {t("images.mcpServers", { names: formatList(image.mcp_servers) })}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">{t("layers.description")}</p>
         {layers.error ? (
           <p className="text-destructive">{layers.error.message}</p>

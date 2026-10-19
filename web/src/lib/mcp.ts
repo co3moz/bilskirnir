@@ -1,0 +1,417 @@
+// MCP endpoints and desktop MCP servers as the MCP page and the forms show them. Bilskirnir MCP at
+// `/mcp` is the administrator channel; an endpoint at `/mcp/<name>` gives an agent some of the
+// container tools of the containers it covers, plus the tools of their desktop MCP servers.
+import type { Tone } from "./format"
+import { formatList, t } from "./i18n"
+import type {
+  DesktopServer,
+  EndpointTool,
+  GrantRequest,
+  ImageItem,
+  McpGrant,
+  McpScope,
+  ServerDeclaration,
+  ServerRequest,
+} from "./types"
+
+/** Every scope, in the order the forms list them. */
+export const SCOPES: McpScope[] = [
+  "view",
+  "input",
+  "applications",
+  "files_read",
+  "files_write",
+  "commands",
+  "media",
+  "power",
+]
+
+/** A desktop MCP server's name: lowercase letters, digits and dashes, at most 32 characters. */
+export const SERVER_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
+/** The same rule for an input's `pattern`, which the browser matches with the `v` flag. */
+export const SERVER_NAME_PATTERN = "[a-z0-9][a-z0-9\\-]{0,31}"
+/** An endpoint's name, the last part of its URL: the same letters, at most 48 characters. */
+export const ENDPOINT_NAME = /^[a-z0-9][a-z0-9-]{0,47}$/
+export const ENDPOINT_NAME_PATTERN = "[a-z0-9][a-z0-9\\-]{0,47}"
+/** The name an endpoint gives a container: the same letters, at most 24 characters. */
+export const ALIAS_PATTERN = "[a-z0-9][a-z0-9\\-]{0,23}"
+const ALIAS_LIMIT = 24
+
+const known = (scope: string): scope is McpScope => SCOPES.includes(scope as McpScope)
+
+/** A scope's name; one a newer manager added as it calls it. */
+export const scopeLabel = (scope: string) => (known(scope) ? t(`mcp.scope.${scope}`) : scope)
+/** What a scope lets an agent do; nothing for one this release does not know. */
+export const scopeDescription = (scope: string) =>
+  known(scope) ? t(`mcp.scope.${scope}.description`) : ""
+
+/** Scopes in the forms' order, each once; unknown ones a newer manager sends are kept last. */
+export function orderScopes(scopes: readonly string[]): McpScope[] {
+  const other = scopes.filter((scope) => !known(scope)) as McpScope[]
+  return [...SCOPES.filter((scope) => scopes.includes(scope)), ...new Set(other)]
+}
+
+/** A grant's scopes in a few words. */
+export function scopeSummary(scopes: readonly McpScope[]) {
+  if (!scopes.length) return t("mcp.scopes.none")
+  if (SCOPES.every((scope) => scopes.includes(scope))) return t("mcp.scopes.all")
+  return formatList(orderScopes(scopes).map(scopeLabel))
+}
+
+/** Which desktop MCP servers a grant includes, in a few words. */
+export function serversSummary(servers: McpGrant["servers"]) {
+  if (servers === "all") return t("mcp.servers.all")
+  return servers.length ? formatList(servers) : t("mcp.servers.none")
+}
+
+/**
+ * The name an endpoint gives a container by default: its name in lowercase letters, digits and
+ * dashes, with a number added when another container of the endpoint already goes by it.
+ */
+export function defaultAlias(name: string, taken: Iterable<string> = []) {
+  const base =
+    name
+      .replace(/ı/g, "i")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+/, "")
+      .slice(0, ALIAS_LIMIT)
+      .replace(/-+$/, "") || "desktop"
+  const used = new Set(taken)
+  if (!used.has(base)) return base
+  for (let number = 2; ; number++) {
+    const suffix = `-${number}`
+    const candidate = `${base.slice(0, ALIAS_LIMIT - suffix.length).replace(/-+$/, "")}${suffix}`
+    if (!used.has(candidate)) return candidate
+  }
+}
+
+/** One container of the endpoint form. `all` keeps the servers chosen before it was turned on. */
+export type GrantDraft = {
+  container_id: string
+  container_name: string
+  alias: string
+  scopes: McpScope[]
+  all: boolean
+  servers: string[]
+}
+
+export const grantDraft = (grant: McpGrant): GrantDraft => ({
+  container_id: grant.container_id,
+  container_name: grant.container_name,
+  alias: grant.alias,
+  scopes: orderScopes(grant.scopes),
+  all: grant.servers === "all",
+  servers: grant.servers === "all" ? [] : [...grant.servers],
+})
+
+/** A container added to the form: the default scopes and every desktop MCP server. */
+export const newGrant = (
+  container: { id: string; name: string },
+  scopes: readonly McpScope[],
+  taken: Iterable<string>
+): GrantDraft => ({
+  container_id: container.id,
+  container_name: container.name,
+  alias: defaultAlias(container.name, taken),
+  scopes: orderScopes(scopes),
+  all: true,
+  servers: [],
+})
+
+/** The grants an endpoint request sends, or the reason the form cannot send them. */
+export function grantRequests(drafts: GrantDraft[]): GrantRequest[] {
+  if (!drafts.length) throw new Error(t("mcp.endpoint.needGrant"))
+  const seen = new Set<string>()
+  return drafts.map((draft) => {
+    const alias = draft.alias.trim()
+    if (alias) {
+      if (seen.has(alias)) throw new Error(t("mcp.endpoint.aliasTwice", { alias }))
+      seen.add(alias)
+    }
+    return {
+      container_id: draft.container_id,
+      ...(alias ? { alias } : {}),
+      scopes: orderScopes(draft.scopes),
+      servers: draft.all ? "all" : draft.servers,
+    }
+  })
+}
+
+/** Where an endpoint answers, from the dashboard's origin and the path the manager reports. */
+export const endpointUrl = (origin: string, path: string) =>
+  `${origin.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`
+
+/** The command that adds the endpoint to Claude Code. */
+export const claudeCommand = (name: string, url: string, token: string) =>
+  `claude mcp add --transport http ${name} ${url} --header "Authorization: Bearer ${token}"`
+
+/** The endpoint as an MCP client's JSON configuration names a server. */
+export const clientConfig = (url: string, token: string) =>
+  JSON.stringify({ type: "http", url, headers: { Authorization: `Bearer ${token}` } }, null, 2)
+
+/** The endpoint routes of the manager's API. */
+export const endpointApi = (name?: string) =>
+  name ? `mcp/endpoints/${encodeURIComponent(name)}` : "mcp/endpoints"
+
+/** A container's desktop MCP servers in the manager's API, or one of them. */
+export const serverApi = (container: string, name?: string) =>
+  `containers/${encodeURIComponent(container)}/mcp/servers${name ? `/${encodeURIComponent(name)}` : ""}`
+
+/** The color family of a desktop MCP server's state. */
+export function serverTone(state: DesktopServer["state"]): Tone {
+  if (state === "ready") return "success"
+  if (state === "error") return "danger"
+  if (state === "pending") return "warning"
+  return "muted"
+}
+
+/** How a server starts, as one line: its command with its arguments, or its URL. */
+export function serverCommand(server: Pick<ServerRequest, "command" | "args" | "url">) {
+  if (!server.command) return server.url ?? ""
+  const quote = (part: string) => (!part || /[\s"'\\]/.test(part) ? JSON.stringify(part) : part)
+  return [server.command, ...(server.args ?? [])].map(quote).join(" ")
+}
+
+/** What else a server is given, by name only: its environment, its headers and its folder. */
+export function serverDetails(env: string[], headers: string[], cwd?: string | null) {
+  return [
+    env.length ? t("mcp.server.envNames", { names: formatList(env) }) : "",
+    headers.length ? t("mcp.server.headerNames", { names: formatList(headers) }) : "",
+    cwd ? t("mcp.server.cwdIn", { path: cwd }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+/** The servers an image declares, by an image ID or reference as the create form names it. */
+export function imageServers(
+  images: Pick<ImageItem, "image_id" | "reference" | "mcp_servers">[],
+  value?: string
+) {
+  if (!value) return []
+  return (
+    images.find(
+      (image) =>
+        image.mcp_servers?.length && (image.image_id === value || image.reference === value)
+    )?.mcp_servers ?? []
+  )
+}
+
+/** The desktop MCP servers by container, in the order of `containers`; others follow. */
+export function serversByContainer<C extends { id: string }>(
+  servers: DesktopServer[],
+  containers: C[]
+) {
+  const groups = new Map<string, DesktopServer[]>()
+  for (const server of servers) {
+    const list = groups.get(server.container_id) ?? []
+    list.push(server)
+    groups.set(server.container_id, list)
+  }
+  const known = new Set(containers.map((container) => container.id))
+  return [
+    ...containers.map((container) => ({
+      id: container.id,
+      container: container as C | undefined,
+      name: groups.get(container.id)?.[0]?.container_name ?? "",
+      servers: groups.get(container.id) ?? [],
+    })),
+    ...[...groups]
+      .filter(([id]) => !known.has(id))
+      .map(([id, list]) => ({
+        id,
+        container: undefined as C | undefined,
+        name: list[0].container_name,
+        servers: list,
+      })),
+  ]
+}
+
+/** An endpoint's tools by where they come from: Bilskirnir's or one server's, per container. */
+export function toolGroups(tools: EndpointTool[]) {
+  const groups = new Map<
+    string,
+    {
+      source: EndpointTool["source"]
+      container_id: string
+      server: string | null
+      tools: EndpointTool[]
+    }
+  >()
+  for (const tool of tools) {
+    const key = `${tool.source}\u0000${tool.container_id}\u0000${tool.server ?? ""}`
+    const group = groups.get(key) ?? {
+      source: tool.source,
+      container_id: tool.container_id,
+      server: tool.server,
+      tools: [],
+    }
+    group.tools.push(tool)
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+}
+
+/** One argument per line; blank lines are left out. */
+export const parseLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/** `KEY=VALUE` lines, the value everything after the first `=`, or why one cannot be read. */
+export function parseEnv(text: string): Record<string, string> {
+  const values: Record<string, string> = {}
+  text.split(/\r?\n/).forEach((line, index) => {
+    if (!line.trim()) return
+    const at = line.indexOf("=")
+    const name = at < 0 ? "" : line.slice(0, at).trim()
+    if (!ENV_NAME.test(name)) throw new Error(t("mcp.server.envLine", { line: index + 1 }))
+    if (Object.hasOwn(values, name)) throw new Error(t("mcp.server.twice", { name }))
+    values[name] = line.slice(at + 1)
+  })
+  return values
+}
+
+/** `Name: value` lines, or why one cannot be read. Header names do not differ by case. */
+export function parseHeaders(text: string): Record<string, string> {
+  const values: Record<string, string> = {}
+  const seen = new Set<string>()
+  text.split(/\r?\n/).forEach((line, index) => {
+    if (!line.trim()) return
+    const at = line.indexOf(":")
+    const name = at < 0 ? "" : line.slice(0, at).trim()
+    if (!HEADER_NAME.test(name)) throw new Error(t("mcp.server.headerLine", { line: index + 1 }))
+    if (seen.has(name.toLowerCase())) throw new Error(t("mcp.server.twice", { name }))
+    seen.add(name.toLowerCase())
+    values[name] = line.slice(at + 1).trim()
+  })
+  return values
+}
+
+/**
+ * Whether a URL points at a server inside the desktop: http or https on 127.0.0.1, localhost or
+ * [::1], with a port. A compose value such as `${PORT}` may stand for any part after the host.
+ */
+export const localUrl = (url: string) =>
+  /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\]):[^/?#\s]+([/?#]\S*)?$/i.test(url.trim())
+
+/** The Add server form, as text fields. */
+export type ServerDraft = {
+  name: string
+  description: string
+  transport: "stdio" | "http"
+  command: string
+  args: string
+  env: string
+  cwd: string
+  url: string
+  headers: string
+}
+
+export const serverDraft = (): ServerDraft => ({
+  name: "",
+  description: "",
+  transport: "stdio",
+  command: "",
+  args: "",
+  env: "",
+  cwd: "",
+  url: "",
+  headers: "",
+})
+
+/** The request the Add server form sends, or the reason it cannot send one. */
+export function serverRequest(draft: ServerDraft): ServerRequest {
+  const name = draft.name.trim()
+  if (!SERVER_NAME.test(name)) throw new Error(t("mcp.server.nameInvalid"))
+  const description = draft.description.trim()
+  const head = { name, ...(description ? { description } : {}) }
+  if (draft.transport === "http") {
+    const url = draft.url.trim()
+    if (!localUrl(url)) throw new Error(t("mcp.server.urlLocal"))
+    const headers = parseHeaders(draft.headers)
+    return { ...head, url, ...(Object.keys(headers).length ? { headers } : {}) }
+  }
+  const command = draft.command.trim()
+  if (!command) throw new Error(t("mcp.server.commandMissing"))
+  const args = parseLines(draft.args)
+  const env = parseEnv(draft.env)
+  const cwd = draft.cwd.trim()
+  return {
+    ...head,
+    command,
+    ...(args.length ? { args } : {}),
+    ...(Object.keys(env).length ? { env } : {}),
+    ...(cwd ? { cwd } : {}),
+  }
+}
+
+const isText = (value: unknown): value is string | undefined | null =>
+  value === undefined || value === null || typeof value === "string"
+
+function isTextMap(value: unknown): value is Record<string, string> | undefined | null {
+  if (value === undefined || value === null) return true
+  if (typeof value !== "object" || Array.isArray(value)) return false
+  return Object.values(value).every((entry) => typeof entry === "string")
+}
+
+const filled = (value: Record<string, string> | undefined | null) =>
+  !!value && Object.keys(value).length > 0
+
+/** A desktop MCP server a configuration declares, or why the build would refuse it. */
+export function readServerDeclaration(value: unknown): ServerDeclaration {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new Error(t("mcp.read.object"))
+  const { name, description, command, args, env, cwd, url, headers } = value as Record<
+    string,
+    unknown
+  >
+  if (typeof name !== "string" || !SERVER_NAME.test(name)) throw new Error(t("mcp.read.name"))
+  const wrong = () => new Error(t("mcp.read.shape", { name }))
+  if (!isText(description) || !isText(command) || !isText(cwd) || !isText(url)) throw wrong()
+  if (!isTextMap(env) || !isTextMap(headers)) throw wrong()
+  if (
+    args !== undefined &&
+    args !== null &&
+    (!Array.isArray(args) || args.some((arg) => typeof arg !== "string"))
+  )
+    throw wrong()
+  const list = (args ?? []) as string[]
+  const runs = !!command?.trim()
+  const listens = !!url?.trim()
+  const stdioOnly = list.length > 0 || filled(env) || !!cwd
+  // Exactly one way to reach it, with only that way's settings.
+  if (runs === listens || (runs && filled(headers)) || (listens && stdioOnly))
+    throw new Error(t("mcp.read.commandOrUrl", { name }))
+  return {
+    name,
+    ...(description ? { description } : {}),
+    ...(runs
+      ? {
+          command: command!,
+          ...(list.length ? { args: list } : {}),
+          ...(filled(env) ? { env: env! } : {}),
+          ...(cwd ? { cwd } : {}),
+        }
+      : { url: url!, ...(filled(headers) ? { headers: headers! } : {}) }),
+  }
+}
+
+/** The desktop MCP servers a configuration declares, each name once. */
+export function readServerDeclarations(value: unknown): ServerDeclaration[] {
+  if (!Array.isArray(value)) throw new Error(t("mcp.read.list"))
+  const seen = new Set<string>()
+  return value.map((entry) => {
+    const server = readServerDeclaration(entry)
+    if (seen.has(server.name)) throw new Error(t("mcp.read.twice", { name: server.name }))
+    seen.add(server.name)
+    return server
+  })
+}

@@ -43,7 +43,8 @@ COPY desktop-diagnostics.sh /usr/local/bin/desktop-diagnostics
 COPY gpu-run.sh /usr/local/bin/gpu-run
 COPY desktop-gnome.sh /usr/local/bin/desktop-gnome
 COPY desktop-healthcheck.sh /usr/local/bin/desktop-healthcheck
-RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run
+COPY bilskirnir-mcp.py /usr/local/bin/bilskirnir-mcp
+RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp
 
 FROM common AS xfce-packages
 # librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon

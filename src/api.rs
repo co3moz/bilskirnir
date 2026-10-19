@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"mcp_enabled":app.config.mcp_enabled}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -157,12 +157,19 @@ pub struct CreateContainer {
     pub spec: ContainerSpec,
     #[serde(default)]
     pub parameters: std::collections::BTreeMap<String, String>,
+    /// Give the container an MCP endpoint of its own once it is created.
+    #[serde(default = "default_true")]
+    pub mcp_endpoint: bool,
 }
 pub async fn create(
     State(app): State<Arc<App>>,
     Json(body): Json<CreateContainer>,
 ) -> Result<Json<Value>> {
-    let CreateContainer { spec, parameters } = body;
+    let CreateContainer {
+        spec,
+        parameters,
+        mcp_endpoint,
+    } = body;
     spec.validate()?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     // A compose found by the name the request uses is checked now; the job checks again once
@@ -178,7 +185,27 @@ pub async fn create(
         app,
         "create",
         format!("container:{id}"),
-        move |app, job_id| async move { app.create_container(&id, spec, parameters, &job_id).await },
+        move |app, job_id| async move {
+            let mut result = app.create_container(&id, spec, parameters, &job_id).await?;
+            if mcp_endpoint {
+                let container = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
+                // The container is made either way; an endpoint can still be created later.
+                match crate::desktop_mcp::automatic_endpoint(&app, &container).await {
+                    Ok(name) => {
+                        app.append_log(
+                            &job_id,
+                            &format!("Created the MCP endpoint /mcp/{name} for this container."),
+                        )?;
+                        result["mcp_endpoint"] = json!(name);
+                    }
+                    Err(error) => app.append_log(
+                        &job_id,
+                        &format!("Could not create an MCP endpoint: {error:#}"),
+                    )?,
+                }
+            }
+            Ok(result)
+        },
     )
 }
 #[derive(Deserialize)]
@@ -433,13 +460,42 @@ pub(crate) async fn image_list(app: &Arc<App>) -> Result<Vec<Value>> {
             }
         }))
         .await;
-    let saved = records.into_iter().map(|r| {
+    let saved = records.iter().map(|r| {
         let available = listed.as_ref().ok().map(|_| ids.contains(&r.image_id));
-        let mut value = image_summary(&r);
+        let mut value = image_summary(r);
         value["available"] = json!(available);
+        value["mcp_servers"] = json!(declared_servers(&records, r));
         value
     });
-    Ok(catalog.into_iter().chain(saved).collect())
+    Ok(catalog
+        .into_iter()
+        .map(|mut value| {
+            value["mcp_servers"] = json!([]);
+            value
+        })
+        .chain(saved)
+        .collect())
+}
+/// The desktop MCP servers an image's builds declared: its own build's and those of the images
+/// it was built or snapshotted from, whose layers it carries.
+pub(crate) fn declared_servers(records: &[ImageRecord], record: &ImageRecord) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    let mut current = Some(record);
+    for _ in 0..32 {
+        let Some(image) = current else { break };
+        for declaration in image.build.iter().flat_map(|build| &build.mcp) {
+            if !names.contains(&declaration.name) {
+                names.push(declaration.name.clone());
+            }
+        }
+        current = image.parent_image_id.as_ref().and_then(|parent| {
+            records
+                .iter()
+                .find(|other| other.image_id == *parent && other.id != image.id)
+        });
+    }
+    names.sort();
+    names
 }
 /// An image record as lists and job results show it. A build or setup script can be up to a
 /// megabyte, so only the configuration and compose routes return them; an icon is named by its
@@ -449,6 +505,8 @@ pub(crate) fn image_summary(record: &ImageRecord) -> Value {
     for (key, list) in [("build", "parts"), ("compose", "steps")] {
         if let Some(part) = value.get_mut(key).and_then(Value::as_object_mut) {
             part.remove("script");
+            // The declarations may carry header values; lists name the servers instead.
+            part.remove("mcp");
             for item in part
                 .get_mut(list)
                 .and_then(Value::as_array_mut)
@@ -489,6 +547,7 @@ pub async fn image_config(
         internet: build.internet,
         script: build.script,
         parts: build.parts,
+        mcp: build.mcp,
         compose: record.compose,
         icon: record.icon,
         template_id,
@@ -562,6 +621,9 @@ pub struct BuildImage {
     pub template_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub template_ids: Vec<String>,
+    /// MCP servers the image declares for its desktops, written to `/etc/bilskirnir/mcp.d`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp: Vec<crate::desktop_mcp::Declaration>,
 }
 impl BuildImage {
     fn validate(&self) -> anyhow::Result<()> {
@@ -570,6 +632,7 @@ impl BuildImage {
             anyhow::bail!("Invalid image name or script");
         }
         build_scripts(&self.script, &self.parts)?;
+        crate::desktop_mcp::check_declarations(&self.mcp)?;
         if self.description.len() > 4096 {
             anyhow::bail!("An image description must be at most 4096 bytes");
         }
@@ -654,6 +717,11 @@ pub async fn build(
                     "COPY {name}.sh /tmp/bilskirnir-{name}.sh\nRUN bash /tmp/bilskirnir-{name}.sh && rm /tmp/bilskirnir-{name}.sh\n"
                 ));
             }
+            // After the scripts, so the declarations the build names are the ones that hold.
+            if !body.mcp.is_empty() {
+                dockerfile
+                    .push_str(&crate::desktop_mcp::write_declarations(&dir, &body.mcp).await?);
+            }
             dockerfile.push_str(&format!(
                 "LABEL bilskirnir.desktop=true\nLABEL {LABEL}=true\n"
             ));
@@ -710,6 +778,7 @@ pub async fn build(
                     internet: body.internet,
                     script,
                     parts,
+                    mcp: body.mcp,
                 }),
                 compose: body.compose,
                 icon: body.icon,
