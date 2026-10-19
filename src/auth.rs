@@ -12,9 +12,34 @@ use axum::{
 };
 use serde::Deserialize;
 use std::{
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
+
+/// Failed sign-ins one address may make in a minute.
+const LOGIN_ATTEMPTS: usize = 20;
+/// Failed sign-ins kept in all, so a flood from many addresses stays bounded in memory and is
+/// refused as a whole.
+const LOGIN_ATTEMPTS_TOTAL: usize = 500;
+
+/// The address a request came from, when the listener records one. A request made without a
+/// connection, as the tests do, has none, and such requests share one bucket.
+pub struct Peer(pub Option<IpAddr>);
+impl<S: Send + Sync> FromRequestParts<S> for Peer {
+    type Rejection = std::convert::Infallible;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        Ok(Peer(
+            parts
+                .extensions
+                .get::<axum::extract::ConnectInfo<SocketAddr>>()
+                .map(|info| info.0.ip()),
+        ))
+    }
+}
 
 pub fn cookie(headers: &HeaderMap) -> Option<String> {
     headers
@@ -169,6 +194,7 @@ pub struct Login {
 }
 pub async fn login(
     State(app): State<Arc<App>>,
+    Peer(peer): Peer,
     headers: HeaderMap,
     Json(body): Json<Login>,
 ) -> Result<Response> {
@@ -190,15 +216,18 @@ pub async fn login(
         ));
     }
     {
+        // Failures count per address, so one guessing neighbour does not lock the administrator
+        // out from another machine; the total bounds what is kept.
         let mut attempts = app.login_attempts.lock().unwrap();
-        attempts.retain(|t| t.elapsed() < Duration::from_secs(60));
-        if attempts.len() >= 20 {
+        attempts.retain(|(_, at)| at.elapsed() < Duration::from_secs(60));
+        let from_peer = attempts.iter().filter(|(from, _)| *from == peer).count();
+        if from_peer >= LOGIN_ATTEMPTS || attempts.len() >= LOGIN_ATTEMPTS_TOTAL {
             return Err(Error(
                 StatusCode::TOO_MANY_REQUESTS,
                 "Try again in one minute".into(),
             ));
         }
-        attempts.push(Instant::now());
+        attempts.push((peer, Instant::now()));
     }
     let hash = app.config.password_hash.clone().unwrap();
     let valid_user = body.username == app.config.username;
@@ -260,3 +289,7 @@ pub async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Response
     )
         .into_response()
 }
+
+#[cfg(test)]
+#[path = "auth_tests.rs"]
+mod tests;

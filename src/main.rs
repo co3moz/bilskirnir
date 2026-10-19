@@ -56,7 +56,8 @@ pub struct App {
     config: config::Config,
     db: db::Db,
     sessions: Mutex<HashMap<String, Instant>>,
-    login_attempts: Mutex<Vec<Instant>>,
+    /// Failed sign-ins of the last minute, by the address they came from.
+    login_attempts: Mutex<Vec<(Option<std::net::IpAddr>, Instant)>>,
     operations: Arc<tokio::sync::Mutex<()>>,
     resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     session_events: tokio::sync::Notify,
@@ -431,11 +432,14 @@ async fn main() -> anyhow::Result<()> {
     });
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("Bilskirnir listening: {listen}");
-    axum::serve(listener, router(app))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+    axum::serve(
+        listener,
+        router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await?;
     Ok(())
 }
 async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
