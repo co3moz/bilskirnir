@@ -308,8 +308,12 @@ impl App {
                 .get(&env.private_network)
                 .is_none()
             {
-                self.connect_network(env, private["Id"].as_str().unwrap(), container_id)
-                    .await?;
+                self.connect_network(
+                    env,
+                    private["Id"].as_str().context("Missing network ID")?,
+                    container_id,
+                )
+                .await?;
             }
             let mut saved = env.clone();
             self.set_internet(&mut saved, env.spec.internet).await?;
