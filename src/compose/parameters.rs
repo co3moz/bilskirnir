@@ -436,11 +436,11 @@ impl Parameter {
     }
 
     /// The volume a container with this ID gets for a parameter that creates one:
-    /// `wsld-<container>-<name>`, the name in lowercase with dashes for underscores.
+    /// `bilskirnir-<container>-<name>`, the name in lowercase with dashes for underscores.
     pub(super) fn new_volume_for(&self, container: &str) -> Option<String> {
         self.new_volume.then(|| {
             format!(
-                "wsld-{container}-{}",
+                "bilskirnir-{container}-{}",
                 self.name.to_ascii_lowercase().replace('_', "-")
             )
         })

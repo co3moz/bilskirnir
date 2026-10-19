@@ -57,11 +57,11 @@ pub fn find(id: &str) -> Option<CatalogImage> {
 pub fn from_image(image: &Value) -> Option<DesktopInfo> {
     let labels = &image["Config"]["Labels"];
     Some(DesktopInfo {
-        catalog_id: labels["io.wsl-desktop.profile"].as_str()?.to_owned(),
+        catalog_id: labels["bilskirnir.profile"].as_str()?.to_owned(),
         title: labels["org.opencontainers.image.title"]
             .as_str()?
             .to_owned(),
-        session: labels["io.wsl-desktop.session"].as_str()?.to_owned(),
+        session: labels["bilskirnir.session"].as_str()?.to_owned(),
     })
 }
 /// A catalog image as the image list shows it, beside the saved images. `inspected` is Docker's

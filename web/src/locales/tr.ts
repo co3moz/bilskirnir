@@ -124,7 +124,6 @@ export const tr: Messages = {
   "containers.dockerName": "Docker adı",
   "containers.image": "İmaj",
   "containers.noMounts": "Bağlı volume yok.",
-  "images.legacyTitle": "Ubuntu 24.04 · Hafif XFCE (eski)",
   "images.kind.catalog": "Katalog",
   "images.kind.build": "Derleme",
   "images.kind.snapshot": "Anlık görüntü",

@@ -92,7 +92,7 @@ newest_release() {
 update_profiles() {
     local catalog release ref source source_was_here
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
-        ! release=$(docker inspect --format '{{index .Config.Labels "io.wsl-desktop.release"}}' "$(compose ps -q manager)"); then
+        ! release=$(docker inspect --format '{{index .Config.Labels "bilskirnir.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi

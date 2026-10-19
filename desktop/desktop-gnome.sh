@@ -11,7 +11,7 @@ printf '[Desktop Entry]\nType=Application\nHidden=true\n' > "$HOME/.config/autos
 # Desktop locking/logind integration is unavailable in this container session.
 gsettings set org.gnome.desktop.screensaver lock-enabled false
 gsettings set org.gnome.desktop.session idle-delay 0
-if [[ ! -f "$HOME/.config/wsld-gnome-initialized" ]]; then
+if [[ ! -f "$HOME/.config/bilskirnir-gnome-initialized" ]]; then
     gsettings set org.gnome.desktop.interface gtk-theme Yaru
     gsettings set org.gnome.desktop.interface icon-theme Yaru
     gsettings set org.gnome.shell enabled-extensions "['ubuntu-dock@ubuntu.com', 'ubuntu-appindicators@ubuntu.com']"
@@ -19,6 +19,6 @@ if [[ ! -f "$HOME/.config/wsld-gnome-initialized" ]]; then
         gsettings set org.gnome.desktop.background picture-uri file:///usr/share/backgrounds/warty-final-ubuntu.png
         gsettings set org.gnome.desktop.background picture-uri-dark file:///usr/share/backgrounds/warty-final-ubuntu.png
     fi
-    touch "$HOME/.config/wsld-gnome-initialized"
+    touch "$HOME/.config/bilskirnir-gnome-initialized"
 fi
-exec gnome-session --session=wsld-ubuntu --disable-acceleration-check
+exec gnome-session --session=bilskirnir-ubuntu --disable-acceleration-check

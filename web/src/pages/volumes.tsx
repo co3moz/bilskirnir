@@ -29,7 +29,7 @@ import type { Volume } from "@/lib/types"
 import { volumeUsers } from "@/lib/volume-files"
 
 // The ownership label the manager puts on what it creates; see src/model.rs.
-const LABEL = "io.wsl-desktop.managed"
+const LABEL = "bilskirnir.managed"
 const MANAGED = `${LABEL}=true`
 
 type Row = Volume & {

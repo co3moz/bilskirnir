@@ -96,7 +96,7 @@ impl App {
             )
         })?;
         let info = self.inspect("container", manager).await?;
-        if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.manager"] != "true" {
             return Err(anyhow::anyhow!("MANAGER_CONTAINER does not point to the manager").into());
         }
         Ok(info)
@@ -112,7 +112,7 @@ impl App {
         Ok(self
             .optional_inspect("container", manager)
             .await?
-            .filter(|info| info["Config"]["Labels"]["io.wsl-desktop.manager"] == "true"))
+            .filter(|info| info["Config"]["Labels"]["bilskirnir.manager"] == "true"))
     }
 
     /// A volume by that name for a helper to mount, the manager's own refused. Whether it exists
@@ -284,7 +284,7 @@ pub(crate) fn refuse_manager_volumes(manager: &Value, mounts: &[Mount]) -> anyho
 }
 
 pub(crate) fn helper_name() -> String {
-    format!("wsld-volume-{}", uuid::Uuid::new_v4().simple())
+    format!("bilskirnir-volume-{}", uuid::Uuid::new_v4().simple())
 }
 
 /// The `docker run` arguments of a helper that runs `command` against the volume.
@@ -301,7 +301,7 @@ pub(crate) fn helper_args(
         "--name",
         name,
         "--label",
-        "io.wsl-desktop.volume-helper=true",
+        "bilskirnir.volume-helper=true",
         "--network",
         "none",
         "--read-only",

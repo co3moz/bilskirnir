@@ -74,7 +74,7 @@ fn name_internet_and_limits_change_in_place_while_creation_settings_restart() {
 #[test]
 fn a_new_identity_recreates_the_container_and_none_cannot_replace_one() {
     let old = ContainerSpec {
-        hostname: Some("wsld-e".into()),
+        hostname: Some("bilskirnir-e".into()),
         mac_address: Some("02:00:00:00:00:01".into()),
         machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
         ..spec()
@@ -120,7 +120,7 @@ fn every_setting_that_recreates_the_container_is_named_in_the_dashboards_warning
     let old = ContainerSpec {
         cpus: Some(2.0),
         memory_mb: Some(2048),
-        hostname: Some("wsld-e".into()),
+        hostname: Some("bilskirnir-e".into()),
         mac_address: Some("02:00:00:00:00:01".into()),
         machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
         ..spec()
@@ -252,9 +252,9 @@ fn volume_settings_leave_the_compose_volumes_alone() {
     .unwrap();
     let env = Container {
         id: "e".into(),
-        container: "wsld-e".into(),
-        private_network: "wsld-e-private".into(),
-        egress_network: "wsld-e-egress".into(),
+        container: "bilskirnir-e".into(),
+        private_network: "bilskirnir-e-private".into(),
+        egress_network: "bilskirnir-e-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -290,9 +290,9 @@ async fn a_settings_change_cannot_mount_the_managers_own_volume() {
     let calls = crate::tests::manager_docker(&mut app);
     let env = Container {
         id: "edit".into(),
-        container: "wsld-edit".into(),
-        private_network: "wsld-edit-private".into(),
-        egress_network: "wsld-edit-egress".into(),
+        container: "bilskirnir-edit".into(),
+        private_network: "bilskirnir-edit-private".into(),
+        egress_network: "bilskirnir-edit-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -335,9 +335,9 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
     .unwrap();
     let env = Container {
         id: "composed".into(),
-        container: "wsld-composed".into(),
-        private_network: "wsld-composed-private".into(),
-        egress_network: "wsld-composed-egress".into(),
+        container: "bilskirnir-composed".into(),
+        private_network: "bilskirnir-composed-private".into(),
+        egress_network: "bilskirnir-composed-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -392,9 +392,9 @@ async fn a_settings_change_keeps_the_volumes_a_container_mounts_and_filters_new_
         spec.mounts = serde_json::from_value(mounts).unwrap();
         Container {
             id: id.into(),
-            container: format!("wsld-{id}"),
-            private_network: format!("wsld-{id}-private"),
-            egress_network: format!("wsld-{id}-egress"),
+            container: format!("bilskirnir-{id}"),
+            private_network: format!("bilskirnir-{id}-private"),
+            egress_network: format!("bilskirnir-{id}-egress"),
             source_image_id: "sha256:source".into(),
             created_at: 0,
             spec,

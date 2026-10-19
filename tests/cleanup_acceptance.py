@@ -13,13 +13,13 @@ def inspect(kind, name):
     return values[0] if values else None
 
 manager = sys.argv[1]
-match = re.fullmatch(r"wsld-test-([a-f0-9]{12})", manager)
+match = re.fullmatch(r"bilskirnir-test-([a-f0-9]{12})", manager)
 assert match, "Exact acceptance-test manager name required"
 tag = match[1]
 info = inspect("container", manager)
-assert info and info["Config"]["Labels"].get("io.wsl-desktop.manager") == "true"
+assert info and info["Config"]["Labels"].get("bilskirnir.manager") == "true"
 assert f"MANAGER_CONTAINER={manager}" in info["Config"]["Env"]
-volume = f"wsld-test-data-{tag}"
+volume = f"bilskirnir-test-data-{tag}"
 assert any(m.get("Name") == volume and m["Destination"] == "/data" for m in info["Mounts"])
 records = json.loads(docker("run", "--rm", "--entrypoint", "python3", "--mount", f"type=volume,src={volume},dst=/data", "bilskirnir/manager:local", "-c", "import sqlite3,json; c=sqlite3.connect('file:/data/state.sqlite?mode=ro',uri=True); print(json.dumps([(kind,json.loads(data)) for kind,data in c.execute(\"SELECT kind,data FROM records WHERE kind IN ('environment','image')\")]))"))
 for kind, record in records:
@@ -27,26 +27,26 @@ for kind, record in records:
         continue
     eid = record["id"]
     assert re.fullmatch(r"[a-f0-9]{32}", eid)
-    container = inspect("container", f"wsld-{eid}")
+    container = inspect("container", f"bilskirnir-{eid}")
     if container:
-        assert container["Config"]["Labels"].get("io.wsl-desktop.environment") == eid
-        assert container["Config"]["Labels"].get("io.wsl-desktop.managed") == "true"
+        assert container["Config"]["Labels"].get("bilskirnir.environment") == eid
+        assert container["Config"]["Labels"].get("bilskirnir.managed") == "true"
         docker("rm", "--force", container["Id"])
     for suffix in ("private", "egress"):
-        network = inspect("network", f"wsld-{eid}-{suffix}")
+        network = inspect("network", f"bilskirnir-{eid}-{suffix}")
         if network:
-            assert network["Labels"].get("io.wsl-desktop.environment") == eid or network["Labels"].get("io.wsl-desktop.test") == tag
+            assert network["Labels"].get("bilskirnir.environment") == eid or network["Labels"].get("bilskirnir.test") == tag
             if info["Id"] in network.get("Containers", {}):
                 docker("network", "disconnect", "--force", network["Id"], info["Id"])
             docker("network", "rm", network["Id"])
 docker("rm", "--force", info["Id"])
-for name in (volume, f"wsld-test-share-{tag}", f"wsld-test-clone-{tag}"):
+for name in (volume, f"bilskirnir-test-share-{tag}", f"bilskirnir-test-clone-{tag}"):
     if inspect("volume", name):
         docker("volume", "rm", name)
 for kind, record in reversed(records):
     if kind == "image" and record["kind"] in ("build", "snapshot", "archive"):
         image = inspect("image", record["reference"])
         if image:
-            assert image["Id"] == record["image_id"] and image["Config"]["Labels"].get("io.wsl-desktop.managed") == "true"
+            assert image["Id"] == record["image_id"] and image["Config"]["Labels"].get("bilskirnir.managed") == "true"
             docker("image", "rm", record["reference"])
 print(f"Cleaned interrupted acceptance run {manager}")

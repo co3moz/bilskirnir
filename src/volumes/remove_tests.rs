@@ -26,9 +26,9 @@ fn container(id: &str, mounts: &[&str], compose: &[&str]) -> Container {
     });
     Container {
         id: id.into(),
-        container: format!("wsld-{id}"),
-        private_network: format!("wsld-{id}-private"),
-        egress_network: format!("wsld-{id}-egress"),
+        container: format!("bilskirnir-{id}"),
+        private_network: format!("bilskirnir-{id}-private"),
+        egress_network: format!("bilskirnir-{id}-egress"),
         source_image_id: "sha256:ws".into(),
         created_at: 0,
         spec,
@@ -43,21 +43,21 @@ fn container(id: &str, mounts: &[&str], compose: &[&str]) -> Container {
 fn a_record_that_mounts_the_volume_is_named_with_what_frees_it() {
     let records = [
         container("a", &["projects"], &[]),
-        container("b", &[], &["wsld-b-cache"]),
+        container("b", &[], &["bilskirnir-b-cache"]),
         container("c", &["projects"], &["installs"]),
     ];
     let found = |name: &str| mounted_by(name, &records).map(|record| record.id.as_str());
     assert_eq!(found("projects"), Some("a"));
-    assert_eq!(found("wsld-b-cache"), Some("b"));
+    assert_eq!(found("bilskirnir-b-cache"), Some("b"));
     assert_eq!(found("installs"), Some("c"));
-    assert_eq!(found("wsld-gone-cache"), None);
+    assert_eq!(found("bilskirnir-gone-cache"), None);
     // A volume of the settings can be taken out there; one the compose was given cannot.
     assert_eq!(
         mounted("projects", &records[0]),
         "\"Desktop a\" mounts this volume; remove it from that container's volumes, or delete the container, first"
     );
     assert_eq!(
-        mounted("wsld-b-cache", &records[1]),
+        mounted("bilskirnir-b-cache", &records[1]),
         "\"Desktop b\" mounts this volume for its compose; delete that container first"
     );
 }
@@ -83,7 +83,7 @@ fn request(name: &str) -> Request<Body> {
         .method("DELETE")
         .uri(format!("/api/volumes/{name}"))
         .header("host", "localhost:8080")
-        .header("x-wsld-request", "1")
+        .header("x-bilskirnir-request", "1")
         .body(Body::empty())
         .unwrap()
 }
@@ -137,7 +137,7 @@ fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
     std::fs::create_dir_all(&dir).unwrap();
     let manager = json!([{
         "Id": "manager",
-        "Config": {"Labels": {"io.wsl-desktop.manager": "true"}},
+        "Config": {"Labels": {"bilskirnir.manager": "true"}},
         "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
     }]);
     let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '@MANAGER@' ;;\n@CASES@\n  *) exit 1 ;;\nesac\n"
@@ -166,7 +166,7 @@ const VOLUMES: &[&str] = &[
     "orphan",
     "busy",
     "projects",
-    "wsld-b-cache",
+    "bilskirnir-b-cache",
     "import",
 ];
 
@@ -194,7 +194,11 @@ async fn only_a_volume_nothing_mounts_is_removed() {
         .put(CONTAINERS, "a", &container("a", &["projects"], &[]))
         .unwrap();
     app.db
-        .put(CONTAINERS, "b", &container("b", &[], &["wsld-b-cache"]))
+        .put(
+            CONTAINERS,
+            "b",
+            &container("b", &[], &["bilskirnir-b-cache"]),
+        )
         .unwrap();
 
     // Refused before Docker is asked to remove anything.
@@ -211,7 +215,7 @@ async fn only_a_volume_nothing_mounts_is_removed() {
             "\"Desktop a\" mounts this volume; remove it from that container's volumes, or delete the container, first",
         ),
         (
-            "wsld-b-cache",
+            "bilskirnir-b-cache",
             StatusCode::CONFLICT,
             "\"Desktop b\" mounts this volume for its compose; delete that container first",
         ),
@@ -265,7 +269,7 @@ async fn a_manager_outside_docker_owns_no_volume() {
 #[tokio::test]
 async fn a_volume_the_filter_leaves_out_is_missing() {
     let (mut app, dir) = fake_docker(
-        "  'volume inspect outside') echo '[{\"Name\":\"outside\",\"Labels\":{}}]' ;;\n  'volume inspect kept') echo '[{\"Name\":\"kept\",\"Labels\":{\"io.wsl-desktop.managed\":\"true\"}}]' ;;\n  'volume rm kept') echo kept ;;",
+        "  'volume inspect outside') echo '[{\"Name\":\"outside\",\"Labels\":{}}]' ;;\n  'volume inspect kept') echo '[{\"Name\":\"kept\",\"Labels\":{\"bilskirnir.managed\":\"true\"}}]' ;;\n  'volume rm kept') echo kept ;;",
     );
     Arc::get_mut(&mut app).unwrap().config.volume_filter =
         crate::config::volume_filter(None).unwrap();

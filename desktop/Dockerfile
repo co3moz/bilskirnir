@@ -13,7 +13,7 @@ RUN curl -fL --retry 3 "https://github.com/VirtualGL/virtualgl/releases/download
 RUN useradd --create-home --shell /bin/bash --uid 1001 desktop \
     && mkdir -p /shared /workspace && chown desktop:desktop /shared /workspace \
     && mkdir -p /usr/local/share/applications
-LABEL io.wsl-desktop.desktop=true
+LABEL bilskirnir.desktop=true
 ENV LANG=en_US.UTF-8 DISPLAY=:0 DESKTOP_RESOLUTION=1920x1080 \
     DESKTOP_AUDIO=false DESKTOP_MICROPHONE=false DESKTOP_GPU=false DESKTOP_SUDO=true \
     PULSE_SERVER=unix:/run/desktop/pulse/native
@@ -53,7 +53,7 @@ COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
-LABEL io.wsl-desktop.profile=ubuntu-xfce io.wsl-desktop.session=xfce \
+LABEL bilskirnir.profile=ubuntu-xfce bilskirnir.session=xfce \
     org.opencontainers.image.title="Ubuntu 24.04 · Lightweight XFCE" \
     org.opencontainers.image.description="Ubuntu LTS with a lightweight XFCE desktop, independent VNC display and optional GPU/audio" \
     org.opencontainers.image.version="24.04"
@@ -71,9 +71,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ubuntu-wallpape
 FROM gnome-packages AS gnome
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
-COPY gnome-container.session /usr/share/gnome-session/sessions/wsld-ubuntu.session
+COPY gnome-container.session /usr/share/gnome-session/sessions/bilskirnir-ubuntu.session
 ENV DESKTOP_SESSION=gnome
-LABEL io.wsl-desktop.profile=ubuntu-gnome io.wsl-desktop.session=gnome \
+LABEL bilskirnir.profile=ubuntu-gnome bilskirnir.session=gnome \
     org.opencontainers.image.title="Ubuntu 24.04 · GNOME" \
     org.opencontainers.image.description="Ubuntu GNOME Shell with Ubuntu session and Yaru appearance, independent VNC display and optional GPU/audio" \
     org.opencontainers.image.version="24.04"

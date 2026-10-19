@@ -18,9 +18,9 @@ fn spec(extra: Value) -> ContainerSpec {
 fn record(spec: ContainerSpec) -> Container {
     Container {
         id: "0123456789abcdef0123456789abcdef".into(),
-        container: "wsld-0123456789abcdef0123456789abcdef".into(),
-        private_network: "wsld-0123456789abcdef0123456789abcdef-private".into(),
-        egress_network: "wsld-0123456789abcdef0123456789abcdef-egress".into(),
+        container: "bilskirnir-0123456789abcdef0123456789abcdef".into(),
+        private_network: "bilskirnir-0123456789abcdef0123456789abcdef-private".into(),
+        egress_network: "bilskirnir-0123456789abcdef0123456789abcdef-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec,
@@ -147,15 +147,15 @@ fn generated_identities_are_valid_random_and_never_a_vendors_address() {
 #[test]
 fn a_new_container_gets_what_its_request_left_out() {
     let mut chosen = spec(json!({"hostname": "unity-build", "mac_address": "02:00:00:00:00:01"}));
-    assign(&mut chosen, "wsld-new");
+    assign(&mut chosen, "bilskirnir-new");
     assert_eq!(chosen.hostname.as_deref(), Some("unity-build"));
     assert_eq!(chosen.mac_address.as_deref(), Some("02:00:00:00:00:01"));
     machine_id(chosen.machine_id.as_deref().unwrap()).unwrap();
     // Two containers from the same request, such as two from one snapshot, differ.
     let (mut first, mut second) = (spec(json!({})), spec(json!({})));
-    assign(&mut first, "wsld-first");
-    assign(&mut second, "wsld-second");
-    assert_eq!(first.hostname.as_deref(), Some("wsld-first"));
+    assign(&mut first, "bilskirnir-first");
+    assign(&mut second, "bilskirnir-second");
+    assert_eq!(first.hostname.as_deref(), Some("bilskirnir-first"));
     assert_ne!(first.mac_address, second.mac_address);
     assert_ne!(first.machine_id, second.machine_id);
     first.validate().unwrap();
@@ -167,11 +167,11 @@ fn a_record_from_before_identities_takes_its_current_containers() {
     let info = json!({
         "Config": {
             "Hostname": "4f02a86c82ec",
-            "Labels": {LABEL: "true", "io.wsl-desktop.environment": env.id}
+            "Labels": {LABEL: "true", "bilskirnir.environment": env.id}
         },
         "NetworkSettings": {"Networks": {
-            "wsld-0123456789abcdef0123456789abcdef-egress": {"MacAddress": "0a:00:00:00:00:09"},
-            "wsld-0123456789abcdef0123456789abcdef-private": {"MacAddress": "c6:1d:2a:3b:4c:5d"}
+            "bilskirnir-0123456789abcdef0123456789abcdef-egress": {"MacAddress": "0a:00:00:00:00:09"},
+            "bilskirnir-0123456789abcdef0123456789abcdef-private": {"MacAddress": "c6:1d:2a:3b:4c:5d"}
         }}
     });
     adopt(&mut env, Some(&info));
@@ -192,20 +192,20 @@ fn without_its_own_container_a_record_gets_a_new_identity() {
     let foreign = json!({
         "Config": {
             "Hostname": "foreign",
-            "Labels": {LABEL: "true", "io.wsl-desktop.environment": "another"}
+            "Labels": {LABEL: "true", "bilskirnir.environment": "another"}
         },
         "NetworkSettings": {"Networks": {
-            "wsld-0123456789abcdef0123456789abcdef-private": {"MacAddress": "02:00:00:00:00:66"}
+            "bilskirnir-0123456789abcdef0123456789abcdef-private": {"MacAddress": "02:00:00:00:00:66"}
         }}
     });
     // A stopped container reports no address, and Docker gives it a new one at its next start.
     let stopped = json!({
         "Config": {
             "Hostname": "4f02a86c82ec",
-            "Labels": {LABEL: "true", "io.wsl-desktop.environment": "0123456789abcdef0123456789abcdef"}
+            "Labels": {LABEL: "true", "bilskirnir.environment": "0123456789abcdef0123456789abcdef"}
         },
         "NetworkSettings": {"Networks": {
-            "wsld-0123456789abcdef0123456789abcdef-private": {"MacAddress": ""}
+            "bilskirnir-0123456789abcdef0123456789abcdef-private": {"MacAddress": ""}
         }}
     });
     for info in [None, Some(&foreign)] {
@@ -231,7 +231,7 @@ fn every_created_container_gets_the_hostname_and_mac_address() {
     let args = app.container_args(&record(identified)).join(" ");
     assert!(args.contains("--hostname unity-build"), "{args}");
     assert!(args.contains("--mac-address 02:00:00:00:00:01"), "{args}");
-    assert!(args.contains("--network wsld-0123456789abcdef0123456789abcdef-private"));
+    assert!(args.contains("--network bilskirnir-0123456789abcdef0123456789abcdef-private"));
     // The internet network is connected after creation, with the same address.
     assert!(!args.contains("-egress"), "{args}");
     // A record saved before identities were kept has none to give.
@@ -324,14 +324,14 @@ async fn the_internet_network_is_connected_with_the_containers_mac_address() {
         server,
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
     ));
-    let body = connect_request("wsld-e", "02:00:00:00:00:01");
-    engine_post(client, "/networks/wsld-e-egress/connect", &body)
+    let body = connect_request("bilskirnir-e", "02:00:00:00:00:01");
+    engine_post(client, "/networks/bilskirnir-e-egress/connect", &body)
         .await
         .unwrap();
     let request = server.await.unwrap();
     // No version in the path: the daemon's own, which Docker 29 needs to use the address.
     assert!(
-        request.starts_with("POST /networks/wsld-e-egress/connect HTTP/1.1\r\n"),
+        request.starts_with("POST /networks/bilskirnir-e-egress/connect HTTP/1.1\r\n"),
         "{request}"
     );
     assert!(
@@ -342,14 +342,14 @@ async fn the_internet_network_is_connected_with_the_containers_mac_address() {
     let (_, sent) = request.split_once("\r\n\r\n").unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(sent).unwrap(),
-        json!({"Container": "wsld-e", "EndpointConfig": {"MacAddress": "02:00:00:00:00:01"}})
+        json!({"Container": "bilskirnir-e", "EndpointConfig": {"MacAddress": "02:00:00:00:00:01"}})
     );
 }
 
 #[tokio::test]
 async fn a_refused_connection_reports_dockers_message() {
     let (client, server) = tokio::io::duplex(8192);
-    let body = r#"{"message":"network wsld-e-egress not found"}"#;
+    let body = r#"{"message":"network bilskirnir-e-egress not found"}"#;
     let response = format!(
         "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
@@ -357,14 +357,14 @@ async fn a_refused_connection_reports_dockers_message() {
     let server = tokio::spawn(async move { serve(server, &response).await });
     let error = engine_post(
         client,
-        "/networks/wsld-e-egress/connect",
-        &connect_request("wsld-e", "02:00:00:00:00:01"),
+        "/networks/bilskirnir-e-egress/connect",
+        &connect_request("bilskirnir-e", "02:00:00:00:00:01"),
     )
     .await
     .unwrap_err();
     server.await.unwrap();
     assert_eq!(
         error.to_string(),
-        "Docker: network wsld-e-egress not found (404 Not Found)"
+        "Docker: network bilskirnir-e-egress not found (404 Not Found)"
     );
 }

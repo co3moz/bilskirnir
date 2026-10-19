@@ -11,9 +11,9 @@ use tower::ServiceExt;
 fn record(id: &str, cpus: Option<f64>) -> Container {
     Container {
         id: id.into(),
-        container: format!("wsld-{id}"),
-        private_network: format!("wsld-{id}-private"),
-        egress_network: format!("wsld-{id}-egress"),
+        container: format!("bilskirnir-{id}"),
+        private_network: format!("bilskirnir-{id}-private"),
+        egress_network: format!("bilskirnir-{id}-egress"),
         source_image_id: "sha256:base".into(),
         created_at: 1,
         spec: serde_json::from_value::<ContainerSpec>(

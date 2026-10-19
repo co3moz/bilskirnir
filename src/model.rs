@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub const LABEL: &str = "io.wsl-desktop.managed";
+pub const LABEL: &str = "bilskirnir.managed";
 /// The database kind of container records. They keep the name they were stored under before
 /// environments were called containers, so an existing installation reads them unchanged.
 pub const CONTAINERS: &str = "environment";

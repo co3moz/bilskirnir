@@ -10,7 +10,7 @@ fn import_request(query: &str, content_type: &str) -> Request<Body> {
         .method("POST")
         .uri(format!("/api/images/import?{query}"))
         .header("host", "localhost:8080")
-        .header("x-wsld-request", "1")
+        .header("x-bilskirnir-request", "1")
         .header("content-type", content_type)
         .body(Body::from(vec![0u8; 16]))
         .unwrap()

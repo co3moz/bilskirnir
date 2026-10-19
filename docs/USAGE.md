@@ -112,7 +112,7 @@ The upload dialog offers a container's volume and folder parameters by their lab
 
 In **New container**, a volume parameter lists the named volumes. **Create new volume…** creates one right there, named after the parameter unless you change it, and chooses it; it works when there are no volumes yet. **No volume** leaves the folder inside the container, where a reset discards it and snapshots keep it. Either way the folder exists and belongs to the desktop user before the script runs, so a script installing into `$UNITY_HOME` works without root. The container's details list the volume under **Volumes**; it stays mounted after a reset or a settings change, and the volume settings cannot mount it at a second path or mount another volume at its path.
 
-When the compose gives each container a new volume, **New container** starts with **A new volume for this container** chosen. Nothing is created while you fill in the form: the volume appears with the container, named `wsld-` followed by the container's ID and the parameter's name, such as `wsld-0f1e…e1f0-workspace`, so a cancelled form leaves nothing behind. You can still pick an existing volume, or create one by name, instead. A container created from a snapshot of that container gets a new volume too, not the one of the container the snapshot came from.
+When the compose gives each container a new volume, **New container** starts with **A new volume for this container** chosen. Nothing is created while you fill in the form: the volume appears with the container, named `bilskirnir-` followed by the container's ID and the parameter's name, such as `bilskirnir-0f1e…e1f0-workspace`, so a cancelled form leaves nothing behind. You can still pick an existing volume, or create one by name, instead. A container created from a snapshot of that container gets a new volume too, not the one of the container the snapshot came from.
 
 For example, an image with Unity Hub and an editor installed could ask for a Unity account and a serial number, and activate the license with them:
 
@@ -172,8 +172,8 @@ The home folder is part of the container filesystem unless a volume is mounted t
 You can also use Docker's file-copy commands from WSL. Replace `CONTAINER_ID` with your container's ID:
 
 ```bash
-docker cp ./project wsld-CONTAINER_ID:/workspace/project
-docker cp wsld-CONTAINER_ID:/home/desktop/Downloads/result ./result
+docker cp ./project bilskirnir-CONTAINER_ID:/workspace/project
+docker cp bilskirnir-CONTAINER_ID:/home/desktop/Downloads/result ./result
 ```
 
 ## Change a container's settings

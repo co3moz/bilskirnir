@@ -275,7 +275,7 @@ fn without_session_cookie(headers: &mut HeaderMap) {
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(';'))
         .map(str::trim)
-        .filter(|pair| !pair.is_empty() && !pair.starts_with("wsld_session="))
+        .filter(|pair| !pair.is_empty() && !pair.starts_with("bilskirnir_session="))
         .collect::<Vec<_>>()
         .join("; ");
     headers.remove(header::COOKIE);

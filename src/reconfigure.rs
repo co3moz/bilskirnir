@@ -337,7 +337,7 @@ impl App {
             // Remove only the container this attempt created, never the original.
             if let Some(created) = self.optional_inspect("container", &env.container).await?
                 && created["Id"] != old_id.as_str()
-                && created["Config"]["Labels"]["io.wsl-desktop.environment"] == env.id.as_str()
+                && created["Config"]["Labels"]["bilskirnir.environment"] == env.id.as_str()
                 && let Some(created_id) = created["Id"].as_str()
             {
                 self.docker(&["rm", "--force", created_id]).await?;

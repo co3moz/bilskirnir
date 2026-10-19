@@ -3,9 +3,6 @@ import { iconUrl } from "./icons"
 import { fileSize } from "./uploads"
 import type { DownloadProgress, ContainerItem, ContainerSpec, ImageItem, Job } from "./types"
 
-export const LEGACY_IMAGE = "wsl-desktop/ubuntu:24.04"
-const legacyTitle = () => t("images.legacyTitle")
-
 const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
 
 export const memory = (bytes?: number | null) =>
@@ -125,7 +122,7 @@ export function desktopTitle(
   return (
     title ||
     images.find((image) => image.kind === "catalog" && image.reference === spec.image)?.name ||
-    (spec.image === LEGACY_IMAGE ? legacyTitle() : t("containers.customDesktop"))
+    t("containers.customDesktop")
   )
 }
 
@@ -301,7 +298,7 @@ export function imageChoices(
   if (defaultImage && !choices.has(defaultImage))
     choices.set(defaultImage, {
       value: defaultImage,
-      label: defaultImage === LEGACY_IMAGE ? legacyTitle() : defaultImage,
+      label: defaultImage,
       disabled: false,
     })
   for (const image of images) {

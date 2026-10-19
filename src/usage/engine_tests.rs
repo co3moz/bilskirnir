@@ -11,9 +11,9 @@ const DOCKER_ID: &str = "4f1c5a0b9e2d3c7a8b6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8
 fn record(id: &str, gpu: bool) -> Container {
     Container {
         id: id.into(),
-        container: format!("wsld-{id}"),
-        private_network: format!("wsld-{id}-private"),
-        egress_network: format!("wsld-{id}-egress"),
+        container: format!("bilskirnir-{id}"),
+        private_network: format!("bilskirnir-{id}-private"),
+        egress_network: format!("bilskirnir-{id}-egress"),
         source_image_id: "sha256:base".into(),
         created_at: 1,
         spec: serde_json::from_value::<ContainerSpec>(
@@ -28,14 +28,14 @@ fn record(id: &str, gpu: bool) -> Container {
 }
 
 fn listed(docker_id: &str, name: &str, owner: &str) -> Value {
-    json!({"Id": docker_id, "Names": [format!("/{name}")], "State": "running", "Labels": {LABEL: "true", "io.wsl-desktop.environment": owner}})
+    json!({"Id": docker_id, "Names": [format!("/{name}")], "State": "running", "Labels": {LABEL: "true", "bilskirnir.environment": owner}})
 }
 
 #[test]
 fn the_list_asks_for_running_managed_containers_only() {
     assert_eq!(
         list_path(),
-        "/containers/json?filters=%7B%22label%22:%5B%22io.wsl-desktop.managed%3Dtrue%22%5D%2C%22status%22:%5B%22running%22%5D%7D"
+        "/containers/json?filters=%7B%22label%22:%5B%22bilskirnir.managed%3Dtrue%22%5D%2C%22status%22:%5B%22running%22%5D%7D"
     );
     assert_eq!(
         stats_path(DOCKER_ID).as_deref(),
@@ -50,18 +50,18 @@ fn the_list_asks_for_running_managed_containers_only() {
 fn a_container_counts_only_when_name_owner_and_label_match_a_record() {
     let records = [record("a", true), record("b", false)];
     let other = DOCKER_ID.replace('4', "5");
-    let mut unlabeled = listed(&other, "wsld-b", "b");
+    let mut unlabeled = listed(&other, "bilskirnir-b", "b");
     unlabeled["Labels"][LABEL] = json!("false");
     let list = json!([
-        listed(DOCKER_ID, "wsld-a", "a"),
+        listed(DOCKER_ID, "bilskirnir-a", "a"),
         // Claims record b's owner label under another name.
-        listed(&other, "wsld-impostor", "b"),
+        listed(&other, "bilskirnir-impostor", "b"),
         unlabeled,
         // Owned by a record this manager does not have.
-        listed(&other, "wsld-c", "c"),
+        listed(&other, "bilskirnir-c", "c"),
         // Docker IDs are hex; anything else never reaches a URL.
-        listed("../../info", "wsld-b", "b"),
-        {"Names": ["/wsld-b"]}
+        listed("../../info", "bilskirnir-b", "b"),
+        {"Names": ["/bilskirnir-b"]}
     ]);
     let found = running(&records, &list);
     assert_eq!(
@@ -179,7 +179,7 @@ async fn a_silent_stream_or_a_refusal_is_an_error() {
 #[tokio::test]
 async fn a_list_is_one_json_response() {
     let (client, server) = tokio::io::duplex(8192);
-    let body = json!([listed(DOCKER_ID, "wsld-a", "a")]).to_string();
+    let body = json!([listed(DOCKER_ID, "bilskirnir-a", "a")]).to_string();
     let server = tokio::spawn(serve(
         server,
         format!(

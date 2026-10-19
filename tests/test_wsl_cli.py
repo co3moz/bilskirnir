@@ -448,8 +448,8 @@ class PackageTest(unittest.TestCase):
 
     def test_the_manager_image_carries_the_release_label_the_cli_reads(self):
         # The manager image is built from the same argument the Rust build reads for its desktops.
-        self.assertIn('LABEL io.wsl-desktop.release="${BILSKIRNIR_RELEASE}"', (ROOT / "Dockerfile").read_text())
-        self.assertIn('"io.wsl-desktop.release"', CLI.read_text())
+        self.assertIn('LABEL bilskirnir.release="${BILSKIRNIR_RELEASE}"', (ROOT / "Dockerfile").read_text())
+        self.assertIn('"bilskirnir.release"', CLI.read_text())
 
     def test_the_package_and_the_manager_bundle_the_files_an_update_copies(self):
         # An update copies these from /app/install in the manager image over the package's copies, and

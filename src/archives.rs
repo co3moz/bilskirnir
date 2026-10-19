@@ -285,7 +285,7 @@ impl App {
             .inspect("image", &record.image_id)
             .await
             .context("The image is no longer available in Docker")?;
-        if info["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
             bail!("A desktop-compatible image is required");
         }
         self.append_log(
@@ -463,7 +463,7 @@ impl App {
         let loaded = loaded_image(&String::from_utf8_lossy(&output))?;
         let info = self.inspect("image", &loaded).await?;
         let image_id = info["Id"].as_str().context("Missing image ID")?.to_owned();
-        if info["Config"]["Labels"]["io.wsl-desktop.desktop"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
             // Only a configuration written to read differently in Docker gets this far. An
             // untagged image is this import's own; a tagged one was already on the host.
             if info["RepoTags"].as_array().is_none_or(Vec::is_empty) {

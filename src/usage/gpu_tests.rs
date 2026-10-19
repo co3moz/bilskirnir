@@ -56,10 +56,10 @@ fn routes_follow_what_the_installation_gives_desktops() {
 
 #[test]
 fn the_helper_gets_the_gpu_and_nothing_else() {
-    let args = helper_args(Route::Wsl, "sha256:manager", "wsld-usage-gpu-1");
+    let args = helper_args(Route::Wsl, "sha256:manager", "bilskirnir-usage-gpu-1");
     let text = args.join(" ");
     for expected in [
-        "run --rm --interactive --name wsld-usage-gpu-1",
+        "run --rm --interactive --name bilskirnir-usage-gpu-1",
         "--network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 65534:65534",
         "--device /dev/dxg --mount type=bind,src=/usr/lib/wsl,dst=/usr/lib/wsl,readonly",
         "--entrypoint sh sha256:manager -c",
@@ -72,7 +72,7 @@ fn the_helper_gets_the_gpu_and_nothing_else() {
         args.last().unwrap(),
         "/usr/lib/wsl/lib/nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits -l 1 & cat >/dev/null; kill $!"
     );
-    let toolkit = helper_args(Route::Toolkit, "sha256:manager", "wsld-usage-gpu-2").join(" ");
+    let toolkit = helper_args(Route::Toolkit, "sha256:manager", "bilskirnir-usage-gpu-2").join(" ");
     assert!(toolkit.contains("--gpus all --entrypoint sh"), "{toolkit}");
     assert!(!toolkit.contains("/dev/dxg"), "{toolkit}");
     assert!(toolkit.ends_with("-c nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits -l 1 & cat >/dev/null; kill $!"), "{toolkit}");

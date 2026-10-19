@@ -96,7 +96,7 @@ pub(crate) fn helper_args(route: Route, image: &str, name: &str) -> Vec<String> 
         "--name",
         name,
         "--label",
-        "io.wsl-desktop.usage-helper=true",
+        "bilskirnir.usage-helper=true",
         "--network",
         "none",
         "--read-only",
@@ -147,14 +147,14 @@ impl App {
             return Ok(command);
         };
         let info = self.inspect("container", manager).await?;
-        if info["Config"]["Labels"]["io.wsl-desktop.manager"] != "true" {
+        if info["Config"]["Labels"]["bilskirnir.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
         let image = info["Image"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing manager image"))?;
         let name = format!(
-            "wsld-usage-gpu-{}",
+            "bilskirnir-usage-gpu-{}",
             &uuid::Uuid::new_v4().simple().to_string()[..12]
         );
         Ok(self.command(&helper_args(route, image, &name)))

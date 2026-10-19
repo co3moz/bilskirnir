@@ -14,7 +14,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             docker_bin: "definitely-not-a-docker-command".into(),
             docker_socket: None,
             manager: None,
-            base_image: "wsl-desktop/ubuntu:24.04".into(),
+            base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
             desktop_context: "desktop".into(),
             auth,
             username: "admin".into(),
@@ -49,8 +49,10 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
     })
 }
 fn spec() -> model::ContainerSpec {
-    serde_json::from_value(serde_json::json!({"name":"Unity","image":"wsl-desktop/ubuntu:24.04"}))
-        .unwrap()
+    serde_json::from_value(
+        serde_json::json!({"name":"Unity","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}),
+    )
+    .unwrap()
 }
 
 pub(crate) fn mcp_app() -> Arc<App> {
@@ -133,7 +135,7 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
     for unset in [None, Some(""), Some("  ")] {
         assert_eq!(
             config::volume_filter(unset).unwrap().as_deref(),
-            Some("io.wsl-desktop.managed=true")
+            Some("bilskirnir.managed=true")
         );
     }
     assert_eq!(config::volume_filter(Some("none")).unwrap(), None);
@@ -141,8 +143,8 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
         "team",
         "team=",
         "com.example.team=unity",
-        "io.wsl-desktop.managed",
-        "io.wsl-desktop.managed=true",
+        "bilskirnir.managed",
+        "bilskirnir.managed=true",
     ] {
         assert_eq!(
             config::volume_filter(Some(label)).unwrap().as_deref(),
@@ -156,8 +158,8 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
         "team=a b",
         "team=a,b",
         "team\n=a",
-        "io.wsl-desktop.managed=false",
-        "io.wsl-desktop.managed=",
+        "bilskirnir.managed=false",
+        "bilskirnir.managed=",
     ] {
         assert!(config::volume_filter(Some(refused)).is_err(), "{refused}");
     }
@@ -625,7 +627,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
                 .header("host", "localhost")
                 .header("content-type", "application/json");
             if csrf {
-                request = request.header("x-wsld-request", "1");
+                request = request.header("x-bilskirnir-request", "1");
             }
             let response = router(app(auth))
                 .oneshot(request.body(Body::from("{}")).unwrap())
@@ -863,7 +865,7 @@ async fn uploads_enforce_authentication_origin_and_size_before_docker() {
             .header("host", "localhost:8080")
             .header("content-type", "application/octet-stream");
         if csrf {
-            request = request.header("x-wsld-request", "1");
+            request = request.header("x-bilskirnir-request", "1");
         }
         let response = router(app(auth))
             .oneshot(request.body(Body::empty()).unwrap())
@@ -997,8 +999,8 @@ async fn logout_revokes_waiting_media_lease_and_expiry_ends_it() {
                 .method("POST")
                 .uri("/api/logout")
                 .header("host", "localhost:8080")
-                .header("cookie", "wsld_session=media")
-                .header("x-wsld-request", "1")
+                .header("cookie", "bilskirnir_session=media")
+                .header("x-bilskirnir-request", "1")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1117,11 +1119,11 @@ fn image_catalog_is_unique_and_metadata_is_explicit() {
     );
     assert!(
         catalog::from_image(
-            &serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.desktop":"true"}}})
+            &serde_json::json!({"Config":{"Labels":{"bilskirnir.desktop":"true"}}})
         )
         .is_none()
     );
-    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"io.wsl-desktop.profile":"ubuntu-gnome","io.wsl-desktop.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
+    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"bilskirnir.profile":"ubuntu-gnome","bilskirnir.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
     assert_eq!(info.session, "gnome");
     assert_eq!(info.catalog_id, "ubuntu-gnome");
     // Records saved while catalog images were profiles still carry their desktop.
@@ -1134,7 +1136,7 @@ fn image_catalog_is_unique_and_metadata_is_explicit() {
 #[test]
 fn catalog_images_are_listed_with_the_saved_images() {
     let xfce = catalog::find("ubuntu-xfce").unwrap();
-    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"io.wsl-desktop.profile":id,"io.wsl-desktop.session":session,"org.opencontainers.image.title":"XFCE"}}});
+    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"bilskirnir.profile":id,"bilskirnir.session":session,"org.opencontainers.image.title":"XFCE"}}});
     // Not downloaded yet: still listed, so a container can start from it and download it.
     let missing = catalog::listed(&xfce, None, true);
     assert_eq!(missing["kind"], "catalog");
@@ -1153,7 +1155,7 @@ fn catalog_images_are_listed_with_the_saved_images() {
 }
 #[test]
 fn old_container_records_remain_readable_without_desktop_metadata() {
-    let value = serde_json::json!({"id":"old","container":"wsld-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"wsl-desktop/ubuntu:24.04"}});
+    let value = serde_json::json!({"id":"old","container":"bilskirnir-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}});
     let env: model::Container = serde_json::from_value(value).unwrap();
     assert!(env.desktop.is_none());
     assert_eq!(env.source_image_id, "sha256:old");
@@ -1187,7 +1189,7 @@ async fn only_catalog_images_are_built_or_pulled() {
                     .header("host", "localhost:8080")
                     .method("POST")
                     .uri(format!("/api/images/not-in-catalog/{action}"))
-                    .header("x-wsld-request", "1")
+                    .header("x-bilskirnir-request", "1")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1317,8 +1319,8 @@ async fn valid_session_still_rejects_cross_origin_mutation() {
                 .header("host", "localhost:8080")
                 .method("POST")
                 .uri("/api/logout")
-                .header("cookie", "wsld_session=token")
-                .header("x-wsld-request", "1")
+                .header("cookie", "bilskirnir_session=token")
+                .header("x-bilskirnir-request", "1")
                 .header("host", "localhost:8080")
                 .header("origin", "https://evil.example")
                 .body(Body::empty())
@@ -1340,7 +1342,7 @@ async fn expired_session_is_not_accepted() {
             Request::builder()
                 .header("host", "localhost:8080")
                 .uri("/api/jobs")
-                .header("cookie", "wsld_session=expired")
+                .header("cookie", "bilskirnir_session=expired")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1556,19 +1558,19 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     let manager = serde_json::json!([{
         "Id": "manager",
         "Image": "sha256:manager",
-        "Config": {"Labels": {"io.wsl-desktop.manager": "true"}},
+        "Config": {"Labels": {"bilskirnir.manager": "true"}},
         "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
     }]);
     let docker = dir.join("docker");
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=io.wsl-desktop.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=bilskirnir.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
             calls = calls.display(),
             data = serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
             project = serde_json::json!({"Name": "project", "Driver": "local"}),
             labeled = serde_json::json!([
-                {"Name": "project", "Labels": {"io.wsl-desktop.managed": "true"}}
+                {"Name": "project", "Labels": {"bilskirnir.managed": "true"}}
             ]),
             outside = serde_json::json!([{"Name": "outside", "Labels": null}]),
         ),
@@ -1620,9 +1622,9 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     // does not recreate the missing one.
     let env = model::Container {
         id: "legacy".into(),
-        container: "wsld-legacy".into(),
-        private_network: "wsld-legacy-private".into(),
-        egress_network: "wsld-legacy-egress".into(),
+        container: "bilskirnir-legacy".into(),
+        private_network: "bilskirnir-legacy-private".into(),
+        egress_network: "bilskirnir-legacy-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec,
@@ -1678,9 +1680,9 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     .unwrap();
     let env = model::Container {
         id: "composed".into(),
-        container: "wsld-composed".into(),
-        private_network: "wsld-composed-private".into(),
-        egress_network: "wsld-composed-egress".into(),
+        container: "bilskirnir-composed".into(),
+        private_network: "bilskirnir-composed-private".into(),
+        egress_network: "bilskirnir-composed-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -2059,9 +2061,9 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
     existing.gpu = true;
     let env = model::Container {
         id: "edit-id".into(),
-        container: "wsld-edit-id".into(),
-        private_network: "wsld-edit-id-private".into(),
-        egress_network: "wsld-edit-id-egress".into(),
+        container: "bilskirnir-edit-id".into(),
+        private_network: "bilskirnir-edit-id-private".into(),
+        egress_network: "bilskirnir-edit-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: existing,
@@ -2075,7 +2077,7 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
         let app = app.clone();
         let request = Request::builder()
             .header("host", "localhost:8080")
-            .header("x-wsld-request", "1")
+            .header("x-bilskirnir-request", "1")
             .header("content-type", "application/json")
             .method("POST")
             .uri(format!("/api/containers/{id}/settings"))
@@ -2146,9 +2148,9 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     }];
     let mut env = model::Container {
         id: "args-id".into(),
-        container: "wsld-args-id".into(),
-        private_network: "wsld-args-id-private".into(),
-        egress_network: "wsld-args-id-egress".into(),
+        container: "bilskirnir-args-id".into(),
+        private_network: "bilskirnir-args-id-private".into(),
+        egress_network: "bilskirnir-args-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec,
@@ -2163,7 +2165,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     let seccomp = format!("--security-opt seccomp={}", profile.display());
     for flag in [
         seccomp.as_str(),
-        "--name wsld-args-id",
+        "--name bilskirnir-args-id",
         "--shm-size 1024m",
         "--env DESKTOP_RESOLUTION=1280x720",
         "--env DESKTOP_AUDIO=true",
@@ -2174,7 +2176,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         "--gpus all",
         "--device /dev/dxg",
         "--device /dev/uinput",
-        "--label io.wsl-desktop.environment=args-id",
+        "--label bilskirnir.environment=args-id",
     ] {
         assert!(args.contains(flag), "{flag} missing from {args}");
     }
@@ -2192,9 +2194,9 @@ fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_pla
     Arc::get_mut(&mut app).unwrap().config.user_namespaces = false;
     let env = model::Container {
         id: "plain-id".into(),
-        container: "wsld-plain-id".into(),
-        private_network: "wsld-plain-id-private".into(),
-        egress_network: "wsld-plain-id-egress".into(),
+        container: "bilskirnir-plain-id".into(),
+        private_network: "bilskirnir-plain-id-private".into(),
+        egress_network: "bilskirnir-plain-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),

@@ -9,7 +9,7 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
     labels:
-      io.wsl-desktop.manager: "true"
+      bilskirnir.manager: "true"
     environment:
       MANAGER_CONTAINER: ${MANAGER_CONTAINER:-bilskirnir-manager}
       AUTH_MODE: ${AUTH_MODE:-password}

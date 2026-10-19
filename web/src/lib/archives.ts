@@ -165,7 +165,7 @@ export class ArchiveImport {
       const query = new URLSearchParams({ size: String(file.size), ...details })
       request.open("POST", `/api/${this.path}?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
-      request.setRequestHeader("X-Wsld-Request", "1")
+      request.setRequestHeader("X-Bilskirnir-Request", "1")
       request.withCredentials = true
       // Docker reads the archive as it arrives, so a large one takes as long as Docker needs.
       request.timeout = 4 * 3_600_000

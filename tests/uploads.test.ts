@@ -60,7 +60,7 @@ test("files upload sequentially with encoded names, CSRF and progress", async ()
     new URL(requests[0].url, "http://localhost").pathname,
     "/api/containers/container/files"
   )
-  assert.equal(requests[0].headers["X-Wsld-Request"], "1")
+  assert.equal(requests[0].headers["X-Bilskirnir-Request"], "1")
   requests[0].upload.onprogress({ loaded: 5 })
   assert.equal(uploads.items[0].loaded, 5)
   requests[0].complete(200, { path: "/shared/project/file & #.txt" })

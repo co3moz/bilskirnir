@@ -13,14 +13,14 @@ The HTTP API uses the same administrator session as the dashboard. Sign in and k
 ```bash
 curl --cookie-jar bilskirnir.cookies \
   --header 'Content-Type: application/json' \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --data '{"username":"admin","password":"YOUR_PASSWORD"}' \
   http://localhost:8080/api/login
 ```
 
-Send that cookie with subsequent requests. POST and DELETE requests also need `X-Wsld-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
+Send that cookie with subsequent requests. POST and DELETE requests also need `X-Bilskirnir-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
 
-The `wsld_session` cookie and `X-Wsld-Request` header retain their names for compatibility. The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
+The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
 
 ## Endpoints
 
@@ -120,7 +120,7 @@ The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/cont
 ```bash
 curl --cookie bilskirnir.cookies \
   --header 'Content-Type: application/json' \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --data '{"name":"Agent desktop","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04","gpu":true,"internet":true}' \
   http://localhost:8080/api/containers
 ```
@@ -177,7 +177,7 @@ Records saved before identities were kept have `null` for all three until a Dock
 With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
 
 ```bash
-curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Wsld-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
+curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Bilskirnir-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
 ```
 
 A feature the installation has switched off cannot be turned on, and an identity field can be changed but not set back to `null`. The job's result repeats the `live` and `restart` lists.
@@ -281,7 +281,7 @@ A text parameter's `pattern` is a regular expression that a value must match as 
 
 A volume parameter keeps data that every container of an image needs in the same place, such as Unity installs, out of the image and the container. Its value is the name of an existing named volume (`GET /api/volumes`, one not marked `manager`), or empty for none, and `required` means a volume must be chosen. The volume is mounted at the parameter's `path`, an absolute, normalized folder that the compose fixes and that follows the same rules as a [volume setting](#create-a-container-and-follow-the-job): not `/`, `/opt`, `/var` or `/home` themselves, and nothing under the system folders or the paths the manager mounts itself, such as `/tmp`, `/run`, `/dev` and `/usr`. Two volume parameters cannot share a path, and no other parameter can be named like a volume parameter's second variable. The script receives the path in the parameter's variable and the volume's name, or an empty string, in the same name with `_VOLUME` appended: `UNITY_HOME=/opt/unity` and `UNITY_HOME_VOLUME=unity-installs`. Without a volume the folder stays inside the container, in its files and its snapshots. Either way, before the script runs, a missing folder is created and an empty one owned by root is given to the desktop user, as Docker leaves a new volume's mount point to root; a folder that already holds files keeps its owner. Docker creates the missing folders above a volume's path owned by root; those inside a folder of the desktop user, such as its home, go to the desktop user too while they hold nothing else.
 
-A volume parameter with `"new_volume": true` gives each container a volume of its own instead, such as a workspace that no other container shares. A container whose request leaves the value empty, or out, gets the volume `wsld-CONTAINER_ID-NAME`, the parameter's name in lowercase with dashes for underscores, such as `wsld-0f1e...e1f0-workspace`; a request that names a volume still uses that one. `required` then never fails, and the parameter cannot have a `default`, since an empty value is what asks for the new volume. The creation job creates the volume, so a request that is refused or a form that is cancelled leaves nothing behind, with the labels `io.wsl-desktop.managed=true`, `io.wsl-desktop.environment=CONTAINER_ID` and `io.wsl-desktop.parameter=NAME`. A volume of that name that does not carry the container's labels stops the job. The value, the script's `NAME_VOLUME` and the container's `setup.mounts` name the volume like a chosen one, and a reset, a retry and a settings change mount it again. A container created from a snapshot gets a new volume of its own, not its source container's. The volume outlives its container unless the container is deleted with `delete_volumes=true`, and `GET /api/volumes` names its owner.
+A volume parameter with `"new_volume": true` gives each container a volume of its own instead, such as a workspace that no other container shares. A container whose request leaves the value empty, or out, gets the volume `bilskirnir-CONTAINER_ID-NAME`, the parameter's name in lowercase with dashes for underscores, such as `bilskirnir-0f1e...e1f0-workspace`; a request that names a volume still uses that one. `required` then never fails, and the parameter cannot have a `default`, since an empty value is what asks for the new volume. The creation job creates the volume, so a request that is refused or a form that is cancelled leaves nothing behind, with the labels `bilskirnir.managed=true`, `bilskirnir.environment=CONTAINER_ID` and `bilskirnir.parameter=NAME`. A volume of that name that does not carry the container's labels stops the job. The value, the script's `NAME_VOLUME` and the container's `setup.mounts` name the volume like a chosen one, and a reset, a retry and a settings change mount it again. A container created from a snapshot gets a new volume of its own, not its source container's. The volume outlives its container unless the container is deleted with `delete_volumes=true`, and `GET /api/volumes` names its owner.
 
 A folder parameter names a folder of the desktop the script works in, such as the project an editor opens. Its value is an absolute, normalized path outside the system folders, by the rules of a volume parameter's `path` except that it may hold a comma: `/home/desktop/UnityProjects/MyGame` or `/srv/projects`, not `/tmp/build`. The manager neither creates the folder nor changes its owner; the script does what it needs. Uploads may go into it and into a volume parameter's `path`, with or without a volume, and the dashboard's upload dialog offers both by their labels, as [files](#files) describes.
 
@@ -319,7 +319,7 @@ For larger uploads, POST the raw file body with `Content-Type: application/octet
 
 ```bash
 curl --cookie bilskirnir.cookies \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --data-binary @notes.txt \
   'http://localhost:8080/api/containers/CONTAINER_ID/files?destination=/home/desktop/Downloads&name=notes.txt&size=FILE_SIZE_IN_BYTES'
@@ -352,7 +352,7 @@ curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
 
 ```bash
 tar -c -C project . | curl --cookie bilskirnir.cookies \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file - \
   'http://localhost:8080/api/volumes/import?name=NEW_VOLUME'
@@ -364,7 +364,7 @@ curl sends such a body in chunks. Its bytes are counted as they arrive, and the 
 
 ```bash
 tar -c -C project . | curl --cookie bilskirnir.cookies \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file - \
   'http://localhost:8080/api/volumes/unity-projects/extract?path=/worktree-42'
@@ -391,7 +391,7 @@ An archive holds every layer, the base desktop included, and its size is not kno
 
 ```bash
 curl --cookie bilskirnir.cookies \
-  --header 'X-Wsld-Request: 1' \
+  --header 'X-Bilskirnir-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file unity.tar.gz \
   'http://localhost:8080/api/images/import?size=FILE_SIZE_IN_BYTES&name=Unity%20workspace'
@@ -400,7 +400,7 @@ curl --cookie bilskirnir.cookies \
 The archive streams into `docker load` as it arrives. On the way, the manager removes every tag and image name the archive carries, so an import cannot replace a catalog image or any other existing tag. Docker can register the image only after the archive has passed these checks:
 
 - It holds exactly one image, with its `manifest.json` and configuration.
-- The image has the `io.wsl-desktop.desktop=true` label.
+- The image has the `bilskirnir.desktop=true` label.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
@@ -415,7 +415,7 @@ The request runs the route the link stands for, with that route's limits, locks,
 curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
 ```
 
-The token replaces the cookie and the `X-Wsld-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
+The token replaces the cookie and the `X-Bilskirnir-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
 
 ## Desktop ports
 
@@ -431,7 +431,7 @@ The service receives the method, `{path}` with the query, the body and the other
 Whatever a desktop serves would appear on the dashboard's address, and a desktop browses sites nobody vouches for, so the route keeps the dashboard's session away from it:
 
 - It takes the MCP bearer token, as `/mcp` does, and never the session cookie, so a browser does not open it signed in. With MCP disabled it answers 404; with `MCP_AUTH_MODE=none` it needs no token, like `/mcp`. A request with an `Origin` header must come from the manager's own address.
-- The `Authorization` header, the `wsld_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
+- The `Authorization` header, the `bilskirnir_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
 - Every response carries `Content-Security-Policy: sandbox` beside the dashboard's own policy, and `X-Content-Type-Options: nosniff`. A browser that renders one, as it could with `MCP_AUTH_MODE=none`, runs no script in it and treats it as an origin of its own. `Set-Cookie` and `Clear-Site-Data` from the service are dropped, and a redirect to a path of the service stays under the proxy's prefix.
 
 ## Screenshots

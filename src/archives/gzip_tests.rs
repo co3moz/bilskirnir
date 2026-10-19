@@ -11,7 +11,7 @@ const LAYER: &str = "blobs/sha256/1111111111111111111111111111111111111111111111
 /// A `docker save` archive as Docker streams it, with a layer of `layer` bytes.
 fn saved(layer: &[u8], labelled: bool) -> Vec<u8> {
     let labels = if labelled {
-        json!({"io.wsl-desktop.desktop": "true"})
+        json!({"bilskirnir.desktop": "true"})
     } else {
         json!({})
     };
