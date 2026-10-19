@@ -30,7 +30,7 @@ export function ContainerPreview({ item, className }: { item: ContainerItem; cla
       </div>
       {shown && (
         <img
-          alt={`${spec.name} desktop preview`}
+          alt={t("containers.previewAlt", { name: spec.name })}
           src={`/api/containers/${encodeURIComponent(id)}/screenshot?max_width=640&t=${stamp}`}
           loading="lazy"
           onError={() => setFailed(stamp)}
