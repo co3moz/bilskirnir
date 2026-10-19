@@ -502,6 +502,7 @@ pub async fn download(
             let source = folder_archive::Source {
                 args,
                 helper: None,
+                lock: None,
                 label: format!("{} in {}", query.path, app.container(&id)?.spec.name),
                 path: query.path.clone(),
             };

@@ -111,13 +111,15 @@ pub async fn list(
     Json(body): Json<ListFiles>,
 ) -> Result<Json<Value>> {
     body.validate()?;
-    let volume = app.open_volume(&name).await?;
     let value = app
-        .volume_ops(
-            &volume,
-            Access::Read,
-            &["list", &inside(&body.path), &body.limit.to_string()],
-        )
+        .volume_read(&name, async |volume| {
+            app.volume_ops(
+                volume,
+                Access::Read,
+                &["list", &inside(&body.path), &body.limit.to_string()],
+            )
+            .await
+        })
         .await?;
     Ok(Json(value))
 }
@@ -134,22 +136,24 @@ pub async fn read(
         )
         .into());
     }
-    let volume = app.open_volume(&name).await?;
     let output = app
-        .run_helper(
-            &volume,
-            Access::Read,
-            &script(
-                READ_FILE,
-                &[
-                    &inside(&body.path),
-                    &body.offset.to_string(),
-                    &body.limit.to_string(),
-                ],
-            ),
-            None,
-            FILE_LIMIT * 2,
-        )
+        .volume_read(&name, async |volume| {
+            app.run_helper(
+                volume,
+                Access::Read,
+                &script(
+                    READ_FILE,
+                    &[
+                        &inside(&body.path),
+                        &body.offset.to_string(),
+                        &body.limit.to_string(),
+                    ],
+                ),
+                None,
+                FILE_LIMIT * 2,
+            )
+            .await
+        })
         .await?;
     let mut result: Value = serde_json::from_slice(&output).map_err(|e| anyhow!(e))?;
     let encoded = result["data_base64"]
@@ -312,6 +316,7 @@ pub async fn download(
             let source = folder_archive::Source {
                 args: super::helper_args(&volume, Access::Archive, &helper, true, &command),
                 helper: Some(helper),
+                lock: Some(format!("volume:{name}")),
                 label: format!("{} in the volume {name}", query.path),
                 path: query.path.clone(),
             };
@@ -341,14 +346,22 @@ pub async fn download(
             &[&path, &app.config.upload_limit.to_string()],
         ),
     );
-    let mut child = app
-        .command(&args)
-        .kill_on_drop(true)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(anyhow::Error::from)?;
+    let mut child = {
+        // Under the volume's lock until Docker has the helper: a delete between the check and
+        // the run would otherwise have `docker run` create the volume anew.
+        let _guard = app.hold(&format!("volume:{name}")).await?;
+        app.open_volume(&name).await?;
+        let mut child = app
+            .command(&args)
+            .kill_on_drop(true)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(anyhow::Error::from)?;
+        app.helper_started(&helper, &mut child).await;
+        child
+    };
     let stdout = child.stdout.take().context("Missing helper output")?;
     let stream = futures_util::stream::unfold((child, stdout), |(child, mut stdout)| async move {
         let mut buffer = vec![0; 65536];
@@ -454,6 +467,7 @@ async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Re
         8192,
         crate::process::Overflow::Tail,
     ));
+    let mut refused = false;
     let sent = async {
         let mut stream = body.into_data_stream();
         let mut received = 0u64;
@@ -465,6 +479,7 @@ async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Re
             }
             // The helper stops reading when it fails; its message says why.
             if stdin.write_all(&chunk).await.is_err() {
+                refused = true;
                 break;
             }
         }
@@ -481,8 +496,17 @@ async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Re
         Err(error) => {
             // An incomplete body must never be committed; the helper removes its temporary file.
             let _ = child.start_kill();
-            let _ = child.wait().await;
+            let status = child.wait().await;
             let _ = app.docker(&["rm", "--force", &helper]).await;
+            // A helper that stopped reading had refused the file, and its reason, such as a
+            // folder the desktop user cannot write, is the answer.
+            if refused
+                && status.is_ok_and(|status| !status.success())
+                && let Ok(Ok(errors)) = errors.await
+                && !errors.is_empty()
+            {
+                return Err(super::helper_error(&errors));
+            }
             return Err(Error(StatusCode::BAD_REQUEST, format!("{error:#}")));
         }
     };

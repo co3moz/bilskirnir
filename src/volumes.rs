@@ -148,6 +148,31 @@ impl App {
         Ok(volume)
     }
 
+    /// Wait until Docker has the helper container `name`, or `child`, its CLI, has ended. A
+    /// reader's volume lock is held until then and no longer.
+    pub(crate) async fn helper_started(&self, name: &str, child: &mut tokio::process::Child) {
+        for _ in 0..50 {
+            if matches!(child.try_wait(), Ok(Some(_)))
+                || matches!(self.optional_inspect("container", name).await, Ok(Some(_)))
+            {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    /// Run a short read of the volume under its lock: the whole of a listing or a file read is
+    /// quick, and a delete cannot land between the check and the helper's run.
+    pub(crate) async fn volume_read<T>(
+        &self,
+        name: &str,
+        work: impl AsyncFnOnce(&Volume) -> Result<T>,
+    ) -> Result<T> {
+        let _guard = self.hold(&format!("volume:{name}")).await?;
+        let volume = self.open_volume(name).await?;
+        work(&volume).await
+    }
+
     /// Whether `VOLUME_FILTER` lets a request see and choose the volume `docker volume inspect`
     /// described.
     pub(crate) fn lists_volume(&self, volume: &Value) -> bool {

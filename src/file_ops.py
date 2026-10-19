@@ -32,7 +32,15 @@ def stat_file(path):
     parent, name = os.path.split(path)
     descriptor = open_dir(parent)
     try:
-        return {"path": path, **describe(name, os.lstat(name, dir_fd=descriptor))}
+        entry = {"path": path, **describe(name, os.lstat(name, dir_fd=descriptor))}
+        if entry["type"] == "file":
+            # Whether a download would get past opening it, told before any headers are sent.
+            try:
+                os.close(os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor))
+                entry["readable"] = True
+            except OSError:
+                entry["readable"] = False
+        return entry
     finally:
         os.close(descriptor)
 
