@@ -2,7 +2,6 @@
 # Manage the Bilskirnir installation inside the WSL distribution.
 set -euo pipefail
 INSTALL=/opt/bilskirnir
-PORT=${PORT:-8080}
 # The manager the package installs, and where its releases are listed.
 MANAGER_REPOSITORY=ghcr.io/co3moz/bilskirnir
 RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
@@ -56,8 +55,14 @@ ensure_docker() {
     echo "Docker did not become ready. Run 'bilskirnir doctor'." >&2
     exit 1
 }
+# The port the dashboard answers on is a setting, so the command follows .env, not the shell.
+port() {
+    local value=
+    if [[ -f $INSTALL/.env ]]; then value=$(setting PORT); fi
+    echo "${value:-8080}"
+}
 address() {
-    echo "http://localhost:$PORT"
+    echo "http://localhost:$(port)"
 }
 # One setting from .env, without the quotes the first start puts around some values.
 setting() {
@@ -219,7 +224,7 @@ case ${1:-help} in
     status)
         if docker info >/dev/null 2>&1; then
             compose ps
-            if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+            if curl -fsS "http://127.0.0.1:$(port)/healthz" >/dev/null 2>&1; then
                 echo "Dashboard: $(address)"
             else
                 echo "The manager is not answering yet."
