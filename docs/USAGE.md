@@ -159,7 +159,7 @@ The desktop user runs as UID/GID **1001:1001**. Existing volumes need permission
 
 **Copy** on a volume's row copies all of its files into a new volume of the name you choose, for work that starts from a prepared project or cache, or a copy kept before a risky change. The copy keeps folders, symlinks and modes, and its files belong to the desktop user. It is a full copy, not a shared one: it takes as much disk space as the volume, and deleting a volume later does not shrink the WSL virtual disk by itself. **Jobs** shows the bytes copied.
 
-**Browse files** on a volume's row, or its name, opens its files without starting a container. Open a folder to look inside, a text file of up to 512 KiB to read and change it, and use the row menu to download, rename or delete. **New folder** and **Upload** add to the open folder; files dropped on the list upload too. Everything runs as the desktop user, so a file that user may not change is refused. A new, empty volume is given to the desktop user on its first change, so files can be added at its root.
+**Browse files** on a volume's row, or its name, opens its files without starting a container. Open a folder to look inside, a text file of up to 512 KiB to read and change it, and use the row menu to download, rename or delete; a folder downloads as a `.tar.gz`. **New folder** and **Upload** add to the open folder; files dropped on the list upload too. Everything runs as the desktop user, so a file that user may not change is refused. A new, empty volume is given to the desktop user on its first change, so files can be added at its root.
 
 Mounting the same writable volume in two containers gives both access to the same files. Taking a snapshot does not copy that volume. Deleting a container preserves named volumes and saved images; unsaved changes left only in the container are lost.
 
@@ -176,6 +176,10 @@ The destination starts at the folder you uploaded into last in that container, o
 Existing files are preserved by default. Select **Replace existing files** when you intend to overwrite them. Uploads run as the desktop user, so a volume must be writable by UID/GID 1001:1001.
 
 The home folder is part of the container filesystem unless a volume is mounted there. Use a named volume for files that should survive container deletion; the dialog says when the chosen folder is in a volume, which snapshots leave out. The default limit is 1 GiB per file, configurable with `UPLOAD_MAX_MB`.
+
+## Download files to the browser
+
+Select **Download files** in a running container's actions menu, its details or the connected desktop's toolbar. The dialog browses the desktop with the same places and address field as the upload folder picker. Select a file to download it as it is, up to the `UPLOAD_MAX_MB` limit. The button beside a folder, or **Download this folder** for the open one, downloads it as a `.tar.gz` archive named after the folder. The archive is made while it downloads, so the browser cannot show its size in advance; **Jobs** shows how much has been sent and any error. Files are read as the desktop user, and a file that user may not read fails the download rather than leaving a gap in the archive. Symlinks are kept as links, not followed.
 
 You can also use Docker's file-copy commands from WSL. Replace `CONTAINER_ID` with your container's ID:
 

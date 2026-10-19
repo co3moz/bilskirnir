@@ -151,7 +151,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 
 Both tools reject path traversal and symlinks. Reads accept regular files only, so devices, sockets and FIFOs cannot turn a bounded read into an endless stream.
 
-`list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file as base64 with its size and a guessed MIME type, up to 5 MiB; the HTTP download route streams larger files. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
+`list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file as base64 with its size and a guessed MIME type, up to 5 MiB; the HTTP download route streams larger files, and a folder as a `.tar.gz`. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
 
 `upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination folder anywhere in the desktop home, in a writable mounted volume or in one of the `places` of the container's `setup`. Its MCP limit is 512 KiB; for larger files, `create_transfer` issues a link to the streaming HTTP upload route that needs no dashboard session, as [move large files](#move-large-files) describes. See [files in the HTTP API](API.md#files).
 
@@ -219,7 +219,7 @@ Requests allow 1–100 actions, up to 10,000 typed characters, single waits or h
 
 ## Hand files to the user
 
-Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the MCP token does not authorize it, and an agent that fetches a file for itself uses `create_transfer` instead. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
+Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the same link with a folder's path downloads that folder as a `.tar.gz`. The MCP token does not authorize it, and an agent that fetches a file for itself uses `create_transfer` instead. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
 
 The bundled TigerVNC server acknowledges input with RFB Fence. This confirms that the server processed the events; an application may still need time to update. Inspect the next screenshot before making a decision. If a connection fails after input starts, check the screen before repeating an action that could submit, purchase or delete something. A custom desktop VNC server must support RFB 3.8, shared connections and Fence.
 
@@ -230,9 +230,9 @@ The file tools carry at most 512 KiB per call as base64 through the conversation
 | `operation` | Arguments | Request |
 | --- | --- | --- |
 | `container_upload` | `container_id`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file as the body |
-| `container_download` | `container_id`, `path` | `GET` the file |
+| `container_download` | `container_id`, `path` | `GET` the file, or a folder as a `.tar.gz` |
 | `volume_upload` | `volume`, `destination`, `name`, optional `replace` | `PUT` or `POST` the file |
-| `volume_download` | `volume`, `path` | `GET` the file |
+| `volume_download` | `volume`, `path` | `GET` the file, or a folder as a `.tar.gz` |
 | `volume_import` | `name` of a new volume | `PUT` or `POST` a `.tar.gz` or `.tar` |
 | `volume_extract` | `volume`, `path` of a new folder in it | `PUT` or `POST` a `.tar.gz` or `.tar` |
 | `volume_export` | `volume` | `GET` a `.tar.gz` |
@@ -246,7 +246,7 @@ curl --fail-with-body --upload-file project.tar.gz http://bilskirnir.lan:8080/ap
 curl --fail --output build.zip http://bilskirnir.lan:8080/api/transfers/TOKEN
 ```
 
-The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends for a file, or from a `size` query parameter for a body sent without one. An import also takes an archive of unknown size, such as `tar -c -C project . | curl --upload-file - URL`, with the checks the [HTTP API](API.md#volume-archives) describes. Nothing else in the request changes what the link does.
+The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export or a folder download with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends for a file, or from a `size` query parameter for a body sent without one. An import also takes an archive of unknown size, such as `tar -c -C project . | curl --upload-file - URL`, with the checks the [HTTP API](API.md#volume-archives) describes. Nothing else in the request changes what the link does.
 
 A link is a credential of its own:
 

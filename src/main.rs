@@ -13,6 +13,7 @@ mod docker;
 mod error;
 mod exec;
 mod files;
+mod folder_archive;
 mod gamepad;
 mod icons;
 mod identity;

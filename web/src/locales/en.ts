@@ -62,6 +62,7 @@ export const en = {
   "job.image-export": "Export image",
   "job.image-import": "Import image",
   "job.volume-export": "Export volume",
+  "job.folder-download": "Download folder",
   "job.volume-import": "Import volume",
   "job.volume-extract": "Extract into volume",
   "job.volume-copy": "Copy volume",
@@ -286,6 +287,16 @@ export const en = {
   "uploads.retry": "Retry remaining files",
   "uploads.browse": "Browse…",
   "uploads.inVolume": "This folder is in a volume, which snapshots leave out.",
+  "downloads.title": "Download files",
+  "downloads.notRunning": "Start the container before downloading files.",
+  "downloads.hint": "Files download as they are, folders as .tar.gz archives.",
+  "downloads.folder": "Download this folder",
+  "downloads.fileOf": "Download {name}",
+  "downloads.archiveOf": "Download {name} as .tar.gz",
+  "downloads.tooLarge": "{name} is larger than the {size} download limit.",
+  "downloads.archiving": "Downloading {name} as .tar.gz.",
+  "downloads.archivingDetail":
+    "The archive is made while it downloads. Jobs shows its progress and any error.",
 
   "folders.title": "Choose a folder",
   "folders.home": "Home",
@@ -308,6 +319,7 @@ export const en = {
   "folders.denied": "The desktop user cannot open this folder.",
   "folders.notFolder": "Part of this path is a file, not a folder.",
   "folders.symlinkPath": "This path goes through a symlink, which is not followed.",
+  "folders.notFound": "This folder does not exist.",
 
   "session.expired": "Session expired. Sign in again.",
 
@@ -466,6 +478,7 @@ export const en = {
   "files.keepEditing": "Keep editing",
   "files.contentsOf": "Contents of {path}",
   "files.download": "Download",
+  "files.downloadArchive": "Download as .tar.gz",
   "files.saving": "Saving…",
   "files.folder": "Folder",
   "files.newFolder": "New folder",

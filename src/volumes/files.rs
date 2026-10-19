@@ -9,6 +9,7 @@ use crate::{
         DeleteFile, Encoding, FILE_LIMIT, ListFiles, MoveFile, ReadFile, WriteFile, mime_type,
         percent_encode, split_path,
     },
+    folder_archive::{self, Target},
     uploads::Upload,
 };
 use anyhow::{Context, anyhow, bail};
@@ -289,26 +290,41 @@ pub struct DownloadQuery {
     pub path: String,
 }
 
-/// Stream a file from the volume with its size known up front; limited by UPLOAD_MAX_MB.
+/// Stream a file or a folder from the volume: a regular file as it is, read as the desktop user
+/// with its size known up front and limited by UPLOAD_MAX_MB, a folder as a `.tar.gz` read as a
+/// volume export reads, so it is complete.
 pub async fn download(
     State(app): State<Arc<App>>,
     Path(name): Path<String>,
     Query(query): Query<DownloadQuery>,
+    token: auth::Session,
 ) -> Result<Response> {
     let (_, file) = split_path(&query.path)?;
     let volume = app.open_volume(&name).await?;
     let path = inside(&query.path);
-    let probe = app
-        .run_helper(
-            &volume,
-            Access::Read,
-            &script(READ_FILE, &[&path, "0", "0"]),
-            None,
-            8192,
-        )
+    let entry = app
+        .volume_ops(&volume, Access::Read, &["stat", &path])
         .await?;
-    let info: Value = serde_json::from_slice(&probe).map_err(|e| anyhow!(e))?;
-    let size = info["size"].as_u64().context("Missing file size")?;
+    let size = match folder_archive::target(&entry)? {
+        Target::File(size) => size,
+        Target::Folder => {
+            let helper = super::helper_name();
+            let command = folder_archive::command(&path);
+            let source = folder_archive::Source {
+                args: super::helper_args(&volume, Access::Archive, &helper, true, &command),
+                helper: Some(helper),
+                label: format!("{} in the volume {name}", query.path),
+                path: query.path.clone(),
+            };
+            return folder_archive::respond(
+                app.clone(),
+                format!("volume:{name}"),
+                file,
+                source,
+                token,
+            );
+        }
+    };
     if size > app.config.upload_limit {
         return Err(Error(
             StatusCode::PAYLOAD_TOO_LARGE,

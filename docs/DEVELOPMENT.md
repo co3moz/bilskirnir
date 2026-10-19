@@ -41,6 +41,7 @@ When a catalog image is missing, its row under **Images** offers a download butt
 | Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
 | Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/src/lib/uploads.ts` |
+| Folder downloads as `.tar.gz` | `src/folder_archive.rs`, `src/archive_folder.py`, `web/src/components/dialogs/download-dialog.tsx`, `tests/test_archive_folder.py` |
 | Volume files through a helper container | `src/volumes.rs`, `src/volumes/`, `src/volume_claim.py`, `web/src/components/dialogs/volume-browser.tsx`, `web/src/lib/volume-files.ts` |
 | Dashboard layout, pages and dialogs | `web/src/App.tsx`, `web/src/pages/`, `web/src/components/`, `web/src/components/dialogs/` |
 | shadcn/ui components and theme | `web/src/components/ui/`, `web/src/index.css`, `components.json` |

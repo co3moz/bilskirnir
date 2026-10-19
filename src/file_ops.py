@@ -1,4 +1,4 @@
-"""List, move, delete or create files as the desktop user without following symlinks in paths."""
+"""Describe, list, move, delete or create files as the desktop user without following symlinks in paths."""
 import json
 import os
 import stat
@@ -26,6 +26,15 @@ def describe(name, info):
         kind = "special"
     return {"name": name, "type": kind, "size": info.st_size, "modified_at": int(info.st_mtime),
             "mode": stat.S_IMODE(info.st_mode)}
+
+
+def stat_file(path):
+    parent, name = os.path.split(path)
+    descriptor = open_dir(parent)
+    try:
+        return {"path": path, **describe(name, os.lstat(name, dir_fd=descriptor))}
+    finally:
+        os.close(descriptor)
 
 
 def list_files(path, limit):
@@ -122,7 +131,9 @@ def make_directory(path):
 
 command, *arguments = sys.argv[1:]
 try:
-    if command == "list":
+    if command == "stat":
+        print(json.dumps(stat_file(arguments[0])))
+    elif command == "list":
         print(json.dumps(list_files(arguments[0], int(arguments[1]))))
     elif command == "move":
         print(json.dumps(move_file(arguments[0], arguments[1], arguments[2] == "true")))

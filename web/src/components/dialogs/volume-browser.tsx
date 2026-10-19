@@ -37,6 +37,7 @@ import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useFileDrop } from "@/hooks/use-file-drop"
+import { downloadFile, downloadFolder } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
 import { shortDate } from "@/lib/format"
 import { formatNumber, rich, t } from "@/lib/i18n"
@@ -49,7 +50,6 @@ import {
   pathCrumbs,
   sortEntries,
   volumeApi,
-  volumeDownloadUrl,
   type VolumeEntry,
   type VolumeListing,
 } from "@/lib/volume-files"
@@ -67,15 +67,6 @@ const icons: Record<VolumeEntry["type"], React.ReactNode> = {
   file: <RiFileLine className="size-4 shrink-0 text-muted-foreground" aria-hidden />,
   symlink: <RiLinkM className="size-4 shrink-0 text-muted-foreground" aria-hidden />,
   special: <RiFileLine className="size-4 shrink-0 text-muted-foreground" aria-hidden />,
-}
-
-function download(volume: string, path: string) {
-  const link = document.createElement("a")
-  link.href = volumeDownloadUrl(volume, path)
-  link.download = ""
-  document.body.append(link)
-  link.click()
-  link.remove()
 }
 
 /** The upload queue of the open folder, rendered again whenever it reports progress. */
@@ -160,7 +151,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
     if (entry.type !== "file") return
     if (entry.size > EDIT_LIMIT) {
       toast.info(t("files.tooLarge", { name: entry.name, size: fileSize(EDIT_LIMIT) }))
-      download(name, target)
+      downloadFile(base, target, entry.size, limit)
       return
     }
     setBusy(true)
@@ -245,7 +236,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => download(name, editing.path)}
+                onClick={() => downloadFile(base, editing.path, 0, limit)}
                 disabled={busy || changed}
               >
                 <RiDownloadLine data-icon="inline-start" />
@@ -447,13 +438,23 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
                             <RiMoreLine />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuContent align="end" className="w-auto">
                           {entry.type === "file" && (
                             <DropdownMenuItem
-                              onSelect={() => download(name, joinPath(path, entry.name))}
+                              onSelect={() =>
+                                downloadFile(base, joinPath(path, entry.name), entry.size, limit)
+                              }
                             >
                               <RiDownloadLine />
                               {t("files.download")}
+                            </DropdownMenuItem>
+                          )}
+                          {entry.type === "directory" && (
+                            <DropdownMenuItem
+                              onSelect={() => downloadFolder(base, joinPath(path, entry.name))}
+                            >
+                              <RiDownloadLine />
+                              {t("files.downloadArchive")}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onSelect={() => setPending({ kind: "rename", entry })}>

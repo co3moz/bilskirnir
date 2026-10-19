@@ -8,7 +8,8 @@ import { t } from "./i18n"
 import { refreshAll } from "./queries"
 import { navigate } from "./route"
 import type { BuildConfig, ImageItem, JobStarted } from "./types"
-import { volumeArchiveUrl } from "./volume-files"
+import { fileSize } from "./uploads"
+import { baseName, fileDownloadUrl, volumeArchiveUrl } from "./volume-files"
 
 /** Queues a manager job, then shows its log so the outcome is visible. */
 export async function runJob(path: string, body?: unknown, method?: string) {
@@ -83,18 +84,29 @@ export async function attempt(action: () => Promise<unknown>) {
   }
 }
 
-/** Downloads a volume's files as a .tar.gz archive, recorded as a job like an image export. */
-export function exportVolume(name: string) {
+/** Lets the browser save what `href` answers, under the name the manager gives it. */
+function save(href: string) {
   const link = document.createElement("a")
-  link.href = volumeArchiveUrl(name)
+  link.href = href
   link.download = ""
   document.body.append(link)
   link.click()
   link.remove()
-  toast.success(t("volumes.exporting", { name }), {
+}
+
+/** Points at the Jobs page, where an archive transfer's progress and any error appear. */
+function archiving(message: string, description?: string) {
+  toast.success(message, {
+    description,
     action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
   })
   setTimeout(() => void refreshAll(), 1000)
+}
+
+/** Downloads a volume's files as a .tar.gz archive, recorded as a job like an image export. */
+export function exportVolume(name: string) {
+  save(volumeArchiveUrl(name))
+  archiving(t("volumes.exporting", { name }))
 }
 
 /**
@@ -102,15 +114,25 @@ export function exportVolume(name: string) {
  * records the export as a job, where its progress and any Docker error appear.
  */
 export function exportArchive(image: Pick<ImageItem, "id" | "name">) {
-  const link = document.createElement("a")
-  link.href = archiveUrl(image.id)
-  link.download = ""
-  document.body.append(link)
-  link.click()
-  link.remove()
-  toast.success(t("images.exporting", { name: image.name }), {
-    description: t("images.exportingDetail"),
-    action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
-  })
-  setTimeout(() => void refreshAll(), 1000)
+  save(archiveUrl(image.id))
+  archiving(t("images.exporting", { name: image.name }), t("images.exportingDetail"))
+}
+
+/**
+ * Downloads a file of a container or a volume (`base` is its API path) as it is. A file past
+ * the transfer limit is refused here, since the manager would refuse it and the browser would
+ * only show a failed download.
+ */
+export function downloadFile(base: string, path: string, size: number, limit: number) {
+  if (limit && size > limit) {
+    toast.error(t("downloads.tooLarge", { name: baseName(path), size: fileSize(limit) }))
+    return
+  }
+  save(fileDownloadUrl(base, path))
+}
+
+/** Downloads a folder of a container or a volume as a .tar.gz, which the manager records as a job. */
+export function downloadFolder(base: string, path: string) {
+  save(fileDownloadUrl(base, path))
+  archiving(t("downloads.archiving", { name: baseName(path) }), t("downloads.archivingDetail"))
 }

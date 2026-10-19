@@ -8,6 +8,7 @@ import {
   RiSettings3Line,
   RiStethoscopeLine,
   RiDeleteBinLine,
+  RiDownloadLine,
   RiUploadLine,
 } from "@remixicon/react"
 
@@ -110,6 +111,14 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
           >
             <RiUploadLine data-icon="inline-start" />
             {t("uploads.title")}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!running}
+            onClick={() => openDialog({ kind: "download", id })}
+          >
+            <RiDownloadLine data-icon="inline-start" />
+            {t("downloads.title")}
           </Button>
           <Button variant="outline" onClick={() => attempt(() => containerAction(id, "restart"))}>
             <RiRestartLine data-icon="inline-start" />

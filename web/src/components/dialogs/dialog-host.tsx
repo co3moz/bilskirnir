@@ -19,6 +19,7 @@ import { ComposeDialog } from "./compose-dialog"
 import { IconDialog } from "./icon-dialog"
 import { ImageDrawer } from "./image-drawer"
 import { UploadDialog } from "./upload-dialog"
+import { DownloadDialog } from "./download-dialog"
 import { VolumeBrowser } from "./volume-browser"
 import { VolumeImportDialog } from "./volume-import-dialog"
 
@@ -45,6 +46,8 @@ function render(dialog: Dialog, open: boolean) {
       return <DeleteDialog {...props} id={dialog.id} />
     case "upload":
       return <UploadDialog {...props} id={dialog.id} files={dialog.files} />
+    case "download":
+      return <DownloadDialog {...props} id={dialog.id} />
     case "build":
       return <BuildImageDialog {...props} config={dialog.config} />
     case "compose":

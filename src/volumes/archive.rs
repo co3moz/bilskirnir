@@ -8,7 +8,9 @@ mod ending;
 use super::{Access, HELPER_LIMIT, MOUNT, Volume, helper_args, helper_error, helper_name};
 use crate::{
     App,
-    archives::{arriving, check_upload, count, import_progress, interrupted, transfer_permit},
+    archives::{
+        arriving, check_upload, count, import_progress, interrupted, send_archive, transfer_permit,
+    },
     auth,
     error::{Error, Result},
     jobs,
@@ -275,7 +277,6 @@ impl App {
         token: auth::Session,
     ) -> anyhow::Result<Value> {
         self.append_log(job_id, &format!("Exporting the files of {}.", volume.name))?;
-        self.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
         let mut helper = Helper::spawn(
             self,
             volume,
@@ -292,53 +293,13 @@ impl App {
                 ".",
             ],
         )?;
-        let mut stdout = helper.child.stdout.take().context("Missing tar output")?;
-        let errors = tokio::spawn(process::read_limited(
-            helper.child.stderr.take().context("Missing tar errors")?,
-            8192,
-            Overflow::Tail,
-        ));
-        let revoked = self.session_revoked(token);
-        tokio::pin!(revoked);
-        let mut buffer = vec![0; READ_SIZE];
-        let (mut sent, mut reported) = (0u64, Instant::now());
-        let streamed = async {
-            loop {
-                let read = tokio::select! {
-                    read = stdout.read(&mut buffer) => read.context("Could not read the archive")?,
-                    _ = &mut revoked => bail!("Session expired. Sign in again."),
-                    _ = body.closed() => bail!("The download was cancelled before it finished"),
-                };
-                if read == 0 {
-                    return anyhow::Ok(());
-                }
-                sent += read as u64;
-                body.send(Ok(Bytes::copy_from_slice(&buffer[..read])))
-                    .await
-                    .map_err(|_| anyhow!("The download was cancelled before it finished"))?;
-                if reported.elapsed() >= PROGRESS_INTERVAL {
-                    self.set_progress(
-                        job_id,
-                        Some(json!({"transfer": "export", "current": sent})),
-                    )?;
-                    reported = Instant::now();
-                }
+        let sent = match send_archive(self, job_id, &mut helper.child, body, token).await {
+            Ok(sent) => sent,
+            Err(error) => {
+                helper.abandon(self).await;
+                return Err(error);
             }
-        }
-        .await;
-        if let Err(error) = streamed {
-            helper.abandon(self).await;
-            return Err(error);
-        }
-        let status = helper.child.wait().await?;
-        let errors = String::from_utf8_lossy(&errors.await??).trim().to_owned();
-        match status.code() {
-            Some(0) => {}
-            // GNU tar ends with 1 when a file changed while it was read, as one in use can; the
-            // archive is complete and holds the file as it was read.
-            Some(1) => self.append_log(job_id, &format!("tar: {errors}"))?,
-            _ => bail!("tar: {errors}"),
-        }
+        };
         self.append_log(job_id, &format!("Exported {sent} bytes."))?;
         Ok(json!({"volume": volume.name, "bytes": sent}))
     }

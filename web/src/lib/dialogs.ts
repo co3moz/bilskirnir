@@ -9,6 +9,7 @@ export type Dialog =
   | { kind: "snapshot"; id: string }
   | { kind: "delete"; id: string }
   | { kind: "upload"; id: string; files?: File[] }
+  | { kind: "download"; id: string }
   | { kind: "build"; config?: ImportedBuild }
   | { kind: "compose"; id: string }
   | { kind: "icon"; id: string }
