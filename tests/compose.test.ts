@@ -9,6 +9,7 @@ import {
   newOption,
   newVolumeName,
   NO_VOLUME,
+  noVolumeValue,
   parameterBody,
   patternMatches,
   readCompose,
@@ -29,6 +30,7 @@ import {
   withOptions,
   withType,
   withVolumeDefault,
+  WITHOUT_VOLUME,
 } from "../web/src/lib/compose"
 import type { Compose, ComposeParameter } from "../web/src/lib/types"
 
@@ -362,17 +364,25 @@ test("the editor offers a new volume for each container as a default of its own"
   assert.equal("new_volume" in draftParameter({ ...text, new_volume: true }), false)
 })
 
-test("the create form preselects the new volume and sends it as an empty value", () => {
+test("the create form preselects the new volume, sent empty, and offers none as a dash", () => {
   const compose = { ...unity, parameters: [workspace] }
   // Left alone, the request leaves it empty, which the job turns into the container's volume.
   assert.deepEqual(parameterBody(compose, {}), { UNITY_WORKSPACE: "" })
   assert.equal(volumeSelection(workspace, "", true), NEW_VOLUME)
-  // Required or not, the form offers the new volume instead of none.
+  // The form offers the new volume, and none too unless a volume is required.
   for (const required of [true, false])
     assert.deepEqual(volumeExtras(workspace, { required, defaults: false }), {
-      none: false,
+      none: !required,
       fresh: true,
     })
+  // None goes as the dash, since an empty value makes the volume, and reads back as none.
+  assert.equal(noVolumeValue(workspace, false), WITHOUT_VOLUME)
+  assert.equal(volumeSelection(workspace, WITHOUT_VOLUME, false), NO_VOLUME)
+  assert.deepEqual(parameterBody(compose, { UNITY_WORKSPACE: WITHOUT_VOLUME }), {
+    UNITY_WORKSPACE: "-",
+  })
+  // The editor's default of none is an empty one without the new volume.
+  assert.equal(noVolumeValue(workspace, true), "")
   // A volume picked by name is sent as it is.
   assert.equal(volumeSelection(workspace, "projects", true), "projects")
   assert.deepEqual(parameterBody(compose, { UNITY_WORKSPACE: "projects" }), {
@@ -386,6 +396,7 @@ test("the create form preselects the new volume and sends it as an empty value",
   })
   assert.equal(volumeSelection(plain, "", false), NO_VOLUME)
   assert.equal(volumeSelection(plain, "", true), "")
+  assert.equal(noVolumeValue(plain, false), "")
 })
 
 test("every type survives the editor unchanged", () => {

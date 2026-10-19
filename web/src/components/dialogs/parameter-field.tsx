@@ -26,6 +26,7 @@ import {
   NEW_VOLUME,
   newVolumeName,
   NO_VOLUME,
+  noVolumeValue,
   patternMatches,
   pickedChoices,
   sliderValue,
@@ -174,7 +175,7 @@ function VolumeControl({
     if (next === CREATE) setName(newVolumeName(parameter, volumes))
     // The form asks for the new volume with an empty value; the editor keeps the choice itself.
     else if (next === NEW_VOLUME) onChange(defaults ? NEW_VOLUME : "")
-    else onChange(next === NO_VOLUME ? "" : next)
+    else onChange(next === NO_VOLUME ? noVolumeValue(parameter, defaults) : next)
   }
   const create = async () => {
     const volume = name.trim()
