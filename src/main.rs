@@ -410,6 +410,16 @@ async fn main() -> anyhow::Result<()> {
     let reconcile = app.clone();
     let cleanup = app.clone();
     tokio::spawn(async move {
+        match cleanup.drop_orphan_tags().await {
+            Ok(dropped) if !dropped.is_empty() => {
+                tracing::info!(
+                    "Removed image tags without a record: {}",
+                    dropped.join(", ")
+                );
+            }
+            Ok(_) => {}
+            Err(error) => tracing::debug!("Orphan image tags: {error:#}"),
+        }
         if let Ok(jobs) = cleanup.db.list::<model::Job>("job") {
             for job in jobs
                 .into_iter()

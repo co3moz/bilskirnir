@@ -93,6 +93,45 @@ impl App {
         Ok(json!({"id": record.id, "name": record.name, "deleted": true, "image_removed": removed}))
     }
 
+    /// Drop the tags of snapshots and imports that got no record, which a manager stopped
+    /// between tagging the image and saving the record leaves behind. Run at startup, before
+    /// any job runs, so a tag whose record is still to come is never seen. Only Bilskirnir's
+    /// own repositories are looked at, and the image goes with its last tag, which is this
+    /// orphan's own.
+    pub(crate) async fn drop_orphan_tags(&self) -> anyhow::Result<Vec<String>> {
+        let records = self.db.list::<ImageRecord>("image")?;
+        let named: std::collections::HashSet<&str> = records
+            .iter()
+            .map(|record| record.reference.as_str())
+            .collect();
+        let mut dropped = Vec::new();
+        for repository in ["bilskirnir/snapshot", "bilskirnir/imported"] {
+            let listed = self
+                .docker(&[
+                    "image",
+                    "ls",
+                    "--format",
+                    "{{.Repository}}:{{.Tag}}",
+                    repository,
+                ])
+                .await?;
+            for tag in String::from_utf8_lossy(&listed)
+                .lines()
+                .map(str::trim)
+                .filter(|tag| tag.starts_with(repository) && !tag.ends_with(":<none>"))
+            {
+                if named.contains(tag) {
+                    continue;
+                }
+                match self.docker(&["image", "rm", tag]).await {
+                    Ok(_) => dropped.push(tag.to_owned()),
+                    Err(error) => tracing::debug!("Orphan tag {tag}: {error:#}"),
+                }
+            }
+        }
+        Ok(dropped)
+    }
+
     /// Refuse while a container record starts from the Docker image `image_id`.
     fn refuse_used(&self, image_id: &str) -> Result<()> {
         let containers = self.db.list::<Container>(CONTAINERS)?;
