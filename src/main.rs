@@ -22,6 +22,7 @@ mod layers;
 mod mcp;
 mod media;
 mod model;
+mod mount_parents;
 mod process;
 mod proxy;
 mod pulls;

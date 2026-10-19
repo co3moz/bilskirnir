@@ -316,6 +316,7 @@ impl App {
             if info["State"]["Running"] != true {
                 // Also a container an earlier attempt created without its machine ID.
                 self.write_machine_id(env).await?;
+                self.hand_over_mount_parents(env).await?;
                 self.docker(&["start", container_id]).await?;
             }
             return Ok(());
@@ -323,6 +324,7 @@ impl App {
         let args = self.container_args(env);
         self.docker_args(&args).await?;
         self.write_machine_id(env).await?;
+        self.hand_over_mount_parents(env).await?;
         if env.spec.internet {
             self.connect_network(env, &env.egress_network, &env.container)
                 .await?;
