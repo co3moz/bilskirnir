@@ -459,6 +459,14 @@ try:
     with client.open(f"http://127.0.0.1:{port}/api/{files}/download?" + urllib.parse.urlencode({"path": "/notes/blob.bin"}), timeout=130) as response:
         assert response.read() == b"\x00\x01\x02"
     api(f"{files}/move", {"source": "/notes/hello.txt", "destination": "/notes/renamed.txt"})
+    # A folder of a volume downloads as a .tar.gz of itself, as a job like an export.
+    with client.open(f"http://127.0.0.1:{port}/api/{files}/download?" + urllib.parse.urlencode({"path": "/notes"}), timeout=130) as response:
+        notes_job = response.headers["X-Job-Id"]
+        notes = response.read()
+    assert job({"job_id": notes_job})["bytes"] == len(notes)
+    with tarfile.open(fileobj=io.BytesIO(notes), mode="r:gz") as archive:
+        assert sorted(archive.getnames()) == ["notes", "notes/blob.bin", "notes/renamed.txt"], archive.getnames()
+        assert archive.extractfile("notes/renamed.txt").read() == b"Hello volume\n"
     # A volume leaves as an ordinary .tar.gz and comes back into a new volume, never over one.
     with client.open(f"http://127.0.0.1:{port}/api/volumes/{files_volume}/archive", timeout=130) as response:
         export_job = response.headers["X-Job-Id"]
@@ -931,7 +939,42 @@ try:
         assert response.headers["Content-Length"] == str(exported["bytes"]) and "evidence.tar.gz" in response.headers["Content-Disposition"], dict(response.headers)
         assert len(response.read()) == exported["bytes"]
     assert tool("download_file", {"container_id":env_id,"path":"/home/desktop/agent-link"}, allow_error=True)["isError"]
-    tone = b"".join(struct.pack("<ff", 0.25 * math.sin(i * 2 * math.pi * 440 / 48000), 0.25 * math.sin(i * 2 * math.pi * 440 / 48000)) for i in range(240000))
+    # A folder downloads from the same route as a .tar.gz of itself, made as the desktop user while
+    # it streams and recorded as a job; symlinks inside stay links, one on the path is refused.
+    docker("exec", "--user", "desktop", container, "sh", "-c", "mkdir -p '/home/desktop/agent folder/sub' && printf folder > '/home/desktop/agent folder/sub/a.txt' && ln -sfn /etc '/home/desktop/agent folder/etc-link' && ln -sfn '/home/desktop/agent folder' /home/desktop/folder-link")
+    def folder_download(url, opener=client):
+        with opener.open(url, timeout=130) as response:
+            return response.headers, response.read()
+    headers, folder_data = folder_download(f"http://127.0.0.1:{port}/api/containers/{env_id}/files/download?" + urllib.parse.urlencode({"path":"/home/desktop/agent folder"}))
+    assert headers["Content-Type"] == "application/gzip" and "filename*=UTF-8''agent%20folder.tar.gz" in headers["Content-Disposition"], dict(headers)
+    assert job({"job_id": headers["X-Job-Id"]}) == {"path": "/home/desktop/agent folder", "bytes": len(folder_data)}
+    with tarfile.open(fileobj=io.BytesIO(folder_data), mode="r:gz") as archive:
+        assert archive.extractfile("agent folder/sub/a.txt").read() == b"folder"
+        assert archive.getmember("agent folder/etc-link").issym(), archive.getnames()
+        assert not any(name.startswith("agent folder/etc-link/") for name in archive.getnames()), archive.getnames()
+        assert {member.uid for member in archive.getmembers()} == {1001}
+    for path in ["/home/desktop/folder-link", "/home/desktop/folder-link/sub"]:
+        try:
+            folder_download(f"http://127.0.0.1:{port}/api/containers/{env_id}/files/download?" + urllib.parse.urlencode({"path":path})); raise AssertionError(f"{path} was downloaded through a symlink")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400, (path, error.code)
+    # A transfer link downloads a folder the same way, without a session.
+    link = transfer_link({"operation":"container_download","container_id":env_id,"path":"/home/desktop/agent folder/sub"})
+    headers, linked = folder_download(f"http://127.0.0.1:{port}{link['url']}", urllib.request.build_opener())
+    with tarfile.open(fileobj=io.BytesIO(linked), mode="r:gz") as archive:
+        assert archive.extractfile("sub/a.txt").read() == b"folder"
+    assert job({"job_id": headers["X-Job-Id"]})["bytes"] == len(linked)
+    # A download that stops early leaves no tar running in the desktop.
+    docker("exec", "--user", "desktop", container, "sh", "-c", "head -c 67108864 /dev/urandom > '/home/desktop/agent folder/noise'")
+    with client.open(f"http://127.0.0.1:{port}/api/containers/{env_id}/files/download?" + urllib.parse.urlencode({"path":"/home/desktop/agent folder"}), timeout=130) as response:
+        cancelled = response.headers["X-Job-Id"]
+        response.read(65536)
+    stopped = wait_for(lambda: (j if (j := api(f"jobs/{cancelled}"))["status"] not in ("queued", "running") else None), 60)
+    assert stopped["status"] == "failed", stopped
+    wait_for(lambda: docker("exec", container, "pgrep", "-x", "tar|gzip", check=False).strip() == b"" or None, 30)
+    docker("exec", "--user", "desktop", container, "rm", "-rf", "/home/desktop/agent folder", "/home/desktop/folder-link")
+    print("PASS folder download as .tar.gz, through a transfer link, and its cancellation", flush=True)
+    tone =b"".join(struct.pack("<ff", 0.25 * math.sin(i * 2 * math.pi * 440 / 48000), 0.25 * math.sin(i * 2 * math.pi * 440 / 48000)) for i in range(240000))
     player = subprocess.Popen(["docker", "exec", "-i", "--user", "desktop", container, "pacat", "--playback", "--device=desktop-output", "--format=float32le", "--rate=48000", "--channels=2"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     threading.Thread(target=lambda: (player.stdin.write(tone), player.stdin.close()), daemon=True).start()
     time.sleep(2.0)

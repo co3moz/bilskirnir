@@ -1,6 +1,7 @@
 use crate::{
-    App,
+    App, auth,
     error::{Error, Result},
+    folder_archive::{self, Target},
     process,
 };
 use anyhow::{Context, bail};
@@ -257,11 +258,20 @@ async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
     if container["State"]["Running"] != true {
         return Err(anyhow::anyhow!("Start the container before using its files").into());
     }
+    file_ops(
+        app,
+        container["Id"].as_str().context("Missing container ID")?,
+        arguments,
+    )
+    .await
+}
+/// Run `file_ops.py` in the running container `cid`, whose lock the caller holds.
+async fn file_ops(app: &App, cid: &str, arguments: &[&str]) -> Result<Value> {
     let mut args = vec![
         "exec",
         "--user",
         "1001:1001",
-        container["Id"].as_str().context("Missing container ID")?,
+        cid,
         "python3",
         "-c",
         FILE_OPS,
@@ -473,33 +483,42 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
         "data_base64": STANDARD.encode(&output.stdout),
     }))
 }
-/// Stream a file from the desktop with its size known up front; limited by UPLOAD_MAX_MB.
+/// Stream a file or a folder from the desktop as the desktop user: a regular file as it is, with
+/// its size known up front and limited by UPLOAD_MAX_MB, a folder as a `.tar.gz`.
 pub async fn download(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
     Query(query): Query<DownloadQuery>,
+    token: auth::Session,
 ) -> Result<Response> {
     let (_, name) = split_path(&query.path)?;
     let lock = app.resource_lock(&format!("container:{id}"));
     let _guard = lock.lock().await;
     let container = running_container(&app, &id).await?;
     let cid = container["Id"].as_str().context("Missing container ID")?;
-    let probe = app
-        .docker(&[
-            "exec",
-            "--user",
-            "1001:1001",
-            cid,
-            "python3",
-            "-c",
-            include_str!("read_file.py"),
-            &query.path,
-            "0",
-            "0",
-        ])
-        .await?;
-    let info: Value = serde_json::from_slice(&probe).map_err(|e| anyhow::anyhow!(e))?;
-    let size = info["size"].as_u64().context("Missing file size")?;
+    let entry = file_ops(&app, cid, &["stat", &query.path]).await?;
+    let size = match folder_archive::target(&entry)? {
+        Target::File(size) => size,
+        Target::Folder => {
+            let mut args = ["exec", "--interactive", "--user", "1001:1001", cid]
+                .map(str::to_owned)
+                .to_vec();
+            args.extend(folder_archive::command(&query.path));
+            let source = folder_archive::Source {
+                args,
+                helper: None,
+                label: format!("{} in {}", query.path, app.container(&id)?.spec.name),
+                path: query.path.clone(),
+            };
+            return folder_archive::respond(
+                app.clone(),
+                format!("container:{id}"),
+                name,
+                source,
+                token,
+            );
+        }
+    };
     if size > app.config.upload_limit {
         return Err(Error(
             StatusCode::PAYLOAD_TOO_LARGE,

@@ -71,7 +71,7 @@ pub(crate) enum Operation {
         #[serde(default)]
         replace: bool,
     },
-    /// `GET /api/containers/{id}/files/download`
+    /// `GET /api/containers/{id}/files/download`: a file, or a folder as a `.tar.gz`.
     ContainerDownload { container_id: String, path: String },
     /// `POST /api/volumes/{name}/files`
     VolumeUpload {
@@ -81,7 +81,7 @@ pub(crate) enum Operation {
         #[serde(default)]
         replace: bool,
     },
-    /// `GET /api/volumes/{name}/files/download`
+    /// `GET /api/volumes/{name}/files/download`: a file, or a folder as a `.tar.gz`.
     VolumeDownload { volume: String, path: String },
     /// `POST /api/volumes/import`: a `.tar.gz` or `.tar` into a new volume.
     VolumeImport { name: String },
@@ -354,6 +354,7 @@ async fn run(
             state,
             Path(container_id),
             Query(files::DownloadQuery { path }),
+            link,
         )
         .await
         .into_response(),
@@ -373,11 +374,14 @@ async fn run(
                 .await
                 .into_response()
         }
-        Operation::VolumeDownload { volume, path } => {
-            volumes::download(state, Path(volume), Query(volumes::DownloadQuery { path }))
-                .await
-                .into_response()
-        }
+        Operation::VolumeDownload { volume, path } => volumes::download(
+            state,
+            Path(volume),
+            Query(volumes::DownloadQuery { path }),
+            link,
+        )
+        .await
+        .into_response(),
         Operation::VolumeImport { name } => {
             let request = volumes::Import {
                 name,

@@ -80,7 +80,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/containers/{id}/files/mkdir` | Create a folder with `path` in an existing parent. |
 | POST | `/api/containers/{id}/files/move` | Rename or move within the same volume. |
 | POST | `/api/containers/{id}/files/delete` | Delete a file, symlink or directory. |
-| GET | `/api/containers/{id}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
+| GET | `/api/containers/{id}/files/download` | Stream a file with `path`, limited by `UPLOAD_MAX_MB`, or a folder as a `.tar.gz` (`folder-download` job). |
 | POST | `/api/containers/{id}/files` | Stream a binary upload. |
 | GET | `/api/images` | Every [image](#images): the catalog images first, then script builds, snapshots and imports, with ancestry and availability. A script build carries `build` with its `base_image`, `internet` and, when [merged from templates](#merged-templates), its `parts` without their scripts, a compose its parameters without the scripts, an [icon](#image-icons) its version and an image built from templates their ids in `template_ids`. |
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
@@ -103,7 +103,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/volumes/{name}/files/mkdir` | Create a folder. |
 | POST | `/api/volumes/{name}/files/move` | Rename or move within the volume. |
 | POST | `/api/volumes/{name}/files/delete` | Delete a file, symlink or folder. |
-| GET | `/api/volumes/{name}/files/download` | Stream a file with `path`; limited by `UPLOAD_MAX_MB`. |
+| GET | `/api/volumes/{name}/files/download` | Stream a file with `path`, limited by `UPLOAD_MAX_MB`, or a folder as a `.tar.gz` (`folder-download` job). |
 | POST | `/api/volumes/{name}/files` | Stream a binary upload. |
 | GET | `/api/volumes/{name}/archive` | Download a volume's files as a `.tar.gz`; the transfer is recorded as a job. |
 | POST | `/api/volumes/import` | Stream a `.tar.gz` or `.tar` with `name` and optional `size` into a new volume; returns a job. |
@@ -386,6 +386,13 @@ Writes are atomic, create missing parent directories and use mode 0600. Existing
 
 `POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/mkdir` with `{"path":"/home/desktop/project/assets"}` creates one folder in an existing parent and returns 409 when the name exists. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks and files larger than `UPLOAD_MAX_MB`. Responses that describe a saved file, such as `download_file`, `export_artifacts` and saved screenshots, include this route as a root-relative `download_url` for the dashboard session.
 
+The same route downloads a folder: its path answers with a gzip-compressed tar named after the folder, such as `project.tar.gz`, that holds the folder under its own name. tar runs in the desktop as the desktop user while the archive streams, so its size is not known up front and `UPLOAD_MAX_MB` does not apply. No symlink on the path is followed, and symlinks inside the folder are archived as links. The transfer is a `folder-download` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent; it shares the two archive transfer slots with image and volume archives. A file the desktop user may not read fails the download instead of leaving the archive incomplete, and a file that changes while it is read is archived as it was read and noted in the job log. `/` itself is refused; download the folders in it.
+
+```bash
+curl --cookie bilskirnir.cookies --remote-header-name --remote-name \
+  'http://localhost:8080/api/containers/CONTAINER_ID/files/download?path=/home/desktop/project'
+```
+
 For larger uploads, POST the raw file body with `Content-Type: application/octet-stream` to `/api/containers/{id}/files`. Supply `destination`, `name`, `size` and optional `replace` as query parameters:
 
 ```bash
@@ -407,6 +414,8 @@ The `/api/volumes/{name}/files/...` routes work on a named volume without a cont
 Each request starts a short-lived helper container from the manager's own image, so it needs `MANAGER_CONTAINER`. The helper mounts only that volume, has no network, a read-only root and no capabilities beyond the ones the operation needs, never gets the Docker socket and is removed when the request ends. Files are read and written as the desktop user, UID/GID 1001, so the permissions a desktop would meet apply: a `403` names a file that user may not change. Docker creates a volume's root owned by root; a write to a volume that is still empty first gives its root to the desktop user, as mounting it over a desktop folder would. A volume that holds files keeps its owners.
 
 A missing volume returns 404 instead of being created. The manager's own volumes, such as its data volume, are refused with 403. Writes to one volume run one at a time; reads do not wait for them.
+
+A folder of a volume downloads as a `.tar.gz` like a container's. Its path is checked as the desktop user, then the archive is read the way a [volume export](#volume-archives) reads, as root on a read-only mount, so files the desktop user may not read are included. `GET /api/volumes/{name}/archive` downloads the whole volume.
 
 ## Volume archives
 

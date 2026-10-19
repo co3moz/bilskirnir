@@ -9,6 +9,7 @@ import {
   RiMicOffLine,
   RiFullscreenExitLine,
   RiRestartLine,
+  RiDownloadLine,
   RiUploadLine,
   RiVolumeUpLine,
   RiVolumeMuteLine,
@@ -209,6 +210,11 @@ export function DesktopPage({ id }: { id: string }) {
                 label={t("uploads.title")}
                 icon={<RiUploadLine />}
                 onClick={() => openDialog({ kind: "upload", id })}
+              />
+              <ToolButton
+                label={t("downloads.title")}
+                icon={<RiDownloadLine />}
+                onClick={() => openDialog({ kind: "download", id })}
               />
               <ToolButton
                 label={t("desktop.clipboard")}

@@ -3,16 +3,18 @@ import assert from "node:assert/strict"
 
 import type { ContainerSpec, Volume } from "../web/src/lib/types"
 import {
+  baseName,
   entryNameError,
+  fileDownloadUrl,
   joinPath,
   mountableVolumes,
   ownedVolumes,
   parentPath,
   pathCrumbs,
   sortEntries,
+  volumeApi,
   volumeArchiveName,
   volumeArchiveUrl,
-  volumeDownloadUrl,
   volumeHolders,
   volumeUsers,
   type VolumeEntry,
@@ -191,7 +193,15 @@ test("a volume any container mounts names each of those containers once", () => 
 })
 
 test("downloads name the volume and the path in the query", () => {
-  const url = new URL(volumeDownloadUrl("my volume", "/a b/c&d.txt"), "http://localhost")
+  const url = new URL(fileDownloadUrl(volumeApi("my volume"), "/a b/c&d.txt"), "http://localhost")
   assert.equal(url.pathname, "/api/volumes/my%20volume/files/download")
   assert.equal(url.searchParams.get("path"), "/a b/c&d.txt")
+})
+
+test("a container's files and folders download from the same route", () => {
+  const url = new URL(fileDownloadUrl("containers/abc", "/home/desktop/My #1"), "http://localhost")
+  assert.equal(url.pathname, "/api/containers/abc/files/download")
+  assert.equal(url.searchParams.get("path"), "/home/desktop/My #1")
+  // The download is named after the last part, as the manager names its archive.
+  assert.equal(baseName("/home/desktop/My #1"), "My #1")
 })

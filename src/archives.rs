@@ -586,7 +586,8 @@ pub(crate) fn arriving(size: Option<u64>) -> String {
     }
 }
 
-/// Image and volume archives share two transfer slots: each holds a Docker save, load or tar.
+/// Image, volume and folder archives share two transfer slots: each holds a Docker save, load
+/// or tar.
 pub(crate) fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
     app.archives.clone().try_acquire_owned().map_err(|_| {
         Error(
@@ -594,6 +595,66 @@ pub(crate) fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
             "Two archive transfers are already running. Try again when one finishes.".into(),
         )
     })
+}
+
+/// Pass on the archive tar writes to `child`'s stdout as a download, with the bytes sent as the
+/// job's progress, and return their count once tar has ended well. tar ends with 1 when a file
+/// changed while it was read, as one in use can; the archive is complete and holds the file as it
+/// was read, so that is only logged. A download that stops early or a session that ends kills
+/// `child`; the caller removes any container it started.
+pub(crate) async fn send_archive(
+    app: &App,
+    job_id: &str,
+    child: &mut Child,
+    body: &mpsc::Sender<std::io::Result<Bytes>>,
+    token: auth::Session,
+) -> anyhow::Result<u64> {
+    app.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
+    let mut stdout = child.stdout.take().context("Missing tar output")?;
+    let errors = tokio::spawn(process::read_limited(
+        child.stderr.take().context("Missing tar errors")?,
+        8192,
+        Overflow::Tail,
+    ));
+    let revoked = app.session_revoked(token);
+    tokio::pin!(revoked);
+    let mut buffer = vec![0; READ_SIZE];
+    let (mut sent, mut reported) = (0u64, Instant::now());
+    let streamed = async {
+        loop {
+            let read = tokio::select! {
+                read = stdout.read(&mut buffer) => read.context("Could not read the archive")?,
+                _ = &mut revoked => bail!("Session expired. Sign in again."),
+                _ = body.closed() => bail!("The download was cancelled before it finished"),
+            };
+            if read == 0 {
+                return anyhow::Ok(());
+            }
+            sent += read as u64;
+            body.send(Ok(Bytes::copy_from_slice(&buffer[..read])))
+                .await
+                .map_err(|_| anyhow!("The download was cancelled before it finished"))?;
+            if reported.elapsed() >= PROGRESS_INTERVAL {
+                app.set_progress(job_id, Some(json!({"transfer": "export", "current": sent})))?;
+                reported = Instant::now();
+            }
+        }
+    }
+    .await;
+    if let Err(error) = streamed {
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+        return Err(error);
+    }
+    let status = child.wait().await?;
+    let errors = String::from_utf8_lossy(&errors.await??).trim().to_owned();
+    match status.code() {
+        Some(1) if !errors.is_empty() => app.append_log(job_id, &errors)?,
+        Some(0 | 1) => {}
+        _ if errors.is_empty() => bail!("tar ended with {status}"),
+        _ => bail!("{errors}"),
+    }
+    Ok(sent)
 }
 
 async fn send(

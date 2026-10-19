@@ -35,6 +35,7 @@ import {
 import { formatNumber, t } from "@/lib/i18n"
 import { queryClient } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
+import { fileSize } from "@/lib/uploads"
 import {
   joinPath,
   parentPath,
@@ -67,24 +68,30 @@ const kindIcons: Record<Exclude<QuickFolder["kind"], "home">, React.ReactNode> =
 
 const GROUPS: QuickFolder["kind"][] = ["home", "compose", "volume", "recent"]
 
+type Purpose =
+  | { onChoose: (path: string) => void; onDownload?: undefined }
+  /** `entry` is the file or folder in the list, or none for the open folder. */
+  | { onDownload: (path: string, entry?: VolumeEntry) => void; onChoose?: undefined }
+
 /**
- * Browses a running container's folders as the desktop user and picks one for an upload: the
- * places beside the list, an address that can be typed, and a new folder where the current one
- * allows it. Folders the manager would refuse can be opened but not chosen.
+ * Browses a running container's folders as the desktop user: the places beside the list and an
+ * address that can be typed. With `onChoose` it picks a folder for an upload, offering a new
+ * folder where the current one allows it; folders the manager would refuse can be opened but not
+ * chosen. With `onDownload` it offers every file and folder, and the open folder, for download.
  */
 export function FolderBrowser({
   container,
   initial,
   recent,
   onChoose,
+  onDownload,
   onCancel,
 }: {
   container: ContainerItem
   initial: string
   recent: string[]
-  onChoose: (path: string) => void
   onCancel: () => void
-}) {
+} & Purpose) {
   const start = canonicalFolder(initial) ? initial : HOME
   const [path, setPath] = React.useState(start)
   const [address, setAddress] = React.useState(start)
@@ -102,10 +109,15 @@ export function FolderBrowser({
   })
   const places = quickFolders(container, recent)
   const failed = (listing.error as Error | null)?.message ?? ""
-  const failure = failed ? listingProblem(failed) : ""
+  const failure = !failed
+    ? ""
+    : onDownload && folderMissing(failed)
+      ? t("folders.notFound")
+      : listingProblem(failed)
   // A folder that is missing is created by the upload; a file or a symlink on the path is not.
-  const problem =
-    uploadProblem(container, path) || (failed && !folderMissing(failed) ? failure : "")
+  const problem = onDownload
+    ? failure
+    : uploadProblem(container, path) || (failed && !folderMissing(failed) ? failure : "")
 
   const open = (target: string) => {
     if (!canonicalFolder(target)) {
@@ -251,14 +263,47 @@ export function FolderBrowser({
               <ul className="divide-y">
                 {entries.map((entry) =>
                   entry.type === "directory" ? (
-                    <li key={entry.name}>
+                    <li key={entry.name} className="flex items-center">
                       <button
                         type="button"
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50"
+                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50"
                         onClick={() => open(joinPath(path, entry.name))}
                       >
                         {entryIcons.directory}
                         <span className="truncate font-mono">{entry.name}</span>
+                      </button>
+                      {onDownload && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="mr-1.5 shrink-0"
+                          aria-label={t("downloads.archiveOf", { name: entry.name })}
+                          title={t("downloads.archiveOf", { name: entry.name })}
+                          onClick={() => onDownload(joinPath(path, entry.name), entry)}
+                        >
+                          <RiDownloadLine />
+                        </Button>
+                      )}
+                    </li>
+                  ) : onDownload && entry.type === "file" ? (
+                    <li key={entry.name}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50"
+                        aria-label={t("downloads.fileOf", { name: entry.name })}
+                        title={t("downloads.fileOf", { name: entry.name })}
+                        onClick={() => onDownload(joinPath(path, entry.name), entry)}
+                      >
+                        {entryIcons.file}
+                        <span className="min-w-0 flex-1 truncate font-mono">{entry.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {fileSize(entry.size)}
+                        </span>
+                        <RiDownloadLine
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden
+                        />
                       </button>
                     </li>
                   ) : (
@@ -292,27 +337,44 @@ export function FolderBrowser({
       </div>
       <FieldError>{error}</FieldError>
       <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
-        {problem || t("folders.target", { path })}
+        {problem || (onDownload ? t("downloads.hint") : t("folders.target", { path }))}
       </p>
-      <DialogFooter className="sm:justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy || creating || !!listing.error || listing.isPending}
-          onClick={() => setCreating(true)}
-        >
-          <RiFolderAddLine data-icon="inline-start" />
-          {t("files.newFolder")}
-        </Button>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+      {onDownload ? (
+        <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            {t("common.cancel")}
+            {t("common.close")}
           </Button>
-          <Button type="button" disabled={!!problem} onClick={() => onChoose(path)}>
-            {t("folders.choose")}
+          <Button
+            type="button"
+            // The root is no folder of its own to archive; its folders are.
+            disabled={path === "/" || !!problem || listing.isPending}
+            onClick={() => onDownload(path)}
+          >
+            <RiDownloadLine data-icon="inline-start" />
+            {t("downloads.folder")}
           </Button>
-        </div>
-      </DialogFooter>
+        </DialogFooter>
+      ) : (
+        <DialogFooter className="sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || creating || !!listing.error || listing.isPending}
+            onClick={() => setCreating(true)}
+          >
+            <RiFolderAddLine data-icon="inline-start" />
+            {t("files.newFolder")}
+          </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="button" disabled={!!problem} onClick={() => onChoose?.(path)}>
+              {t("folders.choose")}
+            </Button>
+          </div>
+        </DialogFooter>
+      )}
     </div>
   )
 }

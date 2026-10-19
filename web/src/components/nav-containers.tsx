@@ -3,6 +3,7 @@ import {
   RiInformationLine,
   RiComputerLine,
   RiMoreLine,
+  RiDownloadLine,
   RiUploadLine,
 } from "@remixicon/react"
 
@@ -84,6 +85,15 @@ export function NavContainers() {
                 >
                   <RiUploadLine />
                   {t("uploads.title")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    close()
+                    openDialog({ kind: "download", id: container.id })
+                  }}
+                >
+                  <RiDownloadLine />
+                  {t("downloads.title")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {

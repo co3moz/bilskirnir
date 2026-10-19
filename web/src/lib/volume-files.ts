@@ -97,8 +97,12 @@ export const sortEntries = (items: VolumeEntry[]) =>
 
 export const volumeApi = (volume: string) => `volumes/${encodeURIComponent(volume)}`
 
-export const volumeDownloadUrl = (volume: string, path: string) =>
-  `/api/${volumeApi(volume)}/files/download?${new URLSearchParams({ path })}`
+/** The download of a container's or a volume's file or folder; `base` is its API path. */
+export const fileDownloadUrl = (base: string, path: string) =>
+  `/api/${base}/files/download?${new URLSearchParams({ path })}`
+
+/** The last part of a path, which names its download. */
+export const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 
 export const volumeArchiveUrl = (volume: string) => `/api/${volumeApi(volume)}/archive`
 

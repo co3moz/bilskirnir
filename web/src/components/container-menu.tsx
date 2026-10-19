@@ -10,6 +10,7 @@ import {
   RiSettings3Line,
   RiStethoscopeLine,
   RiDeleteBinLine,
+  RiDownloadLine,
   RiUploadLine,
 } from "@remixicon/react"
 
@@ -74,6 +75,10 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
         <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "upload", id })}>
           <RiUploadLine />
           {t("uploads.title")}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "download", id })}>
+          <RiDownloadLine />
+          {t("downloads.title")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", id })}>
           <RiSettings3Line />
