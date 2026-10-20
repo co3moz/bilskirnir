@@ -1231,7 +1231,7 @@ fn step_schema() -> Value {
             }), &["name"])},
             "script":{"type":"string","minLength":1,"maxLength":1000000,"description":"Bash script run once the new desktop is ready, with fail-on-error and stdin closed."},
             "root":{"type":"boolean","default":false,"description":"Run as root instead of the desktop user."},
-            "timeout_seconds":{"type":"integer","minimum":1,"maximum":3500,"default":600}
+            "timeout_seconds":{"type":"integer","minimum":1,"maximum":crate::compose::TIMEOUT_LIMIT,"default":600}
         }),
         &["script"],
     )

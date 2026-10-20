@@ -45,6 +45,12 @@ const STEP_LIMIT: usize = 8;
 const SCRIPT_LIMIT: usize = 1_000_000;
 /// How long a new desktop may take to report ready before its setup is given up.
 const READY_LIMIT: Duration = Duration::from_secs(300);
+/// The longest `timeout_seconds` a step may ask for: two hours, for setups that download large
+/// files such as language models or editors.
+pub(crate) const TIMEOUT_LIMIT: u64 = 7200;
+/// What a step's `docker exec` gets beyond the script's own timeout, for the runner to start and
+/// to stop the script and report it when the timeout is reached.
+const RUNNER_GRACE: Duration = Duration::from_secs(120);
 
 /// The steps a new container's setup runs, in order. One step that names nothing is written
 /// as composes were before steps: its fields at the top. Several are written as `steps`.
@@ -133,8 +139,8 @@ impl Step {
         if self.name.chars().count() > 100 || self.name.contains(['\n', '\r']) {
             bail!("A step's name is one line of at most 100 characters");
         }
-        if !(1..=3500).contains(&self.timeout_seconds) {
-            bail!("timeout_seconds must be between 1 and 3500");
+        if !(1..=TIMEOUT_LIMIT).contains(&self.timeout_seconds) {
+            bail!("timeout_seconds must be between 1 and {TIMEOUT_LIMIT}");
         }
         if self.parameters.len() > PARAMETER_LIMIT {
             bail!("A compose has at most {PARAMETER_LIMIT} parameters");
@@ -662,7 +668,13 @@ impl App {
                 RUNNER.into(),
             ]);
             let input = serde_json::to_vec(&pinned.request(index))?;
-            let outcome = self.docker_logged_input(job_id, &args, Some(input)).await;
+            // The runner stops the script at its timeout; Docker's own limit only catches a
+            // runner that does not, so it stays at least the hour every logged command gets.
+            let limit = (Duration::from_secs(step.timeout_seconds) + RUNNER_GRACE)
+                .max(crate::docker::LOGGED_LIMIT);
+            let outcome = self
+                .docker_logged_within(job_id, &args, Some(input), limit)
+                .await;
             self.set_step(
                 &env.id,
                 index,

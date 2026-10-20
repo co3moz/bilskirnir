@@ -75,7 +75,8 @@ fn a_compose_needs_a_script_and_safe_parameter_names() {
     assert!(with(&|t| t.steps[0].script = " \n".into()).is_err());
     assert!(with(&|t| t.steps[0].script = "echo \0".into()).is_err());
     assert!(with(&|t| t.steps[0].timeout_seconds = 0).is_err());
-    assert!(with(&|t| t.steps[0].timeout_seconds = 3501).is_err());
+    with(&|t| t.steps[0].timeout_seconds = 7200).unwrap();
+    assert!(with(&|t| t.steps[0].timeout_seconds = 7201).is_err());
     assert!(
         with(&|t| t.steps[0].parameters = (0..33).map(|i| parameter(&format!("P{i}"))).collect())
             .is_err()

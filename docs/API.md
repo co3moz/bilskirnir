@@ -332,7 +332,7 @@ A saved image can carry a compose: parameters that a new container from it asks 
 | `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `description`, `type`, `display`, `required`, `default` and the fields of their type, below. |
 | `script` | Required | Bash script of at most 1,000,000 bytes, run with fail-on-error and standard input closed. |
 | `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
-| `timeout_seconds` | `600` | From 1 to 3500 seconds. |
+| `timeout_seconds` | `600` | From 1 to 7200 seconds, two hours, for setups that download large files. |
 
 ### Steps
 
