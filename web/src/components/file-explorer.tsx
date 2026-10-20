@@ -597,6 +597,7 @@ export function FileExplorer({
                       <DropdownMenuContent align="end" className="w-auto">
                         {entry.type === "file" && (
                           <DropdownMenuItem
+                            tone="transfer"
                             onSelect={() =>
                               downloadFile(base, joinPath(path, entry.name), entry.size, limit)
                             }
@@ -607,13 +608,17 @@ export function FileExplorer({
                         )}
                         {entry.type === "directory" && (
                           <DropdownMenuItem
+                            tone="transfer"
                             onSelect={() => downloadFolder(base, joinPath(path, entry.name))}
                           >
                             <RiDownloadLine />
                             {t("files.downloadArchive")}
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onSelect={() => setPending({ kind: "rename", entry })}>
+                        <DropdownMenuItem
+                          tone="edit"
+                          onSelect={() => setPending({ kind: "rename", entry })}
+                        >
                           <RiPencilLine />
                           {t("files.rename")}
                         </DropdownMenuItem>

@@ -45,50 +45,68 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onSelect={() => openDialog({ kind: "details", id })}>
+        <DropdownMenuItem tone="info" onSelect={() => openDialog({ kind: "details", id })}>
           <RiInformationLine />
           {t("containers.details")}
         </DropdownMenuItem>
         {needsRetry(item) && (
-          <DropdownMenuItem onSelect={() => attempt(() => retrySetup(id))}>
+          <DropdownMenuItem tone="warning" onSelect={() => attempt(() => retrySetup(id))}>
             <RiResetLeftLine />
             {t("job.retry")}
           </DropdownMenuItem>
         )}
         {!running && (
-          <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "start"))}>
+          <DropdownMenuItem
+            tone="success"
+            onSelect={() => attempt(() => containerAction(id, "start"))}
+          >
             <RiPlayCircleLine />
             {t("containers.start")}
           </DropdownMenuItem>
         )}
         {running && (
-          <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "stop"))}>
+          <DropdownMenuItem
+            tone="warning"
+            onSelect={() => attempt(() => containerAction(id, "stop"))}
+          >
             <RiStopCircleLine />
             {t("containers.stop")}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => attempt(() => containerAction(id, "restart"))}>
+        <DropdownMenuItem
+          tone="success"
+          onSelect={() => attempt(() => containerAction(id, "restart"))}
+        >
           <RiRestartLine />
           {t("containers.restart")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "upload", id })}>
+        <DropdownMenuItem
+          tone="transfer"
+          disabled={!running}
+          onSelect={() => openDialog({ kind: "upload", id })}
+        >
           <RiUploadLine />
           {t("uploads.title")}
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={!running} onSelect={() => openDialog({ kind: "download", id })}>
+        <DropdownMenuItem
+          tone="transfer"
+          disabled={!running}
+          onSelect={() => openDialog({ kind: "download", id })}
+        >
           <RiDownloadLine />
           {t("downloads.title")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", id })}>
+        <DropdownMenuItem tone="edit" onSelect={() => openDialog({ kind: "settings", id })}>
           <RiSettings3Line />
           {t("containers.settings")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openDialog({ kind: "snapshot", id })}>
+        <DropdownMenuItem tone="violet" onSelect={() => openDialog({ kind: "snapshot", id })}>
           <RiCameraLine />
           {t("containers.snapshot")}
         </DropdownMenuItem>
         <DropdownMenuItem
+          tone="info"
           onSelect={() =>
             attempt(() =>
               showLog(t("containers.logsOf", { name: spec.name }), `containers/${id}/logs`)
@@ -99,6 +117,7 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
           {t("containers.logs")}
         </DropdownMenuItem>
         <DropdownMenuItem
+          tone="info"
           onSelect={() =>
             attempt(() =>
               showLog(
