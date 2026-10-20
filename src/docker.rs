@@ -253,8 +253,18 @@ impl App {
             bail!("Manager label does not match");
         }
         let existing = self.optional_inspect("container", &env.container).await?;
-        // A container recreated from the source image lacks what the compose setup changed.
-        if env.working_image.is_none() && existing.is_none() {
+        if existing.is_none() && env.working_image.is_none() {
+            // A settings change set the container aside before it recorded the commit, so that
+            // container may hold the only copy of the files; never replace it with an empty one.
+            let previous = format!("{}-previous", env.container);
+            if self
+                .optional_inspect("container", &previous)
+                .await?
+                .is_some()
+            {
+                bail!("{previous} {}", crate::reconfigure::PREVIOUS_LEFT);
+            }
+            // A container recreated from the source image lacks what the compose setup changed.
             crate::compose::setup_again(&mut env);
         }
         crate::identity::adopt(&mut env, existing.as_ref());
@@ -263,6 +273,11 @@ impl App {
         env.last_error = result.as_ref().err().map(|e| format!("{e:#}"));
         self.db.put(CONTAINERS, id, &env)?;
         result?;
+        // The container stands, so one a settings change set aside has finished its part. With
+        // the commit on record, the files are in the container created from it.
+        if env.working_image.is_some() {
+            self.remove_previous(&env, job_id).await?;
+        }
         // Also a setup that failed or was interrupted earlier.
         self.run_setup(id, job_id).await?;
         Ok(json!({"container_id":id}))
@@ -544,6 +559,7 @@ impl App {
         } else {
             self.append_log(job_id, "Desktop container was already absent.")?;
         }
+        self.remove_previous(env, job_id).await?;
         for info in networks {
             let id = info["Id"].as_str().context("Missing network ID")?;
             let role = if info["Internal"] == true {
@@ -657,6 +673,7 @@ impl App {
             self.append_log(job_id, "Desktop container was already absent.")?;
         }
         // A reset starts over from the source image, so files carried across settings changes go too.
+        self.remove_previous(&env, job_id).await?;
         if let Some(image) = env.working_image.take() {
             self.release_working_image(&image, job_id).await?;
         }

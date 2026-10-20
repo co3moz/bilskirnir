@@ -14,6 +14,9 @@ use std::{
 /// A job's result for a caller that waits for it: the value it returned, or its error message.
 pub(crate) type Outcome = tokio::sync::oneshot::Receiver<std::result::Result<Value, String>>;
 
+/// How many jobs are kept once finished, newest first; the dashboard lists the latest 100.
+pub(crate) const KEPT_JOBS: usize = 500;
+
 impl App {
     pub fn resource_lock(&self, resource: &str) -> Arc<tokio::sync::Mutex<()>> {
         if resource == "global" {
@@ -120,6 +123,9 @@ where
         job.trim_log();
         if let Err(e) = app.db.put("job", &task_id, &job) {
             tracing::error!("Could not save job result: {e}");
+        }
+        if let Err(e) = app.db.prune_jobs(KEPT_JOBS) {
+            tracing::debug!("Job history: {e:#}");
         }
         // Nobody may be waiting; most callers return the job ID at once.
         let _ = done.send(reported);

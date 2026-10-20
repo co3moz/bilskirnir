@@ -4,7 +4,7 @@ import { api } from "./api"
 import { archiveUrl } from "./archives"
 import { formatBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
-import { t } from "./i18n"
+import { plural, t } from "./i18n"
 import { refreshAll } from "./queries"
 import { navigate } from "./route"
 import type { BuildConfig, ImageItem, JobStarted } from "./types"
@@ -27,7 +27,7 @@ export async function runJobs(requests: { path: string; body?: unknown }[]) {
   )
   const failed = results.filter((result) => result.status === "rejected")
   const queued = results.length - failed.length
-  if (queued) toast.success(queued === 1 ? "1 job queued." : `${queued} jobs queued.`)
+  if (queued) toast.success(plural(queued, { one: "jobs.queued.one", other: "jobs.queued.other" }))
   for (const message of new Set(failed.map((result) => (result.reason as Error).message)))
     toast.error(message)
   void refreshAll()
@@ -72,7 +72,7 @@ export async function copyText(text: string) {
 export async function exportBuildConfig(image: Pick<ImageItem, "id" | "name">) {
   const text = formatBuildConfig(await api<BuildConfig>(`images/${image.id}/config`))
   if (await copyText(text)) toast.success(t("images.configCopied", { name: image.name }))
-  else openDialog({ kind: "log", title: `${image.name} configuration`, text })
+  else openDialog({ kind: "log", title: t("images.configuration", { name: image.name }), text })
 }
 
 /** Runs an action from a button and reports a failure instead of throwing it away. */

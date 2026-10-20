@@ -8,9 +8,9 @@ use rmcp::{
     ClientHandler, RoleClient, ServiceExt,
     model::{
         CallToolRequestParams, CallToolResult, ClientCapabilities, ClientConfig, Implementation,
-        JsonObject, ProtocolVersion, Tool,
+        JsonObject, PaginatedRequestParams, ProtocolVersion, Tool,
     },
-    service::{NotificationContext, RunningService},
+    service::{NotificationContext, Peer, RunningService},
 };
 use std::{
     collections::HashMap,
@@ -259,12 +259,53 @@ pub(super) async fn read_tools(
     record: &ServerRecord,
 ) -> Result<Vec<Tool>> {
     let connection = connect(app, container, record).await?;
-    let tools = tokio::time::timeout(CONNECT_LIMIT, connection.service.list_all_tools())
+    let tools = tokio::time::timeout(CONNECT_LIMIT, list_tools(&connection.service))
         .await
-        .context("The server did not list its tools in 2 minutes")?
-        .context("The server could not list its tools")?;
+        .context("The server did not list its tools in 2 minutes")?;
     let _ = connection.service.cancel().await;
-    Ok(tools)
+    tools
+}
+
+/// Most tools a desktop server may list; an endpoint carries them all in every `tools/list`.
+pub(super) const MAX_TOOLS: usize = 256;
+/// Largest tool list, as JSON, a desktop server may give.
+pub(super) const MAX_TOOLS_BYTES: usize = 1 << 20;
+/// Most pages a tool list is read in; a server that keeps handing out cursors is not read on.
+const MAX_TOOL_PAGES: usize = 16;
+
+/// Read a server's tools page by page, within what an endpoint can carry and keep. The server
+/// runs inside the desktop, so its answers are bounded here, not trusted.
+pub(super) async fn list_tools(peer: &Peer<RoleClient>) -> Result<Vec<Tool>> {
+    let mut tools = Vec::new();
+    let mut cursor = None;
+    for _ in 0..MAX_TOOL_PAGES {
+        let page = peer
+            .list_tools(Some(PaginatedRequestParams::default().with_cursor(cursor)))
+            .await
+            .context("The server could not list its tools")?;
+        tools.extend(page.tools);
+        check_tool_list(&tools)?;
+        cursor = page.next_cursor;
+        if cursor.is_none() {
+            return Ok(tools);
+        }
+    }
+    bail!("The server lists its tools in more than {MAX_TOOL_PAGES} pages")
+}
+
+/// Refuse a tool list an endpoint could not carry.
+pub(super) fn check_tool_list(tools: &[Tool]) -> Result<()> {
+    if tools.len() > MAX_TOOLS {
+        bail!("The server lists more than {MAX_TOOLS} tools");
+    }
+    let bytes = serde_json::to_vec(tools).context("The tool list is not JSON")?;
+    if bytes.len() > MAX_TOOLS_BYTES {
+        bail!(
+            "The server's tool list is larger than {} MiB",
+            MAX_TOOLS_BYTES >> 20
+        );
+    }
+    Ok(())
 }
 
 type Key = (String, String, String);

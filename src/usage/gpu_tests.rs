@@ -60,7 +60,7 @@ fn the_helper_gets_the_gpu_and_nothing_else() {
     let text = args.join(" ");
     for expected in [
         "run --rm --interactive --name bilskirnir-usage-gpu-1",
-        "--network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 65534:65534",
+        "--log-driver none --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 65534:65534",
         "--device /dev/dxg --mount type=bind,src=/usr/lib/wsl,dst=/usr/lib/wsl,readonly",
         "--entrypoint sh sha256:manager -c",
     ] {

@@ -97,6 +97,8 @@ pub(crate) fn helper_args(route: Route, image: &str, name: &str) -> Vec<String> 
         name,
         "--label",
         "bilskirnir.usage-helper=true",
+        "--log-driver",
+        "none",
         "--network",
         "none",
         "--read-only",

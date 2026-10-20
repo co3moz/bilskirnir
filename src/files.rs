@@ -235,11 +235,12 @@ impl MoveFile {
     }
 }
 impl DeleteFile {
-    pub fn validate(&self, spec: &crate::model::ContainerSpec) -> anyhow::Result<()> {
+    /// `mounts` are all the container mounts, its settings' and its compose's.
+    pub fn validate(&self, mounts: &[crate::model::Mount]) -> anyhow::Result<()> {
         split_path(&self.path)?;
         if self.path[1..].split('/').count() < 2
             || self.path == "/home/desktop"
-            || spec.mounts.iter().any(|mount| mount.target == self.path)
+            || mounts.iter().any(|mount| mount.target == self.path)
         {
             bail!(
                 "Refusing to delete a top-level directory, the desktop home or a mounted volume's root"
@@ -315,7 +316,7 @@ pub async fn move_file(app: &App, id: &str, body: &MoveFile) -> Result<Value> {
 }
 pub async fn delete_file(app: &App, id: &str, body: &DeleteFile) -> Result<Value> {
     let env = app.container(id)?;
-    body.validate(&env.spec)?;
+    body.validate(&env.mounts())?;
     operate(
         app,
         id,

@@ -21,6 +21,8 @@ use tokio::{
 pub const MAX_WAIT_MS: u64 = 10_000;
 /// Combined waits, holds and gesture delays allowed in one request.
 pub const MAX_TOTAL_DELAY_MS: u64 = 30_000;
+/// How long an input request waits for the container before answering that it is busy.
+const LOCK_WAIT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, Default, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -656,14 +658,25 @@ async fn pointer_position(app: &App, env: &crate::model::Container) -> anyhow::R
 }
 /// Send actions through a shared VNC connection; used by the HTTP route, MCP and act-and-observe.
 pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Value> {
+    // A script or an upload can hold the container for an hour. Waiting for it with one of the
+    // four permits taken would leave the other containers without input, so the wait is bounded
+    // and comes first.
+    let lock = app.resource_lock(&format!("container:{id}"));
+    let _guard = tokio::time::timeout(LOCK_WAIT, lock.lock())
+        .await
+        .map_err(|_| {
+            Error(
+                StatusCode::CONFLICT,
+                "Another operation on the container is still running; retry when it has finished"
+                    .into(),
+            )
+        })?;
     let _permit = app.desktop_inputs.try_acquire().map_err(|_| {
         Error(
             StatusCode::TOO_MANY_REQUESTS,
             "Four desktop input requests are already active".into(),
         )
     })?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
     let env = app.container(id)?;
     let address = app.address(&env).await?;
     let start = if needs_start_position(actions) {
@@ -705,3 +718,7 @@ pub async fn input(
 ) -> Result<Json<Value>> {
     Ok(Json(perform(&app, &id, &body.actions).await?))
 }
+
+#[cfg(test)]
+#[path = "desktop_input_tests.rs"]
+mod tests;
