@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { href, parseRoute } from "../web/src/lib/route"
+import { href, parseRoute } from "../src/lib/route"
 
 test("page links survive a reload and unknown pages fall back to the dashboard", () => {
   for (const page of [

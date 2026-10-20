@@ -2,8 +2,8 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import { compressedCopies, imageName, stepGroups } from "../web/src/lib/layers"
-import type { ImageStep } from "../web/src/lib/types"
+import { compressedCopies, imageName, stepGroups } from "../src/lib/layers"
+import type { ImageStep } from "../src/lib/types"
 
 const step = (overrides: Partial<ImageStep>): ImageStep => ({
   instruction: "RUN true",
@@ -68,7 +68,7 @@ test("compressed copies are what Docker counts beyond the unpacked layers", () =
 })
 
 test("the layers route the image drawer reads is served", () => {
-  const routes = readFileSync(new URL("../src/main.rs", import.meta.url), "utf8")
+  const routes = readFileSync(new URL("../../src/main.rs", import.meta.url), "utf8")
   assert.ok(
     routes.includes('.route("/api/images/{id}/layers",'),
     "src/main.rs must serve /api/images/{id}/layers"

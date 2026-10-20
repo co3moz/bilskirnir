@@ -2,9 +2,9 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import { currentStage, jobStages } from "../web/src/lib/format"
-import type { JobStage, JobStatus } from "../web/src/lib/types"
-import { en } from "../web/src/locales/en"
+import { currentStage, jobStages } from "../src/lib/format"
+import type { JobStage, JobStatus } from "../src/lib/types"
+import { en } from "../src/locales/en"
 
 const plan = (...times: [number?, number?][]): JobStage[] =>
   ["base", "script", "layer", "image", "cleanup"].map((name, index) => {
@@ -84,7 +84,7 @@ test("a settings change of a stopped container skips stopping it while it commit
 // interface, the same words its log uses, and words for a stage the manager no longer reports
 // are left over.
 test("the interface names exactly the stages the manager reports", () => {
-  const source = readFileSync(new URL("../src/stages.rs", import.meta.url), "utf8")
+  const source = readFileSync(new URL("../../src/stages.rs", import.meta.url), "utf8")
   const list = (name: string) => {
     const items = new RegExp(String.raw`const ${name}\b[^=]*=\s*\[([\s\S]*?)\];`).exec(source)?.[1]
     assert.ok(items, `src/stages.rs must declare ${name}`)

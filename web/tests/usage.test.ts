@@ -14,7 +14,7 @@ import {
   type UsageReport,
   type UsageSample,
   type UsageSeries,
-} from "../web/src/lib/usage"
+} from "../src/lib/usage"
 
 const sample = (t: number, cpu = 1): UsageSample => ({
   t,
@@ -192,11 +192,11 @@ test("the longest running containers come first", () => {
 })
 
 test("the routes the dashboard reads are served and every series color is defined", () => {
-  const routes = readFileSync(new URL("../src/main.rs", import.meta.url), "utf8")
+  const routes = readFileSync(new URL("../../src/main.rs", import.meta.url), "utf8")
   for (const route of ['"/api/usage"', '"/api/containers/{id}/usage"']) {
     assert.ok(routes.includes(`.route(${route},`), `src/main.rs must serve ${route}`)
   }
-  const css = readFileSync(new URL("../web/src/index.css", import.meta.url), "utf8")
+  const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8")
   for (const name of [
     ...Array.from({ length: SERIES_SLOTS }, (_, slot) => `--series-${slot + 1}:`),
     "--series-other:",

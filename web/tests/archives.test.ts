@@ -9,7 +9,7 @@ import {
   archiveUrl,
   parseArchiveInfo,
   readArchiveInfo,
-} from "../web/src/lib/archives"
+} from "../src/lib/archives"
 
 /** One USTAR entry as the manager writes it, padded to whole blocks. */
 function entry(name: string, data: Uint8Array) {

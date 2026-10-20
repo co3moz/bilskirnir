@@ -2,7 +2,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { DesktopMedia } from "../web/src/lib/media"
+import { DesktopMedia } from "../src/lib/media"
 
 function fixture() {
   const sockets: any[] = []

@@ -26,8 +26,8 @@ import {
   serversSummary,
   SCOPES,
   toolGroups,
-} from "../web/src/lib/mcp"
-import type { DesktopServer, EndpointTool } from "../web/src/lib/types"
+} from "../src/lib/mcp"
+import type { DesktopServer, EndpointTool } from "../src/lib/types"
 
 test("a container's default name at an endpoint is its name in lowercase letters and dashes", () => {
   assert.equal(defaultAlias("Unity Workspace"), "unity-workspace")

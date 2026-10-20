@@ -1,10 +1,10 @@
 FROM oven/bun:1.4.3-slim AS ui
 WORKDIR /build
-COPY package.json bun.lock bunfig.toml ./
-RUN bun install --frozen-lockfile
-COPY tsconfig*.json vite.config.ts ./
 COPY THIRD_PARTY_NOTICES.md LICENSE ./
-COPY web web
+WORKDIR /build/web
+COPY web/package.json web/bun.lock web/bunfig.toml ./
+RUN bun install --frozen-lockfile
+COPY web .
 RUN bun run build
 
 FROM rust:1-bookworm AS chef

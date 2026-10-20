@@ -18,8 +18,8 @@ import {
   jobTarget,
   needsAttention,
   restartNotice,
-} from "../web/src/lib/format"
-import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../web/src/lib/types"
+} from "../src/lib/format"
+import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../src/lib/types"
 
 test("completed legacy deletion explains the result rather than waiting or displaying an ID", () => {
   const log = jobLogText({

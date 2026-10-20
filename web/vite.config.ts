@@ -47,8 +47,8 @@ function notices(): Plugin {
     "novnc-LICENSE.txt": "node_modules/@novnc/novnc/LICENSE.txt",
     "oxanium-LICENSE.txt": "node_modules/@fontsource-variable/oxanium/LICENSE",
     "geist-mono-LICENSE.txt": "node_modules/@fontsource-variable/geist-mono/LICENSE",
-    "third-party-notices.txt": "THIRD_PARTY_NOTICES.md",
-    "LICENSE.txt": "LICENSE",
+    "third-party-notices.txt": "../THIRD_PARTY_NOTICES.md",
+    "LICENSE.txt": "../LICENSE",
   }
   return {
     name: "bilskirnir-notices",
@@ -70,13 +70,13 @@ function notices(): Plugin {
 }
 
 export default defineConfig({
-  root: resolve(root, "web"),
+  root,
   plugins: [react(), tailwindcss(), notices()],
   resolve: {
-    alias: { "@": resolve(root, "web/src") },
+    alias: { "@": resolve(root, "src") },
   },
   build: {
-    outDir: resolve(root, "web/dist"),
+    outDir: resolve(root, "dist"),
     emptyOutDir: true,
     sourcemap: true,
     rolldownOptions: {

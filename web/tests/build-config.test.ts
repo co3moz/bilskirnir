@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { formatBuildConfig, parseBuildConfig } from "../web/src/lib/build-config"
+import { formatBuildConfig, parseBuildConfig } from "../src/lib/build-config"
 
 const PNG = "data:image/png;base64,"
 

@@ -11,8 +11,8 @@ import {
   rich,
   setLocale,
   t,
-} from "../web/src/lib/i18n"
-import { en } from "../web/src/locales/en"
+} from "../src/lib/i18n"
+import { en } from "../src/locales/en"
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
 

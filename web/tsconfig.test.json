@@ -1,14 +1,12 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "esnext",
-    "types": ["vite/client"],
-    "allowArbitraryExtensions": true,
+    "types": ["bun"],
     "skipLibCheck": true,
 
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -16,15 +14,14 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./web/src/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["web/src"]
+  "include": ["tests/**/*.ts"]
 }

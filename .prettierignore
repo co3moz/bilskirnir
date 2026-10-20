@@ -1,5 +1,0 @@
-web/dist
-web/public
-node_modules
-bun.lock
-web/src/shadcn.css

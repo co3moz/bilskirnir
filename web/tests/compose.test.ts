@@ -31,8 +31,8 @@ import {
   withType,
   withVolumeDefault,
   WITHOUT_VOLUME,
-} from "../web/src/lib/compose"
-import type { Compose, ComposeParameter } from "../web/src/lib/types"
+} from "../src/lib/compose"
+import type { Compose, ComposeParameter } from "../src/lib/types"
 
 const unity: Compose = {
   parameters: [

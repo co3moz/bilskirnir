@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "tsc -b tsconfig.app.json tsconfig.node.json && vite build",
     "test": "tsc -p tsconfig.test.json && bun test tests/",
-    "lint": "eslint . && prettier --check web/src tests vite.config.ts",
-    "format": "prettier --write web/src tests vite.config.ts"
+    "lint": "eslint . && prettier --check src tests vite.config.ts",
+    "format": "prettier --write src tests vite.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "5.3.0",
