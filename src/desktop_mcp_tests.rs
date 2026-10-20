@@ -2,7 +2,7 @@
 //! for its scopes and nothing more, the names its tools get, and that an endpoint's token opens
 //! that endpoint and no other route.
 use super::{
-    client::{Exec, MAX_TOOLS, check_tool_list, exec_args},
+    client::{Exec, MAX_TOOLS, check_tool_list, exec_args, relayed},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
@@ -1051,4 +1051,22 @@ fn a_tool_list_an_endpoint_cannot_carry_is_refused() {
     wide.description = Some("x".repeat(1 << 20).into());
     let error = check_tool_list(&[wide]).unwrap_err().to_string();
     assert!(error.contains("larger than 1 MiB"), "{error}");
+}
+
+#[test]
+fn a_relayed_result_carries_the_result_type_a_newer_client_requires() {
+    // A server of the 2025 revisions answers without resultType; a 2026-07-28 client refuses a
+    // result without it, so the endpoint says what the absence means.
+    let older: rmcp::model::CallToolResult =
+        serde_json::from_value(json!({"content":[{"type":"text","text":"ok"}]})).unwrap();
+    assert!(older.result_type.is_none());
+    let relayed_result = relayed(older);
+    assert_eq!(
+        serde_json::to_value(&relayed_result).unwrap()["resultType"],
+        "complete"
+    );
+    // A result that says so already is passed on as it is.
+    let newer: rmcp::model::CallToolResult =
+        serde_json::from_value(json!({"resultType":"complete","content":[]})).unwrap();
+    assert_eq!(relayed(newer.clone()), newer);
 }
