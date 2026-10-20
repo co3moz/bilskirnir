@@ -14,6 +14,7 @@ import { t, useLocale } from "@/lib/i18n"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
 import { DashboardPage } from "@/pages/dashboard"
+import { FilesPage } from "@/pages/files"
 import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
@@ -34,6 +35,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   templates: TemplatesPage,
   volumes: VolumesPage,
   mcp: McpPage,
+  files: FilesPage,
   jobs: JobsPage,
 }
 

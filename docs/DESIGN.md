@@ -8,7 +8,7 @@ Bilskirnir's appearance draws on the Asgard ships and interiors that inspired th
 
 A user should be able to see which containers are running, open one, and understand whether an operation succeeded. Make those actions and states easy to recognize before adding decoration.
 
-Use familiar names: **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
+Use familiar names: **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files** and **Jobs**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
 
 Write visible copy in English in `web/src/locales/en.ts`, and give the same key a translation in every other catalog there; see [Translate the interface](DEVELOPMENT.md#translate-the-interface). Write each language as natural interface text of its own rather than word for word, keep placeholders where the sentence needs them, and keep labels short enough for a button in every language. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
 
@@ -16,10 +16,10 @@ Write visible copy in English in `web/src/locales/en.ts`, and give the same key 
 
 The layout is `dashboard-01`, filled with Bilskirnir's own data:
 
-- **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the seven pages, a **Running containers** group where the block lists documents, links to the documentation and the MCP guide, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
+- **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the eight pages, a **Running containers** group where the block lists documents, links to the documentation and the MCP guide, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
 - **Site header**: the sidebar button, the page title, the Docker connection and the page's main action.
 - **Dashboard**: four summary cards, resource usage, the job activity chart and the containers table, in that order. The block has one chart; resource usage is the second, in the same card style.
-- **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Templates**: one card per template, with a search field and tag filters; **Volumes** and **Jobs**: tables; **MCP**: a table of endpoints and the desktop servers grouped by container, behind the same view switch as **Jobs**.
+- **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Templates**: one card per template, with a search field and tag filters; **Volumes** and **Jobs**: tables; **MCP**: a table of endpoints and the desktop servers grouped by container, behind the same view switch as **Jobs**; **Files**: a container picker in the heading and one card with the file explorer the volume browser uses too.
 - **Desktop view**: full screen without the sidebar. A 48 px toolbar leaves as much room as possible for the remote desktop.
 
 Pages live in the URL fragment (`#/images`, `#/desktop/<id>`) so they survive a reload and can be bookmarked.

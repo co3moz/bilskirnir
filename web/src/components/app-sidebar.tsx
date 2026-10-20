@@ -3,6 +3,7 @@ import {
   RiApps2Line,
   RiBookOpenLine,
   RiDatabase2Line,
+  RiFolderOpenLine,
   RiStackLine,
   RiDashboardLine,
   RiListCheck3,
@@ -36,6 +37,7 @@ const navMain = [
   { page: "templates", icon: <RiApps2Line /> },
   { page: "volumes", icon: <RiDatabase2Line /> },
   { page: "mcp", icon: <RiPlugLine /> },
+  { page: "files", icon: <RiFolderOpenLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 

@@ -9,6 +9,23 @@ export interface Token {
 
 export type CodeLanguage = "bash" | "json"
 
+const SHELL_FILES = new Set([
+  ".bashrc",
+  ".bash_profile",
+  ".bash_aliases",
+  ".bash_logout",
+  ".profile",
+])
+
+/** The language a file is colored as when it is opened as text, or `null` for plain text. */
+export function codeLanguage(path: string, text: string): CodeLanguage | null {
+  const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase()
+  if (name.endsWith(".json")) return "json"
+  if (/\.(sh|bash)$/.test(name) || SHELL_FILES.has(name)) return "bash"
+  if (/^#![^\n]*\b(ba|da|z)?sh\b/.test(text)) return "bash"
+  return null
+}
+
 /** Splits code into colored pieces whose texts, joined, are the code again. */
 export function highlight(code: string, language: CodeLanguage): Token[] {
   return language === "json" ? highlightJson(code) : highlightBash(code)

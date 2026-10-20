@@ -11,6 +11,7 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
     "templates",
     "volumes",
     "mcp",
+    "files",
     "jobs",
   ] as const)
     assert.deepEqual(parseRoute(href({ page })), { page })
@@ -22,4 +23,12 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
 test("a desktop link carries its container ID intact", () => {
   const id = "a1b2/c3 d4#e5"
   assert.deepEqual(parseRoute(href({ page: "desktop", id })), { page: "desktop", id })
+})
+
+test("the files page keeps the chosen container in its link", () => {
+  const container = "a1b2/c3 d4#e5"
+  assert.deepEqual(parseRoute(href({ page: "files", container })), { page: "files", container })
+  assert.deepEqual(parseRoute("#/files"), { page: "files" })
+  assert.deepEqual(parseRoute("#/files/"), { page: "files" })
+  assert.equal(href({ page: "files" }), "#/files")
 })
