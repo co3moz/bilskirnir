@@ -421,6 +421,10 @@ pub struct Job {
     pub kind: String,
     #[serde(default)]
     pub resource: Option<String>,
+    /// The name a job that makes a container or an image gives it, so a list can show what is on
+    /// its way before the record exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub status: String,
     pub created_at: u64,
     pub finished_at: Option<u64>,

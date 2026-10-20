@@ -47,6 +47,8 @@ export const en = {
   "state.unhealthy": "Desktop error",
   "state.setting_up": "Setting up",
   "state.setup_failed": "Setup failed",
+  "state.creating": "Creating",
+  "state.downloading": "Downloading",
 
   "job.create": "Create container",
   "job.retry": "Retry setup",
@@ -118,6 +120,8 @@ export const en = {
   "containers.diagnosticsOf": "{name} diagnostics",
   "containers.internetOf": "{name} internet access",
   "containers.loadingPreview": "Loading preview",
+  "containers.creating": "Creating the container…",
+  "containers.creatingHint": "Its controls appear once it runs.",
   "containers.previewAlt": "Desktop preview of {name}",
   "containers.stopped": "Container stopped",
   "containers.view.all": "All containers",

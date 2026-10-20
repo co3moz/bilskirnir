@@ -37,7 +37,23 @@ where
     F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
-    let (id, _) = start(app, kind, resource, true, work)?;
+    launch_named(app, kind, resource, None, work)
+}
+
+/// [`launch`] for a job that makes a container or an image called `name`, which the job carries
+/// so the lists can show what is on its way before its record exists.
+pub fn launch_named<F, Fut>(
+    app: Arc<App>,
+    kind: &str,
+    resource: String,
+    name: Option<String>,
+    work: F,
+) -> Result<Json<Value>>
+where
+    F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+{
+    let (id, _) = start_named(app, kind, resource, name, true, work)?;
     Ok(Json(json!({"job_id":id})))
 }
 
@@ -54,11 +70,28 @@ where
     F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
+    start_named(app, kind, resource, None, exclusive, work)
+}
+
+/// [`start`] for a job that makes something called `name`, as [`launch_named`] describes.
+pub(crate) fn start_named<F, Fut>(
+    app: Arc<App>,
+    kind: &str,
+    resource: String,
+    name: Option<String>,
+    exclusive: bool,
+    work: F,
+) -> Result<(String, Outcome)>
+where
+    F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+{
     let id = uuid::Uuid::new_v4().simple().to_string();
     let job = Job {
         id: id.clone(),
         kind: kind.into(),
         resource: Some(resource.clone()),
+        name,
         status: "queued".into(),
         created_at: now(),
         finished_at: None,

@@ -6,6 +6,7 @@ import { closeDialog } from "./dialogs"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
 import { endpointApi } from "./mcp"
+import { creationEnded } from "./pending"
 import type {
   ContainerItem,
   DesktopServer,
@@ -76,8 +77,28 @@ function useList<T>(path: string, poll: boolean) {
 export const useContainers = (poll = true) => useList<ContainerItem[]>("containers", poll)
 export const useImages = (poll = true) => useList<ImageItem[]>("images", poll)
 export const useVolumes = (poll = true) => useList<Volume[]>("volumes", poll)
-export const useJobs = (poll = true) => useList<Job[]>("jobs", poll)
 export const useSystem = (poll = true) => useList<SystemInfo>("system", poll)
+
+/**
+ * The latest jobs. When one that makes a container or an image ends, the lists are read again
+ * before the jobs are, so what it made takes the place of its pending entry without a gap.
+ */
+export const useJobs = (poll = true) =>
+  useQuery({
+    queryKey: ["jobs"],
+    queryFn: async () => {
+      const jobs = await api<Job[]>("jobs")
+      const before = queryClient.getQueryData<Job[]>(["jobs"])
+      if (before && creationEnded(before, jobs))
+        await Promise.all(
+          ["containers", "images"].map((key) =>
+            queryClient.invalidateQueries({ queryKey: [key], exact: true })
+          )
+        )
+      return jobs
+    },
+    refetchInterval: poll ? LIST_INTERVAL : false,
+  })
 
 /** One job with its log, followed until it finishes. */
 export const useJob = (id: string | undefined) =>

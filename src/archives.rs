@@ -202,15 +202,18 @@ pub async fn import(
     {
         return Err(anyhow!("Invalid image name or description").into());
     }
+    // Without a name of its own, the image takes the one its archive records once it is read.
+    let named = (!name.is_empty()).then(|| name.to_owned());
     let permit = transfer_permit(&app)?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (accepted, was_accepted) = oneshot::channel();
     let waiting = app.clone();
     let session = token.clone();
-    let (job_id, outcome) = jobs::start(
+    let (job_id, outcome) = jobs::start_named(
         app,
         "image-import",
         format!("image:{id}"),
+        named,
         true,
         move |app, job_id| async move {
             let _permit = permit;

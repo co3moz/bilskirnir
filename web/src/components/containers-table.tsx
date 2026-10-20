@@ -15,6 +15,7 @@ import {
   columnHelper,
   DataTablePagination,
   DataTableView,
+  ExtraRow,
   selectColumn,
   SortHeader,
   useDataTable,
@@ -23,6 +24,7 @@ import {
 } from "@/components/data-table"
 import { InternetSwitch } from "@/components/container-card"
 import { ContainerMenu } from "@/components/container-menu"
+import { JobLogButton, PendingName, PendingStatus } from "@/components/pending"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -31,7 +33,8 @@ import { runJobs } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, desktopTitle, needsAttention, shortDate, stateLabel } from "@/lib/format"
 import { formatNumber, t } from "@/lib/i18n"
-import { useContainers, useImages } from "@/lib/queries"
+import { pendingContainers } from "@/lib/pending"
+import { useContainers, useImages, useJobs } from "@/lib/queries"
 import { href } from "@/lib/route"
 import type { ContainerItem, ImageItem } from "@/lib/types"
 
@@ -177,12 +180,23 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
   ]
 }
 
-/** dashboard-01's data table, holding the containers with bulk start and stop. */
+/**
+ * dashboard-01's data table, holding the containers with bulk start and stop, and those still
+ * being created above them with nothing to select.
+ */
 export function ContainersTable() {
   const containers = useContainers()
   const images = useImages().data
+  const jobs = useJobs().data
   const [view, setView] = React.useState<View>("all")
-  const all = React.useMemo(() => containers.data ?? [], [containers.data])
+  const pending = React.useMemo(
+    () => pendingContainers(jobs ?? [], containers.data ?? []),
+    [jobs, containers.data]
+  )
+  const all = React.useMemo(
+    () => (containers.data ?? []).filter((item) => !pending.some((entry) => entry.id === item.id)),
+    [containers.data, pending]
+  )
   const data = React.useMemo(() => all.filter(views[view]), [all, view])
   const cols = React.useMemo(() => columns(images ?? []), [images])
   const table = useDataTable({
@@ -282,6 +296,22 @@ export function ContainersTable() {
                 ? t("containers.noneInView")
                 : t("containers.noneYet")
           }
+          // A container being created is neither running nor stopped yet.
+          extra={(view === "all" ? pending : []).map((entry) => (
+            <ExtraRow
+              key={entry.job.id}
+              table={table}
+              cells={{
+                name: <PendingName pending={entry} className="min-w-40" />,
+                status: <PendingStatus job={entry.job} />,
+                actions: (
+                  <div className="flex justify-end">
+                    <JobLogButton id={entry.job.id} />
+                  </div>
+                ),
+              }}
+            />
+          ))}
         />
         <DataTablePagination table={table} selectable />
       </TabsContent>

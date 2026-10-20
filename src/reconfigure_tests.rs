@@ -385,6 +385,7 @@ async fn a_settings_change_keeps_the_volumes_a_container_mounts_and_filters_new_
         result: None,
         progress: None,
         stages: Vec::new(),
+        name: None,
     };
     app.db.put("job", "settings-job", &job).unwrap();
     let container = |id: &str, mounts: Value| {
@@ -525,6 +526,7 @@ esac
         result: None,
         progress: None,
         stages: Vec::new(),
+        name: None,
     };
     app.db.put("job", "change", &job).unwrap();
     let change = |rename_status: u8| {

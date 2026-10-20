@@ -200,12 +200,35 @@ export function ColumnsMenu<T extends RowData>({
   )
 }
 
+/**
+ * A row outside the table's data, such as a record still being made: content for the columns
+ * named in `cells`, and an empty cell under every other visible column.
+ */
+export function ExtraRow<T extends RowData>({
+  table,
+  cells,
+}: {
+  table: DataTable<T>
+  cells: Partial<Record<string, React.ReactNode>>
+}) {
+  return (
+    <TableRow>
+      {table.getVisibleLeafColumns().map((column) => (
+        <TableCell key={column.id}>{cells[column.id]}</TableCell>
+      ))}
+    </TableRow>
+  )
+}
+
+/** The table, with any `extra` rows above its own; those stay out of sorting and pages. */
 export function DataTableView<T extends RowData>({
   table,
   empty,
+  extra = [],
 }: {
   table: DataTable<T>
   empty: React.ReactNode
+  extra?: React.ReactNode[]
 }) {
   const rows = table.getRowModel().rows
   return (
@@ -223,7 +246,8 @@ export function DataTableView<T extends RowData>({
           ))}
         </TableHeader>
         <TableBody className="**:data-[slot=table-cell]:first:w-8">
-          {rows.length ? (
+          {extra}
+          {rows.length || extra.length ? (
             rows.map((row) => (
               <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                 {row.getVisibleCells().map((cell) => (
