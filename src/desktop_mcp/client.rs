@@ -8,7 +8,7 @@ use rmcp::{
     ClientHandler, RoleClient, ServiceExt,
     model::{
         CallToolRequestParams, CallToolResult, ClientCapabilities, ClientConfig, Implementation,
-        JsonObject, PaginatedRequestParams, ProtocolVersion, Tool,
+        JsonObject, PaginatedRequestParams, ProtocolVersion, ResultType, Tool,
     },
     service::{NotificationContext, Peer, RunningService},
 };
@@ -337,6 +337,14 @@ impl Pool {
     }
 }
 
+/// A desktop server's result as the endpoint passes it on. A server of a protocol revision
+/// before 2026-07-28 sends no `resultType`, which a client of that revision requires in every
+/// result, so an absent one is the `complete` it means; rmcp drops it again for older clients.
+pub(super) fn relayed(mut result: CallToolResult) -> CallToolResult {
+    result.result_type.get_or_insert(ResultType::COMPLETE);
+    result
+}
+
 /// Call a tool of a desktop server for an endpoint, connecting first when needed.
 pub(super) async fn call(
     app: &Arc<App>,
@@ -367,7 +375,7 @@ pub(super) async fn call(
     let result = tokio::time::timeout(CALL_LIMIT, connection.service.call_tool(request)).await;
     connection.touch();
     match result {
-        Ok(Ok(result)) => Ok(result),
+        Ok(Ok(result)) => Ok(relayed(result)),
         Ok(Err(error)) => {
             if connection.closed() {
                 slot.lock().await.take();
