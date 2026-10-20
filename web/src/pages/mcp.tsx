@@ -188,6 +188,14 @@ const columns: DataColumn<Row>[] = [
               <span className="text-muted-foreground">
                 {t("mcp.grant.serversLine", { servers: serversSummary(grant.servers) })}
               </span>
+              {grant.excluded_tools.length > 0 && (
+                <span className="text-muted-foreground" title={grant.excluded_tools.join(", ")}>
+                  {plural(grant.excluded_tools.length, {
+                    one: "mcp.grant.excluded.one",
+                    other: "mcp.grant.excluded.other",
+                  })}
+                </span>
+              )}
             </li>
           ))}
         </ul>

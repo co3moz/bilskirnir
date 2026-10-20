@@ -24,6 +24,8 @@ use subtle::ConstantTimeEq;
 /// The database kind of endpoints, by name.
 pub(crate) const ENDPOINTS: &str = "mcp-endpoint";
 const GRANT_LIMIT: usize = 16;
+/// A grant leaves out at most this many tools by name.
+const EXCLUSION_LIMIT: usize = 1024;
 
 /// Which desktop servers of a container an endpoint offers.
 #[derive(Clone, Debug, PartialEq)]
@@ -72,6 +74,18 @@ pub(crate) struct Grant {
     pub alias: String,
     pub scopes: Vec<Scope>,
     pub servers: Servers,
+    /// Tools left out although their scope or server is granted, by the name the endpoint gives
+    /// them for this container alone: a container tool's own name, such as
+    /// `application_diagnostics`, or `SERVER__TOOL` for a desktop server's. Empty means
+    /// everything the scopes and servers give, also tools a server adds later.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded_tools: Vec<String>,
+}
+impl Grant {
+    /// Whether the grant leaves out the tool of this name.
+    pub fn excludes(&self, name: &str) -> bool {
+        self.excluded_tools.iter().any(|excluded| excluded == name)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -163,6 +177,8 @@ pub(crate) struct GrantRequest {
     pub alias: Option<String>,
     pub scopes: Vec<Scope>,
     pub servers: Servers,
+    #[serde(default)]
+    pub excluded_tools: Vec<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -219,12 +235,58 @@ pub(crate) fn grants(app: &App, requested: Vec<GrantRequest>) -> anyhow::Result<
                 server_name(name)?;
             }
         }
+        let excluded_tools = excluded(&request.excluded_tools, &scopes)?;
         out.push(Grant {
             container_id: request.container_id,
             alias,
             scopes,
             servers: request.servers,
+            excluded_tools,
         });
+    }
+    Ok(out)
+}
+
+/// A grant's deny list, checked: names in the characters exposed tool names have, each once. A
+/// name without `__` is a container tool's and must belong to the granted scopes, or be `get_job`
+/// with a scope that returns jobs, so a typo is refused instead of leaving the tool in. A name
+/// with `__` is a desktop server's tool, `SERVER__TOOL`; the server's part must be a server name,
+/// and the tool is kept whether or not the server is known now: it may be stopped, or declared
+/// later.
+fn excluded(names: &[String], scopes: &[Scope]) -> anyhow::Result<Vec<String>> {
+    if names.len() > EXCLUSION_LIMIT {
+        bail!("A grant leaves out at most {EXCLUSION_LIMIT} tools");
+    }
+    let mut out: Vec<String> = Vec::new();
+    for name in names {
+        if name.is_empty()
+            || name.len() > 64
+            || !name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        {
+            bail!(
+                "An excluded tool is named as the endpoint exposes it, in letters, digits, _ and -, at most 64: {name:?}"
+            );
+        }
+        match name.split_once("__") {
+            // Server names have no underscore, so the first `__` ends the server's part.
+            Some((server, _)) => {
+                if server_name(server).is_err() {
+                    bail!("{name} does not name a desktop server's tool as SERVER__TOOL");
+                }
+            }
+            None => {
+                if !scopes.iter().any(|scope| scope.offers(name))
+                    && !(name == "get_job" && scopes.iter().any(|scope| scope.has_jobs()))
+                {
+                    bail!("{name} is not a tool of the granted scopes, so it cannot be left out");
+                }
+            }
+        }
+        if !out.contains(name) {
+            out.push(name.clone());
+        }
     }
     Ok(out)
 }
@@ -244,6 +306,7 @@ pub(crate) fn summary(app: &App, endpoint: &Endpoint) -> Value {
             "alias": grant.alias,
             "scopes": grant.scopes,
             "servers": grant.servers,
+            "excluded_tools": grant.excluded_tools,
         })).collect::<Vec<_>>(),
         "tool_count": catalog(app, endpoint).len(),
     })
@@ -433,6 +496,7 @@ pub(crate) async fn automatic_endpoint(app: &App, container: &Container) -> anyh
             alias: slug_of(&container.spec.name, 24, "desktop"),
             scopes: Scope::DEFAULT.to_vec(),
             servers: Servers::All,
+            excluded_tools: Vec::new(),
         }],
         token_hash: None,
         token_created_at: None,

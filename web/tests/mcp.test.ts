@@ -7,9 +7,11 @@ import {
   defaultAlias,
   endpointApi,
   endpointUrl,
+  excludedTools,
   grantDraft,
   grantRequests,
   imageServers,
+  isServerTool,
   localUrl,
   newGrant,
   orderScopes,
@@ -53,6 +55,7 @@ test("grants are sent with their scopes in order and the servers they include", 
     scopes: ["view", "input"],
     all: true,
     servers: [],
+    excluded: [],
   })
   assert.deepEqual(
     grantRequests([
@@ -78,6 +81,7 @@ test("grants are sent with their scopes in order and the servers they include", 
       alias: "u",
       scopes: ["power", "view"],
       servers: ["x"],
+      excluded_tools: ["container_action"],
     }),
     {
       container_id: "c1",
@@ -86,8 +90,48 @@ test("grants are sent with their scopes in order and the servers they include", 
       scopes: ["view", "power"],
       all: false,
       servers: ["x"],
+      excluded: ["container_action"],
     }
   )
+})
+
+test("tools a grant leaves out are sent once each, container tools only with their scope", () => {
+  const scopes = {
+    scopes: [
+      { id: "view" as const, tools: ["screenshot", "list_windows"] },
+      { id: "applications" as const, tools: ["application_diagnostics"] },
+    ],
+    default: ["view" as const],
+  }
+  const draft = {
+    ...newGrant({ id: "c1", name: "Unity" }, ["view"], []),
+    excluded: [
+      "application_diagnostics",
+      "screenshot",
+      "playwright__browser_run_code_unsafe",
+      "screenshot",
+    ],
+  }
+  // The applications scope is not granted, so the manager would refuse its tool; a server's tool
+  // is kept whether or not the server is listed now.
+  assert.deepEqual(excludedTools(draft, scopes), [
+    "screenshot",
+    "playwright__browser_run_code_unsafe",
+  ])
+  // Without the manager's scopes nothing can be told apart, so every name goes.
+  assert.deepEqual(excludedTools(draft), [
+    "application_diagnostics",
+    "screenshot",
+    "playwright__browser_run_code_unsafe",
+  ])
+  assert.deepEqual(grantRequests([draft], scopes)[0].excluded_tools, [
+    "screenshot",
+    "playwright__browser_run_code_unsafe",
+  ])
+  // Nothing left out sends no list, as requests did before there was one.
+  assert.ok(!("excluded_tools" in grantRequests([{ ...draft, excluded: [] }], scopes)[0]))
+  assert.ok(isServerTool("playwright__browser_run_code_unsafe"))
+  assert.ok(!isServerTool("application_diagnostics"))
 })
 
 test("scopes and servers read as a few words", () => {

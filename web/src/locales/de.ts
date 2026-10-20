@@ -962,6 +962,11 @@ export const de: Messages = {
   "mcp.grant.chosenServers": "Nur die hier gewählten",
   "mcp.grant.noServers": "Dieser Container hat noch keine Desktop-MCP-Server.",
   "mcp.grant.serversLine": "Server: {servers}",
+  "mcp.grant.toolsOf": "{included} von {count} Werkzeugen",
+  "mcp.grant.toolsHint":
+    "Öffnen Sie die Werkzeuge eines Bereichs oder Servers und wählen Sie eines ab, um es auszulassen.",
+  "mcp.grant.excluded.one": "{count} Werkzeug ausgelassen",
+  "mcp.grant.excluded.other": "{count} Werkzeuge ausgelassen",
   "mcp.scopes.all": "Alle Container-Werkzeuge",
   "mcp.scopes.none": "Keine Container-Werkzeuge",
   "mcp.servers.all": "alle, auch spätere",

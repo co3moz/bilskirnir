@@ -1185,6 +1185,18 @@ try:
     assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
     shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
     assert shot["content"][0]["type"] == "image" and shot["structuredContent"]["width"] == 320, shot
+    # Single tools are left out by the names the endpoint gives them, a container tool's and a
+    # server's alike; the list above, without one, was everything the scope and the servers give.
+    assert registered["tools"][0]["exposed"] == "echo__echo", registered
+    narrowed = tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["save_screenshot","echo__echo"]}]})["structuredContent"]
+    assert narrowed["grants"][0]["excluded_tools"] == ["save_screenshot","echo__echo"], narrowed
+    offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
+    assert {"screenshot","api__echo"} <= offered and not offered & {"save_screenshot","echo__echo"}, offered
+    for name in ["save_screenshot","echo__echo"]:
+        _, reply = endpoint_post("acceptance-mcp", scoped, {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":name,"arguments":{"text":"hi"}}}, session)
+        assert "Unknown tool" in reply["error"]["message"], reply
+    assert tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["desktop_input"]}]}, allow_error=True)["isError"]
+    print("PASS an endpoint leaves single container and server tools out by name", flush=True)
     try:
         mcp("tools/list", token=scoped); raise AssertionError("an endpoint token opened the administrator's channel")
     except urllib.error.HTTPError as error:

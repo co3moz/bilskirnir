@@ -336,6 +336,9 @@ export type McpScope =
 
 export type McpTool = { name: string; description: string }
 
+/** A desktop server's tool, with `exposed`, its name on an endpoint of its container alone. */
+export type ServerTool = McpTool & { exposed: string }
+
 /**
  * An MCP server running inside a container: declared by its image (`image`), or registered in
  * the running desktop (`container`). Environment variables and headers are listed by name only.
@@ -356,7 +359,7 @@ export type DesktopServer = {
   /** `pending` before its tools were read, `stopped` while the container is not running. */
   state: "ready" | "error" | "pending" | "stopped"
   error: string | null
-  tools: McpTool[]
+  tools: ServerTool[]
   /** Unix seconds. */
   tools_at: number | null
   /** The end of the server's standard error, which may be empty. */
@@ -389,9 +392,18 @@ export type McpGrant = {
   scopes: McpScope[]
   /** The desktop MCP servers whose tools it includes: all, also later ones, or these. */
   servers: "all" | string[]
+  /**
+   * Tools left out although their scope or server is included, by the name the endpoint gives
+   * them for this container alone: a container tool's own name, or `SERVER__TOOL`. Empty means
+   * everything the scopes and servers give.
+   */
+  excluded_tools: string[]
 }
 
-export type GrantRequest = Omit<McpGrant, "container_name" | "alias"> & { alias?: string }
+export type GrantRequest = Omit<McpGrant, "container_name" | "alias" | "excluded_tools"> & {
+  alias?: string
+  excluded_tools?: string[]
+}
 
 /** A scoped MCP door at `/mcp/<name>` with a bearer token of its own. */
 export type McpEndpoint = {

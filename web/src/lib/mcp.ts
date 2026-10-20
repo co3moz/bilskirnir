@@ -10,6 +10,7 @@ import type {
   ImageItem,
   McpGrant,
   McpScope,
+  McpScopes,
   ServerDeclaration,
   ServerRequest,
 } from "./types"
@@ -88,7 +89,11 @@ export function defaultAlias(name: string, taken: Iterable<string> = []) {
   }
 }
 
-/** One container of the endpoint form. `all` keeps the servers chosen before it was turned on. */
+/**
+ * One container of the endpoint form. `all` keeps the servers chosen before it was turned on,
+ * and `excluded` keeps a tool left out while its scope or server is off, so turning it on again
+ * brings the choice back.
+ */
 export type GrantDraft = {
   container_id: string
   container_name: string
@@ -96,6 +101,8 @@ export type GrantDraft = {
   scopes: McpScope[]
   all: boolean
   servers: string[]
+  /** Tools left out, by the name the endpoint gives them for this container alone. */
+  excluded: string[]
 }
 
 export const grantDraft = (grant: McpGrant): GrantDraft => ({
@@ -105,7 +112,31 @@ export const grantDraft = (grant: McpGrant): GrantDraft => ({
   scopes: orderScopes(grant.scopes),
   all: grant.servers === "all",
   servers: grant.servers === "all" ? [] : [...grant.servers],
+  excluded: [...grant.excluded_tools],
 })
+
+/** Whether an exposed tool name is a desktop server's, `SERVER__TOOL`; a container tool's has no `__`. */
+export const isServerTool = (name: string) => name.includes("__")
+
+/**
+ * The tools a grant leaves out, as a request sends them, each once. A container tool's name goes
+ * only while its scope is granted, since the manager refuses one of a scope the grant does not
+ * have; without the manager's scopes it cannot be told, and every name goes. A desktop server's
+ * tool goes whatever the servers chosen: it is kept for a server that comes back.
+ */
+export function excludedTools(
+  draft: Pick<GrantDraft, "scopes" | "excluded">,
+  scopes?: McpScopes
+): string[] {
+  const granted = new Set(
+    scopes?.scopes
+      .filter((scope) => draft.scopes.includes(scope.id))
+      .flatMap((scope) => scope.tools) ?? []
+  )
+  return [...new Set(draft.excluded)].filter(
+    (name) => isServerTool(name) || !scopes || granted.has(name)
+  )
+}
 
 /** A container added to the form: the default scopes and every desktop MCP server. */
 export const newGrant = (
@@ -119,10 +150,14 @@ export const newGrant = (
   scopes: orderScopes(scopes),
   all: true,
   servers: [],
+  excluded: [],
 })
 
-/** The grants an endpoint request sends, or the reason the form cannot send them. */
-export function grantRequests(drafts: GrantDraft[]): GrantRequest[] {
+/**
+ * The grants an endpoint request sends, or the reason the form cannot send them. `scopes`, the
+ * manager's, tells which excluded container tools still have their scope.
+ */
+export function grantRequests(drafts: GrantDraft[], scopes?: McpScopes): GrantRequest[] {
   if (!drafts.length) throw new Error(t("mcp.endpoint.needGrant"))
   const seen = new Set<string>()
   return drafts.map((draft) => {
@@ -131,11 +166,13 @@ export function grantRequests(drafts: GrantDraft[]): GrantRequest[] {
       if (seen.has(alias)) throw new Error(t("mcp.endpoint.aliasTwice", { alias }))
       seen.add(alias)
     }
+    const excluded = excludedTools(draft, scopes)
     return {
       container_id: draft.container_id,
       ...(alias ? { alias } : {}),
       scopes: orderScopes(draft.scopes),
       servers: draft.all ? "all" : draft.servers,
+      ...(excluded.length ? { excluded_tools: excluded } : {}),
     }
   })
 }

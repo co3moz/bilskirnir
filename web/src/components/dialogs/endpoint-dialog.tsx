@@ -1,5 +1,21 @@
 import * as React from "react"
-import { RiAlertLine, RiCloseLine, RiComputerLine } from "@remixicon/react"
+import {
+  RiAlertLine,
+  RiAppsLine,
+  RiArrowDownSLine,
+  RiCloseLine,
+  RiComputerLine,
+  RiEyeLine,
+  RiFileEditLine,
+  RiFileTextLine,
+  RiFilmLine,
+  RiKeyboardLine,
+  RiPlugLine,
+  RiShutDownLine,
+  RiTerminalBoxLine,
+  type RemixiconComponentType,
+} from "@remixicon/react"
+import { cn } from "cn"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -35,7 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { closeDialog, openDialog } from "@/lib/dialogs"
-import { rich, t } from "@/lib/i18n"
+import { formatNumber, plural, rich, t } from "@/lib/i18n"
 import {
   ALIAS_PATTERN,
   ENDPOINT_NAME_PATTERN,
@@ -51,10 +67,93 @@ import {
 } from "@/lib/mcp"
 import { createEndpoint, updateEndpoint } from "@/lib/mcp-api"
 import { useContainers, useMcpEndpoints, useMcpScopes, useMcpServers } from "@/lib/queries"
-import type { ContainerItem, McpScope, McpScopes } from "@/lib/types"
+import type { ContainerItem, DesktopServer, McpScope, McpScopes, ServerTool } from "@/lib/types"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { Footer } from "./simple-dialogs"
+
+/** What each scope is about, at a glance. */
+const SCOPE_ICONS: Record<McpScope, RemixiconComponentType> = {
+  view: RiEyeLine,
+  input: RiKeyboardLine,
+  applications: RiAppsLine,
+  files_read: RiFileTextLine,
+  files_write: RiFileEditLine,
+  commands: RiTerminalBoxLine,
+  media: RiFilmLine,
+  power: RiShutDownLine,
+}
+/** A scope's icon; a scope a newer manager added gets a plain one. */
+const scopeIcon = (scope: string): RemixiconComponentType =>
+  scope in SCOPE_ICONS ? SCOPE_ICONS[scope as McpScope] : RiPlugLine
+
+/**
+ * The tools a scope or a desktop server gives the endpoint, behind their count. Open, each has a
+ * checkbox, and an unticked one is left out of the endpoint.
+ */
+function ToolChoices({
+  id,
+  tools,
+  excluded,
+  onChange,
+}: {
+  id: string
+  tools: ServerTool[]
+  /** Every tool the grant leaves out, not only this list's. */
+  excluded: string[]
+  onChange: (excluded: string[]) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const included = tools.filter((tool) => !excluded.includes(tool.exposed)).length
+  const toggle = (name: string, on: boolean) =>
+    onChange(on ? excluded.filter((other) => other !== name) : [...excluded, name])
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex w-fit items-center gap-1 rounded-md text-xs outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          included < tools.length ? "text-foreground" : "text-muted-foreground"
+        )}
+      >
+        <RiArrowDownSLine
+          className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
+          aria-hidden
+        />
+        {included === tools.length
+          ? plural(tools.length, { one: "mcp.tools.one", other: "mcp.tools.other" })
+          : t("mcp.grant.toolsOf", {
+              included: formatNumber(included),
+              count: formatNumber(tools.length),
+            })}
+      </button>
+      <ul id={id} hidden={!open} className="flex flex-col gap-2">
+        {tools.map((tool) => (
+          <li key={tool.exposed}>
+            <Label className="flex items-start gap-2 font-normal">
+              <Checkbox
+                className="mt-0.5"
+                checked={!excluded.includes(tool.exposed)}
+                onCheckedChange={(checked) => toggle(tool.exposed, checked === true)}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5 leading-snug">
+                <code className="font-mono text-xs break-all">{tool.exposed}</code>
+                {tool.description && (
+                  <span className="line-clamp-2 text-xs text-muted-foreground">
+                    {tool.description}
+                  </span>
+                )}
+              </span>
+            </Label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 /** One container of an endpoint: the name agents know it by, its scopes and its servers. */
 function GrantFields({
@@ -70,8 +169,8 @@ function GrantFields({
   onRemove: () => void
   /** The container, or nothing once it was deleted. */
   container?: ContainerItem
-  /** The names of the container's desktop MCP servers. */
-  servers: string[]
+  /** The container's desktop MCP servers, with the tools the manager last read from each. */
+  servers: DesktopServer[]
   scopes?: McpScopes
 }) {
   const id = React.useId()
@@ -79,10 +178,15 @@ function GrantFields({
   const name = container?.spec.name ?? draft.container_name
   // Every scope this release knows, and any a newer manager offers besides.
   const offered = orderScopes([...SCOPES, ...(scopes?.scopes.map((scope) => scope.id) ?? [])])
-  const tools = (scope: McpScope) =>
-    scopes?.scopes.find((entry) => entry.id === scope)?.tools.join(", ")
+  // A container tool keeps its own name on the endpoint.
+  const toolsOf = (scope: McpScope): ServerTool[] =>
+    (scopes?.scopes.find((entry) => entry.id === scope)?.tools ?? []).map((tool) => ({
+      name: tool,
+      exposed: tool,
+      description: "",
+    }))
   // Servers chosen earlier stay listed after they were removed, so they can be taken out.
-  const names = [...new Set([...servers, ...draft.servers])]
+  const names = [...new Set([...servers.map((server) => server.name), ...draft.servers])]
   const toggleScope = (scope: McpScope, on: boolean) =>
     set({
       scopes: on
@@ -95,6 +199,7 @@ function GrantFields({
         ? names.filter((other) => other === server || draft.servers.includes(other))
         : draft.servers.filter((other) => other !== server),
     })
+  const setExcluded = (excluded: string[]) => set({ excluded })
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border p-4">
@@ -135,32 +240,54 @@ function GrantFields({
         <FieldLegend variant="label" className="mb-0">
           {t("mcp.grant.scopes")}
         </FieldLegend>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {offered.map((scope) => (
-            <Field key={scope} orientation="horizontal" className="items-start">
-              <Checkbox
-                id={`${id}-${scope}`}
-                checked={draft.scopes.includes(scope)}
-                onCheckedChange={(checked) => toggleScope(scope, checked === true)}
-              />
-              <FieldContent>
-                <FieldLabel htmlFor={`${id}-${scope}`} title={tools(scope)}>
-                  {scopeLabel(scope)}
-                </FieldLabel>
-                {scopeDescription(scope) && (
-                  <FieldDescription className="text-xs">{scopeDescription(scope)}</FieldDescription>
-                )}
-              </FieldContent>
-            </Field>
-          ))}
-        </div>
+        {/* One row per scope: its icon, its name and what it covers on one line that wraps, and
+            below them, while it is granted, its tools behind their count. */}
+        <ul className="flex flex-col divide-y rounded-xl border">
+          {offered.map((scope) => {
+            const Icon = scopeIcon(scope)
+            const on = draft.scopes.includes(scope)
+            const tools = toolsOf(scope)
+            const description = scopeDescription(scope)
+            return (
+              <li key={scope} className="px-3 py-2.5">
+                <Field orientation="horizontal" className="items-start gap-3">
+                  <Checkbox
+                    id={`${id}-${scope}`}
+                    className="mt-0.5"
+                    checked={on}
+                    onCheckedChange={(checked) => toggleScope(scope, checked === true)}
+                  />
+                  <Icon className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <FieldContent className="gap-1.5">
+                    <FieldLabel htmlFor={`${id}-${scope}`} className="block w-full leading-snug">
+                      <span className="font-medium">{scopeLabel(scope)}</span>
+                      {description && (
+                        <span className="font-normal text-muted-foreground"> {description}</span>
+                      )}
+                    </FieldLabel>
+                    {on && tools.length > 0 && (
+                      <ToolChoices
+                        id={`${id}-${scope}-tools`}
+                        tools={tools}
+                        excluded={draft.excluded}
+                        onChange={setExcluded}
+                      />
+                    )}
+                  </FieldContent>
+                </Field>
+              </li>
+            )
+          })}
+        </ul>
         {draft.scopes.includes("commands") && container?.spec.sudo && (
           <Alert>
             <RiAlertLine className="text-warning" />
             <AlertDescription>{t("mcp.grant.sudoWarning", { name })}</AlertDescription>
           </Alert>
         )}
-        <FieldDescription className="text-xs">{t("mcp.grant.never")}</FieldDescription>
+        <FieldDescription className="text-xs">
+          {t("mcp.grant.never")} {t("mcp.grant.toolsHint")}
+        </FieldDescription>
       </FieldSet>
       <FieldSet className="gap-3">
         <FieldLegend variant="label" className="mb-0" id={`${id}-servers`}>
@@ -180,22 +307,53 @@ function GrantFields({
             {t("mcp.grant.chosenServers")}
           </Label>
         </RadioGroup>
-        {!draft.all &&
-          (names.length ? (
-            <div className="flex flex-col gap-2 pl-6">
-              {names.map((server) => (
-                <Label key={server} className="flex items-center gap-2 font-normal">
-                  <Checkbox
-                    checked={draft.servers.includes(server)}
-                    onCheckedChange={(checked) => toggleServer(server, checked === true)}
-                  />
-                  <code className="font-mono text-xs">{server}</code>
-                </Label>
-              ))}
-            </div>
-          ) : (
+        {/* The servers, each with a checkbox when they are chosen here, and under an included one
+            its tools as the manager last read them, behind their count. */}
+        {names.length ? (
+          <ul className="flex flex-col gap-2 pl-6">
+            {names.map((server) => {
+              const record = servers.find((entry) => entry.name === server)
+              const included = draft.all || draft.servers.includes(server)
+              return (
+                <li key={server} className="flex flex-col gap-1.5">
+                  {draft.all ? (
+                    <code className="font-mono text-xs leading-none">{server}</code>
+                  ) : (
+                    <Label className="flex items-center gap-2 font-normal">
+                      <Checkbox
+                        checked={draft.servers.includes(server)}
+                        onCheckedChange={(checked) => toggleServer(server, checked === true)}
+                      />
+                      <code className="font-mono text-xs">{server}</code>
+                    </Label>
+                  )}
+                  {included &&
+                    record &&
+                    (record.tools.length ? (
+                      <div className="pl-6">
+                        <ToolChoices
+                          id={`${id}-${server}-tools`}
+                          tools={record.tools}
+                          excluded={draft.excluded}
+                          onChange={setExcluded}
+                        />
+                      </div>
+                    ) : (
+                      <p className="pl-6 text-xs text-muted-foreground">
+                        {record.state === "ready"
+                          ? t("mcp.server.noTools")
+                          : t("mcp.server.toolsUnread")}
+                      </p>
+                    ))}
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          !draft.all && (
             <FieldDescription className="pl-6 text-xs">{t("mcp.grant.noServers")}</FieldDescription>
-          ))}
+          )
+        )}
       </FieldSet>
     </div>
   )
@@ -238,7 +396,7 @@ export function EndpointDialog({ name: existing, ...props }: DialogProps & { nam
     ])
   }
   const save = async () => {
-    const body = grantRequests(grants)
+    const body = grantRequests(grants, scopes)
     if (existing) {
       await updateEndpoint(existing, body)
       closeDialog()
@@ -330,9 +488,7 @@ export function EndpointDialog({ name: existing, ...props }: DialogProps & { nam
                     key={grant.container_id}
                     draft={grant}
                     container={containers.find((entry) => entry.id === grant.container_id)}
-                    servers={servers
-                      .filter((server) => server.container_id === grant.container_id)
-                      .map((server) => server.name)}
+                    servers={servers.filter((server) => server.container_id === grant.container_id)}
                     scopes={scopes}
                     onChange={(next) =>
                       setGrants(grants.map((other, at) => (at === index ? next : other)))

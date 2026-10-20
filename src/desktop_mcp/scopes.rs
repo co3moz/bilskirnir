@@ -111,8 +111,12 @@ impl Scope {
         }
     }
     /// Scopes whose tools return a job, which `get_job` then reads.
-    fn has_jobs(self) -> bool {
+    pub(super) fn has_jobs(self) -> bool {
         matches!(self, Scope::Commands | Scope::Power)
+    }
+    /// Whether the tool of this name is one of the scope's.
+    pub(super) fn offers(self, name: &str) -> bool {
+        self.tools().contains(&name)
     }
 }
 /// Arguments an endpoint never passes on: the desktop user is as far as a scope reaches.
@@ -140,6 +144,38 @@ pub(crate) enum Target {
 pub(crate) struct Entry {
     pub tool: Tool,
     pub target: Target,
+}
+
+/// A desktop server's tool with the name it has on an endpoint of its container alone.
+pub(super) struct Named<'a> {
+    /// `SERVER__TOOL`, or with the hash tail when another tool of the server took that name.
+    pub name: String,
+    /// Whether the name carries the hash tail because of such a collision.
+    pub hashed: bool,
+    pub tool: &'a Tool,
+}
+
+/// A server's tools under the names they have on an endpoint of their container alone, which
+/// server lists report and a grant's deny list uses. Two tools whose names clean to one keep
+/// their order, the later one with the hash tail of its own name; one whose hashed name is taken
+/// too is left out. Server names have no underscore, so a name tells its server apart from the
+/// tool, and tools of different servers never collide; a container tool's name has no `__`.
+pub(super) fn server_tool_names(record: &ServerRecord) -> Vec<Named<'_>> {
+    let mut out: Vec<Named<'_>> = Vec::new();
+    for tool in &record.tools {
+        let parts = [record.name.as_str(), tool.name.as_ref()];
+        let mut name = exposed_name(&parts);
+        let mut hashed = false;
+        if out.iter().any(|named| named.name == name) {
+            name = exposed_name_hashed(&parts);
+            hashed = true;
+            if out.iter().any(|named| named.name == name) {
+                continue;
+            }
+        }
+        out.push(Named { name, hashed, tool });
+    }
+    out
 }
 
 /// The name an agent sees: the parts joined with `__`, in the characters MCP clients accept and
@@ -227,7 +263,9 @@ fn server_tool(
 }
 
 /// Every tool of an endpoint, in a stable order: container tools by scope, `get_job`, then the
-/// tools of the desktop servers by container and server.
+/// tools of the desktop servers by container and server. A tool a grant leaves out is not offered
+/// for that container: on an endpoint of several containers it keeps the others, and it is gone
+/// once every grant leaves it out.
 pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
     let single = endpoint.grants.len() == 1;
     let mut entries: Vec<Entry> = Vec::new();
@@ -240,20 +278,24 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
         if granted.is_empty() {
             continue;
         }
-        let containers: Vec<(String, String)> = granted
-            .iter()
-            .map(|grant| (grant.alias.clone(), grant.container_id.clone()))
-            .collect();
-        let aliases: Vec<String> = containers.iter().map(|(alias, _)| alias.clone()).collect();
         for name in scope.tools() {
             let Some(tool) = crate::mcp::listed_tool(name) else {
                 continue;
             };
+            let containers: Vec<(String, String)> = granted
+                .iter()
+                .filter(|grant| !grant.excludes(name))
+                .map(|grant| (grant.alias.clone(), grant.container_id.clone()))
+                .collect();
+            if containers.is_empty() {
+                continue;
+            }
+            let aliases: Vec<String> = containers.iter().map(|(alias, _)| alias.clone()).collect();
             entries.push(Entry {
                 tool: bound_tool(&tool, (!single).then_some(aliases.as_slice())),
                 target: Target::Bilskirnir {
                     tool: name,
-                    containers: containers.clone(),
+                    containers,
                 },
             });
         }
@@ -261,7 +303,9 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
     let jobs: Vec<String> = endpoint
         .grants
         .iter()
-        .filter(|grant| grant.scopes.iter().any(|scope| scope.has_jobs()))
+        .filter(|grant| {
+            grant.scopes.iter().any(|scope| scope.has_jobs()) && !grant.excludes("get_job")
+        })
         .map(|grant| grant.container_id.clone())
         .collect();
     if !jobs.is_empty()
@@ -285,19 +329,31 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
                 && record.error.is_none()
                 && grant.servers.includes(&record.name)
         }) {
-            for tool in &record.tools {
-                let parts: Vec<&str> = if single {
-                    vec![&record.name, &tool.name]
+            for Named { name, hashed, tool } in server_tool_names(record) {
+                // The deny list names the tool as this container alone would expose it, so it
+                // holds whatever the alias is and whichever containers the endpoint covers.
+                if grant.excludes(&name) {
+                    continue;
+                }
+                // With several containers the alias leads; the hash tail, which tells two tools
+                // that clean to one name apart, stays where the name alone has it, so leaving one
+                // of them out does not rename the other.
+                let name = if single {
+                    name
                 } else {
-                    vec![&grant.alias, &record.name, &tool.name]
-                };
-                let mut name = exposed_name(&parts);
-                // Two tools that clean to one name both stay listed, the later one marked apart.
-                if entries.iter().any(|entry| entry.tool.name == name) {
-                    name = exposed_name_hashed(&parts);
-                    if entries.iter().any(|entry| entry.tool.name == name) {
-                        continue;
+                    let parts = [
+                        grant.alias.as_str(),
+                        record.name.as_str(),
+                        tool.name.as_ref(),
+                    ];
+                    if hashed {
+                        exposed_name_hashed(&parts)
+                    } else {
+                        exposed_name(&parts)
                     }
+                };
+                if entries.iter().any(|entry| entry.tool.name == name) {
+                    continue;
                 }
                 entries.push(Entry {
                     tool: server_tool(tool, name, &container, &grant.container_id, &record.name),

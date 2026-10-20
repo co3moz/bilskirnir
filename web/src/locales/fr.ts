@@ -960,6 +960,11 @@ export const fr: Messages = {
   "mcp.grant.chosenServers": "Seulement ceux choisis ici",
   "mcp.grant.noServers": "Ce conteneur n'a pas encore de serveur MCP du bureau.",
   "mcp.grant.serversLine": "Serveurs : {servers}",
+  "mcp.grant.toolsOf": "{included} outils sur {count}",
+  "mcp.grant.toolsHint":
+    "Ouvrez les outils d'une portée ou d'un serveur et décochez-en un pour l'écarter.",
+  "mcp.grant.excluded.one": "{count} outil écarté",
+  "mcp.grant.excluded.other": "{count} outils écartés",
   "mcp.scopes.all": "Tous les outils du conteneur",
   "mcp.scopes.none": "Aucun outil du conteneur",
   "mcp.servers.all": "tous, y compris ceux ajoutés plus tard",

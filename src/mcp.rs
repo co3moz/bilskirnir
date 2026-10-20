@@ -1100,12 +1100,13 @@ fn desktop_mcp_tools(id: Value) -> [Tool; 8] {
         "container_id":{"type":"string","minLength":1},
         "alias":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,23}$","description":"The container's name on the endpoint, which its tools take as container when it covers several; defaults to the container's name."},
         "scopes":{"type":"array","uniqueItems":true,"items":{"type":"string","enum":["view","input","applications","files_read","files_write","commands","media","power"]},"description":"Groups of container tools: view (screenshots, windows, accessibility tree, waits, status and logs), input (mouse, keyboard, windows, gamepad), applications, files_read, files_write, commands (scripts and terminals as the desktop user, never root; with sudo that is root inside the container), media (recordings, artifacts, audio) and power (start, stop, restart). Deleting or changing a container is never part of one."},
-        "servers":{"anyOf":[{"type":"string","enum":["all"]},{"type":"array","items":server.clone()}],"description":"The desktop MCP servers whose tools the endpoint offers: \"all\", also those declared later, or these names."}
+        "servers":{"anyOf":[{"type":"string","enum":["all"]},{"type":"array","items":server.clone()}],"description":"The desktop MCP servers whose tools the endpoint offers: \"all\", also those declared later, or these names."},
+        "excluded_tools":{"type":"array","maxItems":1024,"uniqueItems":true,"items":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,64}$"},"description":"Tools left out although their scope or server is granted, named as the endpoint exposes them for this container alone: a container tool's own name, such as application_diagnostics, which must belong to the granted scopes, or SERVER__TOOL for a desktop server's tool, as list_mcp_servers reports it in exposed, kept whether or not the server is known now. Empty or absent leaves everything in, also tools a server adds later."}
     }), &["container_id","scopes","servers"])});
     [
         tool(
             "list_mcp_servers",
-            "List the MCP servers that run inside desktops: the image's, declared in /etc/bilskirnir/mcp.d, and those the desktop user registered in ~/.config/bilskirnir/mcp. Each has its source, transport, state (ready, pending, error, or stopped while the container does not run), error, the tools it last listed and the end of its stderr. With container_id the running desktop's declarations are read again first. Variables and headers are shown by name only.",
+            "List the MCP servers that run inside desktops: the image's, declared in /etc/bilskirnir/mcp.d, and those the desktop user registered in ~/.config/bilskirnir/mcp. Each has its source, transport, state (ready, pending, error, or stopped while the container does not run), error, the tools it last listed, each with the exposed name an endpoint of its container gives it, and the end of its stderr. With container_id the running desktop's declarations are read again first. Variables and headers are shown by name only.",
             json!({"container_id": id}),
             &[],
             true,
@@ -1150,7 +1151,7 @@ fn desktop_mcp_tools(id: Value) -> [Tool; 8] {
         ),
         tool(
             "create_mcp_endpoint",
-            "Create an MCP endpoint at /mcp/NAME for an agent that should reach only these containers, with only these scopes and desktop servers, instead of this administrator channel. Returns the endpoint and its bearer token, shown this once. This administrator token opens every endpoint as well.",
+            "Create an MCP endpoint at /mcp/NAME for an agent that should reach only these containers, with only these scopes and desktop servers, instead of this administrator channel; excluded_tools leaves single tools of those out. Returns the endpoint and its bearer token, shown this once. This administrator token opens every endpoint as well.",
             json!({"name": endpoint, "grants": grants}),
             &["name", "grants"],
             false,
@@ -1159,7 +1160,7 @@ fn desktop_mcp_tools(id: Value) -> [Tool; 8] {
         ),
         tool(
             "update_mcp_endpoint",
-            "Replace the containers, scopes and desktop servers of an MCP endpoint. Its name, path and token stay; agents connected to it see the new tool list.",
+            "Replace the containers, scopes, desktop servers and excluded tools of an MCP endpoint. Its name, path and token stay; agents connected to it see the new tool list.",
             json!({"name": endpoint, "grants": grants}),
             &["name", "grants"],
             false,
