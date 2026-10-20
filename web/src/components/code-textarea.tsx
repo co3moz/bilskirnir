@@ -34,6 +34,8 @@ function CodeTextarea({
   const gutter = React.useRef<HTMLDivElement>(null)
   const tokens = React.useMemo(() => highlight(value, language), [value, language])
   const numbers = React.useMemo(() => lineNumbers(value), [value])
+  // The width of the last number sets the gutter's, as `ch` is a digit in the mono face.
+  const digits = numbers.length - numbers.lastIndexOf("\n") - 1
   const follow = (field: HTMLTextAreaElement) => {
     if (copy.current) {
       copy.current.style.transform = `translate(${-field.scrollLeft}px, ${-field.scrollTop}px)`
@@ -46,11 +48,17 @@ function CodeTextarea({
       data-slot="code-textarea"
       className="flex w-full overflow-hidden rounded-xl border border-input bg-input/30 transition-colors has-disabled:opacity-50 has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 has-[textarea[aria-invalid=true]]:border-destructive has-[textarea[aria-invalid=true]]:ring-[3px] has-[textarea[aria-invalid=true]]:ring-destructive/20 dark:has-[textarea[aria-invalid=true]]:border-destructive/50 dark:has-[textarea[aria-invalid=true]]:ring-destructive/40"
     >
+      {/* The numbers are out of the flow, so only the field sets the height: a gutter as tall as
+          every line would stretch the frame past a field that stops growing at its max height. */}
       <div
         aria-hidden
-        className="shrink-0 overflow-hidden border-r border-input bg-muted/40 py-3 pr-2 pl-3 text-right font-mono text-xs text-muted-foreground select-none"
+        className="relative shrink-0 overflow-hidden border-r border-input bg-muted/40 font-mono text-xs text-muted-foreground select-none"
+        style={{ width: `calc(${Math.max(digits, 2)}ch + 1.25rem + 1px)` }}
       >
-        <div ref={gutter} className="min-w-[2ch] whitespace-pre">
+        <div
+          ref={gutter}
+          className="absolute inset-x-0 top-0 py-3 pr-2 pl-3 text-right whitespace-pre"
+        >
           {numbers}
         </div>
       </div>
