@@ -8,6 +8,7 @@ import {
   RiRefreshLine,
   RiSearchLine,
   RiStackLine,
+  RiTerminalBoxLine,
 } from "@remixicon/react"
 import { cn } from "cn"
 import { toast } from "sonner"
@@ -42,13 +43,17 @@ import { useImages, useSettings, useTemplates } from "@/lib/queries"
 import {
   allTags,
   buildable,
+  groupByKind,
   loadTemplate,
   matches,
   mergeTemplates,
   templateFile,
   type BrokenTemplate,
   type Template,
+  type TemplateKind,
 } from "@/lib/templates"
+
+const KIND_ICONS = { application: RiApps2Line, environment: RiTerminalBoxLine }
 
 /**
  * One template: its icon, what it is, whether an image was built from it, and Install. While
@@ -107,7 +112,7 @@ function TemplateCard({
       >
         <ImageIcon
           src={templateFile(list, template.id, "png")}
-          fallback={RiApps2Line}
+          fallback={KIND_ICONS[template.kind]}
           className="row-span-2 size-14 rounded-xl"
         />
         <CardTitle className="break-words">{template.name}</CardTitle>
@@ -193,6 +198,41 @@ function TemplateCard({
   )
 }
 
+/**
+ * The cards of one kind. A list with more than one kind gives each its heading, and says what an
+ * environment is for, since one is meant to be merged with an application.
+ */
+function TemplateSection({
+  kind,
+  heading,
+  children,
+}: {
+  kind: TemplateKind
+  heading: boolean
+  children: React.ReactNode
+}) {
+  const Icon = KIND_ICONS[kind]
+  const id = `templates-${kind}`
+  return (
+    <section aria-labelledby={heading ? id : undefined} className="flex flex-col gap-3">
+      {heading && (
+        <div className="flex flex-col gap-0.5">
+          <h3 id={id} className="flex items-center gap-2 text-sm font-medium">
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            {t(`templates.kind.${kind}`)}
+          </h3>
+          {kind === "environment" && (
+            <p className="text-sm text-muted-foreground">{t("templates.kind.environmentHint")}</p>
+          )}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @[100rem]/main:grid-cols-4">
+        {children}
+      </div>
+    </section>
+  )
+}
+
 /** Entries the list names but the page cannot offer, so whoever maintains the list sees why. */
 function BrokenTemplates({ broken }: { broken: BrokenTemplate[] }) {
   if (!broken.length) return null
@@ -228,6 +268,9 @@ export function TemplatesPage() {
   const shown = all.filter(
     (template) => matches(template, search) && (!tag || template.tags.includes(tag))
   )
+  // Search and tags narrow every section alike; a list of one kind shows no headings.
+  const groups = groupByKind(shown)
+  const sectioned = React.useMemo(() => groupByKind(all).length > 1, [all])
   const installed = (id: string) =>
     images.filter((image) => image.template_ids?.includes(id)).length
   const source = list ? new URL(list).host : ""
@@ -403,19 +446,23 @@ export function TemplatesPage() {
                 <EmptyDescription>{t("templates.noneHint")}</EmptyDescription>
               </EmptyHeader>
             </Empty>
-          ) : shown.length ? (
-            <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @[100rem]/main:grid-cols-4">
-              {shown.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  list={list}
-                  template={template}
-                  version={version}
-                  installed={installed(template.id)}
-                  choosing={choosing}
-                  order={chosen.indexOf(template.id) + 1}
-                  onChoose={() => choose(template.id)}
-                />
+          ) : groups.length ? (
+            <div className="flex flex-col gap-6">
+              {groups.map((group) => (
+                <TemplateSection key={group.kind} kind={group.kind} heading={sectioned}>
+                  {group.templates.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      list={list}
+                      template={template}
+                      version={version}
+                      installed={installed(template.id)}
+                      choosing={choosing}
+                      order={chosen.indexOf(template.id) + 1}
+                      onChoose={() => choose(template.id)}
+                    />
+                  ))}
+                </TemplateSection>
               ))}
             </div>
           ) : (

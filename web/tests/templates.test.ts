@@ -7,6 +7,7 @@ import {
   allTags,
   buildable,
   compareVersions,
+  groupByKind,
   loadTemplate,
   matches,
   mergeTemplates,
@@ -20,6 +21,7 @@ const unity = {
   name: "Unity Hub",
   description: "Unity Hub with a volume for editors.",
   tags: ["games", "3d"],
+  kind: "application" as const,
   requires: "0.5.0",
 }
 
@@ -38,7 +40,7 @@ test("a list offers the entries it can and says why it cannot offer the rest", (
   })
   assert.deepEqual(list.templates, [
     unity,
-    { id: "vscode", name: "VS Code", description: "", tags: [] },
+    { id: "vscode", name: "VS Code", description: "", tags: [], kind: "application" },
   ])
   assert.deepEqual(
     list.broken.map((entry) => entry.id),
@@ -48,6 +50,61 @@ test("a list offers the entries it can and says why it cannot offer the rest", (
   assert.match(list.broken[3].reason, /at most 8/)
   // Fields a newer list adds are ignored rather than refused.
   assert.equal(readTemplateList({ templates: [{ ...unity, stars: 5 }] }).templates.length, 1)
+})
+
+test("an entry is an application unless the list says it is an environment", () => {
+  const list = readTemplateList({
+    templates: [
+      { id: "node", name: "Node.js", kind: "environment" },
+      { id: "vscode", name: "VS Code" },
+      { id: "chrome", name: "Chrome", kind: "application" },
+      { id: "plugin", name: "Plugin", kind: "plugin" },
+      { id: "upper", name: "Upper", kind: "Environment" },
+      { id: "blank", name: "Blank", kind: "" },
+      { id: "number", name: "Number", kind: 1 },
+      { id: "nothing", name: "Nothing", kind: null },
+    ],
+  })
+  assert.deepEqual(
+    list.templates.map((template) => [template.id, template.kind]),
+    [
+      ["node", "environment"],
+      ["vscode", "application"],
+      ["chrome", "application"],
+    ]
+  )
+  // An unknown kind is refused like bad tags, with the reason, rather than shown in a section.
+  assert.deepEqual(
+    list.broken.map((entry) => entry.id),
+    ["plugin", "upper", "blank", "number", "nothing"]
+  )
+  for (const entry of list.broken) assert.match(entry.reason, /application or environment/)
+})
+
+test("templates group by kind, applications first, each in the list's order", () => {
+  const { templates } = readTemplateList({
+    templates: [
+      { id: "node", name: "Node.js", kind: "environment" },
+      { id: "vscode", name: "VS Code" },
+      { id: "rust", name: "Rust", kind: "environment" },
+      { id: "chrome", name: "Chrome" },
+    ],
+  })
+  assert.deepEqual(
+    groupByKind(templates).map((group) => [group.kind, group.templates.map(({ id }) => id)]),
+    [
+      ["application", ["vscode", "chrome"]],
+      ["environment", ["node", "rust"]],
+    ]
+  )
+  // A kind without templates, such as one a search left empty, has no group.
+  assert.deepEqual(
+    groupByKind(templates.filter((template) => matches(template, "node"))).map(
+      (group) => group.kind
+    ),
+    ["environment"]
+  )
+  assert.deepEqual(groupByKind([]), [])
 })
 
 test("a list without a templates array is refused as a whole", () => {
@@ -170,8 +227,20 @@ const step = (name: string, script: string) => ({
   root: false,
   timeout_seconds: 600,
 })
-const chrome = { id: "chrome", name: "Google Chrome", description: "Chrome.", tags: [] }
-const vscode = { id: "vscode", name: "VS Code", description: "", tags: [] }
+const chrome = {
+  id: "chrome",
+  name: "Google Chrome",
+  description: "Chrome.",
+  tags: [],
+  kind: "application" as const,
+}
+const vscode = {
+  id: "vscode",
+  name: "VS Code",
+  description: "",
+  tags: [],
+  kind: "application" as const,
+}
 
 test("merging templates runs each script as a part and each compose as a step", () => {
   const merged = mergeTemplates([

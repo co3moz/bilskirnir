@@ -578,6 +578,10 @@ export const es: Messages = {
   "templates.filter": "Filtrar plantillas",
   "templates.filterPlaceholder": "Buscar plantillas",
   "templates.tags": "Etiquetas",
+  "templates.kind.application": "Aplicaciones",
+  "templates.kind.environment": "Entornos",
+  "templates.kind.environmentHint":
+    "Toolchains de lenguajes para compilar y probar código. Combine uno con una aplicación mediante Combinar e instalar, por ejemplo Node.js con VS Code.",
   "templates.install": "Instalar",
   "templates.installAgain": "Instalar de nuevo",
   "templates.installOf": "Instalar {name}",
@@ -593,6 +597,7 @@ export const es: Messages = {
   "templates.broken.tags": "las etiquetas deben ser como máximo {count} textos cortos",
   "templates.broken.requires": "requires debe ser una versión como 0.5.0",
   "templates.broken.duplicate": "otra plantilla tiene el mismo id",
+  "templates.broken.kind": "kind debe ser application o environment",
   "templates.merge.start": "Combinar e instalar",
   "templates.merge.go": "Combinar",
   "templates.merge.choose": "Elegir {name}",

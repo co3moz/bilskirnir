@@ -586,6 +586,10 @@ export const de: Messages = {
   "templates.filter": "Vorlagen filtern",
   "templates.filterPlaceholder": "Vorlagen suchen",
   "templates.tags": "Schlagwörter",
+  "templates.kind.application": "Anwendungen",
+  "templates.kind.environment": "Umgebungen",
+  "templates.kind.environmentHint":
+    "Sprach-Toolchains zum Bauen und Testen von Code. Führen Sie eine mit Zusammenführen und installieren mit einer Anwendung zusammen, etwa Node.js mit VS Code.",
   "templates.install": "Installieren",
   "templates.installAgain": "Erneut installieren",
   "templates.installOf": "{name} installieren",
@@ -601,6 +605,7 @@ export const de: Messages = {
   "templates.broken.tags": "höchstens {count} kurze Schlagwörter sind erlaubt",
   "templates.broken.requires": "requires muss eine Version wie 0.5.0 sein",
   "templates.broken.duplicate": "eine andere Vorlage hat dieselbe ID",
+  "templates.broken.kind": "kind muss application oder environment sein",
   "templates.merge.start": "Zusammenführen und installieren",
   "templates.merge.go": "Zusammenführen",
   "templates.merge.choose": "{name} auswählen",

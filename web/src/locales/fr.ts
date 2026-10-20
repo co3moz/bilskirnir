@@ -583,6 +583,10 @@ export const fr: Messages = {
   "templates.filter": "Filtrer les modèles",
   "templates.filterPlaceholder": "Rechercher des modèles",
   "templates.tags": "Étiquettes",
+  "templates.kind.application": "Applications",
+  "templates.kind.environment": "Environnements",
+  "templates.kind.environmentHint":
+    "Chaînes d'outils de langage pour compiler et tester du code. Fusionnez-en une avec une application via Fusionner et installer, par exemple Node.js avec VS Code.",
   "templates.install": "Installer",
   "templates.installAgain": "Réinstaller",
   "templates.installOf": "Installer {name}",
@@ -599,6 +603,7 @@ export const fr: Messages = {
   "templates.broken.tags": "les étiquettes doivent être au plus {count} textes courts",
   "templates.broken.requires": "requires doit être une version comme 0.5.0",
   "templates.broken.duplicate": "un autre modèle a le même identifiant",
+  "templates.broken.kind": "kind doit être application ou environment",
   "templates.merge.start": "Fusionner et installer",
   "templates.merge.go": "Fusionner",
   "templates.merge.choose": "Choisir {name}",

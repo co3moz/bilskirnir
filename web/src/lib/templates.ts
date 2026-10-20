@@ -3,7 +3,8 @@
 // one with a description and tags, and `<id>.png` next to it is its icon.
 //
 //   index.json   {"templates": [{"id": "unity", "name": "Unity Hub", "description": "…",
-//                                "tags": ["games"], "requires": "0.5.0"}]}
+//                                "tags": ["games"], "requires": "0.5.0"},
+//                               {"id": "node", "name": "Node.js", "kind": "environment"}]}
 //   unity.json   the build configuration
 //   unity.png    the icon, at most 256 by 256 pixels
 //
@@ -15,11 +16,21 @@ import { iconFromBlob } from "./icons"
 import { t } from "./i18n"
 import type { BuildPart, ComposeStep, ServerDeclaration } from "./types"
 
+/**
+ * What a template brings: an application for the desktop, or an environment, such as a language
+ * toolchain, that is meant to be merged with an application. The page shows them apart, in this
+ * order.
+ */
+export const TEMPLATE_KINDS = ["application", "environment"] as const
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number]
+
 export type Template = {
   id: string
   name: string
   description: string
   tags: string[]
+  /** `application` when the list names none. */
+  kind: TemplateKind
   /** The oldest Bilskirnir release that can build it, such as `0.5.0`. */
   requires?: string
   /** The names of the desktop MCP servers an image built from it declares. */
@@ -44,6 +55,7 @@ function readTemplate(value: unknown): Template {
     name,
     description = "",
     tags = [],
+    kind = "application",
     requires,
     mcp = [],
   } = value as Record<string, unknown>
@@ -58,6 +70,8 @@ function readTemplate(value: unknown): Template {
     tags.some((tag) => typeof tag !== "string" || !tag.trim() || [...tag].length > 32)
   )
     throw new Error(t("templates.broken.tags", { count: TAG_LIMIT }))
+  // A kind this page does not know would land in the wrong section, so the entry says so.
+  if (!TEMPLATE_KINDS.includes(kind as TemplateKind)) throw new Error(t("templates.broken.kind"))
   if (requires !== undefined && (typeof requires !== "string" || !VERSION.test(requires)))
     throw new Error(t("templates.broken.requires"))
   // Only names, for the card; the declarations come with the template's configuration.
@@ -71,6 +85,7 @@ function readTemplate(value: unknown): Template {
     name: name.trim(),
     description: description.trim(),
     tags: (tags as string[]).map((tag) => tag.trim()),
+    kind: kind as TemplateKind,
     ...(requires ? { requires } : {}),
     ...(servers.length ? { mcp: servers } : {}),
   }
@@ -129,6 +144,16 @@ export function matches(template: Template, search: string) {
 /** Every tag of the list, each once, in alphabetical order. */
 export const allTags = (templates: Template[]) =>
   [...new Set(templates.flatMap((template) => template.tags))].sort((a, b) => a.localeCompare(b))
+
+/**
+ * The templates of each kind that has any, applications first, each in the list's order. The page
+ * shows one section per group.
+ */
+export const groupByKind = (templates: Template[]) =>
+  TEMPLATE_KINDS.map((kind) => ({
+    kind,
+    templates: templates.filter((template) => template.kind === kind),
+  })).filter((group) => group.templates.length > 0)
 
 // The list is public, so requests carry no cookies, and they ask the server whether a cached copy
 // is still current, since a change on the wiki should show without waiting for the cache to expire.

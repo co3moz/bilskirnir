@@ -573,6 +573,10 @@ export const tr: Messages = {
   "templates.filter": "Şablonları filtrele",
   "templates.filterPlaceholder": "Şablon ara",
   "templates.tags": "Etiketler",
+  "templates.kind.application": "Uygulamalar",
+  "templates.kind.environment": "Ortamlar",
+  "templates.kind.environmentHint":
+    "Kod derlemek ve test etmek için dil araç zincirleri. Birini Birleştir ve yükle ile bir uygulamayla birleştirin, örneğin VS Code ile Node.js.",
   "templates.install": "Yükle",
   "templates.installAgain": "Yeniden yükle",
   "templates.installOf": "{name} şablonunu yükle",
@@ -588,6 +592,7 @@ export const tr: Messages = {
   "templates.broken.tags": "etiketler en fazla {count} kısa metin olmalı",
   "templates.broken.requires": "requires 0.5.0 gibi bir sürüm olmalı",
   "templates.broken.duplicate": "aynı kimliğe sahip başka bir şablon var",
+  "templates.broken.kind": "kind application ya da environment olmalı",
   "templates.merge.start": "Birleştir ve yükle",
   "templates.merge.go": "Birleştir",
   "templates.merge.choose": "{name} şablonunu seç",
