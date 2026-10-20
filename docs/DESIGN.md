@@ -17,7 +17,7 @@ Write visible copy in English in `web/src/locales/en.ts`, and give the same key 
 The layout is `dashboard-01`, filled with Bilskirnir's own data:
 
 - **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the eight pages, a **Running containers** group where the block lists documents, links to the documentation and the MCP guide, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
-- **Site header**: the sidebar button, the page title, the Docker connection and the page's main action.
+- **Site header**: the sidebar button, the page title and the page's main action. A lost Docker connection shows as an alert on the pages that need Docker instead.
 - **Dashboard**: four summary cards, resource usage, the job activity chart and the containers table, in that order. The block has one chart; resource usage is the second, in the same card style.
 - **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Templates**: one card per template, with a search field and tag filters, applications first and environments in a section of their own below them; **Volumes** and **Jobs**: tables; **MCP**: a table of endpoints and the desktop servers grouped by container, behind the same view switch as **Jobs**; **Files**: a container picker in the heading and one card with the file explorer the volume browser uses too.
 - **Desktop view**: full screen without the sidebar. A 48 px toolbar leaves as much room as possible for the remote desktop.
