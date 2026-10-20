@@ -1028,6 +1028,7 @@ export const en = {
   "mcp.tools.description.other": "{count} tools, as an agent at this endpoint sees them.",
   "mcp.tools.loading": "Loading tools…",
   "mcp.tools.none": "This endpoint offers no tools yet.",
+  "mcp.tools.endpoint": "The endpoint itself",
   "mcp.servers.description":
     "MCP servers that run inside containers, declared by the image or added in the running desktop. Agents reach their tools through the endpoints that include them.",
   "mcp.servers.loading": "Loading desktop servers…",

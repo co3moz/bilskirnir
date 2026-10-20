@@ -292,7 +292,11 @@ test("desktop servers are grouped by container, in the containers' order", () =>
 })
 
 test("an endpoint's tools are grouped by where they come from", () => {
-  const tool = (source: EndpointTool["source"], container_id: string, server: string | null) => ({
+  const tool = (
+    source: EndpointTool["source"],
+    container_id: string | null,
+    server: string | null
+  ) => ({
     name: `${source}-${container_id}-${server}`,
     description: "",
     source,
@@ -304,6 +308,8 @@ test("an endpoint's tools are grouped by where they come from", () => {
     tool("server", "a", "chrome"),
     tool("bilskirnir", "a", null),
     tool("server", "b", "chrome"),
+    // get_job is the endpoint's own tool and belongs to no container.
+    tool("bilskirnir", null, null),
   ])
   assert.deepEqual(
     groups.map((group) => [group.source, group.container_id, group.server, group.tools.length]),
@@ -311,6 +317,7 @@ test("an endpoint's tools are grouped by where they come from", () => {
       ["bilskirnir", "a", null, 2],
       ["server", "a", "chrome", 1],
       ["server", "b", "chrome", 1],
+      ["bilskirnir", null, null, 1],
     ]
   )
 })

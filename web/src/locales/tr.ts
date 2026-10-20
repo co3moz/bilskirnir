@@ -998,6 +998,7 @@ export const tr: Messages = {
   "mcp.tools.description.other": "{count} araç, bu uç noktadaki bir ajanın gördüğü gibi.",
   "mcp.tools.loading": "Araçlar yükleniyor…",
   "mcp.tools.none": "Bu uç nokta henüz araç sunmuyor.",
+  "mcp.tools.endpoint": "Uç noktanın kendisi",
   "mcp.servers.description":
     "Konteynerlerin içinde çalışan, imajın tanımladığı ya da çalışan masaüstünde eklenen MCP sunucuları. Ajanlar araçlarına onları içeren uç noktalar üzerinden ulaşır.",
   "mcp.servers.loading": "Masaüstü sunucuları yükleniyor…",

@@ -1014,6 +1014,7 @@ export const fr: Messages = {
   "mcp.tools.description.other": "{count} outils, tels qu'un agent les voit à ce point d'accès.",
   "mcp.tools.loading": "Chargement des outils…",
   "mcp.tools.none": "Ce point d'accès n'offre encore aucun outil.",
+  "mcp.tools.endpoint": "Le point d'accès lui-même",
   "mcp.servers.description":
     "Serveurs MCP qui tournent dans les conteneurs, déclarés par l'image ou ajoutés dans le bureau en marche. Les agents atteignent leurs outils par les points d'accès qui les incluent.",
   "mcp.servers.loading": "Chargement des serveurs du bureau…",

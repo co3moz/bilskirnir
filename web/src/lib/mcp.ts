@@ -230,19 +230,22 @@ export function serversByContainer<C extends { id: string }>(
   ]
 }
 
-/** An endpoint's tools by where they come from: Bilskirnir's or one server's, per container. */
+/**
+ * An endpoint's tools by where they come from: Bilskirnir's or one server's, per container.
+ * A tool of the endpoint itself, such as `get_job`, has no container and forms a group of its own.
+ */
 export function toolGroups(tools: EndpointTool[]) {
   const groups = new Map<
     string,
     {
       source: EndpointTool["source"]
-      container_id: string
+      container_id: string | null
       server: string | null
       tools: EndpointTool[]
     }
   >()
   for (const tool of tools) {
-    const key = `${tool.source}\u0000${tool.container_id}\u0000${tool.server ?? ""}`
+    const key = `${tool.source}\u0000${tool.container_id ?? ""}\u0000${tool.server ?? ""}`
     const group = groups.get(key) ?? {
       source: tool.source,
       container_id: tool.container_id,
