@@ -1,19 +1,38 @@
 import { useSyncExternalStore } from "react"
 
-export type Page = "dashboard" | "containers" | "images" | "templates" | "volumes" | "mcp" | "jobs"
-export type Route = { page: Page } | { page: "desktop"; id: string }
+export type Page =
+  "dashboard" | "containers" | "images" | "templates" | "volumes" | "mcp" | "files" | "jobs"
+export type Route =
+  | { page: Exclude<Page, "files"> }
+  /** The files page, with the container it shows when one was chosen. */
+  | { page: "files"; container?: string }
+  | { page: "desktop"; id: string }
 
-const pages: Page[] = ["dashboard", "containers", "images", "templates", "volumes", "mcp", "jobs"]
+const pages: Page[] = [
+  "dashboard",
+  "containers",
+  "images",
+  "templates",
+  "volumes",
+  "mcp",
+  "files",
+  "jobs",
+]
 
 /** Pages live in the URL fragment, so the manager serves one index.html for all of them. */
 export function parseRoute(hash: string): Route {
   const [page, id] = hash.replace(/^#\/?/, "").split("/")
   if (page === "desktop" && id) return { page: "desktop", id: decodeURIComponent(id) }
-  return { page: pages.includes(page as Page) ? (page as Page) : "dashboard" }
+  if (page === "files") return id ? { page, container: decodeURIComponent(id) } : { page }
+  return { page: pages.includes(page as Page) ? (page as Exclude<Page, "files">) : "dashboard" }
 }
 
-export const href = (route: Route) =>
-  route.page === "desktop" ? `#/desktop/${encodeURIComponent(route.id)}` : `#/${route.page}`
+export function href(route: Route) {
+  if (route.page === "desktop") return `#/desktop/${encodeURIComponent(route.id)}`
+  if (route.page === "files" && route.container)
+    return `#/files/${encodeURIComponent(route.container)}`
+  return `#/${route.page}`
+}
 
 export function navigate(route: Route) {
   location.hash = href(route)

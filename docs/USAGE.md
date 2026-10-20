@@ -6,7 +6,7 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out.
 
 The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
@@ -197,6 +197,10 @@ You can also use Docker's file-copy commands from WSL. Replace `CONTAINER_ID` wi
 docker cp ./project bilskirnir-CONTAINER_ID:/workspace/project
 docker cp bilskirnir-CONTAINER_ID:/home/desktop/Downloads/result ./result
 ```
+
+## Browse and edit a container's files
+
+**Files** in the sidebar browses a running container's files as the desktop user. Choose the container at the top; the address keeps the choice, so a link or a reload opens the same one. The page starts in the home folder and lists the same places as the upload folder picker beside the files, with an address field for any folder the desktop user can open. Open a folder to look inside, and a text file of up to 512 KiB to read and change it; a larger file downloads instead. Scripts (`.sh`, `.bashrc` or a shell `#!` line) and `.json` files open with their code colored. Saving replaces the file in one step and keeps its permissions, so a script stays executable. The row menu downloads, renames or deletes, and a folder downloads as a `.tar.gz`. **New folder** and **Upload** add to the open folder, and files dropped on the list upload too, wherever the upload rules allow; elsewhere the page says why they are off. The manager refuses anything the desktop user may not do, such as changing a system file.
 
 ## Change a container's settings
 

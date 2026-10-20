@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { highlight, type Token, type TokenKind } from "@/lib/highlight"
+import { codeLanguage, highlight, type Token, type TokenKind } from "@/lib/highlight"
 
 /** The kind of each piece, ignoring whitespace-only plain pieces, for readable expectations. */
 const kinds = (tokens: Token[]) =>
@@ -128,4 +128,15 @@ test("JSON tells keys from string values", () => {
     ["keyword", "null"],
     ["operator", "]}"],
   ])
+})
+
+test("a file opens colored as bash or JSON by its name or its first line", () => {
+  assert.equal(codeLanguage("/home/desktop/setup.sh", "echo"), "bash")
+  assert.equal(codeLanguage("/home/desktop/.bashrc", ""), "bash")
+  assert.equal(codeLanguage("/home/desktop/run", "#!/usr/bin/env bash\necho"), "bash")
+  assert.equal(codeLanguage("/usr/local/bin/tool", "#!/bin/sh -e\n"), "bash")
+  assert.equal(codeLanguage("/home/desktop/package.JSON", "{}"), "json")
+  assert.equal(codeLanguage("/home/desktop/notes.txt", "# not a shebang"), null)
+  assert.equal(codeLanguage("/home/desktop/app.py", "#!/usr/bin/env python3\n"), null)
+  assert.equal(codeLanguage("/home/desktop/fish", "#!/usr/bin/fish\n"), null)
 })
