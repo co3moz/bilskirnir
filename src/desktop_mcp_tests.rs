@@ -2,7 +2,7 @@
 //! for its scopes and nothing more, the names its tools get, and that an endpoint's token opens
 //! that endpoint and no other route.
 use super::{
-    client::exec_args,
+    client::{MAX_TOOLS, check_tool_list, exec_args},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
@@ -925,4 +925,20 @@ fn every_route_and_tool_is_documented() {
             scope.id()
         );
     }
+}
+
+#[test]
+fn a_tool_list_an_endpoint_cannot_carry_is_refused() {
+    let names: Vec<String> = (0..MAX_TOOLS).map(|i| format!("tool_{i}")).collect();
+    let tools: Vec<rmcp::model::Tool> = names.iter().map(|name| tool(name)).collect();
+    assert!(check_tool_list(&tools).is_ok());
+    let mut one_more = tools.clone();
+    one_more.push(tool("tool_more"));
+    let error = check_tool_list(&one_more).unwrap_err().to_string();
+    assert!(error.contains("more than 256 tools"), "{error}");
+    // Few tools, but described at a length no endpoint should send with every list.
+    let mut wide = tool("wide");
+    wide.description = Some("x".repeat(1 << 20).into());
+    let error = check_tool_list(&[wide]).unwrap_err().to_string();
+    assert!(error.contains("larger than 1 MiB"), "{error}");
 }

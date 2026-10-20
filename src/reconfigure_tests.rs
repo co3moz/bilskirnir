@@ -451,3 +451,151 @@ fn proxied_ports_change_in_place_within_their_limits() {
         );
     }
 }
+
+/// A manager whose Docker CLI is a shell script in a new directory, which it enters before
+/// `commands` run with the CLI's arguments. The container `e` exists, stopped, and the manager
+/// container is `bilskirnir-manager`.
+#[cfg(unix)]
+fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!(
+        "bilskirnir-reconfigure-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    std::fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\ncd '{}'\necho \"$*\" >> calls\n{commands}",
+            dir.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut app = crate::tests::app(false);
+    let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
+    config.docker_bin = docker.display().to_string();
+    config.data = dir.join("data");
+    config.manager = Some("bilskirnir-manager".into());
+    let env = Container {
+        id: "e".into(),
+        container: "bilskirnir-e".into(),
+        private_network: "bilskirnir-e-private".into(),
+        egress_network: "bilskirnir-e-egress".into(),
+        source_image_id: "sha256:desktop".into(),
+        created_at: 1,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(CONTAINERS, "e", &env).unwrap();
+    (app, dir)
+}
+
+#[cfg(unix)]
+const STOPPED: &str = r#"[{"Id":"c0ffee","Config":{"Image":"sha256:desktop","Labels":{"bilskirnir.managed":"true","bilskirnir.environment":"e"}},"State":{"Running":false}}]"#;
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_record_names_the_commit_before_the_new_container_is_created() {
+    // Creating the new container fails; whether the old one can be renamed back is scripted.
+    let (app, dir) = fake_docker(
+        r#"case "$*" in
+  'container inspect bilskirnir-e') cat stopped.json; exit ;;
+  'container inspect '*) exit 1 ;;
+  'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
+  'rename c0ffee bilskirnir-e') exit $(cat rename-status) ;;
+  create*) exit 1 ;;
+esac
+"#,
+    );
+    std::fs::write(dir.join("stopped.json"), STOPPED).unwrap();
+    // The stages are reported on the job, so the job record exists as a launched one would.
+    let job = Job {
+        id: "change".into(),
+        kind: "settings".into(),
+        resource: Some("container:e".into()),
+        status: "running".into(),
+        created_at: 1,
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+    };
+    app.db.put("job", "change", &job).unwrap();
+    let change = |rename_status: u8| {
+        std::fs::write(dir.join("rename-status"), rename_status.to_string()).unwrap();
+        let app = app.clone();
+        async move {
+            app.update_container("e", request(json!({"resolution": "1280x720"})), "change")
+                .await
+                .unwrap_err()
+        }
+    };
+
+    // The old container could not be renamed back, so the record keeps naming the commit the
+    // files are in, with the new settings: a retry creates the container from it.
+    let error = change(1).await;
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    let saved: Container = app.db.get(CONTAINERS, "e").unwrap();
+    assert_eq!(
+        saved.working_image,
+        Some(WorkingImage {
+            image_id: "sha256:work".into(),
+            reference: "bilskirnir/container:change".into()
+        }),
+        "{error:#}
+{calls}"
+    );
+    assert_eq!(saved.spec.resolution, "1280x720");
+
+    // Once the old container is back under its name, the record is what it was.
+    let mut before: Container = app.db.get(CONTAINERS, "e").unwrap();
+    before.working_image = None;
+    before.spec = spec();
+    app.db.put(CONTAINERS, "e", &before).unwrap();
+    change(0).await;
+    let restored: Container = app.db.get(CONTAINERS, "e").unwrap();
+    assert_eq!(restored.working_image, None);
+    assert_eq!(restored.spec, spec());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_retry_never_replaces_a_container_set_aside_without_its_commit_on_record() {
+    // The container is gone from under its name, and the one set aside is the only copy.
+    let (app, dir) = fake_docker(
+        r#"case "$*" in
+  'container inspect bilskirnir-manager') echo '[{"Id":"manager","Config":{"Labels":{"bilskirnir.manager":"true"}}}]'; exit ;;
+  'container inspect bilskirnir-e-previous') cat stopped.json; exit ;;
+  'container inspect '*) exit 1 ;;
+esac
+"#,
+    );
+    std::fs::write(dir.join("stopped.json"), STOPPED).unwrap();
+    let error = app.retry_container("e", "retry").await.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        format!("bilskirnir-e-previous {PREVIOUS_LEFT}")
+    );
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    assert!(!calls.contains("create"), "{calls}");
+    assert!(!calls.contains(" rm "), "{calls}");
+    // With the commit on record, the retry goes on to create the container from it.
+    let mut env: Container = app.db.get(CONTAINERS, "e").unwrap();
+    env.working_image = Some(WorkingImage {
+        image_id: "sha256:work".into(),
+        reference: "bilskirnir/container:change".into(),
+    });
+    app.db.put(CONTAINERS, "e", &env).unwrap();
+    std::fs::write(dir.join("calls"), "").unwrap();
+    let _ = app.retry_container("e", "retry").await;
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    assert!(calls.contains("image inspect sha256:work"), "{calls}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

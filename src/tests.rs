@@ -1866,7 +1866,7 @@ fn file_tool_requests_are_validated() {
                 path: path.into(),
                 recursive: true
             }
-            .validate(&spec)
+            .validate(&spec.mounts)
             .is_err(),
             "{path}"
         );
@@ -1876,9 +1876,23 @@ fn file_tool_requests_are_validated() {
             path: "/shared/project".into(),
             recursive: true
         }
-        .validate(&spec)
+        .validate(&spec.mounts)
         .is_ok()
     );
+    // A volume a compose parameter mounts is a root too, though the settings never list it.
+    let composed = model::Mount {
+        volume: "bilskirnir-c-DATA".into(),
+        target: "/home/desktop/Projects".into(),
+        readonly: false,
+    };
+    let data = files::DeleteFile {
+        path: "/home/desktop/Projects".into(),
+        recursive: true,
+    };
+    assert!(data.validate(&spec.mounts).is_ok());
+    let mut all = spec.mounts.clone();
+    all.push(composed);
+    assert!(data.validate(&all).is_err());
 }
 
 #[test]

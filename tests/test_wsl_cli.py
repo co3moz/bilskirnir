@@ -485,3 +485,34 @@ class PackageTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class PortTest(unittest.TestCase):
+    """The dashboard's address follows the PORT setting in .env, not the shell's environment."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        # Without explorer.exe, `open` prints the address instead of opening it.
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        self.env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "PORT": "7777", "HOME": str(self.dir)}
+
+    def address(self):
+        result = subprocess.run(["bash", str(self.cli), "open"], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_the_address_follows_the_port_setting(self):
+        (self.install / ".env").write_text("AUTH_MODE=none\nPORT='9090'\n")
+        self.assertEqual(self.address(), "http://localhost:9090")
+
+    def test_the_default_port_is_used_without_the_setting_or_the_file(self):
+        self.assertEqual(self.address(), "http://localhost:8080")
+        (self.install / ".env").write_text("AUTH_MODE=none\n")
+        self.assertEqual(self.address(), "http://localhost:8080")

@@ -41,6 +41,8 @@ fn a_helper_reaches_nothing_but_the_volume() {
         let joined = args.join(" ");
         assert_eq!(&args[..2], ["run", "--rm"]);
         assert_eq!(after(&args, "--network"), "none");
+        // Nothing it streams is copied into a container log.
+        assert_eq!(after(&args, "--log-driver"), "none");
         assert_eq!(after(&args, "--cap-drop"), "ALL");
         assert_eq!(after(&args, "--security-opt"), "no-new-privileges");
         assert!(args.contains(&"--read-only".into()));

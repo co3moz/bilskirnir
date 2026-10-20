@@ -43,6 +43,9 @@ pub struct DesktopMcp {
     watchers: Mutex<HashSet<String>>,
     /// Servers whose tools are being read, by record key.
     fetching: Mutex<HashSet<String>>,
+    /// Servers reading their tools again because they said they changed, by record key, and
+    /// whether they said so once more meanwhile.
+    rereads: Mutex<HashMap<String, bool>>,
     /// The connections endpoints hold to desktop servers.
     pool: client::Pool,
     /// The end of each server's stderr, by record key.
@@ -57,6 +60,7 @@ impl Default for DesktopMcp {
         Self {
             watchers: Mutex::default(),
             fetching: Mutex::default(),
+            rereads: Mutex::default(),
             pool: client::Pool::default(),
             logs: Mutex::default(),
             changes: tokio::sync::broadcast::channel(64).0,

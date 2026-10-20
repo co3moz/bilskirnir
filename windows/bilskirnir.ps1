@@ -21,13 +21,21 @@ param(
     [Parameter(Position = 1)][string]$Option = "",
     [string]$Package = "",
     [string]$Distro = "Bilskirnir",
-    [int]$Port = 8080
+    [int]$Port = 0
 )
 $ErrorActionPreference = "Stop"
 $taskName = "Bilskirnir keep-alive"
 
 function Invoke-Wsl { param([string[]]$Arguments) & wsl.exe @Arguments; if ($LASTEXITCODE -ne 0) { throw "wsl.exe exited with code $LASTEXITCODE" } }
 function Test-Registered { $list = (& wsl.exe --list --quiet) -join "`n"; return ($list -replace "`0", "") -match "(?m)^$Distro\s*$" }
+# The port is a setting of the installation; -Port overrides what its .env says.
+function Get-Port {
+    if ($Port) { return $Port }
+    $value = (& wsl.exe -d $Distro -- sh -c "sed -n 's/^PORT=//p' /opt/bilskirnir/.env 2>/dev/null | tail -n 1") -join ""
+    $value = ($value -replace "`0", "").Trim('"', "'", " ")
+    if ($value -match '^[0-9]+$') { return [int]$value }
+    return 8080
+}
 function Start-KeepAlive {
     $running = Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" | Where-Object { $_.CommandLine -like "*keepalive.sh*" }
     if (-not $running) {
@@ -47,7 +55,7 @@ switch ($Command.ToLower()) {
         if (-not (Test-Registered)) { throw "The $Distro distribution is not registered. Run 'install' first." }
         Start-KeepAlive
         Invoke-Wsl @("-d", $Distro, "--", "bilskirnir", "start")
-        Write-Host "Dashboard: http://localhost:$Port"
+        Write-Host "Dashboard: http://localhost:$(Get-Port)"
     }
     "stop" {
         & wsl.exe -d $Distro -- bilskirnir stop
@@ -58,7 +66,7 @@ switch ($Command.ToLower()) {
         if (Test-Registered) { & wsl.exe -d $Distro -- bilskirnir status } else { Write-Host "The $Distro distribution is not registered." }
     }
     "open" {
-        Start-Process "http://localhost:$Port"
+        Start-Process "http://localhost:$(Get-Port)"
     }
     "autostart" {
         switch ($Option.ToLower()) {
