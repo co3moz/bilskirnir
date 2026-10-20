@@ -133,6 +133,28 @@ templates/<id>.png     its icon, at most 256 by 256 pixels
 
 To make a template, build the image in the dashboard with **Build image**, give it its compose, description and icon, create a container from it and check that the setup works. Then **Export configuration** copies exactly the JSON `<id>.json` holds. Its `icon` line can be dropped, since the page takes the icon from `<id>.png`; the line is used only when that file is missing. Save the icon at 256 by 256 pixels.
 
+An image can bring [MCP servers that run inside its desktops](MCP.md#mcp-servers-inside-a-desktop), such as a browser automation server attached to its Chrome. The build request declares them in `mcp`, which **Export configuration** includes, and the build writes each as `/etc/bilskirnir/mcp.d/NAME.json` in the image, so every container created from it, and from its snapshots, has them. Each entry is the file's content with its `name`, a stdio command or a loopback URL, as the MCP guide describes; at most 16, each name once. A `${NAME}` in its arguments, variables, URL or headers is filled in from the container's compose values when the manager starts the server, so the template can let the user choose what the server gets:
+
+```json
+{
+  "name": "Chrome with Playwright MCP",
+  "base_image": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+  "script": "#!/usr/bin/env bash\n...",
+  "compose": {"parameters": [{"name": "CAPS", "type": "text", "label": "Extra tool groups", "default": "network,storage"}]},
+  "mcp": [
+    {
+      "name": "playwright",
+      "description": "Playwright MCP attached to the agent's Chrome",
+      "command": "chrome-mcp",
+      "args": ["mcp"],
+      "env": {"CHROME_MCP_CAPS": "${CAPS}"}
+    }
+  ]
+}
+```
+
+The script installs the program the command names; the manager runs it as the desktop user only when an endpoint needs its tools, never on a port. **Install** shows the declarations under the script, where the user can leave one out before building. To say on the card which servers a template provides, list their names in its `index.json` entry, as `"mcp": ["playwright"]`.
+
 ```bash
 git clone https://github.com/co3moz/bilskirnir.wiki.git
 cd bilskirnir.wiki
@@ -152,6 +174,7 @@ The wiki has no review or checks before a push reaches every installation, which
 - Give a panel launcher its own plugin id: the `vscode` template takes `plugin-23`, so a new one takes the next free number rather than reusing one a template already checks for.
 - Keep the template's compose volume paths its own, such as `/home/desktop/workspace` only for the template that owns that workspace: two steps cannot mount volumes at one path.
 - Name the template's base image as the others do. A merge builds on the first template's base and warns about any other.
+- Give the template's MCP servers names of their own, such as `playwright` rather than `mcp`: a merged image has one `mcp.d` folder, so a merge of two templates that declare a server under the same name is refused, and the build refuses a duplicate name too.
 
 A template exported from a merged image has `parts` and `template_ids`, and can be listed like any other; choosing it together with one of the templates it holds is refused.
 
