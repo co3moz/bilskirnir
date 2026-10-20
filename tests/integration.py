@@ -857,7 +857,10 @@ try:
     assert docker("exec",container,"stat","-c","%u:%g %a",written["path"]).strip() == b"1001:1001 600"
     conflict = tool("write_file", {"container_id":env_id,"path":written["path"],"data":"no overwrite"}, allow_error=True)
     assert conflict["isError"]
+    # Saving over a file keeps its permission bits, as the Files page's editor relies on.
+    docker("exec","--user","desktop",container,"chmod","755",written["path"])
     api(f"containers/{env_id}/files/write", {"path":written["path"],"data":"Updated","replace":True})
+    assert docker("exec",container,"stat","-c","%u:%g %a",written["path"]).strip() == b"1001:1001 755"
     page = tool("read_file", {"container_id":env_id,"path":written["path"],"offset":2,"limit":3})["structuredContent"]
     assert page["data"] == "dat" and page["next_offset"] == 5 and not page["eof"]
     binary = bytes(range(256))

@@ -1,6 +1,7 @@
 """Receive one complete file as the desktop user; never follow path symlinks."""
 import os
 import signal
+import stat
 import sys
 import uuid
 
@@ -27,6 +28,14 @@ try:
         folder = child
     temporary = ".bilskirnir-upload-" + uuid.uuid4().hex
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=folder)
+    if replace == "true":
+        # A file saved over keeps its permissions, so an edited script stays executable.
+        try:
+            existing = os.stat(name, dir_fd=folder, follow_symlinks=False)
+        except FileNotFoundError:
+            existing = None
+        if existing is not None and stat.S_ISREG(existing.st_mode):
+            os.fchmod(descriptor, stat.S_IMODE(existing.st_mode) & 0o777)
     received = 0
     with os.fdopen(descriptor, "wb") as output:
         while chunk := sys.stdin.buffer.read(65536):
