@@ -31,9 +31,9 @@ import {
 import { attempt } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
 import { t } from "@/lib/i18n"
-import { useSession, useSystem } from "@/lib/queries"
+import { useSession } from "@/lib/queries"
 
-function Identity({ auth, detail }: { auth: boolean; detail: string }) {
+function Identity({ auth, detail }: { auth: boolean; detail?: string }) {
   return (
     <>
       <Avatar className="h-8 w-8 rounded-lg">
@@ -49,7 +49,7 @@ function Identity({ auth, detail }: { auth: boolean; detail: string }) {
         <span className="truncate font-medium">
           {auth ? t("account.administrator") : t("account.local")}
         </span>
-        <span className="truncate text-xs text-muted-foreground">{detail}</span>
+        {detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
       </div>
     </>
   )
@@ -59,12 +59,6 @@ export function NavUser() {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
   const auth = useSession().data?.auth_enabled ?? false
-  const system = useSystem().data
-  const docker = system?.connected
-    ? `Docker ${system.version ?? ""}`.trim()
-    : system
-      ? t("state.unavailable")
-      : t("docker.checking")
 
   return (
     <SidebarMenu>
@@ -75,7 +69,7 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Identity auth={auth} detail={docker} />
+              <Identity auth={auth} />
               <RiMore2Line className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>

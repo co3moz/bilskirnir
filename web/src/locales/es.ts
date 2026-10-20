@@ -646,7 +646,6 @@ export const es: Messages = {
   "app.connectionFailed": "Error de conexión",
   "docker.unreachable": "No se puede conectar a Docker",
   "docker.checkDaemon": "Comprueba que el daemon de Docker se esté ejecutando.",
-  "docker.checking": "Comprobando Docker…",
   "login.title": "Iniciar sesión",
   "login.description": "Usa la cuenta de administrador de esta instalación.",
   "login.username": "Nombre de usuario",

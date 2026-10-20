@@ -652,7 +652,6 @@ export const fr: Messages = {
   "app.connectionFailed": "Échec de la connexion",
   "docker.unreachable": "Impossible de se connecter à Docker",
   "docker.checkDaemon": "Vérifiez que le démon Docker est en cours d'exécution.",
-  "docker.checking": "Vérification de Docker…",
   "login.title": "Connexion",
   "login.description": "Utilisez le compte administrateur de cette installation.",
   "login.username": "Nom d'utilisateur",

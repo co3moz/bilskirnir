@@ -641,7 +641,6 @@ export const tr: Messages = {
   "app.connectionFailed": "Bağlantı başarısız",
   "docker.unreachable": "Docker'a bağlanılamıyor",
   "docker.checkDaemon": "Docker hizmetinin çalıştığını kontrol edin.",
-  "docker.checking": "Docker kontrol ediliyor…",
   "login.title": "Giriş yap",
   "login.description": "Bu kurulumun yönetici hesabını kullanın.",
   "login.username": "Kullanıcı adı",

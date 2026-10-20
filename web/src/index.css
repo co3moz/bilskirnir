@@ -51,6 +51,11 @@
   --color-code-variable: var(--code-variable);
   --color-code-number: var(--code-number);
   --color-code-operator: var(--code-operator);
+  --color-glass: var(--glass);
+  --color-glass-raised: var(--glass-raised);
+  --color-glass-inverse: var(--glass-inverse);
+  --color-glass-ring: var(--glass-ring);
+  --shadow-glass: var(--glass-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -103,6 +108,19 @@
   --code-variable: #b0306a;
   --code-number: #8a5a00;
   --code-operator: #0b6e85;
+  /* Glass for everything that floats: dialogs, sheets and drawers on --glass over their dimmed
+     overlay, menus and toasts raised above the page and dialogs, tooltips inverted. Opaque when
+     the system asks (below). White over the dimmed overlay turns grey and washes out the input
+     borders, so a light dialog stays nearly opaque. */
+  --glass-opacity: 95%;
+  --glass-raised-opacity: 85%;
+  --glass-edge: 10%;
+  --glass: oklch(1 0 0 / var(--glass-opacity));
+  --glass-raised: oklch(1 0 0 / var(--glass-raised-opacity));
+  --glass-inverse: oklch(0.145 0 0 / var(--glass-raised-opacity));
+  --glass-ring: oklch(0 0 0 / var(--glass-edge));
+  --glass-shadow: 0 24px 48px -12px oklch(0 0 0 / 18%), 0 8px 16px -8px oklch(0 0 0 / 10%);
+  --glass-filter: blur(40px) saturate(1.5);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -155,6 +173,15 @@
   --code-variable: #f49ac1;
   --code-number: #f0c674;
   --code-operator: #7fd4e6;
+  /* A menu over a dialog is one step lighter, as raised surfaces are in the dark. */
+  --glass-opacity: 80%;
+  --glass-raised-opacity: 80%;
+  --glass-edge: 12%;
+  --glass: oklch(0.205 0 0 / var(--glass-opacity));
+  --glass-raised: oklch(0.27 0 0 / var(--glass-raised-opacity));
+  --glass-inverse: oklch(0.985 0 0 / var(--glass-raised-opacity));
+  --glass-ring: oklch(1 0 0 / var(--glass-edge));
+  --glass-shadow: 0 24px 48px -12px oklch(0 0 0 / 60%), 0 8px 16px -8px oklch(0 0 0 / 40%);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.922 0 0);
@@ -163,6 +190,29 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Less transparency or more contrast asked for: solid surfaces with a firmer edge. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --glass-opacity: 100%;
+    --glass-raised-opacity: 100%;
+    --glass-edge: 25%;
+    --glass-filter: none;
+  }
+}
+
+/* A browser that cannot blur would show the page through a menu unblurred. */
+@supports not (backdrop-filter: blur(1px)) {
+  :root {
+    --glass-opacity: 100%;
+    --glass-raised-opacity: 100%;
+  }
+}
+
+@utility backdrop-glass {
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 
 @layer base {
@@ -184,6 +234,18 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Sonner styles toasts through its own attribute selectors, so the glass matches their weight. */
+[data-sonner-toast][data-styled="true"].cn-toast {
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-shadow);
+}
+[data-sonner-toast][data-styled="true"].cn-toast:focus-visible {
+  box-shadow:
+    var(--glass-shadow),
+    0 0 0 2px var(--ring);
 }
 
 /* noVNC paints its own grey behind the remote screen; match the letterbox around it. */

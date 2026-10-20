@@ -17,7 +17,7 @@ Write visible copy in English in `web/src/locales/en.ts`, and give the same key 
 The layout is `dashboard-01`, filled with Bilskirnir's own data:
 
 - **Sidebar** (inset variant, 18 rem): the hammer mark and name, **New container** with a hammer button for **Build image**, the eight pages, a **Running containers** group where the block lists documents, links to the documentation and the MCP guide, and the account menu with the theme choice and sign-out. It collapses off screen with the header button or Ctrl+B, and is a sheet below 768 px.
-- **Site header**: the sidebar button, the page title, the Docker connection and the page's main action.
+- **Site header**: the sidebar button, the page title and the page's main action. A lost Docker connection shows as an alert on the pages that need Docker instead.
 - **Dashboard**: four summary cards, resource usage, the job activity chart and the containers table, in that order. The block has one chart; resource usage is the second, in the same card style.
 - **Containers**: one card per container with its preview; **Images**: one table with the catalog images first; **Templates**: one card per template, with a search field and tag filters, applications first and environments in a section of their own below them; **Volumes** and **Jobs**: tables; **MCP**: a table of endpoints and the desktop servers grouped by container, behind the same view switch as **Jobs**; **Files**: a container picker in the heading and one card with the file explorer the volume browser uses too.
 - **Desktop view**: full screen without the sidebar. A 48 px toolbar leaves as much room as possible for the remote desktop.
@@ -33,7 +33,11 @@ Colors are the shadcn theme variables in `web/src/index.css`, with a light and a
 | `--sidebar` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Sidebar and the frame around the inset page |
 | `--background` | `oklch(0.145 0 0)` | `oklch(1 0 0)` | Page surface |
 | `--card` | `oklch(0.205 0 0)` | `oklch(1 0 0)` | Cards and panels |
-| `--popover` | `oklch(0.205 0 0)` | `oklch(1 0 0)` | Dialogs, drawers and menus |
+| `--popover` | `oklch(0.205 0 0)` | `oklch(1 0 0)` | The opaque tone of `--glass`; its foreground is the text on floating surfaces |
+| `--glass` | `oklch(0.205 0 0)` at 80% | white at 95% | Dialogs, alert dialogs, sheets and drawers, over their dimmed overlay |
+| `--glass-raised` | `oklch(0.27 0 0)` at 80% | white at 85% | Menus, selects and toasts, above the page and dialogs |
+| `--glass-inverse` | `oklch(0.985 0 0)` at 80% | `oklch(0.145 0 0)` at 85% | Tooltips |
+| `--glass-ring` | white at 12% | black at 10% | The edge of every glass surface |
 | `--muted` | `oklch(0.269 0 0)` | `oklch(0.97 0 0)` | Table headers, selected toggles, quiet backgrounds |
 | `--border` | white at 10% | `oklch(0.922 0 0)` | Borders and separators |
 | `--input` | white at 15% | `oklch(0.922 0 0)` | Input borders and field backgrounds |
@@ -50,6 +54,8 @@ Colors are the shadcn theme variables in `web/src/index.css`, with a light and a
 | `--code-comment`, `--code-keyword`, `--code-command`, `--code-string`, `--code-variable`, `--code-number`, `--code-operator` | `#a1a1a1` `#c4b5fd` `#7cb7ff` `#9fd8a8` `#f49ac1` `#f0c674` `#7fd4e6` | `#6b6b6b` `#6d28d9` `#1d5fbf` `#1f7a45` `#b0306a` `#8a5a00` `#0b6e85` | Syntax colors in script and configuration fields only, each at least 4.5:1 on the field |
 
 The surfaces are the neutral palette of the shadcn preset, without a blue or warm cast. The primary color is near white on dark and near black on light, and it marks what the user can act on. Hue is kept for meaning: violet identifies images and their relationships, and green, amber and red carry states. Always pair a status color with text and an icon: `StatusBadge` does this for every state. A chart whose series are outcomes uses those colors too: the job activity chart draws completed jobs in `--primary` and failed ones in `--destructive`, because two greys cannot be told apart on a dark card. The usage charts tell containers apart, so each running container gets one of the `--series` hues in their order and keeps it while it is listed; past five they share the grey `--series-other`. That order was checked with a color vision deficiency validator against both card surfaces: every adjacent pair stays distinct. Three light-theme hues sit below 3:1 against the white card, so the legend names each one and a table under the charts gives the current figures; never let the hue alone say which container is which. The host GPU is not a container and is drawn in `--primary`. There is no background lighting; leave remote desktop screenshots in their original colors.
+
+Everything that floats is glass: a translucent surface over a 40 px blur of what lies behind it (`backdrop-glass`, saturated by half), edged by `--glass-ring` and lifted by the deep `shadow-glass`. Menus, selects and toasts use `--glass-raised`, one step lighter than a dialog in the dark theme, so a menu opened over a dialog never shares its tone. In the light theme both are white and the ring and shadow set them apart; a dialog stays nearly opaque there, because white over the dimmed overlay turns grey and washes out the input borders. Tooltips stay inverted. The dropdown menus lost a `::before` backdrop in Chromium, so a menu's blur sits on the menu element itself, and submenus are portaled so a blurred menu never clips what opens from it. When the system asks for less transparency or more contrast, every glass surface turns opaque and its ring firms up; a browser that cannot blur gets the opaque surfaces too.
 
 ## Type and spacing
 
