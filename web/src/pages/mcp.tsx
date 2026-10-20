@@ -91,17 +91,19 @@ function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem
+          tone="edit"
           onSelect={() => openDialog({ kind: "mcp-endpoint", name: endpoint.name })}
         >
           <RiEditLine />
           {t("mcp.endpoint.edit")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => attempt(() => newToken(endpoint))}>
+        <DropdownMenuItem tone="success" onSelect={() => attempt(() => newToken(endpoint))}>
           <RiKey2Line />
           {endpoint.has_token ? t("mcp.token.replace") : t("mcp.token.create")}
         </DropdownMenuItem>
         {endpoint.has_token && (
           <DropdownMenuItem
+            tone="warning"
             onSelect={() =>
               openDialog({ kind: "mcp-endpoint-confirm", name: endpoint.name, action: "revoke" })
             }
