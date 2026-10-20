@@ -26,6 +26,10 @@ export function codeLanguage(path: string, text: string): CodeLanguage | null {
   return null
 }
 
+/** "1\n2\n...", one number for each line of `text`, a last empty line included. */
+export const lineNumbers = (text: string) =>
+  Array.from({ length: text.split("\n").length }, (_, index) => index + 1).join("\n")
+
 /** Splits code into colored pieces whose texts, joined, are the code again. */
 export function highlight(code: string, language: CodeLanguage): Token[] {
   return language === "json" ? highlightJson(code) : highlightBash(code)

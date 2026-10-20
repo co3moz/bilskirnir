@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { codeLanguage, highlight, type Token, type TokenKind } from "@/lib/highlight"
+import { codeLanguage, highlight, lineNumbers, type Token, type TokenKind } from "@/lib/highlight"
 
 /** The kind of each piece, ignoring whitespace-only plain pieces, for readable expectations. */
 const kinds = (tokens: Token[]) =>
@@ -139,4 +139,11 @@ test("a file opens colored as bash or JSON by its name or its first line", () =>
   assert.equal(codeLanguage("/home/desktop/notes.txt", "# not a shebang"), null)
   assert.equal(codeLanguage("/home/desktop/app.py", "#!/usr/bin/env python3\n"), null)
   assert.equal(codeLanguage("/home/desktop/fish", "#!/usr/bin/fish\n"), null)
+})
+
+test("the gutter numbers every line the field shows, a last empty one too", () => {
+  assert.equal(lineNumbers(""), "1")
+  assert.equal(lineNumbers("echo"), "1")
+  assert.equal(lineNumbers("set -eu\necho"), "1\n2")
+  assert.equal(lineNumbers("set -eu\necho\n"), "1\n2\n3")
 })
