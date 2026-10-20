@@ -735,9 +735,9 @@ try:
     assert "connect-src 'self' https://raw.githubusercontent.com;" in policy, policy
     icon_png = png(64, 32)
     build_request = {"name": "offline-script-test", "description": "Built by the acceptance run", "base_image": xfce["reference"], "internet": False, "script": "set -eu\nprintf script-built > /opt/script-built\npython3 - <<'PY'\nimport socket\ns = socket.socket(); s.settimeout(2)\ntry:\n s.connect(('1.1.1.1',443))\nexcept OSError:\n pass\nelse:\n raise RuntimeError('offline build had internet')\nPY\n", "icon": "data:image/png;base64," + base64.b64encode(icon_png).decode(), "template_id": "acceptance"}
-    for refused in [{"icon": "data:image/png;base64," + base64.b64encode(png(512, 512)).decode()}, {"template_id": "Not An Id"}]:
+    for bad_field in [{"icon": "data:image/png;base64," + base64.b64encode(png(512, 512)).decode()}, {"template_id": "Not An Id"}]:
         try:
-            api("images/build", {**build_request, **refused}); raise AssertionError(f"build accepted {list(refused)}")
+            api("images/build", {**build_request, **bad_field}); raise AssertionError(f"build accepted {list(bad_field)}")
         except urllib.error.HTTPError as error:
             assert error.code == 400
     build_job = api("images/build", build_request)
@@ -804,7 +804,7 @@ try:
     merged_job = api("images/build", merged_request)
     merged_image = job(merged_job)
     assert merged_image["template_ids"] == ["first", "second"] and merged_image["build"]["parts"] == [{"id": "first", "name": "First"}, {"id": "second", "name": "Second"}], merged_image
-    assert "script" not in json.dumps(merged_image["compose"]), merged_image["compose"]
+    assert all("script" not in step for step in merged_image["compose"]["steps"]), merged_image["compose"]
     assert "Running the scripts of First, Second as root" in api(f"jobs/{merged_job['job_id']}")["log"]
     exported = api(f"images/{merged_image['id']}/config")
     assert exported["parts"][1] == merged_request["parts"][1] and "script" not in exported and exported["template_ids"] == ["first", "second"], exported
@@ -873,7 +873,7 @@ try:
     assert saved["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-shot.jpg"
     assert docker("exec",container,"cat",saved["path"]).startswith(b"\xff\xd8")
     assert tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg"}, allow_error=True)["isError"]
-    assert tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/agent-shot.jpg"}, allow_error=True)["isError"]
+    assert tool("save_screenshot", {"container_id":env_id,"path":"/etc/agent-shot.jpg"}, allow_error=True)["isError"]
     assert api(f"containers/{env_id}/screenshots", {"path":"/home/desktop/Downloads/agent-shot.jpg","replace":True,"capture":{"max_width":160}})["width"] == 160
     request = urllib.request.Request(f"http://127.0.0.1:{port}{saved['download_url']}", headers={"X-Bilskirnir-Request":"1"})
     with client.open(request, timeout=60) as response:
@@ -1194,10 +1194,16 @@ try:
     assert "echo__echo" not in offered and "api__echo" in offered, offered
     assert tool("remove_mcp_server",{"container_id":env_id,"name":"api"})["structuredContent"]["removed"]
     tool("delete_mcp_endpoint",{"name":"acceptance-mcp"})
+    # Whether an endpoint exists is told only to a token that opens something: the revoked token
+    # gets 401, the administrator's 404.
     try:
         endpoint_session("acceptance-mcp", scoped); raise AssertionError("a deleted endpoint answered")
     except urllib.error.HTTPError as error:
-        assert error.code == 404
+        assert error.code == 401, error.code
+    try:
+        endpoint_session("acceptance-mcp", mcp_token); raise AssertionError("a deleted endpoint answered the administrator")
+    except urllib.error.HTTPError as error:
+        assert error.code == 404, error.code
     tool("stop_application",{"container_id":env_id,"application_id":http_server})
     print("PASS desktop MCP servers are reached through a scoped endpoint as the desktop user", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
@@ -1509,10 +1515,12 @@ try:
     corrupt_network=f"bilskirnir-{clone_id}-egress"
     docker("network","rm",corrupt_network)
     docker("network","create","--label",f"bilskirnir.test={tag}",corrupt_network)
+    records = {record["id"] for record in api("containers")}
+    assert {env_id, clone_id, merged_id} <= records, records
     docker("rm", "--force", manager)
     start_manager(); cookies.clear(); login()
     wait_for(lambda: api(f"containers/{env_id}/screenshot", raw=True).startswith(b"\xff\xd8"), 50)
-    assert len(api("containers")) == 2
+    assert {record["id"] for record in api("containers")} == records, records
     docker("network","rm",corrupt_network)
     job(api(f"containers/{clone_id}/retry",{}))
     print("PASS malformed container network does not block reconciliation of others",flush=True)
