@@ -174,7 +174,7 @@ function StepFields({
             id={`${id}-timeout`}
             type="number"
             min={1}
-            max={3500}
+            max={7200}
             required
             value={draft.timeout_seconds}
             onChange={(event) => set({ timeout_seconds: event.target.value })}

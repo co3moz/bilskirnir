@@ -7,6 +7,10 @@ use tokio::{
     process::Command,
 };
 
+/// How long a logged Docker command (a build, a pull, a script or a setup step) may run, unless
+/// its caller gives a longer limit.
+pub(crate) const LOGGED_LIMIT: Duration = Duration::from_secs(3600);
+
 impl App {
     pub fn command(&self, args: &[String]) -> Command {
         let mut cmd = Command::new(&self.config.docker_bin);
@@ -719,12 +723,23 @@ impl App {
         args: &[String],
         input: Option<Vec<u8>>,
     ) -> Result<()> {
-        self.run_logged(id, args, input, false).await
+        self.run_logged(id, args, input, false, LOGGED_LIMIT).await
+    }
+    /// A logged command that may run longer than the usual hour, such as a compose setup step
+    /// whose own timeout is longer.
+    pub async fn docker_logged_within(
+        &self,
+        id: &str,
+        args: &[String],
+        input: Option<Vec<u8>>,
+        limit: Duration,
+    ) -> Result<()> {
+        self.run_logged(id, args, input, false, limit).await
     }
     /// A script build's `docker build`: its output is logged a whole line at a time, and a line
     /// that begins a build stage starts it.
     pub async fn docker_build_logged(&self, id: &str, args: &[String]) -> Result<()> {
-        self.run_logged(id, args, None, true).await
+        self.run_logged(id, args, None, true, LOGGED_LIMIT).await
     }
     async fn run_logged(
         &self,
@@ -732,6 +747,7 @@ impl App {
         args: &[String],
         input: Option<Vec<u8>>,
         staged: bool,
+        limit: Duration,
     ) -> Result<()> {
         let mut child = self
             .command(args)
@@ -792,7 +808,7 @@ impl App {
             }
             anyhow::Ok(())
         };
-        let result = tokio::time::timeout(Duration::from_secs(3600), async {
+        let result = tokio::time::timeout(limit, async {
             tokio::try_join!(write, read)?;
             anyhow::Ok(())
         })
@@ -801,7 +817,10 @@ impl App {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
-        result.context("Image preparation exceeded the one-hour limit")??;
+        result.with_context(|| match limit.as_secs() {
+            3600 => "Image preparation exceeded the one-hour limit".to_owned(),
+            seconds => format!("The operation exceeded its {}-minute limit", seconds / 60),
+        })??;
         Ok(())
     }
     pub async fn cleanup_build(&self, id: &str) -> Result<()> {
