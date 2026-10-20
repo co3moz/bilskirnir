@@ -44,6 +44,13 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-violet: var(--violet);
+  --color-code-comment: var(--code-comment);
+  --color-code-keyword: var(--code-keyword);
+  --color-code-command: var(--code-command);
+  --color-code-string: var(--code-string);
+  --color-code-variable: var(--code-variable);
+  --color-code-number: var(--code-number);
+  --color-code-operator: var(--code-operator);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -88,6 +95,14 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-other: oklch(0.556 0 0);
+  /* Script and configuration fields; each at least 4.5:1 on the field. */
+  --code-comment: #6b6b6b;
+  --code-keyword: #6d28d9;
+  --code-command: #1d5fbf;
+  --code-string: #1f7a45;
+  --code-variable: #b0306a;
+  --code-number: #8a5a00;
+  --code-operator: #0b6e85;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -133,6 +148,13 @@
   --series-4: #c98500;
   --series-5: #d55181;
   --series-other: oklch(0.708 0 0);
+  --code-comment: #a1a1a1;
+  --code-keyword: #c4b5fd;
+  --code-command: #7cb7ff;
+  --code-string: #9fd8a8;
+  --code-variable: #f49ac1;
+  --code-number: #f0c674;
+  --code-operator: #7fd4e6;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.922 0 0);

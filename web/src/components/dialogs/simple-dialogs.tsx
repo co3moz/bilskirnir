@@ -36,6 +36,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CodeTextarea } from "@/components/code-textarea"
 import { Textarea } from "@/components/ui/textarea"
 import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
@@ -422,14 +423,14 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                     ) : (
                       <Field>
                         <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
-                        <Textarea
+                        <CodeTextarea
                           id={`${field}-script`}
+                          language="bash"
                           rows={12}
                           required
-                          spellCheck={false}
                           value={script}
                           onChange={(event) => setScript(event.target.value)}
-                          className="max-h-[500px] overflow-y-auto font-mono text-xs"
+                          className="max-h-[500px]"
                         />
                         <FieldDescription>{t("build.scriptHint")}</FieldDescription>
                       </Field>
@@ -521,11 +522,11 @@ function ImportConfiguration({
       <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
         <Field data-invalid={!!error}>
           <FieldLabel htmlFor={`${field}-config`}>{t("build.config")}</FieldLabel>
-          <Textarea
+          <CodeTextarea
             id={`${field}-config`}
+            language="json"
             rows={12}
             required
-            spellCheck={false}
             placeholder={'{\n  "name": "Unity tools",\n  "base_image": "…",\n  "script": "…"\n}'}
             value={text}
             onChange={(event) => {
@@ -533,7 +534,7 @@ function ImportConfiguration({
               setError(undefined)
             }}
             aria-invalid={!!error}
-            className="max-h-[500px] overflow-y-auto font-mono text-xs"
+            className="max-h-[500px]"
             autoFocus
           />
           <FieldError>{error}</FieldError>

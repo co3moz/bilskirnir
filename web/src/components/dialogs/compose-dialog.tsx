@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
+import { CodeTextarea } from "@/components/code-textarea"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { refreshAll, useImages } from "@/lib/queries"
@@ -148,14 +148,14 @@ function StepFields({
       </FieldSet>
       <Field>
         <FieldLabel htmlFor={`${id}-script`}>{t("compose.script")}</FieldLabel>
-        <Textarea
+        <CodeTextarea
           id={`${id}-script`}
+          language="bash"
           rows={9}
           required
-          spellCheck={false}
           value={draft.script}
           onChange={(event) => set({ script: event.target.value })}
-          className="max-h-[500px] overflow-y-auto font-mono text-xs"
+          className="max-h-[500px]"
         />
         <FieldDescription>{t("compose.scriptHint")}</FieldDescription>
       </Field>

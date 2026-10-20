@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Textarea } from "@/components/ui/textarea"
+import { CodeTextarea } from "@/components/code-textarea"
 import { formatNumber, t } from "@/lib/i18n"
 import type { BuildPart } from "@/lib/types"
 
@@ -49,14 +49,14 @@ export function BuildParts({
                 <FieldLabel htmlFor={`${id}-${part.id}`} className="sr-only">
                   {t("build.partScript", { name: part.name })}
                 </FieldLabel>
-                <Textarea
+                <CodeTextarea
                   id={`${id}-${part.id}`}
+                  language="bash"
                   rows={10}
                   required
-                  spellCheck={false}
                   value={part.script}
                   onChange={(event) => onChange(index, event.target.value)}
-                  className="max-h-[400px] overflow-y-auto font-mono text-xs"
+                  className="max-h-[400px]"
                 />
               </Field>
               <div className="flex flex-wrap gap-2">
