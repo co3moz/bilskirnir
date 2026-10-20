@@ -143,7 +143,7 @@ The response contains `job_id`. Poll its detail endpoint:
 curl --cookie bilskirnir.cookies http://localhost:8080/api/jobs/JOB_ID
 ```
 
-A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `container_id` in `result`. Read the log for a failed job; after interruption, inspect the resources before retrying.
+A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `container_id` in `result`. A job that makes a container or an image, `create`, `build`, `snapshot` or `image-import`, carries its `name` from the moment it is queued, so a list can show what is on its way before the record exists; an import sent without a name has none, since its image takes the archive's. Other jobs have no `name`. Read the log for a failed job; after interruption, inspect the resources before retrying.
 
 `GET /api/containers` returns each container's record, with `id`, `spec` (its creation settings), `container` (the Docker container's name), `source_image_id` and `last_error`, and Docker's view beside those fields: `state` is Docker's container state, `missing` when the container is gone or `unavailable` when Docker cannot be reached; `health` is `healthy`, `unhealthy`, `starting` or `unknown`; `status` is Docker's status text. `GET /api/containers/{id}` returns one item of the same shape.
 

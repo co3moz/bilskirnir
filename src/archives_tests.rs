@@ -116,6 +116,8 @@ async fn a_refused_import_answers_with_its_jobs_error() {
         (job.kind.as_str(), job.status.as_str()),
         ("image-import", "failed")
     );
+    // The images page shows the import under this name until its record exists.
+    assert_eq!(job.name.as_deref(), Some("Saved"));
     assert_eq!(app.archives.available_permits(), 2);
 }
 

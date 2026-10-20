@@ -14,6 +14,7 @@ fn job(id: &str, finished: bool) -> Job {
         result: None,
         progress: None,
         stages: Vec::new(),
+        name: None,
     }
 }
 

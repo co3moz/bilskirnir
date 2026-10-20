@@ -20,11 +20,14 @@ import {
   columnHelper,
   DataTablePagination,
   DataTableView,
+  ExtraRow,
   useDataTable,
   type DataColumn,
+  type DataTable,
 } from "@/components/data-table"
 import { ImageIcon } from "@/components/image-icon"
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
+import { JobLogButton, PendingName, PendingStatus } from "@/components/pending"
 import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -42,8 +45,9 @@ import {
 } from "@/lib/format"
 import { formatList, t } from "@/lib/i18n"
 import { iconUrl } from "@/lib/icons"
-import { useImages } from "@/lib/queries"
-import type { ImageItem } from "@/lib/types"
+import { catalogImageJobs, pendingImages, type Pending } from "@/lib/pending"
+import { useImages, useJobs } from "@/lib/queries"
+import type { ImageItem, Job } from "@/lib/types"
 import { fileSize } from "@/lib/uploads"
 
 /** What a compose asks for, in a few words. */
@@ -185,7 +189,8 @@ function SavedActions({ image }: { image: ImageItem }) {
   )
 }
 
-type Row = ImageItem & { depth: number }
+/** An image in its parent order, with the job downloading or building it for a catalog image. */
+type Row = ImageItem & { depth: number; job?: Job }
 const column = columnHelper<Row>()
 
 const columns: DataColumn<Row>[] = [
@@ -280,6 +285,7 @@ const columns: DataColumn<Row>[] = [
     id: "status",
     header: () => t("table.status"),
     cell: ({ row }) => {
+      if (row.original.job) return <PendingStatus job={row.original.job} />
       const status = imageStatus(row.original)
       return (
         <span title={row.original.error ?? undefined}>
@@ -336,8 +342,15 @@ const columns: DataColumn<Row>[] = [
       const unusable = catalog ? !!image.error : image.available === false
       return (
         <div className="flex justify-end gap-2">
-          {catalog ? <CatalogActions image={image} /> : <SavedActions image={image} />}
-          {deletableImage(image) && <DeleteAction image={image} />}
+          {/* While it downloads or builds, its job is all a catalog image offers besides a start. */}
+          {image.job ? (
+            <JobLogButton id={image.job.id} />
+          ) : (
+            <>
+              {catalog ? <CatalogActions image={image} /> : <SavedActions image={image} />}
+              {deletableImage(image) && <DeleteAction image={image} />}
+            </>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -354,10 +367,51 @@ const columns: DataColumn<Row>[] = [
   }),
 ]
 
-/** Every image in its parent order, the catalog images first. */
+/** A saved image a job is still making, above the images; it has nothing to act on yet. */
+function PendingImageRow({
+  table,
+  pending,
+}: {
+  table: DataTable<Row>
+  pending: Pending & { kind: string }
+}) {
+  return (
+    <ExtraRow
+      table={table}
+      cells={{
+        name: (
+          <div className="flex min-w-64 items-start gap-2 whitespace-normal">
+            <RiStackLine className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <PendingName pending={pending} />
+          </div>
+        ),
+        kind: (
+          <Badge variant="outline" className="border-violet/40 text-violet">
+            {imageKind(pending.kind)}
+          </Badge>
+        ),
+        status: <PendingStatus job={pending.job} />,
+        actions: (
+          <div className="flex justify-end">
+            <JobLogButton id={pending.job.id} />
+          </div>
+        ),
+      }}
+    />
+  )
+}
+
+/** Every image in its parent order, the catalog images first and the ones being made above. */
 export function ImagesPage() {
   const images = useImages()
-  const data = React.useMemo(() => imageTree(images.data ?? []), [images.data])
+  const jobs = useJobs().data
+  const data = React.useMemo(() => {
+    const running = catalogImageJobs(jobs ?? [])
+    return imageTree(images.data ?? []).map((image) =>
+      image.kind === "catalog" ? { ...image, job: running.get(image.id) } : image
+    )
+  }, [images.data, jobs])
+  const pending = pendingImages(jobs ?? [], images.data ?? [])
   const table = useDataTable({ data, columns, getRowId: (row) => row.id })
 
   return (
@@ -377,6 +431,9 @@ export function ImagesPage() {
         <DataTableView
           table={table}
           empty={images.isPending ? t("images.loading") : t("images.none")}
+          extra={pending.map((entry) => (
+            <PendingImageRow key={entry.job.id} table={table} pending={entry} />
+          ))}
         />
         <DataTablePagination table={table} />
       </div>

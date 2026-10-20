@@ -18,6 +18,7 @@ fn job(stages: bool) -> Job {
         result: None,
         progress: None,
         stages: Vec::new(),
+        name: None,
     };
     if stages {
         job.stages = BUILD_STAGES

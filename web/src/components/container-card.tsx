@@ -13,6 +13,7 @@ import { cn } from "cn"
 
 import { ContainerMenu } from "@/components/container-menu"
 import { ContainerPreview } from "@/components/container-preview"
+import { JobLogButton } from "@/components/pending"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -27,13 +28,15 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { attempt, containerAction, retrySetup, setInternet } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
-import { containerStatus, desktopTitle, needsRetry } from "@/lib/format"
+import { containerStatus, desktopTitle, jobProgress, jobTone, needsRetry } from "@/lib/format"
 import { formatNumber, t } from "@/lib/i18n"
+import { pendingState, type Pending } from "@/lib/pending"
 import { href } from "@/lib/route"
 import type { ContainerItem, ContainerSpec, ImageItem } from "@/lib/types"
 
@@ -203,6 +206,54 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
           <TooltipContent>{running ? t("uploads.title") : t("uploads.startFirst")}</TooltipContent>
         </Tooltip>
         <ContainerMenu item={item} />
+      </CardFooter>
+    </Card>
+  )
+}
+
+/**
+ * A container its creation job is still making. It has nothing to control yet, so the card shows
+ * how far the job is and opens the job's panel instead.
+ */
+export function PendingContainerCard({ pending }: { pending: Pending }) {
+  const { job, name } = pending
+  const progress = job.status === "running" ? jobProgress(job.progress) : null
+  const queued = job.status === "queued"
+  return (
+    <Card className="gap-4 pt-3">
+      <CardContent className="px-3">
+        <div
+          role="status"
+          className="flex aspect-video flex-col items-center justify-center gap-2 rounded-md border bg-muted/40 px-6 text-center text-xs text-muted-foreground"
+        >
+          <RiComputerLine className="size-6 opacity-60" aria-hidden />
+          {progress?.text ?? (queued ? t("jobs.log.queued") : t("containers.creating"))}
+          {progress?.max !== undefined && (
+            <Progress
+              value={(progress.value! * 100) / progress.max}
+              aria-label={t("jobs.downloadProgress")}
+              className="max-w-48 bg-background"
+            />
+          )}
+        </div>
+      </CardContent>
+      <CardHeader>
+        <CardTitle className="truncate text-base">
+          <button
+            type="button"
+            className="truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
+            onClick={() => openDialog({ kind: "job", id: job.id })}
+          >
+            {name}
+          </button>
+        </CardTitle>
+        <CardDescription className="line-clamp-2">{t("containers.creatingHint")}</CardDescription>
+        <CardAction>
+          <StatusBadge state={pendingState(job)} tone={jobTone(job.status)} />
+        </CardAction>
+      </CardHeader>
+      <CardFooter className="mt-auto">
+        <JobLogButton id={job.id} size="default" className="flex-1" />
       </CardFooter>
     </Card>
   )

@@ -1,7 +1,7 @@
 use crate::{
     App,
     error::{Error, Result, missing},
-    jobs::launch,
+    jobs::{launch, launch_named},
     model::*,
 };
 use anyhow::Context;
@@ -181,10 +181,12 @@ pub async fn create(
         let values = compose.resolve(&parameters, &id)?;
         crate::compose::check_mounts(&spec.mounts, &compose.mounts(&values))?;
     }
-    launch(
+    let name = spec.name.clone();
+    launch_named(
         app,
         "create",
         format!("container:{id}"),
+        Some(name),
         move |app, job_id| async move {
             let mut result = app.create_container(&id, spec, parameters, &job_id).await?;
             if mcp_endpoint {
@@ -671,10 +673,12 @@ pub async fn build(
     Json(body): Json<BuildImage>,
 ) -> Result<Json<Value>> {
     body.validate()?;
-    launch(
+    let name = body.name.clone();
+    launch_named(
         app,
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
+        Some(name),
         move |app, id| async move {
             app.plan_stages(&id, &crate::stages::BUILD_STAGES)?;
             app.begin_stage(&id, "base")?;
@@ -807,10 +811,12 @@ pub async fn snapshot(
     {
         return Err(anyhow::anyhow!("Invalid snapshot name or description").into());
     }
-    launch(
+    let name = body.name.clone();
+    launch_named(
         app,
         "snapshot",
         format!("container:{env_id}"),
+        Some(name),
         move |app, id| async move {
             app.plan_stages(&id, &crate::stages::SNAPSHOT_STAGES)?;
             app.begin_stage(&id, "check")?;

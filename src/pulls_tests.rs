@@ -351,6 +351,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
         result: None,
         progress: None,
         stages: Vec::new(),
+        name: None,
     };
     app.db.put("job", "pull", &job).unwrap();
 

@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiComputerLine, RiAddLine, RiSearchLine } from "@remixicon/react"
 
 import { ViewTabs } from "@/components/data-table"
-import { ContainerCard } from "@/components/container-card"
+import { ContainerCard, PendingContainerCard } from "@/components/container-card"
 import { DockerAlert, PageBody } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,7 +20,8 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { openDialog } from "@/lib/dialogs"
 import { needsAttention } from "@/lib/format"
 import { t } from "@/lib/i18n"
-import { useContainers, useImages } from "@/lib/queries"
+import { pendingContainers } from "@/lib/pending"
+import { useContainers, useImages, useJobs } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
 
 const views = {
@@ -31,18 +32,25 @@ const views = {
 } satisfies Record<string, (item: ContainerItem) => boolean>
 type View = keyof typeof views
 
-/** Every container as a card with its live preview. */
+/** Every container as a card with its live preview, and those still being created first. */
 export function ContainersPage() {
   const containers = useContainers()
   const images = useImages().data ?? []
+  const jobs = useJobs().data ?? []
   const [view, setView] = React.useState<View>("all")
   const [search, setSearch] = React.useState("")
-  const all = containers.data ?? []
+  const pending = pendingContainers(jobs, containers.data ?? [])
+  const all = (containers.data ?? []).filter(
+    (item) => !pending.some((entry) => entry.id === item.id)
+  )
   const query = search.trim().toLowerCase()
+  const matches = (name: string) => !query || name.toLowerCase().includes(query)
   const shown = all
     .filter(views[view])
-    .filter((item) => !query || item.spec.name.toLowerCase().includes(query))
+    .filter((item) => matches(item.spec.name))
     .sort((a, b) => a.spec.name.localeCompare(b.spec.name))
+  // A container being created is neither running nor stopped yet.
+  const making = view === "all" ? pending.filter((entry) => matches(entry.name)) : []
   const count = (key: View) => all.filter(views[key]).length
 
   return (
@@ -58,7 +66,7 @@ export function ContainersPage() {
             </Card>
           ))}
         </div>
-      ) : all.length === 0 ? (
+      ) : all.length === 0 && pending.length === 0 ? (
         <Empty className="mx-4 border lg:mx-6">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -104,8 +112,11 @@ export function ContainersPage() {
             </div>
           </div>
           <TabsContent value={view}>
-            {shown.length ? (
+            {shown.length || making.length ? (
               <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @[100rem]/main:grid-cols-4">
+                {making.map((entry) => (
+                  <PendingContainerCard key={entry.job.id} pending={entry} />
+                ))}
                 {shown.map((item) => (
                   <ContainerCard key={item.id} item={item} images={images} />
                 ))}

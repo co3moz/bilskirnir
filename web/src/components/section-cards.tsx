@@ -12,6 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { jobActive, jobName, limitTotals, memory, needsAttention, stateLabel } from "@/lib/format"
 import { formatNumber, plural, t } from "@/lib/i18n"
+import { pendingContainers } from "@/lib/pending"
 import { useContainers, useJobs, useSettings, useSystem } from "@/lib/queries"
 
 function Metric({
@@ -51,9 +52,12 @@ export function SectionCards() {
   const system = useSystem().data
   const settings = useSettings().data
 
-  const running = containers?.filter((item) => item.state === "running").length ?? 0
-  const attention = containers?.filter(needsAttention).length ?? 0
-  const stopped = (containers?.length ?? 0) - running
+  // A container still being created is neither stopped nor in need of attention.
+  const making = new Set(pendingContainers(jobs ?? [], containers ?? []).map((entry) => entry.id))
+  const settled = containers?.filter((item) => !making.has(item.id)) ?? []
+  const running = settled.filter((item) => item.state === "running").length
+  const attention = settled.filter(needsAttention).length
+  const stopped = settled.length - running
   const active = jobs?.filter(jobActive).length ?? 0
   // Measured from when the list was fetched, so the count only changes with the list.
   const dayAgo = jobsQuery.dataUpdatedAt / 1000 - 86400

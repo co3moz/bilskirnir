@@ -284,6 +284,8 @@ export type Job = {
   id: string
   kind: string
   resource?: string | null
+  /** What a job that makes a container or an image calls it, before its record exists. */
+  name?: string | null
   status: JobStatus
   created_at: number
   finished_at: number | null

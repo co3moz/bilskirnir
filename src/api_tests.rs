@@ -1,6 +1,7 @@
 //! Pins down how a script build's configuration is kept: the configuration route hands back the
 //! exact request that built the image, image lists and job results leave the script out, and
-//! records saved before the configuration existed still load.
+//! records saved before the configuration existed still load. Also that the jobs which make a
+//! container or an image carry its name in the job list before its record exists.
 use super::*;
 
 fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
@@ -269,4 +270,57 @@ async fn a_create_request_missing_a_required_value_is_refused_before_a_job() {
     let refused = create(State(app.clone()), Json(request)).await.unwrap_err();
     assert!(refused.1.contains("UNITY_EMAIL"), "{}", refused.1);
     assert!(app.db.list::<Job>("job").unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn creation_jobs_carry_the_name_of_what_they_make() {
+    // The test manager has no Docker CLI and no manager container, so both jobs fail quickly.
+    let app = crate::tests::app(false);
+    let request = json!({"name": "Agent desktop", "image": "example/desktop:1"});
+    let created = create(
+        State(app.clone()),
+        Json(serde_json::from_value(request).unwrap()),
+    )
+    .await
+    .unwrap();
+    let request = json!({"name": "Tools", "base_image": "example/desktop:1", "script": "true"});
+    let built = build(
+        State(app.clone()),
+        Json(serde_json::from_value(request).unwrap()),
+    )
+    .await
+    .unwrap();
+    let other = launch(app.clone(), "start", "container:one".into(), |_, _| async {
+        Ok(json!({}))
+    })
+    .unwrap();
+    let ids = [&created, &built, &other].map(|started| started.0["job_id"].clone());
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while ids.iter().any(|id| {
+            let job: Job = app.db.get("job", id.as_str().unwrap()).unwrap();
+            job.finished_at.is_none()
+        }) {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // The list the pages poll, as they read it, keeps the name once the job has ended too.
+    let listed = serde_json::to_value(app.db.jobs_summary().unwrap()).unwrap();
+    let job = |id: &Value| {
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|job| job["id"] == *id)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(job(&ids[0])["name"], "Agent desktop");
+    assert_eq!(job(&ids[0])["status"], "failed");
+    assert_eq!(job(&ids[1])["name"], "Tools");
+    assert!(
+        job(&ids[2]).get("name").is_none(),
+        "other jobs name nothing"
+    );
 }

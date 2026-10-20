@@ -484,13 +484,16 @@ try:
         missing = next(i for i in api("images") if i["id"] == "ubuntu-xfce")
         assert not missing["available"] and not missing["downloaded"] and missing["image_id"] is None, missing
         created = api("containers", {"name": "Lazy catalog download", "image": xfce_ref, "gpu": False, "internet": False})
+        # The pages show the container under this name while its record does not exist yet.
+        listed = next(j for j in api("jobs") if j["id"] == created["job_id"])
+        assert listed["name"] == "Lazy catalog download", listed
         samples, deadline = [], time.monotonic() + 1200
         while (state := api(f"jobs/{created['job_id']}"))["status"] in ("queued", "running"):
             assert time.monotonic() < deadline, state["log"]
             if state.get("progress"):
                 samples.append(state["progress"])
             time.sleep(0.5)
-        assert state["status"] == "completed", state["log"]
+        assert state["status"] == "completed" and state["name"] == "Lazy catalog download", state
         lazy_env = state["result"]["container_id"]
         container_ids.append(lazy_env)
         assert "progress" not in state and f"from {xfce_source}." in state["log"], state
@@ -513,7 +516,7 @@ try:
         if pulled_xfce and pulled_xfce != local_xfce and pulled_xfce not in known_images:
             image_refs.append(pulled_xfce)
     assert docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip() == local_xfce
-    print(f"PASS missing catalog image downloads from {xfce_source} on creation with byte progress", flush=True)
+    print(f"PASS missing catalog image downloads from {xfce_source} on creation with byte progress, named in the job list", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
     # A volume's files are reachable without a container, as the desktop user.
