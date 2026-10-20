@@ -78,8 +78,9 @@ function TemplateCard({
   const install = async () => {
     setBusy(true)
     try {
-      // The build form shows everything the template runs before anything is built.
-      openDialog({ kind: "build", config: await loadTemplate(list, template) })
+      // The build form asks only for a name and a base image; its advanced editing shows
+      // everything the template runs before anything is built.
+      openDialog({ kind: "build", config: await loadTemplate(list, template), simple: true })
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -254,8 +255,8 @@ export function TemplatesPage() {
           config: await loadTemplate(list, template),
         }))
       )
-      // The build form shows every script the merge runs before anything is built.
-      openDialog({ kind: "build", config: mergeTemplates(loaded) })
+      // As for one template; advanced editing shows every script the merge runs.
+      openDialog({ kind: "build", config: mergeTemplates(loaded), simple: true })
       stopChoosing()
     } catch (error) {
       toast.error((error as Error).message)

@@ -533,6 +533,11 @@ export const es: Messages = {
   "build.mcpHint":
     "Se escriben en la imagen, así que cada contenedor creado a partir de ella tiene estos servidores. Sus comandos se ejecutan dentro del escritorio.",
   "build.mcpRemoveOf": "Dejar fuera {name}",
+  "build.simple":
+    "Compila una imagen a partir de esta plantilla tal como está configurada. La edición avanzada muestra su script, que se ejecuta como root, y permite cambiarlo antes.",
+  "build.simpleMerged":
+    "Compila una sola imagen a partir de {names}, cuyos scripts se ejecutan en este orden. La edición avanzada muestra cada script, que se ejecuta como root, y permite cambiarlo antes.",
+  "build.advanced": "Edición avanzada",
 
   "icons.label": "Icono",
   "icons.choose": "Elegir icono",
@@ -552,7 +557,7 @@ export const es: Messages = {
 
   "templates.title": "Plantillas",
   "templates.description":
-    "Imágenes listas desde {source}. Al instalar una se abre el formulario de compilación para revisar su script.",
+    "Imágenes listas desde {source}. Al instalar una solo se pide un nombre; la edición avanzada muestra antes su script.",
   "templates.refresh": "Actualizar",
   "templates.retry": "Reintentar",
   "templates.loading": "Cargando plantillas",
