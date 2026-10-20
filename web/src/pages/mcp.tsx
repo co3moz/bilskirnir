@@ -8,6 +8,7 @@ import {
   RiInformationLine,
   RiKey2Line,
   RiMore2Line,
+  RiPlayLine,
   RiPlugLine,
   RiRefreshLine,
 } from "@remixicon/react"
@@ -15,6 +16,7 @@ import { cn } from "cn"
 import { toast } from "sonner"
 
 import { CopyButton } from "@/components/copy-button"
+import { InspectorView } from "@/components/inspector/inspector-view"
 import {
   columnHelper,
   DataTablePagination,
@@ -47,9 +49,12 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { attempt } from "@/lib/actions"
+import { wsUrl } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, shortDate } from "@/lib/format"
 import { plural, rich, t } from "@/lib/i18n"
+import { targetGroups, targetKey } from "@/lib/inspector"
+import { INSPECT_PATH, InspectorClient, type InspectTarget } from "@/lib/mcp-client"
 import {
   endpointUrl,
   scopeSummary,
@@ -76,7 +81,12 @@ type Row = McpEndpoint & {
 }
 const column = columnHelper<Row>()
 
+/** Opens a server in the inspector, from a row of the other views. */
+const InspectContext = React.createContext<(target: InspectTarget) => void>(() => {})
+
 function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
+  const inspect = React.useContext(InspectContext)
+  const enabled = useSettings().data?.mcp_enabled !== false
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -90,6 +100,13 @@ function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem
+          disabled={!enabled}
+          onSelect={() => inspect({ kind: "endpoint", name: endpoint.name })}
+        >
+          <RiPlayLine />
+          {t("inspector.open")}
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => openDialog({ kind: "mcp-endpoint", name: endpoint.name })}
         >
@@ -332,7 +349,10 @@ function RefreshServer({ server }: { server: DesktopServer }) {
 
 /** One desktop MCP server: where it comes from, how it starts, its state, tools and log. */
 function ServerRow({ server }: { server: DesktopServer }) {
+  const inspect = React.useContext(InspectContext)
   const details = serverDetails(server.env, server.headers, server.cwd)
+  // Without a command or a URL its declaration could not be read, so nothing can start it.
+  const startable = server.state !== "stopped" && !!(server.command || server.url)
   return (
     <li className="flex flex-col gap-2 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -374,6 +394,22 @@ function ServerRow({ server }: { server: DesktopServer }) {
           {details && <p className="text-xs break-words text-muted-foreground">{details}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                disabled={!startable}
+                onClick={() =>
+                  inspect({ kind: "server", container: server.container_id, name: server.name })
+                }
+                aria-label={t("inspector.openOf", { name: server.name })}
+              >
+                <RiPlayLine />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("inspector.open")}</TooltipContent>
+          </Tooltip>
           <RefreshServer server={server} />
           {server.source === "container" && (
             <Tooltip>
@@ -562,9 +598,9 @@ function ServersView({ containers }: { containers: ContainerItem[] }) {
   )
 }
 
-type View = "endpoints" | "servers"
+type View = "endpoints" | "servers" | "inspector"
 
-/** MCP endpoints and the desktop MCP servers whose tools they offer. */
+/** MCP endpoints, the desktop MCP servers whose tools they offer, and the inspector that runs them. */
 export function McpPage() {
   const settings = useSettings().data
   const containers = useContainers().data
@@ -574,62 +610,108 @@ export function McpPage() {
   useMcpScopes()
   const [view, setView] = React.useState<View>("endpoints")
   const list = React.useMemo(() => containers ?? [], [containers])
+  const [client, setClient] = React.useState<InspectorClient | null>(null)
+  const [picked, setPicked] = React.useState<string>()
+  const groups = targetGroups(
+    servers.data ?? [],
+    endpoints.data ?? [],
+    list,
+    settings?.mcp_enabled !== false
+  )
+  // An inspector ends with the page, and the one before when another is opened.
+  React.useEffect(() => () => client?.close(), [client])
+
+  const connect = (target: InspectTarget) => {
+    setClient(
+      new InspectorClient(target, {
+        socket: () => new WebSocket(wsUrl(INSPECT_PATH)),
+        version: settings?.version ?? "",
+      })
+    )
+    setPicked(targetKey(target))
+  }
+  const inspect = (target: InspectTarget) => {
+    connect(target)
+    setView("inspector")
+  }
+  const pickedTarget = groups
+    .flatMap((group) => group.choices)
+    .find((choice) => choice.key === picked)?.target
 
   return (
-    <PageBody>
-      <DockerAlert />
-      {settings?.mcp_enabled === false && (
-        <div className="px-4 lg:px-6">
-          <Alert>
-            <RiInformationLine />
-            <AlertTitle>{t("mcp.off")}</AlertTitle>
-            <AlertDescription>{t("mcp.offHint")}</AlertDescription>
-          </Alert>
-        </div>
-      )}
-      <Tabs
-        value={view}
-        onValueChange={(value) => setView(value as View)}
-        className="w-full flex-col justify-start gap-4"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 lg:px-6">
-          <ViewTabs
-            value={view}
-            onChange={(value) => setView(value as View)}
-            views={[
-              {
-                value: "endpoints",
-                label: t("mcp.view.endpoints"),
-                count: endpoints.data?.length,
-              },
-              { value: "servers", label: t("mcp.view.servers"), count: servers.data?.length },
-            ]}
-          />
-          {view === "endpoints" ? (
-            <Button size="sm" onClick={() => openDialog({ kind: "mcp-endpoint" })}>
-              <RiAddLine data-icon="inline-start" />
-              {t("mcp.endpoint.new")}
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => openDialog({ kind: "mcp-server" })}>
-              <RiAddLine data-icon="inline-start" />
-              {t("mcp.server.add")}
-            </Button>
-          )}
-        </div>
-        <TabsContent value="endpoints" className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
-          <p className="text-sm text-muted-foreground">
-            {rich("mcp.endpoints.description", {
-              admin: <code className="font-mono text-foreground">/mcp</code>,
-            })}
-          </p>
-          <EndpointsView containers={list} />
-        </TabsContent>
-        <TabsContent value="servers" className="flex flex-col gap-4 px-4 lg:px-6">
-          <p className="text-sm text-muted-foreground">{t("mcp.servers.description")}</p>
-          <ServersView containers={list} />
-        </TabsContent>
-      </Tabs>
-    </PageBody>
+    <InspectContext.Provider value={inspect}>
+      <PageBody>
+        <DockerAlert />
+        {settings?.mcp_enabled === false && (
+          <div className="px-4 lg:px-6">
+            <Alert>
+              <RiInformationLine />
+              <AlertTitle>{t("mcp.off")}</AlertTitle>
+              <AlertDescription>{t("mcp.offHint")}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+        <Tabs
+          value={view}
+          onValueChange={(value) => setView(value as View)}
+          className="w-full flex-col justify-start gap-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 lg:px-6">
+            <ViewTabs
+              value={view}
+              onChange={(value) => setView(value as View)}
+              views={[
+                {
+                  value: "endpoints",
+                  label: t("mcp.view.endpoints"),
+                  count: endpoints.data?.length,
+                },
+                { value: "servers", label: t("mcp.view.servers"), count: servers.data?.length },
+                { value: "inspector", label: t("mcp.view.inspector") },
+              ]}
+            />
+            {view === "endpoints" ? (
+              <Button size="sm" onClick={() => openDialog({ kind: "mcp-endpoint" })}>
+                <RiAddLine data-icon="inline-start" />
+                {t("mcp.endpoint.new")}
+              </Button>
+            ) : view === "servers" ? (
+              <Button size="sm" onClick={() => openDialog({ kind: "mcp-server" })}>
+                <RiAddLine data-icon="inline-start" />
+                {t("mcp.server.add")}
+              </Button>
+            ) : null}
+          </div>
+          <TabsContent value="endpoints" className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+            <p className="text-sm text-muted-foreground">
+              {rich("mcp.endpoints.description", {
+                admin: <code className="font-mono text-foreground">/mcp</code>,
+              })}
+            </p>
+            <EndpointsView containers={list} />
+          </TabsContent>
+          <TabsContent value="servers" className="flex flex-col gap-4 px-4 lg:px-6">
+            <p className="text-sm text-muted-foreground">{t("mcp.servers.description")}</p>
+            <ServersView containers={list} />
+          </TabsContent>
+          {/* Kept while another view shows, so the inspector's server and its results stay open. */}
+          <TabsContent
+            value="inspector"
+            forceMount
+            className="flex flex-col gap-4 px-4 data-[state=inactive]:hidden lg:px-6"
+          >
+            <p className="text-sm text-muted-foreground">{t("inspector.description")}</p>
+            <InspectorView
+              client={client}
+              groups={groups}
+              picked={picked}
+              onPick={setPicked}
+              onConnect={() => pickedTarget && connect(pickedTarget)}
+              onDisconnect={() => client?.close()}
+            />
+          </TabsContent>
+        </Tabs>
+      </PageBody>
+    </InspectContext.Provider>
   )
 }
