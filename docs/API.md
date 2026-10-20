@@ -120,6 +120,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | PUT, DELETE | `/api/mcp/endpoints/{name}` | Replace an endpoint's `grants`, or delete it and end its sessions. |
 | POST, DELETE | `/api/mcp/endpoints/{name}/token` | Create or replace an endpoint's token, returned once, or revoke it. |
 | GET | `/api/mcp/endpoints/{name}/tools` | The tools the endpoint offers, as its agents see them. |
+| GET | `/api/mcp/inspect` | The [MCP inspector](#the-mcp-inspector)'s WebSocket, which joins the dashboard to one desktop server, endpoint or `/mcp`. |
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
@@ -531,6 +532,31 @@ An endpoint is created with:
 ```
 
 `alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). `excluded_tools`, optional and empty by default, names tools left out although their scope or server is granted, as the endpoint exposes them for that container alone: a container tool's own name, which must be one of the granted scopes', or `SERVER__TOOL`, the `exposed` name of the server lists, kept whether or not the server is known now. Each grant is returned with its list, empty when nothing is left out. The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.
+
+### The MCP inspector
+
+`/api/mcp/inspect` is a WebSocket of the signed-in dashboard, opened from its own `Origin`, that joins the browser to one MCP server until either side closes. The browser is the MCP client and the manager carries its JSON-RPC messages without reading them, so the page sees exactly what the server sends. The first text frame names the server:
+
+```json
+{"kind": "server", "container": "CONTAINER_ID", "name": "chrome"}
+{"kind": "trial", "container": "CONTAINER_ID", "server": {"name": "try", "command": "npx", "args": ["-y", "@playwright/mcp"]}}
+{"kind": "endpoint", "name": "chrome-dev"}
+{"kind": "administrator"}
+```
+
+A `server` is a desktop server the manager knows, and a `trial` is a declaration, as registering takes it, tried before it is saved. Both need a running container and start in a `docker exec` of their own as the desktop user, apart from the connections endpoints hold, and closing the socket ends it. Being a second process, a server that locks something of its own, such as a browser profile, may refuse to start while an agent's connection to it is open. An `endpoint` offers the tools its agents see and `administrator` those of `/mcp`; both are served inside the manager without a token, and only while MCP is enabled.
+
+Every later frame from the browser is one JSON-RPC message, or a batch, on one line, at most 1.1 MB. Every frame from the manager is a JSON object with a `type`:
+
+| `type` | Carries |
+| --- | --- |
+| `ready` | `server`, what was started, such as `{"kind": "server", "container_id": "...", "container_name": "Chrome dev", "name": "chrome", "source": "image", "transport": "stdio"}` |
+| `message` | One JSON-RPC `message` from the server, as it wrote it |
+| `stdout`, `stderr` | A `line` of a desktop server's output that is not a message, cut at 8 KiB, with `truncated` |
+| `error` | Why the server cannot be opened, after which the socket closes, or why a frame was refused |
+| `closed` | The `reason` the server stopped, after which the socket closes |
+
+At most eight inspectors are open at once. A line of output longer than 16 MiB ends the server, as it ends an endpoint's connection.
 
 ## Desktop ports
 

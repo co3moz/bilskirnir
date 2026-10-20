@@ -48,29 +48,43 @@ class WebSocket:
             raise RuntimeError(f"WebSocket rejected: {status!r}")
         self.pending = b""
 
+    def frame(self):
+        head = self.file.read(2)
+        if len(head) != 2:
+            raise EOFError("WebSocket closed")
+        opcode, length = head[0] & 15, head[1] & 127
+        if length == 126:
+            length = struct.unpack("!H", self.file.read(2))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", self.file.read(8))[0]
+        payload = self.file.read(length)
+        if opcode == 8:
+            raise EOFError("WebSocket closed")
+        return opcode, payload
+
     def read(self, size):
         while len(self.pending) < size:
-            head = self.file.read(2)
-            if len(head) != 2:
-                raise EOFError("WebSocket closed")
-            opcode, length = head[0] & 15, head[1] & 127
-            if length == 126:
-                length = struct.unpack("!H", self.file.read(2))[0]
-            elif length == 127:
-                length = struct.unpack("!Q", self.file.read(8))[0]
-            payload = self.file.read(length)
-            if opcode == 8:
-                raise EOFError("WebSocket closed")
+            opcode, payload = self.frame()
             if opcode == 2:
                 self.pending += payload
         result, self.pending = self.pending[:size], self.pending[size:]
         return result
 
-    def send(self, payload):
+    def receive(self):
+        """The next text frame, as JSON."""
+        while True:
+            opcode, payload = self.frame()
+            if opcode == 1:
+                return json.loads(payload)
+
+    def send(self, payload, opcode=0x82):
         mask = os.urandom(4)
         length = len(payload)
-        header = bytes([0x82, 0x80 | length]) if length < 126 else bytes([0x82, 0x80 | 126]) + struct.pack("!H", length)
+        header = bytes([opcode, 0x80 | length]) if length < 126 else bytes([opcode, 0x80 | 126]) + struct.pack("!H", length)
         self.socket.sendall(header + mask + bytes(v ^ mask[i % 4] for i, v in enumerate(payload)))
+
+    def send_text(self, text):
+        self.send(text.encode(), 0x81)
 
     def assert_closed(self):
         self.socket.settimeout(3)
@@ -1188,6 +1202,61 @@ try:
     assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
     shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
     assert shot["content"][0]["type"] == "image" and shot["structuredContent"]["width"] == 320, shot
+    # The MCP page's inspector reaches the same servers from the signed-in dashboard: a desktop
+    # server in a docker exec of its own that ends with the socket, a declaration tried without
+    # saving it, and the endpoint as its agent sees it.
+    cookie = "; ".join(f"{c.name}={c.value}" for c in cookies)
+    def inspector_reply(ws, request_id):
+        while True:
+            frame = ws.receive()
+            assert frame["type"] not in ("error", "closed"), frame
+            if frame["type"] == "message" and frame["message"].get("id") == request_id:
+                return frame["message"]
+    def inspected(target, *requests):
+        ws = WebSocket(port, "/api/mcp/inspect", cookie)
+        try:
+            ws.send_text(json.dumps(target))
+            ready = ws.receive()
+            assert ready["type"] == "ready", ready
+            ws.send_text(json.dumps({"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}}}))
+            assert inspector_reply(ws, 0)["result"]["serverInfo"]["name"], target
+            ws.send_text(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}))
+            replies = []
+            for number, (method, params) in enumerate(requests, 1):
+                ws.send_text(json.dumps({"jsonrpc":"2.0","id":number,"method":method,"params":params}))
+                replies.append(inspector_reply(ws, number)["result"])
+            replies.append(echo_processes())
+            return ready["server"], replies
+        finally:
+            ws.close()
+    def echo_processes():
+        return int(docker("exec",container,"pgrep","-c","-f","mcp/echo.py",check=False).strip() or 0)
+    before = echo_processes()
+    described, (echoed, during) = inspected({"kind":"server","container":env_id,"name":"echo"}, ("tools/call",{"name":"echo","arguments":{"text":"inspected"}}))
+    assert described["source"] == "container" and described["transport"] == "stdio", described
+    assert echoed["content"][0]["text"] == "echo: inspected uid=1001 display=:0" and during == before + 1, (echoed, during, before)
+    wait_for(lambda: echo_processes() == before, 15)
+    _, (echoed, _) = inspected({"kind":"server","container":env_id,"name":"api"}, ("tools/call",{"name":"echo","arguments":{"text":"inspected"}}))
+    assert echoed["content"][0]["text"] == "echo: inspected header=yes", echoed
+    described, (listed, _) = inspected({"kind":"trial","container":env_id,"server":{"name":"tried","command":"python3","args":["/home/desktop/mcp/echo.py"]}}, ("tools/list",{}))
+    assert described["kind"] == "trial" and [t["name"] for t in listed["tools"]] == ["echo"], (described, listed)
+    assert "tried" not in {s["name"] for s in tool("list_mcp_servers",{"container_id":env_id})["structuredContent"]["items"]}
+    _, (listed, _) = inspected({"kind":"endpoint","name":"acceptance-mcp"}, ("tools/list",{}))
+    assert {t["name"] for t in listed["tools"]} == offered, listed
+    # A server that cannot start says why: its stderr, then the reason it stopped.
+    ws = WebSocket(port, "/api/mcp/inspect", cookie)
+    ws.send_text(json.dumps({"kind":"trial","container":env_id,"server":{"name":"missing","command":"no-such-mcp-server"}}))
+    frames = [ws.receive()]
+    while frames[-1]["type"] != "closed":
+        frames.append(ws.receive())
+    ws.close()
+    assert frames[0]["type"] == "ready" and any(f["type"] == "stderr" and "no-such-mcp-server" in f["line"] for f in frames), frames
+    try:
+        WebSocket(port, "/api/mcp/inspect", cookie, "https://evil.example")
+        raise AssertionError("cross-origin inspector accepted")
+    except RuntimeError as error:
+        assert "403" in str(error)
+    print("PASS the MCP inspector reaches desktop servers, trials and endpoints from the dashboard", flush=True)
     # Single tools are left out by the names the endpoint gives them, a container tool's and a
     # server's alike; the list above, without one, was everything the scope and the servers give.
     assert registered["tools"][0]["exposed"] == "echo__echo", registered
