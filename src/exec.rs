@@ -57,7 +57,7 @@ impl Execute {
             || self.script.len() > 1_000_000
             || self.script.contains('\0')
         {
-            bail!("Script must contain 1–1000000 bytes without NUL characters");
+            bail!("Script must contain 1 to 1000000 bytes without NUL characters");
         }
         if !(1..=3500).contains(&self.timeout_seconds) {
             bail!("timeout_seconds must be between 1 and 3500");

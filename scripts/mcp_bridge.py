@@ -16,6 +16,9 @@ def run(url, token, source, output, errors):
     output_lock = threading.Lock()
     slots = threading.Semaphore(8)
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    # A scoped endpoint (/mcp/<name>) assigns a session on initialize and expects it back on
+    # every later request; /mcp assigns none.
+    session = {"id": None}
 
     def emit(message):
         with output_lock:
@@ -51,8 +54,13 @@ def run(url, token, source, output, errors):
             }
             if token:
                 headers["Authorization"] = "Bearer " + token
+            if session["id"]:
+                headers["Mcp-Session-Id"] = session["id"]
             request = urllib.request.Request(url, data=body, headers=headers)
             with client.open(request, timeout=125) as response:
+                assigned = response.headers.get("Mcp-Session-Id")
+                if assigned:
+                    session["id"] = assigned
                 if response.status in (202, 204):
                     return
                 mime = response.headers.get_content_type()
@@ -109,7 +117,11 @@ def run(url, token, source, output, errors):
                 failure(None, -32600, "Expected one JSON-RPC 2.0 message per line")
                 continue
             slots.acquire()
-            pool.submit(forward, message)
+            # The answer to initialize carries the session everything after it must name.
+            if message.get("method") == "initialize":
+                forward(message)
+            else:
+                pool.submit(forward, message)
 
 
 if __name__ == "__main__":

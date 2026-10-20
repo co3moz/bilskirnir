@@ -27,7 +27,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Method | Path | Result or purpose |
 | --- | --- | --- |
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
-| POST | `/api/login` | Sign in with `username` and `password`. |
+| POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
 | GET | `/api/system` | Docker connection and host summary. |
@@ -384,7 +384,7 @@ Read request:
 {"path":"/home/desktop/project/config.json","encoding":"utf8","offset":0,"limit":65536}
 ```
 
-The response includes `data`, `encoding`, `bytes`, `size`, `offset`, `next_offset` and `eof`. `limit` is 1–524288 bytes. Use `encoding:"base64"` for binary files or slices that split UTF-8 characters.
+The response includes `data`, `encoding`, `bytes`, `size`, `offset`, `next_offset` and `eof`. `limit` is 1 to 524288 bytes. Use `encoding:"base64"` for binary files or slices that split UTF-8 characters.
 
 Write request:
 
@@ -394,7 +394,7 @@ Write request:
 
 Writes are atomic, create missing parent directories and use mode 0600. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
 
-`POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/mkdir` with `{"path":"/home/desktop/project/assets"}` creates one folder in an existing parent and returns 409 when the name exists. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks and files larger than `UPLOAD_MAX_MB`. Responses that describe a saved file, such as `download_file`, `export_artifacts` and saved screenshots, include this route as a root-relative `download_url` for the dashboard session.
+`POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/mkdir` with `{"path":"/home/desktop/project/assets"}` creates one folder in an existing parent and returns 409 when the name exists. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks, files larger than `UPLOAD_MAX_MB` and, with 403, a file the desktop user cannot open, which is tried before any headers are sent so a refused file never arrives as a body cut short. Responses that describe a saved file, such as `download_file`, `export_artifacts` and saved screenshots, include this route as a root-relative `download_url` for the dashboard session.
 
 The same route downloads a folder: its path answers with a gzip-compressed tar named after the folder, such as `project.tar.gz`, that holds the folder under its own name. tar runs in the desktop as the desktop user while the archive streams, so its size is not known up front and `UPLOAD_MAX_MB` does not apply. No symlink on the path is followed, and symlinks inside the folder are archived as links. The transfer is a `folder-download` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent; it shares the two archive transfer slots with image and volume archives. A file the desktop user may not read fails the download instead of leaving the archive incomplete, and a file that changes while it is read is archived as it was read and noted in the job log. `/` itself is refused; download the folders in it.
 
@@ -435,6 +435,8 @@ A folder of a volume downloads as a `.tar.gz` like a container's. Its path is ch
 curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
   http://localhost:8080/api/volumes/unity-projects/archive
 ```
+
+A volume's file routes run their helper under the volume's lock from the check that the volume exists until Docker has the helper container, since `docker run` would otherwise create a volume anew that a delete removed in between; a listing or a file read holds it for the whole request. An upload the helper refuses, such as into a folder the desktop user cannot write, is answered with the helper's reason.
 
 `POST /api/volumes/import?name=NEW_VOLUME` with `Content-Type: application/octet-stream` and the archive as the body creates the volume `name` and unpacks the archive into it. The name must not exist yet: an import never replaces a volume's files, and a name in use returns 409. The archive is `.tar.gz` or `.tar`, at most `IMAGE_ARCHIVE_MAX_MB` after decompression. tar unpacks it as the desktop user in a helper without network, so every file belongs to UID/GID 1001: a setuid bit grants nothing beyond that user, device files cannot be created, and nothing lands outside the volume. The response is a `volume-import` job once the whole archive has arrived; if the upload or unpacking fails, the new volume is removed again.
 
@@ -587,7 +589,7 @@ The response includes `applied_actions`, `width`, `height`, the final `pointer` 
 ]
 ```
 
-Put the actions you need in your request's `actions` array. Batches allow 1–100 actions, single waits or holds of at most 10 seconds and at most 30 seconds of combined delays. Keys and buttons held by `key_down` and `button_down` stay pressed for later actions in the same request and are released when the request ends. `move_relative` is emulated with absolute positions from the pointer location reported by the desktop. Input travels through a shared RFB connection with Fence acknowledgement; it does not disconnect the browser viewer. See the [MCP input guide](MCP.md#use-the-mouse-and-keyboard) for key names and limits.
+Put the actions you need in your request's `actions` array. Batches allow 1 to 100 actions, single waits or holds of at most 10 seconds and at most 30 seconds of combined delays. Keys and buttons held by `key_down` and `button_down` stay pressed for later actions in the same request and are released when the request ends. `move_relative` is emulated with absolute positions from the pointer location reported by the desktop. Input travels through a shared RFB connection with Fence acknowledgement; it does not disconnect the browser viewer. See the [MCP input guide](MCP.md#use-the-mouse-and-keyboard) for key names and limits.
 
 ## Applications and windows
 
@@ -595,9 +597,9 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 `GET .../applications/{application_id}/logs?tail_bytes=65536` returns the end of the combined stdout/stderr log, which keeps about the latest 1 MiB. `POST .../applications/{application_id}/stop` with an optional `{"grace_seconds":5}` body sends SIGTERM to the process group, then SIGKILL. Supervisor files live under `/tmp` in the desktop and disappear when it restarts, after which the state is `unknown`.
 
-`GET .../applications/{application_id}/diagnostics` returns the application's state, exit status, its session's processes with memory use, open file count, thread count and the latest log lines. `GET .../applications/{application_id}/metrics?duration_ms=1000` samples CPU time and resident memory of those processes over the window (100–10000 ms) and reports container memory from cgroups; frame rate is not available.
+`GET .../applications/{application_id}/diagnostics` returns the application's state, exit status, its session's processes with memory use, open file count, thread count and the latest log lines. `GET .../applications/{application_id}/metrics?duration_ms=1000` samples CPU time and resident memory of those processes over the window (100 to 10000 ms) and reports container memory from cgroups; frame rate is not available.
 
-`POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100–60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`.
+`POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100 to 60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`.
 
 `POST .../reset` recreates the container from its saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the container ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
 
@@ -642,7 +644,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs. An input request waits at most five seconds for a job that holds the container, such as a running script or an upload, and answers 409 after that without taking one of the four input slots.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs. An input request waits at most five seconds for a job that holds the container, such as a running script or an upload, and answers 409 after that without taking one of the four input slots. A request that needs a container, volume or image a job holds, such as a running script, an upload or an export, waits five seconds for it and then answers 409 instead of waiting for the job.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

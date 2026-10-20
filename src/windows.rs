@@ -235,10 +235,10 @@ pub struct Inspect {
     /// Only applications whose accessible name contains this text.
     #[serde(default)]
     pub name: Option<String>,
-    /// Tree depth to descend (1–20).
+    /// Tree depth to descend (1 to 20).
     #[serde(default = "inspect_depth")]
     pub max_depth: u8,
-    /// Maximum nodes to return (1–2000).
+    /// Maximum nodes to return (1 to 2000).
     #[serde(default = "inspect_nodes")]
     pub max_nodes: u32,
 }
@@ -251,15 +251,15 @@ fn inspect_nodes() -> u32 {
 impl Inspect {
     pub fn validate(&self) -> anyhow::Result<()> {
         if !(1..=20).contains(&self.max_depth) {
-            bail!("max_depth must be 1–20");
+            bail!("max_depth must be 1 to 20");
         }
         if !(1..=2000).contains(&self.max_nodes) {
-            bail!("max_nodes must be 1–2000");
+            bail!("max_nodes must be 1 to 2000");
         }
         if let Some(name) = &self.name
             && (name.is_empty() || name.len() > 200)
         {
-            bail!("name must be 1–200 bytes");
+            bail!("name must be 1 to 200 bytes");
         }
         Ok(())
     }

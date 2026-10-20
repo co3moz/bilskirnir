@@ -20,7 +20,7 @@ const TOOLS: &str = include_str!("audio_tools.py");
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CaptureAudio {
-    /// Seconds to record (0.1–10).
+    /// Seconds to record (0.1 to 10).
     #[serde(default = "seconds")]
     pub seconds: f64,
     /// "desktop" records what the desktop plays; "microphone" records what the browser or
@@ -50,7 +50,7 @@ fn microphone() -> String {
 impl CaptureAudio {
     pub fn validate(&self) -> anyhow::Result<&'static str> {
         if !self.seconds.is_finite() || !(0.1..=10.0).contains(&self.seconds) {
-            bail!("seconds must be 0.1–10");
+            bail!("seconds must be 0.1 to 10");
         }
         match self.source.as_str() {
             "desktop" => Ok("desktop-output.monitor"),
@@ -62,7 +62,7 @@ impl CaptureAudio {
 impl InjectAudio {
     pub fn validate(&self) -> anyhow::Result<&'static str> {
         if self.data_base64.is_empty() || self.data_base64.len() > 1_000_000 {
-            bail!("data_base64 must be 1–1000000 characters");
+            bail!("data_base64 must be 1 to 1000000 characters");
         }
         match self.target.as_str() {
             "microphone" => Ok("browser-mic-sink"),

@@ -36,6 +36,12 @@ pub(crate) enum Target {
 
 pub(crate) fn target(entry: &Value) -> Result<Target> {
     match entry["type"].as_str() {
+        // The stat tried to open the file as the desktop user; a file it cannot read would
+        // otherwise be answered with headers and then a body cut short.
+        Some("file") if entry["readable"] == false => Err(Error(
+            StatusCode::FORBIDDEN,
+            "The desktop user cannot read the file".into(),
+        )),
         Some("file") => Ok(Target::File(
             entry["size"].as_u64().context("Missing file size")?,
         )),
@@ -58,6 +64,10 @@ pub(crate) struct Source {
     pub args: Vec<String>,
     /// The helper container the arguments start, removed when the download stops early.
     pub helper: Option<String>,
+    /// The resource lock held from before the helper starts until Docker has it: a volume,
+    /// which `docker run` would create anew after a delete slipped in between the check and
+    /// the run. A folder in a desktop needs none.
+    pub lock: Option<String>,
     /// The folder as the job log names it.
     pub label: String,
     /// The folder's path, for the job's result.
@@ -127,6 +137,14 @@ impl App {
         token: auth::Session,
     ) -> anyhow::Result<Value> {
         self.append_log(job_id, &format!("Archiving {}.", source.label))?;
+        let guard = match &source.lock {
+            Some(resource) => Some(
+                self.hold(resource)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error.1))?,
+            ),
+            None => None,
+        };
         let mut child = self
             .command(&source.args)
             .stdin(Stdio::piped())
@@ -134,6 +152,10 @@ impl App {
             .stderr(Stdio::piped())
             .spawn()
             .context("Could not start Docker CLI")?;
+        if let Some(helper) = &source.helper {
+            self.helper_started(helper, &mut child).await;
+        }
+        drop(guard);
         // Held until tar has ended; when it closes early, tar stops where it runs.
         let stdin = child.stdin.take();
         let sent = send_archive(self, job_id, &mut child, body, token).await;

@@ -200,21 +200,36 @@ impl App {
         };
         // The container's own volumes are made before its record, so no record names one that
         // was never made; a missing one later was removed, and the rule for missing volumes holds.
-        for (parameter, volume) in &own_volumes {
-            let lock = self.resource_lock(&format!("volume:{volume}"));
-            let _guard = lock.lock().await;
-            if self.container_volume(id, parameter, volume).await? {
-                self.append_log(
-                    job_id,
-                    &format!("Created the volume {volume} for {parameter}."),
-                )?;
+        // The other way round too: a volume made here goes again when the record cannot be
+        // saved, so no volume names an owner that never existed.
+        let mut created = Vec::new();
+        let recorded = async {
+            for (parameter, volume) in &own_volumes {
+                let lock = self.resource_lock(&format!("volume:{volume}"));
+                let _guard = lock.lock().await;
+                if self.container_volume(id, parameter, volume).await? {
+                    created.push(volume.to_string());
+                    self.append_log(
+                        job_id,
+                        &format!("Created the volume {volume} for {parameter}."),
+                    )?;
+                }
             }
+            // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
+            if let Some((_, pinned)) = &compose {
+                self.save_pinned(id, pinned)?;
+            }
+            self.db.put(CONTAINERS, id, &env)
         }
-        // Save intent first: failed setup and interrupted jobs remain discoverable and removable.
-        if let Some((_, pinned)) = &compose {
-            self.save_pinned(id, pinned)?;
+        .await;
+        if let Err(error) = recorded {
+            for volume in &created {
+                if self.docker(&["volume", "rm", volume]).await.is_ok() {
+                    let _ = self.append_log(job_id, &format!("Removed the volume {volume} again."));
+                }
+            }
+            return Err(error);
         }
-        self.db.put(CONTAINERS, id, &env)?;
         let result = self.provision(&env, manager).await;
         if let Err(ref e) = result {
             let mut failed = env.clone();
@@ -323,8 +338,12 @@ impl App {
                 .get(&env.private_network)
                 .is_none()
             {
-                self.connect_network(env, private["Id"].as_str().unwrap(), container_id)
-                    .await?;
+                self.connect_network(
+                    env,
+                    private["Id"].as_str().context("Missing network ID")?,
+                    container_id,
+                )
+                .await?;
             }
             let mut saved = env.clone();
             self.set_internet(&mut saved, env.spec.internet).await?;

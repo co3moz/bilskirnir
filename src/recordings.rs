@@ -24,13 +24,13 @@ pub const ROOT: &str = "/tmp/bilskirnir-recordings";
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartRecording {
-    /// Frames per second (1–5).
+    /// Frames per second (1 to 5).
     #[serde(default = "fps")]
     pub fps: u8,
-    /// Stop automatically after this many seconds (1–600).
+    /// Stop automatically after this many seconds (1 to 600).
     #[serde(default = "max_seconds")]
     pub max_seconds: u64,
-    /// Scale frames down to this width (16–7680); default 960.
+    /// Scale frames down to this width (16 to 7680); default 960.
     #[serde(default = "max_width")]
     pub max_width: u32,
     /// Record only this region, given as x,y,width,height in desktop pixels.
@@ -52,15 +52,15 @@ fn max_width() -> u32 {
 impl StartRecording {
     pub fn validate(&self) -> anyhow::Result<()> {
         if !(1..=5).contains(&self.fps) {
-            bail!("fps must be 1–5");
+            bail!("fps must be 1 to 5");
         }
         if !(1..=600).contains(&self.max_seconds) {
-            bail!("max_seconds must be 1–600");
+            bail!("max_seconds must be 1 to 600");
         }
         if let Some(name) = &self.name
             && (name.trim().is_empty() || name.chars().count() > 100)
         {
-            bail!("Recording name must be 1–100 characters");
+            bail!("Recording name must be 1 to 100 characters");
         }
         Capture {
             max_width: Some(self.max_width),
@@ -148,8 +148,7 @@ fn describe(record: &Recording, status: Value) -> Value {
 }
 pub async fn start_recording(app: &Arc<App>, id: &str, body: &StartRecording) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let (_, info) = running(app, id).await?;
     let record = Recording {
         id: uuid::Uuid::new_v4().simple().to_string(),
@@ -246,8 +245,7 @@ pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
 }
 pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let (env, info) = running(app, id).await?;
     uploads::validate_target(&env, &body.destination, &body.name)?;
     let mut recordings = serde_json::Map::new();

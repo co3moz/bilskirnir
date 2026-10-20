@@ -234,6 +234,27 @@ struct Helper {
 }
 
 impl Helper {
+    /// Start a helper that only reads the volume, under the volume's lock until Docker has the
+    /// container: `docker run` creates a volume that a delete removed meanwhile, so the lock
+    /// covers the moment between the check and the run, and no longer.
+    async fn spawn_reader(
+        app: &App,
+        volume: &Volume,
+        access: Access,
+        command: &[&str],
+    ) -> anyhow::Result<Self> {
+        let _guard = app
+            .hold(&format!("volume:{}", volume.name))
+            .await
+            .map_err(|error| anyhow!(error.1))?;
+        app.open_volume(&volume.name)
+            .await
+            .map_err(|error| anyhow!(error.1))?;
+        let mut helper = Self::spawn(app, volume, access, command)?;
+        app.helper_started(&helper.name, &mut helper.child).await;
+        Ok(helper)
+    }
+
     fn spawn(app: &App, volume: &Volume, access: Access, command: &[&str]) -> anyhow::Result<Self> {
         let name = helper_name();
         let command = command
@@ -277,7 +298,7 @@ impl App {
         token: auth::Session,
     ) -> anyhow::Result<Value> {
         self.append_log(job_id, &format!("Exporting the files of {}.", volume.name))?;
-        let mut helper = Helper::spawn(
+        let mut helper = Helper::spawn_reader(
             self,
             volume,
             Access::Archive,
@@ -292,7 +313,8 @@ impl App {
                 MOUNT,
                 ".",
             ],
-        )?;
+        )
+        .await?;
         let sent = match send_archive(self, job_id, &mut helper.child, body, token).await {
             Ok(sent) => sent,
             Err(error) => {

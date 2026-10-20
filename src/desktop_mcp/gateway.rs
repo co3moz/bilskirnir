@@ -90,14 +90,17 @@ fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
     if !app.config.mcp_enabled {
         return Some(StatusCode::NOT_FOUND.into_response());
     }
-    let Ok(endpoint) = app.db.get::<Endpoint>(ENDPOINTS, name) else {
-        return Some(
+    // Whether the endpoint exists is told only to a caller whose token opens something, so the
+    // names, which follow the containers', cannot be listed from the LAN.
+    let endpoint = app.db.get::<Endpoint>(ENDPOINTS, name).ok();
+    let missing = || {
+        Some(
             error::Error(
                 StatusCode::NOT_FOUND,
                 format!("No MCP endpoint is called {name}"),
             )
             .into_response(),
-        );
+        )
     };
     if request.headers().contains_key(header::ORIGIN)
         && !crate::auth::origin_matches(request.headers())
@@ -109,7 +112,7 @@ fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
     }
     let Some(administrator) = &app.config.mcp_token else {
         // MCP_AUTH_MODE=none: the administrator's channel is open, so this one is too.
-        return None;
+        return if endpoint.is_some() { None } else { missing() };
     };
     let token = request
         .headers()
@@ -118,7 +121,9 @@ fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
         .and_then(|v| v.strip_prefix("Bearer "));
     let allowed = token.is_some_and(|token| {
         (!administrator.is_empty() && bool::from(token.as_bytes().ct_eq(administrator.as_bytes())))
-            | endpoint.opens(token)
+            | endpoint
+                .as_ref()
+                .is_some_and(|endpoint| endpoint.opens(token))
     });
     if !allowed {
         return Some((
@@ -130,6 +135,9 @@ fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
             Json(json!({"error":"This endpoint's bearer token, or the administrator's MCP token, is required"})),
         )
             .into_response());
+    }
+    if endpoint.is_none() {
+        return missing();
     }
     None
 }
@@ -186,7 +194,18 @@ impl EndpointMcp {
                 let object = args.as_object_mut().expect("arguments are an object");
                 object.remove("container");
                 object.insert("container_id".into(), json!(container_id));
-                Box::pin(mcp::BilskirnirMcp::new(self.app.clone()).dispatch(tool, args)).await
+                let scoped = tool == "get_usage";
+                let result =
+                    Box::pin(mcp::BilskirnirMcp::new(self.app.clone()).dispatch(tool, args))
+                        .await?;
+                // The host GPU is outside what one container's grant covers.
+                Ok(match result.structured_content {
+                    Some(mut body) if scoped && body.get("gpu").is_some() => {
+                        body.as_object_mut().map(|body| body.remove("gpu"));
+                        CallToolResult::structured(body)
+                    }
+                    _ => result,
+                })
             }
             Target::Job { containers } => {
                 let id = args["job_id"].as_str().unwrap_or_default();

@@ -112,10 +112,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for Bounded<R> {
 }
 
 /// The `docker exec` arguments that start a server, and what its stdin receives first.
-pub(super) fn exec_args(
-    container: &str,
-    spec: &ServerSpec,
-) -> Result<(Vec<String>, Option<Vec<u8>>)> {
+pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
     let mut args: Vec<String> = ["exec", "-i", "--user", "1001:1001"]
         .map(str::to_owned)
         .to_vec();
@@ -124,7 +121,11 @@ pub(super) fn exec_args(
         let mut first =
             serde_json::to_vec(&serde_json::json!({"url": url, "headers": spec.headers}))?;
         first.push(b'\n');
-        return Ok((args, Some(first)));
+        return Ok(Exec {
+            args,
+            env: Vec::new(),
+            first: Some(first),
+        });
     }
     let command = spec
         .command
@@ -139,17 +140,34 @@ pub(super) fn exec_args(
         "XDG_RUNTIME_DIR=/run/desktop".into(),
         "PULSE_SERVER=unix:/run/desktop/pulse/native".into(),
         format!("PATH={PATH}"),
-    ]
-    .into_iter()
-    .chain(spec.env.iter().map(|(key, value)| format!("{key}={value}")))
-    {
+    ] {
         args.push("--env".into());
         args.push(variable);
+    }
+    // A declared variable may hold a resolved compose value: named alone, Docker reads it from
+    // the CLI's own environment, so the value is not on a command line `ps` shows.
+    let mut env = Vec::new();
+    for (key, value) in &spec.env {
+        args.push("--env".into());
+        args.push(key.clone());
+        env.push((key.clone(), value.clone()));
     }
     args.push(container.into());
     args.push(command.into());
     args.extend(spec.args.iter().cloned());
-    Ok((args, None))
+    Ok(Exec {
+        args,
+        env,
+        first: None,
+    })
+}
+
+/// How a server is started: the `docker exec` arguments, the variables the CLI's environment
+/// carries for `--env KEY`, and what the server's stdin receives first.
+pub(super) struct Exec {
+    pub(super) args: Vec<String>,
+    pub(super) env: Vec<(String, String)>,
+    pub(super) first: Option<Vec<u8>>,
 }
 
 /// Start a server of a running container and finish its MCP handshake.
@@ -168,9 +186,10 @@ async fn connect(
         bail!("Start the container before using its MCP servers");
     }
     let docker_id = info["Id"].as_str().context("Missing container ID")?;
-    let (args, first) = exec_args(docker_id, &spec)?;
+    let Exec { args, env, first } = exec_args(docker_id, &spec)?;
     let mut child = app
         .command(&args)
+        .envs(env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

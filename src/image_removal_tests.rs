@@ -378,3 +378,48 @@ async fn a_catalog_image_loses_only_its_download() {
     assert_eq!(removals(&dir), [format!("image rm {}", xfce.reference)]);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// A snapshot or import tagged before its record was saved is removed at startup; every tag a
+/// record names, and every other repository, stays.
+#[cfg(unix)]
+#[tokio::test]
+async fn tags_without_a_record_are_dropped_at_startup() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!(
+        "bilskirnir-orphans-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'image ls --format {{.Repository}}:{{.Tag}} bilskirnir/snapshot') printf 'bilskirnir/snapshot:kept\nbilskirnir/snapshot:lost\nbilskirnir/snapshot:<none>\n' ;;\n  'image ls --format {{.Repository}}:{{.Tag}} bilskirnir/imported') printf 'bilskirnir/imported:orphan\n' ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n"
+        .replace("@DIR@", &dir.display().to_string());
+    let docker = dir.join("docker");
+    std::fs::write(&docker, script).unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut app = crate::tests::app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    app.db
+        .put(
+            "image",
+            "kept",
+            &record(
+                "kept",
+                "snapshot",
+                "sha256:kept",
+                "bilskirnir/snapshot:kept",
+            ),
+        )
+        .unwrap();
+    let dropped = app.drop_orphan_tags().await.unwrap();
+    assert_eq!(
+        dropped,
+        ["bilskirnir/snapshot:lost", "bilskirnir/imported:orphan"]
+    );
+    assert_eq!(
+        removals(&dir),
+        [
+            "image rm bilskirnir/snapshot:lost",
+            "image rm bilskirnir/imported:orphan"
+        ]
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}

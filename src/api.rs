@@ -565,7 +565,7 @@ pub async fn register_image(
 ) -> Result<Json<Value>> {
     image_ref(&body.reference)?;
     if body.name.trim().is_empty() || body.name.chars().count() > 100 {
-        return Err(anyhow::anyhow!("Image name must be 1–100 characters").into());
+        return Err(anyhow::anyhow!("Image name must be 1 to 100 characters").into());
     }
     let _guard = app.operations.lock().await;
     let info = app.inspect("image", &body.reference).await?;
@@ -884,8 +884,7 @@ pub async fn create_volume(
     Json(body): Json<Volume>,
 ) -> Result<Json<Value>> {
     volume_name(&body.name)?;
-    let lock = app.resource_lock(&format!("volume:{}", body.name));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("volume:{}", body.name)).await?;
     app.new_volume(&body.name).await?;
     Ok(Json(json!({"name":body.name})))
 }

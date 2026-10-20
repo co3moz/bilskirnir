@@ -119,7 +119,7 @@ impl App {
             .start_unpack(target, "/", COPIED)
             .await
             .map_err(|error| anyhow!(error.1))?;
-        let mut reader = match Helper::spawn(
+        let mut reader = match Helper::spawn_reader(
             self,
             source,
             Access::Archive,
@@ -133,7 +133,9 @@ impl App {
                 MOUNT,
                 ".",
             ],
-        ) {
+        )
+        .await
+        {
             Ok(reader) => reader,
             Err(error) => {
                 writer.abandon(self).await;

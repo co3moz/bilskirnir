@@ -72,12 +72,11 @@ pub async fn read(
     split_path(&body.path)?;
     if body.limit == 0 || body.limit > FILE_LIMIT || body.offset > i64::MAX as u64 {
         return Err(anyhow::anyhow!(
-            "Read limit must be 1–524288 bytes; offset must fit a signed 64-bit integer"
+            "Read limit must be 1 to 524288 bytes; offset must fit a signed 64-bit integer"
         )
         .into());
     }
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -136,8 +135,7 @@ pub async fn write(
         return Err(anyhow::anyhow!("File writes are limited to 512 KiB").into());
     }
     let size = data.len();
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -187,7 +185,7 @@ const FILE_OPS: &str = include_str!("file_ops.py");
 pub struct ListFiles {
     /// Canonical absolute directory path.
     pub path: String,
-    /// Maximum number of entries to return (1–2000).
+    /// Maximum number of entries to return (1 to 2000).
     #[serde(default = "list_limit")]
     pub limit: usize,
 }
@@ -224,7 +222,7 @@ impl ListFiles {
     pub fn validate(&self) -> anyhow::Result<()> {
         crate::apps::directory(&self.path)?;
         if self.limit == 0 || self.limit > 2000 {
-            bail!("limit must be 1–2000");
+            bail!("limit must be 1 to 2000");
         }
         Ok(())
     }
@@ -252,8 +250,7 @@ impl DeleteFile {
     }
 }
 async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -382,7 +379,7 @@ pub fn download_url(id: &str, path: &str) -> String {
 pub struct Download {
     /// Canonical absolute path of a regular file.
     pub path: String,
-    /// Maximum bytes to return (1–5242880).
+    /// Maximum bytes to return (1 to 5242880).
     #[serde(default = "download_limit")]
     pub max_bytes: usize,
 }
@@ -444,11 +441,10 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
     if body.max_bytes == 0 || body.max_bytes > 5 * 1024 * 1024 {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "max_bytes must be 1–5242880".into(),
+            "max_bytes must be 1 to 5242880".into(),
         ));
     }
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let container = running_container(app, id).await?;
     let args = [
         "exec",
@@ -493,8 +489,7 @@ pub async fn download(
     token: auth::Session,
 ) -> Result<Response> {
     let (_, name) = split_path(&query.path)?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let container = running_container(&app, &id).await?;
     let cid = container["Id"].as_str().context("Missing container ID")?;
     let entry = file_ops(&app, cid, &["stat", &query.path]).await?;
@@ -508,6 +503,7 @@ pub async fn download(
             let source = folder_archive::Source {
                 args,
                 helper: None,
+                lock: None,
                 label: format!("{} in {}", query.path, app.container(&id)?.spec.name),
                 path: query.path.clone(),
             };

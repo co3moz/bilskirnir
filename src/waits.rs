@@ -40,10 +40,10 @@ pub struct WaitFor {
     /// Region x,y,width,height observed for screen_stable_ms; defaults to the whole desktop.
     #[serde(default)]
     pub region: Option<String>,
-    /// Give up after this many milliseconds (100–60000).
+    /// Give up after this many milliseconds (100 to 60000).
     #[serde(default = "timeout")]
     pub timeout_ms: u64,
-    /// Milliseconds between checks (100–5000).
+    /// Milliseconds between checks (100 to 5000).
     #[serde(default = "interval")]
     pub interval_ms: u64,
 }
@@ -64,7 +64,7 @@ impl WaitFor {
         if let Some(title) = &self.window_title
             && (title.is_empty() || title.len() > 512)
         {
-            bail!("window_title must be 1–512 bytes");
+            bail!("window_title must be 1 to 512 bytes");
         }
         if let Some(state) = &self.application_state {
             if self.application_id.is_none() {
@@ -79,19 +79,19 @@ impl WaitFor {
                 bail!("log_contains needs application_id");
             }
             if text.is_empty() || text.len() > 4096 {
-                bail!("log_contains must be 1–4096 bytes");
+                bail!("log_contains must be 1 to 4096 bytes");
             }
         }
         if !(100..=60_000).contains(&self.timeout_ms) {
-            bail!("timeout_ms must be 100–60000");
+            bail!("timeout_ms must be 100 to 60000");
         }
         if !(100..=5_000).contains(&self.interval_ms) {
-            bail!("interval_ms must be 100–5000");
+            bail!("interval_ms must be 100 to 5000");
         }
         if let Some(stable) = self.screen_stable_ms
             && (!(100..=30_000).contains(&stable) || stable > self.timeout_ms)
         {
-            bail!("screen_stable_ms must be 100–30000 and at most timeout_ms");
+            bail!("screen_stable_ms must be 100 to 30000 and at most timeout_ms");
         }
         if self.region.is_some() && self.screen_stable_ms.is_none() {
             bail!("region needs screen_stable_ms");

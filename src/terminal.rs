@@ -45,7 +45,7 @@ pub struct TerminalOutput {
     /// Byte offset to read from; use next_offset from the previous call.
     #[serde(default)]
     pub offset: u64,
-    /// Maximum bytes to return (1–524288).
+    /// Maximum bytes to return (1 to 524288).
     #[serde(default = "limit")]
     pub limit: usize,
     /// Remove terminal escape sequences and carriage returns.
@@ -69,7 +69,7 @@ impl OpenTerminal {
 impl TerminalInput {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.text.is_empty() || self.text.len() > 65536 || self.text.contains('\0') {
-            bail!("text must be 1–65536 bytes without NUL characters");
+            bail!("text must be 1 to 65536 bytes without NUL characters");
         }
         Ok(())
     }
@@ -77,7 +77,7 @@ impl TerminalInput {
 impl TerminalOutput {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.limit == 0 || self.limit > 524_288 {
-            bail!("limit must be 1–524288");
+            bail!("limit must be 1 to 524288");
         }
         Ok(())
     }
@@ -139,8 +139,7 @@ fn describe(record: &Terminal, status: Value) -> Value {
 }
 pub async fn open_terminal(app: &Arc<App>, id: &str, body: &OpenTerminal) -> Result<Value> {
     body.validate()?;
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = lock.lock().await;
+    let _guard = app.hold(&format!("container:{id}")).await?;
     let info = running(app, id).await?;
     let home = if body.root { "/root" } else { "/home/desktop" };
     let record = Terminal {
