@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { formatPorts, parsePorts, PORTS_PATTERN } from "../web/src/lib/ports"
+import { formatPorts, parsePorts, PORTS_PATTERN } from "../src/lib/ports"
 
 test("the ports field round-trips the setting and tolerates any separator spacing", () => {
   assert.equal(formatPorts([8090, 6400]), "8090, 6400")

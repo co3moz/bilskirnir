@@ -1,8 +1,8 @@
 import { afterEach, test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { composeSteps } from "../web/src/lib/compose"
-import { dataUrlBytes, iconUrl, readIcon } from "../web/src/lib/icons"
+import { composeSteps } from "../src/lib/compose"
+import { dataUrlBytes, iconUrl, readIcon } from "../src/lib/icons"
 import {
   allTags,
   buildable,
@@ -12,7 +12,7 @@ import {
   mergeTemplates,
   readTemplateList,
   templateFile,
-} from "../web/src/lib/templates"
+} from "../src/lib/templates"
 
 const LIST = "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
 const unity = {

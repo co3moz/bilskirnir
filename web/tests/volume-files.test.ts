@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import type { ContainerSpec, Volume } from "../web/src/lib/types"
+import type { ContainerSpec, Volume } from "../src/lib/types"
 import {
   baseName,
   entryNameError,
@@ -18,7 +18,7 @@ import {
   volumeHolders,
   volumeUsers,
   type VolumeEntry,
-} from "../web/src/lib/volume-files"
+} from "../src/lib/volume-files"
 
 const spec: ContainerSpec = {
   name: "",

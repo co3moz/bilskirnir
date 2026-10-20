@@ -10,8 +10,8 @@ import {
   recentFolders,
   rememberFolder,
   uploadProblem,
-} from "../web/src/lib/desktop-paths"
-import type { Container, Mount } from "../web/src/lib/types"
+} from "../src/lib/desktop-paths"
+import type { Container, Mount } from "../src/lib/types"
 
 const mount = (volume: string, target: string, readonly = false): Mount => ({
   volume,

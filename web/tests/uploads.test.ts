@@ -2,7 +2,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { FileUploads } from "../web/src/lib/uploads"
+import { FileUploads } from "../src/lib/uploads"
 
 function fixture() {
   const requests: any[] = []

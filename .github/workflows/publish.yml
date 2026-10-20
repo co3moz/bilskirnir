@@ -11,13 +11,6 @@ on:
       - 'compose*.yml'
       - '.env.example'
       - 'Cargo.*'
-      - 'package.json'
-      - 'bun.lock'
-      - 'bunfig.toml'
-      - 'tsconfig*.json'
-      - 'vite.config.ts'
-      - 'eslint.config.js'
-      - '.prettier*'
       - 'src/**'
       - 'web/**'
       - 'desktop/**'
@@ -54,6 +47,7 @@ jobs:
         with:
           bun-version: 1.4.3
       - name: Check frontend
+        working-directory: web
         run: |
           bun install --frozen-lockfile
           bun run lint
