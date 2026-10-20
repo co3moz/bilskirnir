@@ -250,6 +250,7 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/mcp/servers", get(desktop_mcp::all_servers))
         .route("/api/mcp/scopes", get(desktop_mcp::scopes_list))
+        .route("/api/mcp/inspect", get(desktop_mcp::inspect))
         .route(
             "/api/mcp/endpoints",
             get(desktop_mcp::endpoints).post(desktop_mcp::create_endpoint),

@@ -27,7 +27,7 @@ use tower::ServiceExt;
 
 const ADMIN: &str = "test-token-with-at-least-32-characters";
 
-fn container(id: &str, name: &str) -> Container {
+pub(super) fn container(id: &str, name: &str) -> Container {
     Container {
         id: id.into(),
         container: format!("bilskirnir-{id}"),
@@ -60,7 +60,7 @@ fn tool(name: &str) -> rmcp::model::Tool {
     tool.annotations = Some(rmcp::model::ToolAnnotations::new().read_only(true));
     tool
 }
-fn server(app: &App, container_id: &str, name: &str, tools: &[&str]) {
+pub(super) fn server(app: &App, container_id: &str, name: &str, tools: &[&str]) {
     let record = ServerRecord {
         container_id: container_id.into(),
         name: name.into(),
@@ -74,7 +74,7 @@ fn server(app: &App, container_id: &str, name: &str, tools: &[&str]) {
         .put(SERVERS, &ServerRecord::key(container_id, name), &record)
         .unwrap();
 }
-fn grant(container_id: &str, alias: &str, scopes: &[Scope]) -> Grant {
+pub(super) fn grant(container_id: &str, alias: &str, scopes: &[Scope]) -> Grant {
     Grant {
         container_id: container_id.into(),
         alias: alias.into(),
@@ -83,7 +83,7 @@ fn grant(container_id: &str, alias: &str, scopes: &[Scope]) -> Grant {
         excluded_tools: Vec::new(),
     }
 }
-fn endpoint(name: &str, grants: Vec<Grant>) -> Endpoint {
+pub(super) fn endpoint(name: &str, grants: Vec<Grant>) -> Endpoint {
     Endpoint {
         name: name.into(),
         automatic: false,
@@ -93,7 +93,7 @@ fn endpoint(name: &str, grants: Vec<Grant>) -> Endpoint {
         created_at: 1,
     }
 }
-fn names(app: &App, endpoint: &Endpoint) -> Vec<String> {
+pub(super) fn names(app: &App, endpoint: &Endpoint) -> Vec<String> {
     catalog(app, endpoint)
         .into_iter()
         .map(|entry| entry.tool.name.to_string())
@@ -1251,6 +1251,7 @@ fn every_route_and_tool_is_documented() {
     for route in [
         "`/api/mcp/servers`",
         "`/api/mcp/scopes`",
+        "`/api/mcp/inspect`",
         "`/api/mcp/endpoints`",
         "`/api/mcp/endpoints/{name}`",
         "`/api/mcp/endpoints/{name}/token`",

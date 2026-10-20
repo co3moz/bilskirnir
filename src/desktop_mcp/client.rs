@@ -22,7 +22,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf},
-    process::Child,
+    process::{Child, ChildStderr, ChildStdin, ChildStdout},
 };
 
 /// A server that has not finished its handshake in this time is not going to.
@@ -81,9 +81,14 @@ impl Connection {
 }
 
 /// Ends the connection when a server writes a line longer than [`LINE_LIMIT`], before it is held.
-struct Bounded<R> {
+pub(super) struct Bounded<R> {
     inner: R,
     run: usize,
+}
+impl<R> Bounded<R> {
+    pub(super) fn new(inner: R) -> Self {
+        Self { inner, run: 0 }
+    }
 }
 impl<R: AsyncRead + Unpin> AsyncRead for Bounded<R> {
     fn poll_read(
@@ -170,17 +175,17 @@ pub(super) struct Exec {
     pub(super) first: Option<Vec<u8>>,
 }
 
-/// Start a server of a running container and finish its MCP handshake.
-async fn connect(
-    app: &Arc<App>,
-    container: &Container,
-    record: &ServerRecord,
-) -> Result<Connection> {
-    let spec = record
-        .spec
-        .as_ref()
-        .with_context(|| format!("The server {} has no valid declaration", record.name))?
-        .resolve(&app.compose_values(&container.id))?;
+/// A server's `docker exec` and its standard streams, what its stdin receives first written.
+pub(super) struct Started {
+    pub child: Child,
+    pub stdin: ChildStdin,
+    pub stdout: ChildStdout,
+    pub stderr: ChildStderr,
+}
+
+/// Start a server of a running container as the desktop user, its `${NAME}` values resolved.
+pub(super) async fn start(app: &App, container: &Container, spec: &ServerSpec) -> Result<Started> {
+    let spec = spec.resolve(&app.compose_values(&container.id))?;
     let info = app.owned(container).await?;
     if info["State"]["Running"] != true {
         bail!("Start the container before using its MCP servers");
@@ -198,6 +203,33 @@ async fn connect(
     let mut stdin = child.stdin.take().context("Missing stdin")?;
     let stdout = child.stdout.take().context("Missing stdout")?;
     let stderr = child.stderr.take().context("Missing stderr")?;
+    if let Some(first) = first {
+        stdin.write_all(&first).await?;
+    }
+    Ok(Started {
+        child,
+        stdin,
+        stdout,
+        stderr,
+    })
+}
+
+/// Start a server of a running container and finish its MCP handshake.
+async fn connect(
+    app: &Arc<App>,
+    container: &Container,
+    record: &ServerRecord,
+) -> Result<Connection> {
+    let spec = record
+        .spec
+        .as_ref()
+        .with_context(|| format!("The server {} has no valid declaration", record.name))?;
+    let Started {
+        mut child,
+        stdin,
+        stdout,
+        stderr,
+    } = start(app, container, spec).await?;
     let key = ServerRecord::key(&container.id, &record.name);
     let logs = Arc::downgrade(app);
     let log_key = key.clone();
@@ -208,21 +240,12 @@ async fn connect(
             app.desktop_mcp.log(&log_key, &line);
         }
     });
-    if let Some(first) = first {
-        stdin.write_all(&first).await?;
-    }
     let listener = Listener {
         app: Arc::downgrade(app),
         container_id: container.id.clone(),
         server: record.name.clone(),
     };
-    let transport = (
-        Bounded {
-            inner: stdout,
-            run: 0,
-        },
-        stdin,
-    );
+    let transport = (Bounded::new(stdout), stdin);
     let started = tokio::time::timeout(CONNECT_LIMIT, listener.serve(transport)).await;
     let service = match started {
         Ok(Ok(service)) => service,

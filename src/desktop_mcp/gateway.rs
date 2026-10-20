@@ -61,10 +61,7 @@ impl super::DesktopMcp {
                     .with_cancellation_token(ends.clone())
                     // The outer router and authorize() apply Bilskirnir's Host/Origin policy.
                     .disable_allowed_hosts();
-                let handler = EndpointMcp {
-                    app: app.clone(),
-                    name: name.to_owned(),
-                };
+                let handler = EndpointMcp::new(app.clone(), name.to_owned());
                 Service {
                     http: StreamableHttpService::new(
                         move || Ok(handler.clone()),
@@ -166,6 +163,9 @@ pub(crate) struct EndpointMcp {
 }
 
 impl EndpointMcp {
+    pub(super) fn new(app: Arc<App>, name: String) -> Self {
+        Self { app, name }
+    }
     fn endpoint(&self) -> Result<Endpoint, ErrorData> {
         self.app
             .db

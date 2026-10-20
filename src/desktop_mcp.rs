@@ -12,9 +12,12 @@
 //! `/mcp` stays the administrator's channel. An endpoint at `/mcp/<name>` gives an agent the
 //! container tools of the scopes it was granted, bound to its containers, and the tools of their
 //! desktop servers, with a bearer token of its own that opens nothing else.
+//!
+//! The MCP page's inspector reaches any of these servers from the dashboard over a WebSocket.
 mod client;
 mod endpoints;
 mod gateway;
+mod inspect;
 mod registry;
 mod scopes;
 mod servers;
@@ -25,6 +28,7 @@ pub(crate) use endpoints::{
     scopes_list, token, update_endpoint,
 };
 pub(crate) use gateway::endpoint;
+pub(crate) use inspect::inspect;
 pub(crate) use registry::{Declaration, check_declarations, write_declarations};
 pub(crate) use servers::{
     all_servers, container_servers, refresh_server, register_server, unregister_server,
@@ -34,7 +38,7 @@ pub(crate) use watch::spawn;
 use crate::App;
 use std::{
     collections::{HashMap, HashSet},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 /// What the manager holds in memory about desktop servers and endpoints.
@@ -54,6 +58,8 @@ pub struct DesktopMcp {
     changes: tokio::sync::broadcast::Sender<String>,
     /// The MCP service of each endpoint that was reached, with what ends its sessions.
     services: Mutex<HashMap<String, gateway::Service>>,
+    /// The inspectors that may be open at once.
+    inspectors: Arc<tokio::sync::Semaphore>,
 }
 impl Default for DesktopMcp {
     fn default() -> Self {
@@ -65,6 +71,7 @@ impl Default for DesktopMcp {
             logs: Mutex::default(),
             changes: tokio::sync::broadcast::channel(64).0,
             services: Mutex::default(),
+            inspectors: Arc::new(tokio::sync::Semaphore::new(inspect::INSPECTORS)),
         }
     }
 }
