@@ -52,7 +52,7 @@ function render(dialog: Dialog, open: boolean) {
     case "download":
       return <DownloadDialog {...props} id={dialog.id} />
     case "build":
-      return <BuildImageDialog {...props} config={dialog.config} />
+      return <BuildImageDialog {...props} config={dialog.config} simple={dialog.simple} />
     case "compose":
       return <ComposeDialog {...props} id={dialog.id} />
     case "icon":

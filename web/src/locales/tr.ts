@@ -529,6 +529,11 @@ export const tr: Messages = {
   "build.mcpHint":
     "İmaja yazılır; ondan oluşturulan her konteynerde bu sunucular bulunur. Komutları masaüstünün içinde çalışır.",
   "build.mcpRemoveOf": "Dışarıda bırak: {name}",
+  "build.simple":
+    "Bu şablondan, ayarlandığı haliyle bir imaj oluşturur. Gelişmiş düzenleme, root olarak çalışan betiğini gösterir ve önce değiştirmenize izin verir.",
+  "build.simpleMerged":
+    "{names} şablonlarından tek bir imaj oluşturur; betikleri bu sırayla çalışır. Gelişmiş düzenleme, root olarak çalışan her betiği gösterir ve önce değiştirmenize izin verir.",
+  "build.advanced": "Gelişmiş düzenleme",
 
   "icons.label": "Simge",
   "icons.choose": "Simge seç",
@@ -548,7 +553,7 @@ export const tr: Messages = {
 
   "templates.title": "Şablonlar",
   "templates.description":
-    "{source} üzerindeki hazır imajlar. Birini yüklemek, betiğini gözden geçirebilmeniz için oluşturma formunu açar.",
+    "{source} üzerindeki hazır imajlar. Birini yüklemek yalnızca bir ad sorar ve onu oluşturur; gelişmiş düzenleme önce betiğini gösterir.",
   "templates.refresh": "Yenile",
   "templates.retry": "Tekrar dene",
   "templates.loading": "Şablonlar yükleniyor",

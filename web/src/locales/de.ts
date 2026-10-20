@@ -541,6 +541,11 @@ export const de: Messages = {
   "build.mcpHint":
     "Werden ins Image geschrieben, sodass jeder Container daraus diese Server hat. Ihre Befehle laufen im Desktop.",
   "build.mcpRemoveOf": "{name} weglassen",
+  "build.simple":
+    "Erstellt ein Image aus dieser Vorlage, so wie sie eingerichtet ist. Die erweiterte Bearbeitung zeigt ihr Skript, das als root läuft, und lässt Sie es vorher ändern.",
+  "build.simpleMerged":
+    "Erstellt ein Image aus {names}, deren Skripte in dieser Reihenfolge laufen. Die erweiterte Bearbeitung zeigt jedes Skript, das als root läuft, und lässt Sie es vorher ändern.",
+  "build.advanced": "Erweiterte Bearbeitung",
 
   "icons.label": "Symbol",
   "icons.choose": "Symbol wählen",
@@ -560,7 +565,7 @@ export const de: Messages = {
 
   "templates.title": "Vorlagen",
   "templates.description":
-    "Fertige Images von {source}. Beim Installieren öffnet sich das Build-Formular, damit Sie das Skript prüfen können.",
+    "Fertige Images von {source}. Beim Installieren wird nur nach einem Namen gefragt; die erweiterte Bearbeitung zeigt vorher das Skript.",
   "templates.refresh": "Aktualisieren",
   "templates.retry": "Erneut versuchen",
   "templates.loading": "Vorlagen werden geladen",

@@ -546,6 +546,11 @@ export const en = {
   "build.mcpHint":
     "Written into the image, so every container from it has these servers. Their commands run inside the desktop.",
   "build.mcpRemoveOf": "Leave out {name}",
+  "build.simple":
+    "Builds an image from this template as it is configured. Advanced editing shows its script, which runs as root, and lets you change it first.",
+  "build.simpleMerged":
+    "Builds one image from {names}, their scripts running in this order. Advanced editing shows each script, which runs as root, and lets you change it first.",
+  "build.advanced": "Advanced editing",
 
   "icons.label": "Icon",
   "icons.choose": "Choose icon",
@@ -565,7 +570,7 @@ export const en = {
 
   "templates.title": "Templates",
   "templates.description":
-    "Ready-made images from {source}. Installing one opens the build form with its script for review.",
+    "Ready-made images from {source}. Installing one asks only for a name and builds it; advanced editing shows its script first.",
   "templates.refresh": "Refresh",
   "templates.retry": "Try again",
   "templates.loading": "Loading templates",

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiAlertLine, RiClipboardLine } from "@remixicon/react"
+import { RiAlertLine, RiClipboardLine, RiEqualizerLine } from "@remixicon/react"
 import { toast } from "sonner"
 
 import { IconPicker, ImageChoiceItem } from "@/components/image-icon"
@@ -50,6 +50,7 @@ import type { BuildPart } from "@/lib/types"
 import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
 import { BuildParts } from "./build-parts"
 import { BuildServers } from "./build-servers"
+import { BuildSummary } from "./build-summary"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { ComposeFields } from "./compose-dialog"
@@ -203,8 +204,16 @@ const templatesOf = (config?: ImportedBuild) =>
       ? [config.template_id]
       : []
 
-/** Builds an image from a script, or from a configuration a template or a paste filled in. */
-export function BuildImageDialog({ config, ...props }: DialogProps & { config?: ImportedBuild }) {
+/**
+ * Builds an image from a script, or from a configuration a template or a paste filled in. A
+ * `simple` form asks only for a name and a base image and builds the rest as configured, until
+ * Advanced editing shows everything else.
+ */
+export function BuildImageDialog({
+  config,
+  simple,
+  ...props
+}: DialogProps & { config?: ImportedBuild; simple?: boolean }) {
   const settings = useSettings().data
   const images = useImages()
   const choices = imageChoices(images.data ?? [], settings?.base_image)
@@ -227,6 +236,7 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
   // Desktop MCP servers the configuration declares; they are shown, never typed in here.
   const [servers, setServers] = React.useState(config?.mcp ?? [])
   const [importing, setImporting] = React.useState(false)
+  const [advanced, setAdvanced] = React.useState(!simple)
   const parameterCount =
     compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
 
@@ -308,13 +318,19 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
             <DialogHeader>
               <DialogTitle>{t("images.build")}</DialogTitle>
               <DialogDescription>
-                {parts
-                  ? t("build.fromTemplates", {
-                      names: formatList(parts.map((part) => part.name)),
-                    })
-                  : templateIds.length
-                    ? t("build.fromTemplate")
-                    : t("build.description")}
+                {!advanced
+                  ? parts
+                    ? t("build.simpleMerged", {
+                        names: formatList(parts.map((part) => part.name)),
+                      })
+                    : t("build.simple")
+                  : parts
+                    ? t("build.fromTemplates", {
+                        names: formatList(parts.map((part) => part.name)),
+                      })
+                    : templateIds.length
+                      ? t("build.fromTemplate")
+                      : t("build.description")}
               </DialogDescription>
             </DialogHeader>
             <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
@@ -347,27 +363,37 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                   </Select>
                 </Field>
               </div>
-              <Field>
-                <FieldLabel htmlFor={`${field}-description`}>{t("common.description")}</FieldLabel>
-                <Textarea
-                  id={`${field}-description`}
-                  rows={2}
-                  maxLength={4096}
-                  placeholder={t("common.optional")}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                />
-              </Field>
-              <Field data-invalid={!!iconError}>
-                <FieldLabel htmlFor={`${field}-icon`}>{t("icons.label")}</FieldLabel>
-                <IconPicker
-                  id={`${field}-icon`}
-                  value={icon}
-                  onChange={setIcon}
-                  onError={setIconError}
-                />
-                <FieldError>{iconError}</FieldError>
-              </Field>
+              {advanced ? (
+                <>
+                  <Field>
+                    <FieldLabel htmlFor={`${field}-description`}>
+                      {t("common.description")}
+                    </FieldLabel>
+                    <Textarea
+                      id={`${field}-description`}
+                      rows={2}
+                      maxLength={4096}
+                      placeholder={t("common.optional")}
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      // Advanced editing replaces the button that had focus with this field.
+                      autoFocus={simple}
+                    />
+                  </Field>
+                  <Field data-invalid={!!iconError}>
+                    <FieldLabel htmlFor={`${field}-icon`}>{t("icons.label")}</FieldLabel>
+                    <IconPicker
+                      id={`${field}-icon`}
+                      value={icon}
+                      onChange={setIcon}
+                      onError={setIconError}
+                    />
+                    <FieldError>{iconError}</FieldError>
+                  </Field>
+                </>
+              ) : (
+                <BuildSummary description={description} icon={icon} servers={servers} />
+              )}
               {missingBase && (
                 <Alert>
                   <RiAlertLine className="text-warning" />
@@ -384,106 +410,120 @@ export function BuildImageDialog({ config, ...props }: DialogProps & { config?: 
                   <AlertDescription>{warning}</AlertDescription>
                 </Alert>
               ))}
-              {servers.length > 0 && (
+              {advanced && servers.length > 0 && (
                 <BuildServers
                   servers={servers}
                   onRemove={(name) => setServers(servers.filter((server) => server.name !== name))}
                 />
               )}
-              <Tabs defaultValue="build">
-                <TabsList>
-                  <TabsTrigger value="build">
-                    {t("build.script")}
-                    {parts ? ` · ${formatNumber(parts.length)}` : ""}
-                  </TabsTrigger>
-                  <TabsTrigger value="compose">
-                    {t("compose.name")}
-                    {parameterCount ? ` · ${formatNumber(parameterCount)}` : ""}
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="build">
-                  <FieldGroup>
-                    {parts ? (
-                      <BuildParts
-                        parts={parts}
-                        onChange={(index, next) =>
-                          setParts(
-                            parts.map((part, other) =>
-                              other === index ? { ...part, script: next } : part
+              {advanced ? (
+                <Tabs defaultValue="build">
+                  <TabsList>
+                    <TabsTrigger value="build">
+                      {t("build.script")}
+                      {parts ? ` · ${formatNumber(parts.length)}` : ""}
+                    </TabsTrigger>
+                    <TabsTrigger value="compose">
+                      {t("compose.name")}
+                      {parameterCount ? ` · ${formatNumber(parameterCount)}` : ""}
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="build">
+                    <FieldGroup>
+                      {parts ? (
+                        <BuildParts
+                          parts={parts}
+                          onChange={(index, next) =>
+                            setParts(
+                              parts.map((part, other) =>
+                                other === index ? { ...part, script: next } : part
+                              )
                             )
-                          )
-                        }
-                        onMove={(index, by) => {
-                          const next = [...parts]
-                          ;[next[index], next[index + by]] = [next[index + by], next[index]]
-                          moveParts(next)
-                        }}
-                        onRemove={removePart}
-                      />
-                    ) : (
-                      <Field>
-                        <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
-                        <CodeTextarea
-                          id={`${field}-script`}
-                          language="bash"
-                          rows={12}
-                          required
-                          value={script}
-                          onChange={(event) => setScript(event.target.value)}
-                          className="max-h-[500px]"
+                          }
+                          onMove={(index, by) => {
+                            const next = [...parts]
+                            ;[next[index], next[index + by]] = [next[index + by], next[index]]
+                            moveParts(next)
+                          }}
+                          onRemove={removePart}
                         />
-                        <FieldDescription>{t("build.scriptHint")}</FieldDescription>
+                      ) : (
+                        <Field>
+                          <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
+                          <CodeTextarea
+                            id={`${field}-script`}
+                            language="bash"
+                            rows={12}
+                            required
+                            value={script}
+                            onChange={(event) => setScript(event.target.value)}
+                            className="max-h-[500px]"
+                          />
+                          <FieldDescription>{t("build.scriptHint")}</FieldDescription>
+                        </Field>
+                      )}
+                      <Field orientation="horizontal">
+                        <Switch
+                          id={`${field}-internet`}
+                          checked={internet}
+                          onCheckedChange={setInternet}
+                        />
+                        <FieldLabel htmlFor={`${field}-internet`}>{t("build.internet")}</FieldLabel>
                       </Field>
+                    </FieldGroup>
+                  </TabsContent>
+                  <TabsContent value="compose">
+                    {compose ? (
+                      <div className="flex flex-col gap-4">
+                        <ComposeFields draft={compose} onChange={setCompose} />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="self-start text-destructive"
+                          onClick={() => setCompose(null)}
+                        >
+                          {t("compose.remove")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-start gap-3 py-2">
+                        <p className="text-sm text-muted-foreground">{t("compose.about")}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCompose(composeDraft())}
+                        >
+                          {t("compose.add")}
+                        </Button>
+                      </div>
                     )}
-                    <Field orientation="horizontal">
-                      <Switch
-                        id={`${field}-internet`}
-                        checked={internet}
-                        onCheckedChange={setInternet}
-                      />
-                      <FieldLabel htmlFor={`${field}-internet`}>{t("build.internet")}</FieldLabel>
-                    </Field>
-                  </FieldGroup>
-                </TabsContent>
-                <TabsContent value="compose">
-                  {compose ? (
-                    <div className="flex flex-col gap-4">
-                      <ComposeFields draft={compose} onChange={setCompose} />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="self-start text-destructive"
-                        onClick={() => setCompose(null)}
-                      >
-                        {t("compose.remove")}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-start gap-3 py-2">
-                      <p className="text-sm text-muted-foreground">{t("compose.about")}</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setCompose(composeDraft())}
-                      >
-                        {t("compose.add")}
-                      </Button>
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => setAdvanced(true)}
+                >
+                  <RiEqualizerLine data-icon="inline-start" />
+                  {t("build.advanced")}
+                </Button>
+              )}
               <FieldError>{error}</FieldError>
             </FieldGroup>
             <Footer busy={busy} label={t("images.build")} disabled={!chosen}>
-              <Button
-                type="button"
-                variant="outline"
-                className="sm:mr-auto"
-                onClick={() => setImporting(true)}
-              >
-                <RiClipboardLine data-icon="inline-start" />
-                {t("build.importConfig")}
-              </Button>
+              {advanced && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="sm:mr-auto"
+                  onClick={() => setImporting(true)}
+                >
+                  <RiClipboardLine data-icon="inline-start" />
+                  {t("build.importConfig")}
+                </Button>
+              )}
             </Footer>
           </form>
         )}

@@ -11,7 +11,7 @@ export type Dialog =
   | { kind: "delete"; id: string }
   | { kind: "upload"; id: string; files?: File[] }
   | { kind: "download"; id: string }
-  | { kind: "build"; config?: ImportedBuild }
+  | { kind: "build"; config?: ImportedBuild; simple?: boolean }
   | { kind: "compose"; id: string }
   | { kind: "icon"; id: string }
   | { kind: "image"; id: string }
