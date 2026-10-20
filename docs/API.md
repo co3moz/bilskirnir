@@ -517,19 +517,20 @@ A desktop declares MCP servers in `/etc/bilskirnir/mcp.d/NAME.json`, which an im
 {"container_id": "...", "container_name": "Chrome dev", "name": "chrome", "source": "image",
  "description": "", "transport": "stdio", "command": "playwright-mcp", "args": ["--cdp-endpoint", "http://127.0.0.1:9223"],
  "cwd": null, "env": [], "url": null, "headers": [], "state": "ready", "error": null,
- "tools": [{"name": "browser_navigate", "description": "Navigate to a URL"}], "tools_at": 1760900000, "log": ""}
+ "tools": [{"name": "browser_navigate", "description": "Navigate to a URL", "exposed": "chrome__browser_navigate"}], "tools_at": 1760900000, "log": ""}
 ```
 
-`env` and `headers` are names only; their values, which may hold credentials, are never returned. `state` is `ready`, `pending`, `error` or `stopped`. Registering takes the declaration with its `name`, such as `{"name": "x", "command": "node", "args": ["/home/desktop/ext/mcp.js"]}` or `{"name": "api", "url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}`, needs a running container, and answers once the server's tools were read or its error is known. A build takes the same declarations in `mcp`, at most 16 with names of their own; `/api/images/{id}/config` returns them and the image list names them in `mcp_servers`, with those of the images it was built or snapshotted from.
+`env` and `headers` are names only; their values, which may hold credentials, are never returned. `state` is `ready`, `pending`, `error` or `stopped`. A tool's `exposed` is its name on an endpoint of this container alone, which an endpoint's `excluded_tools` uses. Registering takes the declaration with its `name`, such as `{"name": "x", "command": "node", "args": ["/home/desktop/ext/mcp.js"]}` or `{"name": "api", "url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}`, needs a running container, and answers once the server's tools were read or its error is known. A build takes the same declarations in `mcp`, at most 16 with names of their own; `/api/images/{id}/config` returns them and the image list names them in `mcp_servers`, with those of the images it was built or snapshotted from.
 
 An endpoint is created with:
 
 ```json
 {"name": "chrome-dev",
- "grants": [{"container_id": "...", "alias": "chrome-dev", "scopes": ["view", "input", "files_read"], "servers": "all"}]}
+ "grants": [{"container_id": "...", "alias": "chrome-dev", "scopes": ["view", "input", "files_read"], "servers": "all",
+             "excluded_tools": ["save_screenshot", "chrome__browser_run_code_unsafe"]}]}
 ```
 
-`alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.
+`alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). `excluded_tools`, optional and empty by default, names tools left out although their scope or server is granted, as the endpoint exposes them for that container alone: a container tool's own name, which must be one of the granted scopes', or `SERVER__TOOL`, the `exposed` name of the server lists, kept whether or not the server is known now. Each grant is returned with its list, empty when nothing is left out. The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.
 
 ## Desktop ports
 

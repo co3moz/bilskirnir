@@ -952,6 +952,11 @@ export const es: Messages = {
   "mcp.grant.chosenServers": "Solo los elegidos aquí",
   "mcp.grant.noServers": "Este contenedor aún no tiene servidores MCP del escritorio.",
   "mcp.grant.serversLine": "Servidores: {servers}",
+  "mcp.grant.toolsOf": "{included} de {count} herramientas",
+  "mcp.grant.toolsHint":
+    "Abre las herramientas de un ámbito o de un servidor y desmarca una para dejarla fuera.",
+  "mcp.grant.excluded.one": "{count} herramienta excluida",
+  "mcp.grant.excluded.other": "{count} herramientas excluidas",
   "mcp.scopes.all": "Todas las herramientas del contenedor",
   "mcp.scopes.none": "Ninguna herramienta del contenedor",
   "mcp.servers.all": "todos, también los que se añadan después",

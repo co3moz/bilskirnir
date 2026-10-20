@@ -944,6 +944,11 @@ export const tr: Messages = {
   "mcp.grant.chosenServers": "Yalnızca burada seçilenler",
   "mcp.grant.noServers": "Bu konteynerde henüz masaüstü MCP sunucusu yok.",
   "mcp.grant.serversLine": "Sunucular: {servers}",
+  "mcp.grant.toolsOf": "{count} araçtan {included} tanesi",
+  "mcp.grant.toolsHint":
+    "Bir kapsamın ya da sunucunun araçlarını açıp birinin işaretini kaldırarak onu dışarıda bırakın.",
+  "mcp.grant.excluded.one": "{count} araç dışarıda bırakıldı",
+  "mcp.grant.excluded.other": "{count} araç dışarıda bırakıldı",
   "mcp.scopes.all": "Tüm konteyner araçları",
   "mcp.scopes.none": "Konteyner aracı yok",
   "mcp.servers.all": "tümü, sonradan eklenenler de",

@@ -2,6 +2,7 @@
 //! one in a running desktop, removing it and reading its tools again.
 use super::{
     registry::{Declaration, SERVERS, ServerRecord, Source, server_name},
+    scopes::server_tool_names,
     watch,
 };
 use crate::{
@@ -18,7 +19,9 @@ use axum::{
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-/// A server as lists show it: never the values of its variables or headers.
+/// A server as lists show it: never the values of its variables or headers. Each tool comes with
+/// `exposed`, its name on an endpoint of this container alone, which an endpoint's deny list
+/// uses.
 pub(crate) fn summary(app: &App, record: &ServerRecord, container: &str, running: bool) -> Value {
     let mut value = match &record.spec {
         Some(spec) => spec.summary(),
@@ -33,10 +36,13 @@ pub(crate) fn summary(app: &App, record: &ServerRecord, container: &str, running
     value["state"] = json!(record.state(running));
     value["error"] = json!(record.error);
     value["tools"] = json!(
-        record
-            .tools
+        server_tool_names(record)
             .iter()
-            .map(|tool| json!({"name": tool.name, "description": tool.description.as_deref().unwrap_or_default()}))
+            .map(|named| json!({
+                "name": named.tool.name,
+                "description": named.tool.description.as_deref().unwrap_or_default(),
+                "exposed": named.name,
+            }))
             .collect::<Vec<_>>()
     );
     value["tools_at"] = json!(record.tools_at);

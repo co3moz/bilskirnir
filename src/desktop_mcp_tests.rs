@@ -1,9 +1,9 @@
 //! Desktop MCP servers and MCP endpoints: which declarations are accepted, what an endpoint offers
-//! for its scopes and nothing more, the names its tools get, and that an endpoint's token opens
-//! that endpoint and no other route.
+//! for its scopes and nothing more, the names its tools get, which single tools a grant leaves
+//! out, and that an endpoint's token opens that endpoint and no other route.
 use super::{
     client::{Exec, MAX_TOOLS, check_tool_list, exec_args, relayed},
-    endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of},
+    endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of, summary},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
         loopback_url, substitute,
@@ -80,6 +80,7 @@ fn grant(container_id: &str, alias: &str, scopes: &[Scope]) -> Grant {
         alias: alias.into(),
         scopes: scopes.to_vec(),
         servers: Servers::All,
+        excluded_tools: Vec::new(),
     }
 }
 fn endpoint(name: &str, grants: Vec<Grant>) -> Endpoint {
@@ -482,6 +483,259 @@ fn desktop_server_tools_are_prefixed_and_their_own_claims_dropped() {
 }
 
 #[test]
+fn a_grant_leaves_single_tools_out_under_the_names_the_endpoint_gives_them() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    app.db
+        .put(CONTAINERS, "c2", &container("c2", "Unity"))
+        .unwrap();
+    server(
+        &app,
+        "c1",
+        "playwright",
+        &["browser_navigate", "browser_run_code_unsafe", "a.b", "a_b"],
+    );
+    // One container: the deny list holds the exposed names, a hash tail included.
+    let mut one = endpoint(
+        "one",
+        vec![grant(
+            "c1",
+            "chrome-dev",
+            &[Scope::View, Scope::Applications],
+        )],
+    );
+    let before = names(&app, &one);
+    assert!(before.contains(&"playwright__a_b".to_owned()));
+    let hashed = before
+        .iter()
+        .find(|name| name.starts_with("playwright__a_b_"))
+        .unwrap()
+        .clone();
+    one.grants[0].excluded_tools = vec![
+        "application_diagnostics".into(),
+        "playwright__browser_run_code_unsafe".into(),
+        "playwright__a_b".into(),
+    ];
+    let after = names(&app, &one);
+    for absent in [
+        "application_diagnostics",
+        "playwright__browser_run_code_unsafe",
+        "playwright__a_b",
+    ] {
+        assert!(!after.contains(&absent.to_owned()), "{absent}");
+    }
+    for present in [
+        "screenshot",
+        "launch_application",
+        "playwright__browser_navigate",
+        hashed.as_str(),
+    ] {
+        assert!(after.contains(&present.to_owned()), "{present}");
+    }
+    // Leaving one of two colliding tools out does not rename the other.
+    assert_eq!(before.len(), after.len() + 3);
+    // Several containers: a container tool stays for the others and takes only their aliases; a
+    // server tool is named without the alias, as the container alone would expose it.
+    let mut two = endpoint(
+        "two",
+        vec![
+            grant("c1", "chrome-dev", &[Scope::View]),
+            grant("c2", "unity", &[Scope::View]),
+        ],
+    );
+    two.grants[0].excluded_tools = vec![
+        "screenshot".into(),
+        "playwright__browser_run_code_unsafe".into(),
+    ];
+    let entries = catalog(&app, &two);
+    let screenshot = entries
+        .iter()
+        .find(|entry| entry.tool.name == "screenshot")
+        .unwrap();
+    assert_eq!(
+        screenshot.tool.input_schema["properties"]["container"]["enum"],
+        json!(["unity"])
+    );
+    assert_eq!(
+        screenshot.target,
+        Target::Bilskirnir {
+            tool: "screenshot",
+            containers: vec![("unity".into(), "c2".into())]
+        }
+    );
+    let offered: Vec<String> = entries
+        .iter()
+        .map(|entry| entry.tool.name.to_string())
+        .collect();
+    assert!(offered.contains(&"chrome-dev__playwright__browser_navigate".to_owned()));
+    assert!(!offered.contains(&"chrome-dev__playwright__browser_run_code_unsafe".to_owned()));
+    // Once every grant leaves a tool out, it is gone.
+    two.grants[1].excluded_tools = vec!["screenshot".into()];
+    assert!(!names(&app, &two).contains(&"screenshot".to_owned()));
+    // get_job reads only the jobs of the containers whose grants keep it.
+    let mut jobs = endpoint(
+        "jobs",
+        vec![
+            grant("c1", "a", &[Scope::Power]),
+            grant("c2", "b", &[Scope::Power]),
+        ],
+    );
+    jobs.grants[0].excluded_tools = vec!["get_job".into()];
+    let job = catalog(&app, &jobs)
+        .into_iter()
+        .find(|entry| entry.tool.name == "get_job")
+        .unwrap();
+    assert_eq!(
+        job.target,
+        Target::Job {
+            containers: vec!["c2".into()]
+        }
+    );
+    jobs.grants[1].excluded_tools = vec!["get_job".into()];
+    assert!(!names(&app, &jobs).contains(&"get_job".to_owned()));
+}
+
+#[test]
+fn excluded_tools_are_checked_against_the_scopes_and_kept_for_servers_not_known_yet() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    let request = |scopes: &[Scope], excluded: &[&str]| GrantRequest {
+        container_id: "c1".into(),
+        alias: None,
+        scopes: scopes.to_vec(),
+        servers: Servers::All,
+        excluded_tools: excluded.iter().map(|name| (*name).to_owned()).collect(),
+    };
+    let made = grants(
+        &app,
+        vec![request(
+            &[Scope::Applications, Scope::Power],
+            &[
+                "application_diagnostics",
+                "playwright__browser_run_code_unsafe",
+                "get_job",
+                "application_diagnostics",
+            ],
+        )],
+    )
+    .unwrap();
+    assert_eq!(
+        made[0].excluded_tools,
+        [
+            "application_diagnostics",
+            "playwright__browser_run_code_unsafe",
+            "get_job"
+        ]
+    );
+    // A container tool outside the granted scopes is a typo worth naming, as is a name no
+    // exposed tool can have.
+    for (scopes, excluded) in [
+        (&[Scope::View][..], &["application_diagnostics"][..]),
+        (&[Scope::View], &["get_job"]),
+        (&[Scope::View], &["screenshot "]),
+        (&[Scope::View], &[""]),
+        (&[Scope::View], &["a.b"]),
+        (&[Scope::View], &["Screenshot"]),
+        (&[Scope::View], &["Chrome__navigate"]),
+        (&[Scope::View], &["__navigate"]),
+    ] {
+        assert!(
+            grants(&app, vec![request(scopes, excluded)]).is_err(),
+            "{excluded:?}"
+        );
+    }
+    let longest = format!("s__{}", "a".repeat(61));
+    assert!(grants(&app, vec![request(&[], &[&longest])]).is_ok());
+    assert!(grants(&app, vec![request(&[], &[&format!("{longest}a")])]).is_err());
+    let many: Vec<String> = (0..1025).map(|i| format!("s__t{i}")).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).collect();
+    assert!(grants(&app, vec![request(&[], &many)]).is_err());
+    assert!(grants(&app, vec![request(&[], &many[..1024])]).is_ok());
+    // A record from before the list reads as leaving nothing out, and a grant that leaves
+    // nothing out is stored as records were, without the field.
+    let old: Grant = serde_json::from_value(
+        json!({"container_id":"c1","alias":"a","scopes":["view"],"servers":"all"}),
+    )
+    .unwrap();
+    assert!(old.excluded_tools.is_empty());
+    assert!(
+        !serde_json::to_value(&old)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("excluded_tools")
+    );
+    // The dashboard and the administrator's tools see the list with each grant.
+    let shown = summary(&app, &endpoint("e", made));
+    assert_eq!(
+        shown["grants"][0]["excluded_tools"],
+        json!([
+            "application_diagnostics",
+            "playwright__browser_run_code_unsafe",
+            "get_job"
+        ])
+    );
+    assert_eq!(
+        summary(&app, &endpoint("f", vec![old]))["grants"][0]["excluded_tools"],
+        json!([])
+    );
+}
+
+#[test]
+fn server_lists_name_each_tool_as_an_endpoint_of_its_container_exposes_it() {
+    let app = app(false);
+    server(
+        &app,
+        "c1",
+        "playwright",
+        &["browser_navigate", "a.b", "a_b", "a/b"],
+    );
+    let record: ServerRecord = app
+        .db
+        .get(SERVERS, &ServerRecord::key("c1", "playwright"))
+        .unwrap();
+    let shown = super::servers::summary(&app, &record, "Chrome dev", true);
+    let tools: Vec<(String, String)> = shown["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| {
+            (
+                tool["name"].as_str().unwrap().to_owned(),
+                tool["exposed"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        tools[0],
+        (
+            "browser_navigate".to_owned(),
+            "playwright__browser_navigate".to_owned()
+        )
+    );
+    assert_eq!(tools[1], ("a.b".to_owned(), "playwright__a_b".to_owned()));
+    assert_eq!(tools[2].0, "a_b");
+    assert!(tools[2].1.starts_with("playwright__a_b_"));
+    // The tail hashes the tool's own name, so a third tool that cleans the same gets its own.
+    assert_eq!(tools[3].0, "a/b");
+    assert!(tools[3].1.starts_with("playwright__a_b_") && tools[3].1 != tools[2].1);
+    assert_eq!(tools.len(), 4);
+    // The list's names are the catalog's on an endpoint of this container alone.
+    let offered = names(&app, &endpoint("one", vec![grant("c1", "chrome-dev", &[])]));
+    assert_eq!(
+        offered,
+        tools
+            .iter()
+            .map(|(_, exposed)| exposed.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn grants_name_existing_containers_once_with_their_own_aliases() {
     let app = app(false);
     app.db
@@ -495,6 +749,7 @@ fn grants_name_existing_containers_once_with_their_own_aliases() {
         alias: alias.map(str::to_owned),
         scopes: vec![Scope::View, Scope::View],
         servers: Servers::All,
+        excluded_tools: Vec::new(),
     };
     let made = grants(&app, vec![request("c1", None), request("c2", None)]).unwrap();
     assert_eq!(made[0].alias, "chrome-dev");
@@ -787,6 +1042,91 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn an_excluded_tool_is_unknown_on_the_endpoint() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(
+        &app,
+        "c1",
+        "chrome",
+        &["browser_navigate", "browser_run_code_unsafe"],
+    );
+    let Json(created) = create_endpoint(
+        State(app.clone()),
+        Json(
+            serde_json::from_value(json!({"name":"chrome-dev","grants":[{"container_id":"c1","scopes":["view"],"servers":"all","excluded_tools":["screenshot","chrome__browser_run_code_unsafe"]}]}))
+                .unwrap(),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        created["endpoint"]["grants"][0]["excluded_tools"],
+        json!(["screenshot", "chrome__browser_run_code_unsafe"])
+    );
+    let token = created["token"].as_str().unwrap().to_owned();
+    let session = open_session(&app, "/mcp/chrome-dev", &token).await;
+    let (_, _, body) = call(
+        app.clone(),
+        "/mcp/chrome-dev",
+        Some(&token),
+        Some(&session),
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
+    )
+    .await;
+    let tools: Vec<&str> = body["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert!(
+        tools.contains(&"list_windows") && tools.contains(&"chrome__browser_navigate"),
+        "{tools:?}"
+    );
+    assert!(
+        !tools.contains(&"screenshot") && !tools.contains(&"chrome__browser_run_code_unsafe"),
+        "{tools:?}"
+    );
+    // Called anyway, an excluded tool is as unknown as one outside the scopes.
+    for name in ["screenshot", "chrome__browser_run_code_unsafe"] {
+        let (_, _, body) = call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            Some(&token),
+            Some(&session),
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":name,"arguments":{}}}),
+        )
+        .await;
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown tool"),
+            "{body}"
+        );
+    }
+    // A container tool of a scope the grant lacks is refused, so a typo cannot pass for one.
+    let refused = update_endpoint(
+        State(app.clone()),
+        Path("chrome-dev".into()),
+        Json(
+            serde_json::from_value(json!({"grants":[{"container_id":"c1","scopes":["view"],"servers":"all","excluded_tools":["desktop_input"]}]}))
+                .unwrap(),
+        ),
+    )
+    .await;
+    let Err(error) = refused else {
+        panic!("a tool outside the scopes was accepted as excluded");
+    };
+    assert!(error.1.contains("desktop_input"), "{}", error.1);
+    let kept: Endpoint = app.db.get(ENDPOINTS, "chrome-dev").unwrap();
+    assert_eq!(kept.grants[0].excluded_tools.len(), 2);
 }
 
 #[tokio::test]
