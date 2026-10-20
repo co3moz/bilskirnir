@@ -590,6 +590,10 @@ export const en = {
   "templates.filter": "Filter templates",
   "templates.filterPlaceholder": "Search templates",
   "templates.tags": "Tags",
+  "templates.kind.application": "Applications",
+  "templates.kind.environment": "Environments",
+  "templates.kind.environmentHint":
+    "Language toolchains for building and testing code. Merge one with an application through Merge and install, such as Node.js with VS Code.",
   "templates.install": "Install",
   "templates.installAgain": "Install again",
   "templates.installOf": "Install {name}",
@@ -605,6 +609,7 @@ export const en = {
   "templates.broken.tags": "tags must be at most {count} short texts",
   "templates.broken.requires": "requires must be a version such as 0.5.0",
   "templates.broken.duplicate": "another template has the same id",
+  "templates.broken.kind": "kind must be application or environment",
   "templates.merge.start": "Merge and install",
   "templates.merge.go": "Merge",
   "templates.merge.choose": "Choose {name}",
