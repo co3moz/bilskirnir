@@ -71,13 +71,14 @@ export function NavContainers() {
                 side={isMobile ? "bottom" : "right"}
                 align={isMobile ? "end" : "start"}
               >
-                <DropdownMenuItem asChild>
+                <DropdownMenuItem tone="success" asChild>
                   <a href={href({ page: "desktop", id: container.id })}>
                     <RiComputerLine />
                     {t("containers.connect")}
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  tone="transfer"
                   onSelect={() => {
                     close()
                     openDialog({ kind: "upload", id: container.id })
@@ -87,6 +88,7 @@ export function NavContainers() {
                   {t("uploads.title")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  tone="transfer"
                   onSelect={() => {
                     close()
                     openDialog({ kind: "download", id: container.id })
@@ -96,6 +98,7 @@ export function NavContainers() {
                   {t("downloads.title")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  tone="info"
                   onSelect={() => {
                     close()
                     openDialog({ kind: "details", id: container.id })
@@ -106,7 +109,7 @@ export function NavContainers() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  variant="destructive"
+                  tone="warning"
                   onSelect={() => attempt(() => containerAction(container.id, "stop"))}
                 >
                   <RiStopCircleLine />

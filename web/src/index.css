@@ -44,6 +44,9 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-violet: var(--violet);
+  --color-info: var(--info);
+  --color-transfer: var(--transfer);
+  --color-edit: var(--edit);
   --color-code-comment: var(--code-comment);
   --color-code-keyword: var(--code-keyword);
   --color-code-command: var(--code-command);
@@ -93,6 +96,11 @@
   --success: #1d7f60;
   --warning: #96660f;
   --violet: #6152c4;
+  /* Menu actions, beside the state colors above: looking at something, moving files, changing
+     settings. Each at least 4.5:1 on a menu. */
+  --info: #1d5fbf;
+  --transfer: #0b6e85;
+  --edit: #b0306a;
   /* Containers in the usage charts, in this order; validated for color vision deficiency. */
   --series-1: #2a78d6;
   --series-2: #eb6834;
@@ -160,6 +168,9 @@
   --success: #a9dfcd;
   --warning: #e3c88f;
   --violet: #aaa0ed;
+  --info: #7cb7ff;
+  --transfer: #7fd4e6;
+  --edit: #f49ac1;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
