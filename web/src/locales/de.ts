@@ -1017,6 +1017,7 @@ export const de: Messages = {
     "{count} Werkzeuge, so wie ein Agent an diesem Endpunkt sie sieht.",
   "mcp.tools.loading": "Werkzeuge werden geladen…",
   "mcp.tools.none": "Dieser Endpunkt bietet noch keine Werkzeuge.",
+  "mcp.tools.endpoint": "Der Endpunkt selbst",
   "mcp.servers.description":
     "MCP-Server, die in Containern laufen, vom Image deklariert oder im laufenden Desktop hinzugefügt. Agenten erreichen ihre Werkzeuge über die Endpunkte, die sie einschließen.",
   "mcp.servers.loading": "Desktop-Server werden geladen…",

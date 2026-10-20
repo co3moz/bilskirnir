@@ -1008,6 +1008,7 @@ export const es: Messages = {
     "{count} herramientas, tal como las ve un agente en este punto de acceso.",
   "mcp.tools.loading": "Cargando herramientas…",
   "mcp.tools.none": "Este punto de acceso aún no ofrece herramientas.",
+  "mcp.tools.endpoint": "El propio punto de acceso",
   "mcp.servers.description":
     "Servidores MCP que se ejecutan dentro de los contenedores, declarados por la imagen o añadidos en el escritorio en marcha. Los agentes llegan a sus herramientas a través de los puntos de acceso que los incluyen.",
   "mcp.servers.loading": "Cargando servidores del escritorio…",

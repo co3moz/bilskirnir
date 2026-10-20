@@ -410,10 +410,10 @@ export type McpEndpoint = {
 /** A token is returned once, when it is created or replaced. */
 export type EndpointToken = { endpoint: McpEndpoint; token: string }
 
-/** A tool as an endpoint exposes it. */
+/** A tool as an endpoint exposes it; `container_id` is null for a tool of the endpoint itself, such as `get_job`. */
 export type EndpointTool = McpTool & {
   source: "bilskirnir" | "server"
-  container_id: string
+  container_id: string | null
   server: string | null
 }
 

@@ -173,10 +173,13 @@ export function ToolsDialog({ name, ...props }: DialogProps & { name: string }) 
   const tools = useEndpointTools(name)
   const endpoint = useMcpEndpoints(false).data?.find((entry) => entry.name === name)
   const containers = useContainers().data ?? []
-  const containerName = (id: string) =>
-    endpoint?.grants.find((grant) => grant.container_id === id)?.container_name ??
-    containers.find((container) => container.id === id)?.spec.name ??
-    id.slice(0, 12)
+  // A tool of the endpoint itself, such as get_job, belongs to no container.
+  const containerName = (id: string | null) =>
+    id === null
+      ? t("mcp.tools.endpoint")
+      : (endpoint?.grants.find((grant) => grant.container_id === id)?.container_name ??
+        containers.find((container) => container.id === id)?.spec.name ??
+        id.slice(0, 12))
   const groups = toolGroups(tools.data ?? [])
   return (
     <Dialog {...props}>
@@ -205,7 +208,7 @@ export function ToolsDialog({ name, ...props }: DialogProps & { name: string }) 
           ) : (
             groups.map((group) => (
               <section
-                key={`${group.source}-${group.container_id}-${group.server ?? ""}`}
+                key={`${group.source}-${group.container_id ?? ""}-${group.server ?? ""}`}
                 className="flex flex-col"
               >
                 <h3 className="flex flex-wrap items-center gap-2 text-sm font-medium">
