@@ -53,7 +53,7 @@ The surfaces are the neutral palette of the shadcn preset, without a blue or war
 
 ## Type and spacing
 
-The interface uses Oxanium for text and Geist Mono for code, both bundled from Fontsource packages so nothing loads from the network. Logs, image references, volume names and container IDs use the mono face. Build scripts, compose setup scripts and the build configuration are written in `CodeTextarea`, which colors bash or JSON with the `--code-*` colors and does not wrap lines; other fields stay plain `Textarea`s. Sizes follow the shadcn components: 14 px body text, 12 px supporting text, 16 px page titles in the header and larger numbers only on summary cards.
+The interface uses Oxanium for text and Geist Mono for code, both bundled from Fontsource packages so nothing loads from the network. Logs, image references, volume names and container IDs use the mono face. Build scripts, compose setup scripts and the build configuration are written in `CodeTextarea`, which colors bash or JSON with the `--code-*` colors, does not wrap lines and numbers them in a gutter that scrolls with the field; other fields stay plain `Textarea`s. Sizes follow the shadcn components: 14 px body text, 12 px supporting text, 16 px page titles in the header and larger numbers only on summary cards.
 
 The radius is 10 px (`--radius: 0.625rem`); the components derive smaller and larger corners from it. In the Maia style buttons, inputs and badges are fully rounded and cards use the 2xl corner. Pages use the block's spacing: 16 px side padding, 24 px from 1024 px, and 16 to 24 px between sections.
 
