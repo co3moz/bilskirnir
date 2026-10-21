@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiArrowDownLine, RiArrowUpLine, RiCloseLine } from "@remixicon/react"
 import { cn } from "cn"
 
-import { CodeTextarea } from "@/components/code-textarea"
+import { JsonEditor } from "@/components/json-editor"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,8 +19,10 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { t } from "@/lib/i18n"
+import { editorSchema } from "@/lib/json-editor"
 import {
   childPath,
+  isPlainObject,
   constraintHint,
   discriminator,
   draftOf,
@@ -38,11 +40,15 @@ import {
   type JsonSchema,
 } from "@/lib/schema-form"
 
-/** What every field of one form shares: the root schema for `$ref`s and the errors of the last run. */
+/**
+ * What every field of one form shares: the root schema for `$ref`s, the errors of the last run,
+ * and the run itself, which a JSON field's editor takes Ctrl+Enter for.
+ */
 const FormContext = React.createContext<{
   root: JsonSchema
   errors: ReadonlyMap<string, string>
   clear(path: string): void
+  submit?(): void
 }>({ root: {}, errors: new Map(), clear: () => {} })
 
 /** Radix selects take no empty value, so a field left unset is this one. */
@@ -67,14 +73,19 @@ export function SchemaForm({
   onChange,
   errors,
   clear,
+  submit,
 }: {
   schema: JsonSchema
   fields: Record<string, Draft>
   onChange(fields: Record<string, Draft>): void
   errors: ReadonlyMap<string, string>
   clear(path: string): void
+  submit?(): void
 }) {
-  const context = React.useMemo(() => ({ root: schema, errors, clear }), [schema, errors, clear])
+  const context = React.useMemo(
+    () => ({ root: schema, errors, clear, submit }),
+    [schema, errors, clear, submit]
+  )
   return (
     <FormContext.Provider value={context}>
       <ObjectFields
@@ -148,7 +159,7 @@ function SchemaField(props: FieldProps) {
     case "array":
       return <ArrayField {...field} />
     case "json":
-      return <JsonField {...field} />
+      return <JsonField {...field} raw={props.schema} />
   }
 }
 
@@ -678,18 +689,24 @@ function ItemButton({
   )
 }
 
-/** A value the form cannot break down, such as a union of plain values, typed as JSON. */
-function JsonField(field: Resolved) {
-  const { id, error, edited, invalid } = useField(field.path)
+/**
+ * A value the form cannot break down, such as a union of plain values, typed as JSON and checked
+ * against the field's own schema, `$ref`s and all.
+ */
+function JsonField({ raw, ...field }: Resolved & { raw: unknown }) {
+  const { root, submit } = React.useContext(FormContext)
+  const { id, error, edited } = useField(field.path)
   const text = (field.draft as Extract<Draft, { kind: "text" }>).text
   return (
     <Shell id={id} {...field} error={error}>
-      <CodeTextarea
-        id={id}
-        language="json"
+      <JsonEditor
         value={text}
-        rows={2}
-        className="min-h-12"
+        schema={editorSchema(isPlainObject(raw) ? raw : {}, root)}
+        label={field.name}
+        minHeight={36}
+        maxHeight={240}
+        invalid={!!error}
+        onSubmit={submit}
         placeholder={
           hasDefault(field.schema)
             ? JSON.stringify(field.schema.default)
@@ -699,12 +716,10 @@ function JsonField(field: Resolved) {
                 ? "{ }"
                 : t("inspector.form.jsonValue")
         }
-        aria-label={field.bare ? field.name : undefined}
-        onChange={(event) => {
+        onChange={(value) => {
           edited()
-          field.onChange({ kind: "text", text: event.target.value })
+          field.onChange({ kind: "text", text: value })
         }}
-        {...invalid}
       />
     </Shell>
   )
