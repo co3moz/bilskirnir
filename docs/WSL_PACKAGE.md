@@ -65,6 +65,8 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
+Tab completes the commands: type `bilskirnir re` and press Tab for `restart`. The package installs `bash-completion` for it, so `docker` completes as well. Packages before 0.6.0 have neither; an update does not add them.
+
 The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`. [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
 ## Update

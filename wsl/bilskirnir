@@ -19,6 +19,7 @@ NEEDS_PACKAGE=1
 # package without the file is level 1.
 PACKAGE_LEVEL=/usr/lib/wsl/package-level
 
+# Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
     cat <<'EOF'
 Usage: bilskirnir <command>

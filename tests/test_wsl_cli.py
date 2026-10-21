@@ -483,6 +483,54 @@ class PackageTest(unittest.TestCase):
         self.assertLessEqual(int(needs[0]), level[0])
 
 
+COMPLETION = ROOT / "wsl/bilskirnir-completion.bash"
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class CompletionTest(unittest.TestCase):
+    """Tab completion of the command's first word, with the commands the command itself lists."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        shutil.copy(CLI, self.dir / "bilskirnir")
+        (self.dir / "bilskirnir").chmod(0o755)
+
+    def complete(self, *words):
+        """What Tab offers after the words typed so far, the last one being the word under the cursor."""
+        script = (
+            f'source "{COMPLETION}"\n'
+            'COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1))\n'
+            '_bilskirnir bilskirnir "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
+            'printf "%s\\n" "${COMPREPLY[@]}"\n'
+        )
+        env = {**os.environ, "PATH": f"{self.dir}:{os.environ['PATH']}"}
+        result = subprocess.run(["bash", "-c", script, "bash", *words], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.split()
+
+    def test_a_prefix_completes_to_its_command(self):
+        self.assertEqual(self.complete("bilskirnir", "re"), ["restart"])
+        self.assertEqual(sorted(self.complete("bilskirnir", "st")), ["start", "status", "stop"])
+        self.assertEqual(self.complete("bilskirnir", "x"), [])
+
+    def test_every_command_is_offered_and_only_the_first_word_completes(self):
+        # Each branch of the command's case is offered, except help, which is what the bare command shows.
+        branches = re.findall(r"^    ([a-z][a-z|-]*)\)$", CLI.read_text(), re.M)
+        commands = sorted(branch for branch in branches if not branch.startswith("help"))
+        self.assertIn("restart", commands)
+        self.assertEqual(sorted(self.complete("bilskirnir", "")), commands)
+        self.assertEqual(self.complete("bilskirnir", "restart", ""), [])
+
+    def test_the_package_installs_the_completion_where_bash_completion_loads_it(self):
+        # bash-completion loads completions/<command> the first time that command is completed.
+        package = (ROOT / "wsl/Dockerfile").read_text()
+        command = Path(re.search(r"^CLI=(\S+)$", CLI.read_text(), re.M).group(1)).name
+        target = f"/usr/share/bash-completion/completions/{command}"
+        self.assertEqual(copy_source(package, target), "wsl/bilskirnir-completion.bash")
+        self.assertRegex(package, r"apt-get install [^&]*\bbash-completion\b")
+
+
 if __name__ == "__main__":
     unittest.main()
 
