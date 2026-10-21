@@ -1,6 +1,10 @@
 import * as React from "react"
+import { RiCheckboxCircleFill, RiErrorWarningLine, RiPlayLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -18,34 +22,142 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { wsUrl } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { plural, rich, t } from "@/lib/i18n"
 import { SERVER_NAME_PATTERN, serverDraft, serverRequest, type ServerDraft } from "@/lib/mcp"
 import { addServer } from "@/lib/mcp-api"
-import { useContainers } from "@/lib/queries"
+import { INSPECT_PATH } from "@/lib/mcp-client"
+import { useContainers, useSettings } from "@/lib/queries"
+import { testServer, type TestOutcome } from "@/lib/server-test"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { Footer } from "./simple-dialogs"
 
 const code = (text: string) => <code className="font-mono text-foreground">{text}</code>
 
+/** A try of the form's server: going on, with how to stop it, or how it went. */
+type Test = { state: "running"; cancel(): void } | { state: "done"; outcome: TestOutcome }
+
+/** What a try of the server found: its name and tools, or why it did not answer. */
+function TestResult({ test, onCancel }: { test: Test; onCancel(): void }) {
+  if (test.state === "running")
+    return (
+      <div aria-live="polite" className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Spinner />
+        {t("mcp.server.testing")}
+        <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
+          {t("common.cancel")}
+        </Button>
+      </div>
+    )
+  const { outcome } = test
+  const output = outcome.output.length > 0 && (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs text-muted-foreground">{t("mcp.server.testOutput")}</span>
+      <pre className="max-h-32 overflow-auto rounded-lg border bg-muted/30 p-2 font-mono text-xs break-all whitespace-pre-wrap">
+        {outcome.output.join("\n")}
+      </pre>
+    </div>
+  )
+  if (!outcome.ok)
+    return (
+      <Alert variant="destructive" aria-live="polite">
+        <RiErrorWarningLine />
+        <AlertTitle>{t("mcp.server.testFailed")}</AlertTitle>
+        <AlertDescription className="flex min-w-0 flex-col gap-2">
+          <span className="break-words whitespace-pre-wrap">{outcome.error}</span>
+          {output}
+        </AlertDescription>
+      </Alert>
+    )
+  return (
+    <div aria-live="polite" className="flex flex-col gap-2 rounded-xl border p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <RiCheckboxCircleFill className="size-4 text-success" aria-hidden />
+        <span className="font-medium">
+          {t("mcp.server.testOk", {
+            name: outcome.info?.title || outcome.info?.name || "?",
+            version: outcome.info?.version ?? "",
+          })}
+        </span>
+        <span className="text-muted-foreground">
+          {plural(outcome.tools.length, { one: "mcp.tools.one", other: "mcp.tools.other" })}
+        </span>
+      </div>
+      {outcome.tools.length > 0 && (
+        <ul className="flex max-h-24 flex-wrap gap-1 overflow-auto">
+          {outcome.tools.map((tool) => (
+            <li key={tool.name}>
+              <Badge
+                variant="outline"
+                className="font-mono text-muted-foreground"
+                title={tool.description}
+              >
+                {tool.name}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+      <span className="text-muted-foreground">{t("mcp.server.testSaved")}</span>
+      {output}
+    </div>
+  )
+}
+
 /**
  * Registers an MCP server in a running desktop: a command the manager starts there, or the URL
- * of a server that already listens inside it. Its tools are read before the dialog closes.
+ * of a server that already listens inside it. Its tools are read before the dialog closes, and
+ * **Test** tries the form as it is through the inspector's trial target, saving nothing.
  */
 export function ServerDialog({ container, ...props }: DialogProps & { container?: string }) {
   const containers = useContainers().data ?? []
+  const version = useSettings().data?.version ?? ""
   const [chosen, setChosen] = React.useState<string | undefined>(container)
   const target =
     chosen ?? containers.find((entry) => entry.state === "running")?.id ?? containers[0]?.id
   const item = containers.find((entry) => entry.id === target)
   const running = item?.state === "running"
   const [draft, setDraft] = React.useState<ServerDraft>(serverDraft)
-  const set = (patch: Partial<ServerDraft>) => setDraft({ ...draft, ...patch })
-  const { busy, error, submit } = useSubmit()
+  const [test, setTest] = React.useState<Test>()
+  // A finished test speaks for the form as it was; a change makes it stale.
+  const set = (patch: Partial<ServerDraft>) => {
+    setDraft({ ...draft, ...patch })
+    if (test?.state === "done") setTest(undefined)
+  }
+  const { busy, error, setError, submit } = useSubmit()
   const id = React.useId()
+  // Closing the dialog stops a test still going on.
+  React.useEffect(() => {
+    if (test?.state === "running") return test.cancel
+  }, [test])
+
+  const startTest = () => {
+    let request
+    try {
+      request = serverRequest(draft)
+    } catch (failure) {
+      setError((failure as Error).message)
+      return
+    }
+    setError("")
+    const run = testServer(target!, request, {
+      socket: () => new WebSocket(wsUrl(INSPECT_PATH)),
+      version,
+    })
+    setTest({ state: "running", cancel: run.cancel })
+    void run.outcome.then((outcome) =>
+      setTest((current) =>
+        current?.state === "running" && current.cancel === run.cancel
+          ? { state: "done", outcome }
+          : current
+      )
+    )
+  }
 
   const save = async () => {
     const request = serverRequest(draft)
@@ -79,7 +191,13 @@ export function ServerDialog({ container, ...props }: DialogProps & { container?
             {!container && (
               <Field>
                 <FieldLabel htmlFor={`${id}-container`}>{t("containers.container")}</FieldLabel>
-                <Select value={target ?? ""} onValueChange={setChosen}>
+                <Select
+                  value={target ?? ""}
+                  onValueChange={(value) => {
+                    setChosen(value)
+                    if (test?.state === "done") setTest(undefined)
+                  }}
+                >
                   <SelectTrigger id={`${id}-container`} className="w-full">
                     <SelectValue placeholder={t("containers.none")} />
                   </SelectTrigger>
@@ -248,8 +366,20 @@ export function ServerDialog({ container, ...props }: DialogProps & { container?
               })}
             </FieldDescription>
           </FieldGroup>
+          {/* Dropping a running test stops it, through the effect above. */}
+          {test && <TestResult test={test} onCancel={() => setTest(undefined)} />}
           <FieldError>{error}</FieldError>
-          <Footer busy={busy} label={t("mcp.server.add")} disabled={!target || !running} />
+          <Footer busy={busy} label={t("mcp.server.add")} disabled={!target || !running}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!target || !running || test?.state === "running"}
+              onClick={startTest}
+            >
+              <RiPlayLine data-icon="inline-start" />
+              {t("mcp.server.test")}
+            </Button>
+          </Footer>
         </form>
       </DialogContent>
     </Dialog>

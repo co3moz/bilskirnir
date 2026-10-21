@@ -1075,6 +1075,12 @@ export const en = {
   "mcp.state.stopped": "Container stopped",
   "mcp.server.add": "Add server",
   "mcp.server.addTo": "Add server to {name}",
+  "mcp.server.test": "Test",
+  "mcp.server.testing": "Starting the server in the container and reading its tools…",
+  "mcp.server.testOk": "{name} {version} answered",
+  "mcp.server.testFailed": "The server did not answer",
+  "mcp.server.testOutput": "What it wrote",
+  "mcp.server.testSaved": "It ran once and stopped; nothing is saved until you add it.",
   "mcp.server.startFirst": "Start the container to add a server.",
   "mcp.server.formDescription":
     "An MCP server inside the desktop: a command Bilskirnir starts there, or the URL of one that already listens inside it. Its tools are read when it is added.",
