@@ -1058,6 +1058,12 @@ export const es: Messages = {
   "mcp.state.stopped": "Contenedor detenido",
   "mcp.server.add": "Añadir servidor",
   "mcp.server.addTo": "Añadir un servidor a {name}",
+  "mcp.server.test": "Probar",
+  "mcp.server.testing": "Iniciando el servidor en el contenedor y leyendo sus herramientas…",
+  "mcp.server.testOk": "{name} {version} respondió",
+  "mcp.server.testFailed": "El servidor no respondió",
+  "mcp.server.testOutput": "Lo que escribió",
+  "mcp.server.testSaved": "Se ejecutó una vez y se detuvo; no se guarda nada hasta que lo añadas.",
   "mcp.server.startFirst": "Inicia el contenedor para añadir un servidor.",
   "mcp.server.formDescription":
     "Un servidor MCP dentro del escritorio: un comando que Bilskirnir inicia allí, o la URL de uno que ya escucha dentro. Sus herramientas se leen al añadirlo.",

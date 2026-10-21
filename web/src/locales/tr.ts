@@ -1048,6 +1048,12 @@ export const tr: Messages = {
   "mcp.state.stopped": "Konteyner durdu",
   "mcp.server.add": "Sunucu ekle",
   "mcp.server.addTo": "{name} konteynerine sunucu ekle",
+  "mcp.server.test": "Dene",
+  "mcp.server.testing": "Sunucu konteynerde başlatılıyor ve araçları okunuyor…",
+  "mcp.server.testOk": "{name} {version} yanıt verdi",
+  "mcp.server.testFailed": "Sunucu yanıt vermedi",
+  "mcp.server.testOutput": "Yazdıkları",
+  "mcp.server.testSaved": "Bir kez çalışıp durdu; eklemeden hiçbir şey kaydedilmez.",
   "mcp.server.startFirst": "Sunucu eklemek için konteyneri başlatın.",
   "mcp.server.formDescription":
     "Masaüstünün içinde bir MCP sunucusu: Bilskirnir'in orada başlattığı bir komut ya da içinde zaten dinleyen bir sunucunun URL'si. Araçları eklenirken okunur.",

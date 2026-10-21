@@ -415,13 +415,22 @@ export class InspectorClient {
         clientInfo: { name: "bilskirnir-inspector", version: this.deps.version },
       })) as Record<string, unknown>
       this.notify("notifications/initialized")
+      const capabilities = isRecord(result?.capabilities) ? result.capabilities : {}
       this.update({
         status: "ready",
         info: isRecord(result?.serverInfo) ? (result.serverInfo as InspectorState["info"]) : {},
         protocolVersion:
           typeof result?.protocolVersion === "string" ? result.protocolVersion : undefined,
-        capabilities: isRecord(result?.capabilities) ? result.capabilities : {},
+        capabilities,
         instructions: typeof result?.instructions === "string" ? result.instructions : undefined,
+        // The lists the server offers are being read from the moment it is ready, so nobody
+        // waiting for them takes a ready server with no list yet for one that offers none.
+        loading: Object.fromEntries(
+          ITEM_KINDS.filter((kind) => capabilities[LIST_METHODS[kind].capability]).map((kind) => [
+            kind,
+            true,
+          ])
+        ),
       })
       await this.refresh()
     } catch (error) {
