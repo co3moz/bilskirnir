@@ -33,6 +33,8 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             mcp_token: Some(String::new()),
             templates_url: None,
             volume_filter: None,
+            update_check: false,
+            update_dir: "update".into(),
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -48,6 +50,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         transfers: transfers::Links::default(),
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
+        releases: releases::Releases::default(),
     })
 }
 fn spec() -> model::ContainerSpec {

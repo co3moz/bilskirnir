@@ -18,6 +18,10 @@ NEEDS_PACKAGE=1
 # The package records the level of its own files here, such as the firewall watcher and its unit. A
 # package without the file is level 1.
 PACKAGE_LEVEL=/usr/lib/wsl/package-level
+# The units that run an update the dashboard asks for. Every manager image bundles them under
+# /app/install/systemd, and the package installs them as well; see update_units.
+UNIT_DIR=/etc/systemd/system
+UPDATE_UNITS=(bilskirnir-update.path bilskirnir-update.service)
 
 # Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
@@ -207,6 +211,39 @@ update_install_files() {
     done
     put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
+# The dashboard asks for an update by leaving a request in $INSTALL/update, which the manager sees
+# at /update; bilskirnir-update.path notices it and bilskirnir-update.service runs this command's
+# update as root. Like the command, the units come only from releases, since they run as root and
+# would stay after a MANAGER_IMAGE chosen by hand is gone. An update brings them to an installation
+# whose package came before them, and enables them only then or when a release changes them, so a
+# path unit turned off by hand stays off. The manager offers the update once the folder holds
+# 'watched'.
+update_units() {
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":} unit changed=""
+    if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    fi
+    for unit in "${UPDATE_UNITS[@]}"; do
+        if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/systemd/$unit" >"$tmp/$unit" 2>/dev/null ||
+            [[ ! -s $tmp/$unit ]]; then
+            echo "$image has no $unit, so updates from the dashboard stay as they are."
+            return 0
+        fi
+    done
+    for unit in "${UPDATE_UNITS[@]}"; do
+        if ! cmp -s "$tmp/$unit" "$UNIT_DIR/$unit"; then
+            put_file "$UNIT_DIR/$unit" "$tmp/$unit" 0644
+            changed=yes
+        fi
+    done
+    if [[ -n $changed ]]; then
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now bilskirnir-update.path
+        sudo install -d -m 0755 "$INSTALL/update"
+        sudo touch "$INSTALL/update/watched"
+        echo "The dashboard can update this installation from now on."
+    fi
+}
 case ${1:-help} in
     start)
         require_settings
@@ -265,6 +302,7 @@ case ${1:-help} in
         trap 'rm -rf "$tmp"' EXIT
         update_cli "$image"
         update_install_files "$image"
+        update_units "$image"
         compose pull
         compose up -d
         update_profiles

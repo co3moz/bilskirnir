@@ -16,6 +16,7 @@ import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { UpdateNotice } from "@/components/update-notice"
 import {
   Sidebar,
   SidebarContent,
@@ -78,6 +79,7 @@ export function AppSidebar({
         <NavSecondary items={navSecondary()} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
+        <UpdateNotice />
         <NavUser />
       </SidebarFooter>
     </Sidebar>

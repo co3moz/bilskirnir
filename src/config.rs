@@ -37,6 +37,10 @@ pub struct Config {
     /// The label a volume carries for a request to list and choose it, `key` or `key=value`, or
     /// `None` for every volume. See [`volume_filter`].
     pub volume_filter: Option<String>,
+    /// Whether the manager looks for newer releases, which the dashboard then offers.
+    pub update_check: bool,
+    /// Where the WSL package takes update requests from the dashboard; see [`crate::releases`].
+    pub update_dir: PathBuf,
 }
 /// The template list on the project's GitHub wiki.
 pub(crate) const TEMPLATES_URL: &str =
@@ -131,6 +135,8 @@ impl Config {
             mcp_token,
             templates_url: templates_url(env::var("TEMPLATES_URL").ok().as_deref())?,
             volume_filter: volume_filter(env::var("VOLUME_FILTER").ok().as_deref())?,
+            update_check: flag("UPDATE_CHECK", true)?,
+            update_dir: crate::releases::UPDATE_DIR.into(),
         };
         super::model::image_ref(&cfg.base_image)?;
         if let Some(profile) = cfg.seccomp_profile()
