@@ -280,19 +280,19 @@ The dashboard's **Templates** page lists ready-made images. It reads the list in
 
 ### Merged templates
 
-**Merge and install** builds several templates into one image, such as Unity development with Google Chrome. The page merges them in the browser into one build request with `parts` instead of a `script`, a compose with one [step](#steps) for every template that has one, and their ids in `template_ids`, in the order they were chosen:
+**Merge and install** builds several templates into one image, such as VS Code with the Node.js environment. The page merges them in the browser into one build request with `parts` instead of a `script`, a compose with one [step](#steps) for every template that has one, and their ids in `template_ids`, in the order they were chosen:
 
 ```json
 {
-  "name": "Unity development + Google Chrome",
+  "name": "Visual Studio Code + Node.js",
   "base_image": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
   "internet": true,
   "parts": [
-    {"id": "unity-dev", "name": "Unity development", "script": "#!/usr/bin/env bash\n..."},
-    {"id": "chrome", "name": "Google Chrome", "script": "#!/usr/bin/env bash\n..."}
+    {"id": "vscode", "name": "Visual Studio Code", "script": "#!/usr/bin/env bash\n..."},
+    {"id": "node", "name": "Node.js", "script": "#!/usr/bin/env bash\n..."}
   ],
-  "compose": {"steps": [{"id": "unity-dev", "name": "Unity development", "parameters": [], "script": "..."}]},
-  "template_ids": ["unity-dev", "chrome"]
+  "compose": {"steps": [{"id": "vscode", "name": "Visual Studio Code", "parameters": [{"name": "GIT_NAME"}, {"name": "GIT_EMAIL"}], "script": "..."}]},
+  "template_ids": ["vscode", "node"]
 }
 ```
 
