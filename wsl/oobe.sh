@@ -262,18 +262,19 @@ if [[ $access == other ]]; then
     echo "Windows has to let other devices in as well."
     case $networking in
         mirrored)
-            echo "WSL shares the Windows network (mirrored mode), so open port $port in the Hyper-V firewall,"
-            echo "in PowerShell as administrator:"
-            echo "  New-NetFirewallHyperVRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts $port"
-            echo "More in the guide:"
+            echo "WSL shares the Windows network (mirrored mode), so port $port needs a Hyper-V firewall rule."
             ;;
         nat)
-            echo "With NAT networking, the WSL default, Windows forwards only its own localhost into WSL."
-            echo "Switch WSL to mirrored networking, or forward the port from Windows, as the guide describes:"
+            echo "With NAT networking, the WSL default, Windows forwards only its own localhost into WSL,"
+            echo "so port $port needs a port proxy to this distribution and a Windows firewall rule."
             ;;
         *)
-            echo "How depends on the WSL networking mode, as the guide describes:"
+            echo "What that takes depends on the WSL networking mode."
             ;;
     esac
+    echo "The PowerShell helper bilskirnir.ps1, attached to the release next to bilskirnir.wsl, sets it up."
+    echo "Run it in PowerShell and confirm the administrator prompt:"
+    echo '  .\bilskirnir.ps1 lan enable'
+    echo "The guide describes it, and the same steps by hand:"
     echo "  https://github.com/co3moz/bilskirnir/blob/master/docs/WSL_PACKAGE.md#access-from-other-devices"
 fi

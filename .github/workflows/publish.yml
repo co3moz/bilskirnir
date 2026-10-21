@@ -346,9 +346,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the WSL distribution package
         run: scripts/build-wsl.sh dist/bilskirnir.wsl
-      - name: Attach the package to the release
+      # The PowerShell helper goes with it: it installs and starts the package and opens it to other devices.
+      - name: Attach the package and the PowerShell helper to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Bilskirnir $GITHUB_REF_NAME"
-          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl windows/bilskirnir.ps1 --clobber
