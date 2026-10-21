@@ -103,4 +103,42 @@ function CodeTextarea({
   )
 }
 
-export { CodeTextarea }
+/** Code to read, colored as in {@link CodeTextarea}, scrolling inside its frame. */
+function CodeView({
+  language,
+  value,
+  className,
+  label,
+}: {
+  language: CodeLanguage
+  value: string
+  className?: string
+  /** What the code is, for screen readers. */
+  label?: string
+}) {
+  const tokens = React.useMemo(() => highlight(value, language), [value, language])
+  return (
+    <pre
+      data-slot="code-view"
+      tabIndex={0}
+      aria-label={label}
+      className={cn(
+        TEXT,
+        "m-0 max-h-96 overflow-auto rounded-xl border border-input bg-input/30 text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        className
+      )}
+    >
+      {tokens.map((token, index) =>
+        COLORS[token.kind] ? (
+          <span key={index} className={COLORS[token.kind]}>
+            {token.text}
+          </span>
+        ) : (
+          token.text
+        )
+      )}
+    </pre>
+  )
+}
+
+export { CodeTextarea, CodeView }

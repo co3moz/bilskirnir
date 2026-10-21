@@ -84,14 +84,22 @@ export async function attempt(action: () => Promise<unknown>) {
   }
 }
 
-/** Lets the browser save what `href` answers, under the name the manager gives it. */
-function save(href: string) {
+/** Lets the browser save what `href` answers, under the name the manager gives it, or `name`. */
+function save(href: string, name = "") {
   const link = document.createElement("a")
   link.href = href
-  link.download = ""
+  link.download = name
   document.body.append(link)
   link.click()
   link.remove()
+}
+
+/** Lets the browser save data made in the page, such as an MCP result, as the file `name`. */
+export function saveData(name: string, data: BlobPart, type: string) {
+  const url = URL.createObjectURL(new Blob([data], { type }))
+  save(url, name)
+  // The click has started the download by now; the URL is not needed after it.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 /** Points at the Jobs page, where an archive transfer's progress and any error appear. */

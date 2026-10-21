@@ -89,6 +89,14 @@ A desktop can run MCP servers of its own, such as a browser automation server a 
 
 A template can declare its MCP servers, which **Install** names and its **Advanced editing** shows with its script, so every container from the image has them.
 
+### Test a server in the inspector
+
+**Inspector** opens one server and shows what it offers: a desktop server of a running container, an endpoint as its agent sees it, or Bilskirnir MCP itself. Choose it and press **Connect**, or use the play button of a server under **Desktop servers** or **Test in the inspector** in an endpoint's menu. The server's name, protocol revision, capabilities and instructions show above its tools, prompts, resources and resource templates, which you can search by name, title or URI and sort.
+
+Choosing one shows its description, its hints such as read-only or destructive, and a form made from its input schema: nested objects, lists you can add to, reorder and remove from, and variants picked by the property that tells them apart, such as `type`. **JSON** edits the same arguments as text. **Run tool**, **Get prompt** or **Read resource** sends them (Ctrl+Enter), shows the server's progress, and **Cancel** (Esc) asks the server to stop. The result shows each part as it is meant to be read: text, JSON, images, embedded resources and links, `structuredContent` and the raw result, which you can copy or save; audio is offered to save, since the page plays nothing from a server. The play button beside an item runs it again with its last arguments. **Traffic and logs** lists every message to and from the server, what it wrote on its standard error and its log messages, newest first.
+
+A desktop server runs in a process of its own for the inspector, as the desktop user, and stops when you disconnect or leave the page; agents keep their own connections to it. A server that locks something of its own, such as a browser profile, may not start a second time while an agent uses it.
+
 ## Save a container as a snapshot
 
 Use **Snapshot** after installing applications or changing settings in a container. Bilskirnir briefly pauses the container and uses Docker commit to save its filesystem changes as a new image layer.
