@@ -27,6 +27,63 @@ export function modelName(path: string | undefined, language: CodeLanguage | und
 }
 
 /**
+ * Files Monaco knows no language for, given the nearest one it has, as Monaco's own language
+ * points name files. Configurations that are keys and values under sections, TOML and
+ * systemd's units among them, color as INI; shaders, whose languages are all C at heart, as C++.
+ */
+export const MORE_FILES: readonly {
+  id: string
+  extensions?: string[]
+  filenames?: string[]
+  filenamePatterns?: string[]
+}[] = [
+  {
+    id: "ini",
+    extensions: [
+      ".conf",
+      ".cfg",
+      ".desktop",
+      ".env",
+      ".toml",
+      ".service",
+      ".socket",
+      ".timer",
+      ".target",
+      ".mount",
+      ".path",
+    ],
+    // `.env.local`, `.env.example` and the like.
+    filenamePatterns: [".env.*"],
+    filenames: ["Pipfile"],
+  },
+  {
+    id: "cpp",
+    extensions: [
+      // GLSL, and its stages by their usual names.
+      ".glsl",
+      ".vert",
+      ".frag",
+      ".geom",
+      ".tesc",
+      ".tese",
+      ".comp",
+      // HLSL and Cg, Unity's shaders and compute shaders, Godot's, Unreal's and Metal's.
+      ".hlsl",
+      ".hlsli",
+      ".fx",
+      ".fxh",
+      ".cginc",
+      ".shader",
+      ".compute",
+      ".gdshader",
+      ".usf",
+      ".ush",
+      ".metal",
+    ],
+  },
+]
+
+/**
  * The address of an editor's model. A JSON field's schema is matched to it, and Monaco tells a
  * file's language from the name at its end, such as `.py` or `Dockerfile`.
  */
@@ -65,6 +122,8 @@ export const TOKEN_COLORS: Record<string, string> = {
   // A script's `#!` line.
   metatag: "--code-comment",
   keyword: "--code-keyword",
+  // An INI file's `[section]`.
+  "metatag.ini": "--code-keyword",
   tag: "--code-keyword",
   // Types, and the shell's builtin commands.
   type: "--code-command",
@@ -73,6 +132,8 @@ export const TOKEN_COLORS: Record<string, string> = {
   regexp: "--code-string",
   "attribute.value": "--code-string",
   variable: "--code-variable",
+  // An INI file's keys, named as JSON's are.
+  key: "--code-variable",
   "attribute.name": "--code-variable",
   "string.key.json": "--code-variable",
   number: "--code-number",
@@ -92,13 +153,19 @@ export function hexColor([red, green, blue, alpha]: readonly number[], withHash 
   return withHash ? `#${hex}` : hex
 }
 
-/** Monaco's token rules from the code colors, read through `color` as `RRGGBB`. */
+/**
+ * Monaco's token rules from the code colors, read through `color` as `RRGGBB`. Each says its
+ * style, since a rule without one takes its parent's: an INI section would lean as a `#!` does.
+ */
 export const tokenRules = (color: (variable: string) => string) =>
   Object.entries(TOKEN_COLORS).map(([token, variable]) => ({
     token,
     foreground: color(variable).replace(/^#/, ""),
-    ...(variable === "--code-comment" ? { fontStyle: "italic" } : {}),
+    fontStyle: variable === "--code-comment" ? "italic" : "",
   }))
+
+/** The colors of nested brackets, outermost first, from the same palette as the tokens. */
+export const BRACKET_COLORS = ["--code-operator", "--code-keyword", "--code-command"]
 
 type Placing = Pick<
   CSSStyleDeclaration,
