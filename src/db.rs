@@ -52,6 +52,13 @@ impl Db {
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
         rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
     }
+    /// The jobs that are queued or running, newest first, without their logs.
+    pub fn active_jobs(&self) -> Result<Vec<crate::model::Job>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT json_set(data, '$.log', '') FROM records WHERE kind='job' AND json_extract(data, '$.status') IN ('queued', 'running') ORDER BY rowid DESC")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
+    }
 }
 
 #[cfg(test)]

@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "wsl/bilskirnir"
 REPOSITORY = "ghcr.io/co3moz/bilskirnir"
 FILES = ("compose.yml", "deploy/Caddyfile", ".env.example")
+UNITS = ("bilskirnir-update.path", "bilskirnir-update.service")
 
 STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
@@ -66,11 +67,14 @@ class UpdateTest(unittest.TestCase):
         self.install.mkdir()
         self.cli = self.dir / "bilskirnir"
         self.level = self.dir / "package-level"
+        self.units = self.dir / "systemd"
+        self.units.mkdir()
         self.script = CLI.read_text()
         for line, replacement in (
             ("INSTALL=/opt/bilskirnir", f"INSTALL={self.install}"),
             ("CLI=/usr/local/bin/bilskirnir", f"CLI={self.cli}"),
             ("PACKAGE_LEVEL=/usr/lib/wsl/package-level", f"PACKAGE_LEVEL={self.level}"),
+            ("UNIT_DIR=/etc/systemd/system", f"UNIT_DIR={self.units}"),
         ):
             self.assertEqual(self.script.count(f"\n{line}\n"), 1, line)
             self.script = self.script.replace(f"\n{line}\n", f"\n{replacement}\n")
@@ -237,7 +241,10 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((self.install / "compose.yml").stat().st_mode), 0o640)
         self.assertEqual([p.name for p in self.install.rglob("*") if p.suffix in (".bak", ".new")], [])
         self.assertEqual(list(self.tmp.iterdir()), [])
-        copies = [i for i, call in enumerate(calls) if call.startswith("docker run ") and not call.endswith("/bilskirnir")]
+        copies = [
+            i for i, call in enumerate(calls)
+            if call.startswith("docker run ") and not call.endswith("/bilskirnir") and "/systemd/" not in call
+        ]
         self.assertEqual(len(copies), len(FILES))
         for i in copies:
             self.assertIn(f" {REPOSITORY}:0.3.0 /app/install/", calls[i])
@@ -292,6 +299,53 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(self.installed(name), content)
         self.assertEqual(self.installed(".shipped.sha256"), shipped(self.old))
         self.assertIn("/app/install/deploy/Caddyfile", result.stderr)
+        self.assertIn("docker compose up -d", calls)
+
+    def bundle_units(self):
+        """Puts the units that take the dashboard's update requests into the manager image."""
+        for name in UNITS:
+            path = self.image / "app/install/systemd" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"[Unit]\nDescription={name}\n")
+
+    def test_a_release_brings_the_units_that_take_dashboard_requests(self):
+        self.bundle_units()
+        result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name in UNITS:
+            self.assertEqual((self.units / name).read_text(), f"[Unit]\nDescription={name}\n")
+            self.assertEqual(stat.S_IMODE((self.units / name).stat().st_mode), 0o644)
+            self.assertIn(f"docker run --rm --network none --entrypoint cat {REPOSITORY}:0.3.0 /app/install/systemd/{name}", calls)
+        # The manager offers the update once the path unit watches the folder.
+        self.assertTrue((self.install / "update/watched").is_file())
+        enable = calls.index("systemctl enable --now bilskirnir-update.path")
+        self.assertLess(calls.index("systemctl daemon-reload"), enable)
+        self.assertLess(enable, calls.index("docker compose up -d"))
+        # The same units again are left as they are, so a path unit turned off by hand stays off.
+        self.calls.unlink()
+        result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("systemctl daemon-reload", calls)
+        self.assertNotIn("systemctl enable --now bilskirnir-update.path", calls)
+
+    def test_the_units_come_only_from_releases(self):
+        self.bundle_units()
+        for image in (f"{REPOSITORY}:latest", "ghcr.io/someone/bilskirnir:0.1.0"):
+            with self.subTest(image=image):
+                self.calls.unlink(missing_ok=True)
+                result, _, calls = self.update(f"MANAGER_IMAGE={image}\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(any("/app/install/systemd/" in call for call in calls))
+                self.assertEqual(list(self.units.iterdir()), [])
+                self.assertFalse((self.install / "update").exists())
+                self.assertIn("docker compose up -d", calls)
+
+    def test_a_release_without_the_units_leaves_dashboard_updates_as_they_are(self):
+        result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("updates from the dashboard stay as they are", result.stdout)
+        self.assertEqual(list(self.units.iterdir()), [])
+        self.assertNotIn("systemctl enable --now bilskirnir-update.path", calls)
         self.assertIn("docker compose up -d", calls)
 
     def test_a_newer_release_replaces_the_command_and_the_update_continues_with_it(self):
@@ -465,6 +519,36 @@ class PackageTest(unittest.TestCase):
             self.assertEqual(source, copy_source(package, f"/opt/bilskirnir/{name}"))
         self.assertIn(f"sha256sum {' '.join(FILES)} > .shipped.sha256", package)
 
+    def test_the_package_and_the_manager_bundle_the_update_units(self):
+        # The package installs them, and an update brings them from /app/install/systemd in the
+        # manager image to installations whose package came before them.
+        script = CLI.read_text()
+        self.assertEqual(tuple(re.search(r"^UPDATE_UNITS=\((.*)\)$", script, re.M).group(1).split()), UNITS)
+        unit_dir = re.search(r"^UNIT_DIR=(\S+)$", script, re.M).group(1)
+        manager = (ROOT / "Dockerfile").read_text()
+        package = (ROOT / "wsl/Dockerfile").read_text()
+        for name in UNITS:
+            self.assertEqual(copy_source(manager, f"/app/install/systemd/{name}"), f"wsl/{name}")
+            self.assertEqual(copy_source(package, f"{unit_dir}/{name}"), f"wsl/{name}")
+        self.assertRegex(package, r"systemctl enable [^\n]*\bbilskirnir-update\.path\b")
+
+    def test_the_units_use_the_folder_and_the_names_the_manager_reads(self):
+        # compose.ghcr.yml mounts the installation's update folder where src/releases.rs looks, and
+        # the manager reads what the service writes there by the names that file gives them.
+        script = CLI.read_text()
+        install = re.search(r"^INSTALL=(\S+)$", script, re.M).group(1)
+        folder = f"{install}/update"
+        names = dict(re.findall(r'^pub\(crate\) const (\w+): &str = "([^"]*)";$', (ROOT / "src/releases.rs").read_text(), re.M))
+        self.assertIn(f"      - ./update:{names['UPDATE_DIR']}\n", (ROOT / "compose.ghcr.yml").read_text())
+        self.assertIn(f"\nPathExists={folder}/{names['REQUEST']}\n", (ROOT / "wsl/bilskirnir-update.path").read_text())
+        service = (ROOT / "wsl/bilskirnir-update.service").read_text()
+        self.assertIn(f"ExecStartPre=/bin/mv -f {folder}/{names['REQUEST']} {folder}/{names['STARTED']}\n", service)
+        cli = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
+        self.assertIn(f"'exec {cli} update >{folder}/{names['LOG']} 2>&1'", service)
+        self.assertIn(f"mv -f {folder}/{names['EXIT']}.new {folder}/{names['EXIT']}'", service)
+        self.assertIn(f'"$INSTALL/update/{names["WATCHED"]}"', script)
+        self.assertIn(f"touch {folder}/{names['WATCHED']}", (ROOT / "wsl/Dockerfile").read_text())
+
     def test_the_manager_bundles_the_command_the_package_installs(self):
         script = CLI.read_text()
         target = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
@@ -501,7 +585,7 @@ class CompletionTest(unittest.TestCase):
         script = (
             f'source "{COMPLETION}"\n'
             'COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1))\n'
-            '_bilskirnir bilskirnir "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
+            '_bilskirnir "$1" "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
             'printf "%s\\n" "${COMPREPLY[@]}"\n'
         )
         env = {**os.environ, "PATH": f"{self.dir}:{os.environ['PATH']}"}
@@ -529,6 +613,24 @@ class CompletionTest(unittest.TestCase):
         target = f"/usr/share/bash-completion/completions/{command}"
         self.assertEqual(copy_source(package, target), "wsl/bilskirnir-completion.bash")
         self.assertRegex(package, r"apt-get install [^&]*\bbash-completion\b")
+
+    def test_the_short_name_completes_like_the_command(self):
+        # b8r is a link to the command, so its help lists the same commands.
+        (self.dir / "b8r").symlink_to("bilskirnir")
+        self.assertEqual(self.complete("b8r", "re"), ["restart"])
+        registered = subprocess.run(
+            ["bash", "-c", f'source "{COMPLETION}"; complete -p b8r'], capture_output=True, text=True
+        )
+        self.assertEqual(registered.stdout.strip(), "complete -F _bilskirnir b8r")
+
+    def test_the_package_links_the_short_name_and_its_completion(self):
+        # Completing b8r loads completions/b8r, which is the command's completion file and registers both names.
+        package = (ROOT / "wsl/Dockerfile").read_text()
+        cli = Path(re.search(r"^CLI=(\S+)$", CLI.read_text(), re.M).group(1))
+        completions = "/usr/share/bash-completion/completions"
+        self.assertEqual(copy_source(package, f"{completions}/{cli.name}"), "wsl/bilskirnir-completion.bash")
+        self.assertRegex(package, rf"\bln -s {cli.name} {cli.parent}/b8r\b")
+        self.assertRegex(package, rf"\bln -s {cli.name} {completions}/b8r\b")
 
 
 if __name__ == "__main__":
@@ -564,3 +666,42 @@ class PortTest(unittest.TestCase):
         self.assertEqual(self.address(), "http://localhost:8080")
         (self.install / ".env").write_text("AUTH_MODE=none\n")
         self.assertEqual(self.address(), "http://localhost:8080")
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class AccessTest(unittest.TestCase):
+    """`bilskirnir status` tells who can reach the dashboard from BIND_ADDRESS, which the first start
+    sets and Compose publishes the port on, with 127.0.0.1 when it is missing or empty."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        # A running Docker and a manager that answers its health check.
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        for name in ("docker", "curl"):
+            (bin_dir / name).write_text("#!/bin/sh\nexit 0\n")
+            (bin_dir / name).chmod(0o755)
+        self.env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(self.dir), "BIND_ADDRESS": "0.0.0.0"}
+
+    def dashboard(self, settings):
+        (self.install / ".env").write_text(settings)
+        result = subprocess.run(["bash", str(self.cli), "status"], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return [line for line in result.stdout.splitlines() if line.startswith("Dashboard:")]
+
+    def test_the_status_names_who_can_reach_the_dashboard(self):
+        for settings, reach in (
+            ("AUTH_MODE=none\n", "this computer only (127.0.0.1:8080)"),
+            ("BIND_ADDRESS=\nPORT=9090\n", "this computer only (127.0.0.1:9090)"),
+            ("BIND_ADDRESS=127.0.0.1\n", "this computer only (127.0.0.1:8080)"),
+            ("BIND_ADDRESS=0.0.0.0\nPORT='9090'\n", "other devices too (0.0.0.0:9090)"),
+            ("BIND_ADDRESS='192.168.1.20'\n", "other devices too (192.168.1.20:8080)"),
+        ):
+            with self.subTest(settings=settings):
+                port = "9090" if "9090" in settings else "8080"
+                self.assertEqual(self.dashboard(settings), [f"Dashboard: http://localhost:{port}, reachable from {reach}"])

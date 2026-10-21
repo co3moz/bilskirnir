@@ -30,6 +30,7 @@ mod proxy;
 mod pulls;
 mod reconfigure;
 mod recordings;
+mod releases;
 mod stages;
 mod terminal;
 mod transfers;
@@ -74,6 +75,8 @@ pub struct App {
     layers: layers::Cache,
     /// Desktop MCP servers, their connections and the services of the MCP endpoints.
     desktop_mcp: desktop_mcp::DesktopMcp,
+    /// The newest release GitHub named, for the dashboard's update.
+    releases: releases::Releases,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -90,6 +93,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
         .route("/api/system", get(api::system))
+        .route("/api/update", get(releases::status).post(releases::start))
         .route("/api/usage", get(usage::all))
         .route("/api/containers", get(api::containers).post(api::create))
         .route(
@@ -378,9 +382,13 @@ async fn main() -> anyhow::Result<()> {
     // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
     db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
+    // An update the WSL distribution runs replaces the manager on its way, and goes on.
     let mut interrupted_builds = Vec::new();
+    let mut updates = Vec::new();
     for mut job in db.list::<model::Job>("job")? {
-        if job.status == "queued" || job.status == "running" {
+        if releases::resumable(&config.update_dir, &job) {
+            updates.push(job);
+        } else if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
             job.finished_at = Some(model::now());
             job.finish_stages(model::now());
@@ -411,9 +419,14 @@ async fn main() -> anyhow::Result<()> {
         transfers: transfers::Links::default(),
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
+        releases: releases::Releases::default(),
     });
     usage::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
+    releases::spawn(app.clone());
+    for job in updates {
+        releases::resume(app.clone(), job);
+    }
     let reconcile = app.clone();
     let cleanup = app.clone();
     tokio::spawn(async move {

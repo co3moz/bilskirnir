@@ -47,6 +47,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
 | `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
 | `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `bilskirnir.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
+| `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts and every six hours. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `bilskirnir update`. `false` turns both off, and the manager makes no request to GitHub. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 
@@ -72,7 +73,7 @@ Agent access uses a separate token rather than the dashboard session, unless `MC
 
 For the minimal Compose example, change the port binding to `0.0.0.0:8080:8080`. For the full manifests, set `BIND_ADDRESS=0.0.0.0`. Open the manager using the host's LAN address.
 
-The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings.
+The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings. The WSL package asks at first start whether other devices may connect and [describes the Windows side](WSL_PACKAGE.md#access-from-other-devices).
 
 Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user container permissions.
 
@@ -110,6 +111,8 @@ docker compose up -d
 ```
 
 For the full registry installation, add `-f compose.ghcr.yml` to both commands.
+
+The sidebar names a newer release when one is out, unless `UPDATE_CHECK=false`. Only the WSL package updates itself from there; on other installations, run the commands above. `compose.ghcr.yml` mounts an `update` folder beside it into the manager for that, which stays empty elsewhere.
 
 This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To get a newer release of a catalog image you already have, select the update button on its row under **Images**. A release manager, such as `ghcr.io/co3moz/bilskirnir:1.2.0`, downloads the catalog image published with it (`ubuntu-xfce:1.2.0`) and tags it with the catalog reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `bilskirnir update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `bilskirnir` command.
 

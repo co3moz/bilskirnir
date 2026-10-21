@@ -143,6 +143,21 @@ if [[ $mcp_auth == custom ]]; then
     fi
 fi
 
+echo
+if [[ $mcp == yes ]]; then
+    echo "The dashboard and the agent endpoint share one address, reachable from this computer or the network."
+else
+    echo "The dashboard is reachable from this computer alone, or from other devices on the network too."
+fi
+if [[ -z $password ]]; then
+    echo "There is no password, so any device that reaches the dashboard controls every desktop."
+fi
+if [[ $mcp_auth == none ]]; then
+    echo "Agents need no token, so any device that reaches the agent endpoint controls every desktop."
+fi
+choose "Who can reach the dashboard?" "This computer only, 127.0.0.1" "Other devices too, 0.0.0.0"
+access=$choice
+
 useradd --create-home --shell /bin/bash --uid 1000 --groups sudo,docker "$username"
 if [[ -n $password ]]; then
     printf '%s:%s\n' "$username" "$password" | chpasswd
@@ -181,6 +196,14 @@ if [[ $mcp == yes ]]; then
 else
     set_setting MCP_ENABLED false
 fi
+# Compose publishes the manager's port on this address inside WSL; Windows decides the rest.
+if [[ $access == other ]]; then
+    set_setting BIND_ADDRESS 0.0.0.0
+else
+    set_setting BIND_ADDRESS 127.0.0.1
+fi
+port=$(sed -n 's/^PORT=//p' "$ENV_FILE" | tail -n1)
+port=${port:-8080}
 set_setting WSL_GPU "$gpu"
 set_setting NVIDIA_COMPUTE "$cuda"
 set_setting GPU_ADAPTER "$adapter"
@@ -190,9 +213,17 @@ chmod 0640 "$ENV_FILE"
 echo
 if [[ -n $password ]]; then
     echo "Created $username with your password. It signs in to the dashboard too; sudo needs no password."
+elif [[ $access == other ]]; then
+    echo "Created $username without a password. The dashboard opens without signing in, so anyone"
+    echo "on the network who reaches it controls every desktop."
 else
     echo "Created $username without a password. The dashboard opens without signing in, so anyone"
-    echo "who can reach it can use it; set a password before allowing LAN access."
+    echo "who can reach it can use it; set a password before allowing other devices."
+fi
+if [[ $access == other ]]; then
+    echo "Other devices can reach the dashboard too: it listens on 0.0.0.0:$port."
+else
+    echo "Only this computer can reach the dashboard: it listens on 127.0.0.1:$port."
 fi
 echo "Settings written to $ENV_FILE (WSL GPU: $gpu, CUDA: $cuda)."
 if [[ $gpu == false ]]; then
@@ -222,4 +253,28 @@ if [[ $mcp == yes ]]; then
 else
     echo "Agent access (MCP) is off; 'bilskirnir mcp' explains how to turn it on."
     echo "'bilskirnir doctor' checks Docker, the GPU and the network."
+fi
+if [[ $access == other ]]; then
+    # Docker publishes the port inside WSL. How other devices get through Windows to it depends on the
+    # WSL networking mode, a Windows setting shared by every distribution, which the setup leaves alone.
+    networking=$(wslinfo --networking-mode 2>/dev/null || true)
+    echo
+    echo "Windows has to let other devices in as well."
+    case $networking in
+        mirrored)
+            echo "WSL shares the Windows network (mirrored mode), so port $port needs a Hyper-V firewall rule."
+            ;;
+        nat)
+            echo "With NAT networking, the WSL default, Windows forwards only its own localhost into WSL,"
+            echo "so port $port needs a port proxy to this distribution and a Windows firewall rule."
+            ;;
+        *)
+            echo "What that takes depends on the WSL networking mode."
+            ;;
+    esac
+    echo "The Windows helper sets it up. Run it in PowerShell, choose to let other devices reach the"
+    echo "dashboard and confirm the administrator prompt:"
+    echo '  irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex'
+    echo "The guide describes it, and the same steps by hand:"
+    echo "  https://github.com/co3moz/bilskirnir/blob/master/docs/WSL_PACKAGE.md#access-from-other-devices"
 fi

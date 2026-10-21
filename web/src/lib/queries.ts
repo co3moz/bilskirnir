@@ -19,6 +19,7 @@ import type {
   Session,
   Settings,
   SystemInfo,
+  UpdateStatus,
   Volume,
 } from "./types"
 
@@ -26,13 +27,20 @@ const LIST_INTERVAL = 8000
 const JOB_INTERVAL = 2000
 
 let signedOut = false
+// While an update replaces the manager, requests fail until the page reloads; see lib/update.ts.
+let restarting = false
+
+export function quietWhileRestarting(on: boolean) {
+  restarting = on
+}
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     // Several lists fail together when Docker is down; one toast per distinct message is enough.
     // A query marked quiet shows its error on its own page instead.
     onError: (error, query) => {
-      if (!signedOut && !query.meta?.quiet) toast.error(error.message, { id: error.message })
+      if (!signedOut && !restarting && !query.meta?.quiet)
+        toast.error(error.message, { id: error.message })
     },
   }),
   defaultOptions: {
@@ -78,6 +86,19 @@ export const useContainers = (poll = true) => useList<ContainerItem[]>("containe
 export const useImages = (poll = true) => useList<ImageItem[]>("images", poll)
 export const useVolumes = (poll = true) => useList<Volume[]>("volumes", poll)
 export const useSystem = (poll = true) => useList<SystemInfo>("system", poll)
+
+/**
+ * The newest release, which the manager looks up every six hours, and a running update, which is
+ * followed closely.
+ */
+export const useUpdate = () =>
+  useQuery({
+    queryKey: ["update"],
+    queryFn: () => api<UpdateStatus>("update"),
+    refetchInterval: (query) => (query.state.data?.job_id ? JOB_INTERVAL : 10 * 60_000),
+    staleTime: 60_000,
+    meta: { quiet: true },
+  })
 
 /**
  * The latest jobs. When one that makes a container or an image ends, the lists are read again

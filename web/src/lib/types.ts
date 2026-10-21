@@ -317,6 +317,25 @@ export type Settings = {
   mcp_enabled: boolean
 }
 
+/** `GET update`: this release, the newest one and whether the dashboard can update to it. */
+export type UpdateStatus = {
+  /** Whether the manager looks for new releases (UPDATE_CHECK). */
+  enabled: boolean
+  current: string
+  /** The newest release GitHub named, or `null` before the first answer. */
+  newest: string | null
+  /** Whether `newest` is later than `current`. */
+  available: boolean
+  release_url: string | null
+  checked_at: number | null
+  /** Why the last look at GitHub failed; `newest` is then the one seen before. */
+  error: string | null
+  /** Whether the WSL package runs `bilskirnir update` when the dashboard asks. */
+  installable: boolean
+  /** The running update job, which outlives the manager it replaces. */
+  job_id: string | null
+}
+
 export type SystemInfo = {
   connected: boolean
   version?: string

@@ -1,4 +1,5 @@
-//! Pins down that pruning keeps the newest jobs and every unfinished one, whatever its age.
+//! Pins down that pruning keeps the newest jobs and every unfinished one, whatever its age, and
+//! that the unfinished ones are found without reading the logs of the others.
 use super::*;
 use crate::model::Job;
 
@@ -43,4 +44,24 @@ fn pruning_keeps_the_newest_jobs_and_the_unfinished_ones() {
     assert_eq!(ids(&db), ["new", "running"]);
     drop(db);
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn active_jobs_are_the_queued_and_running_ones_without_their_logs() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    for (id, status) in [
+        ("queued", "queued"),
+        ("done", "completed"),
+        ("running", "running"),
+        ("failed", "failed"),
+    ] {
+        let mut record = job(id, false);
+        record.status = status.into();
+        record.log = "a long log".into();
+        db.put("job", id, &record).unwrap();
+    }
+    let active = db.active_jobs().unwrap();
+    let ids: Vec<&str> = active.iter().map(|job| job.id.as_str()).collect();
+    assert_eq!(ids, ["running", "queued"]);
+    assert!(active.iter().all(|job| job.log.is_empty()));
 }

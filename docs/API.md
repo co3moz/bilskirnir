@@ -31,6 +31,8 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
 | GET | `/api/system` | Docker connection and host summary. |
+| GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
+| POST | `/api/update` | Ask the WSL package to run `bilskirnir update`; returns a job. See [updates](#updates). |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
 | POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. `mcp_endpoint: false` leaves out its own [MCP endpoint](#desktop-mcp-servers-and-endpoints). |
@@ -668,6 +670,19 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 `gpu.state` is `sampling`, `idle` while no GPU container runs, `unavailable` with a `reason`, or `disabled` when the installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false). Each of `gpu.devices` has `index`, `name`, `memory_total` and samples of `t`, `utilization` (percent) and `memory` (bytes); a figure the driver does not report is `null`. These are the whole GPU's figures, which `scope: "host"` says: WSL gives Linux a paravirtual GPU whose driver reports neither processes nor containers, and Windows applications count too. They come from `nvidia-smi`, so only NVIDIA GPUs report them. While a GPU container runs, the manager runs it in a helper container from its own image that gets the GPU device, no network, no capabilities and a read-only root, and ends with the manager.
 
 `GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started. A deleted container's ID is still answered while its samples are in the window, and returns 404 once they have aged out.
+
+## Updates
+
+Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when it starts and every six hours. `GET /api/update` returns:
+
+- `enabled`: whether the manager looks for releases at all.
+- `current`: this manager's release.
+- `newest`, `release_url` and `checked_at`: the newest release, the page of its notes and when GitHub was last asked, `null` before the first answer. `error` says why the last look failed; `newest` then keeps the release seen before.
+- `available`: whether `newest` is later than `current`.
+- `installable`: whether this installation runs the update itself, which only the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) does.
+- `job_id`: the running update job, or `null`.
+
+`POST /api/update` starts that update and returns a job. It answers 409 while the lookup is turned off, on an installation other than the WSL package, without a newer release and while any job runs, since every job ends with the manager. The manager leaves a request in the folder the package mounts at `/update`, and the distribution runs `bilskirnir update` as root, which moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the newest release and recreates the manager. The job's log is that command's output. The new manager finds the job still running and follows it to its end; sessions end with the old manager, so sign in again.
 
 ## Limits and results
 

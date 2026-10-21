@@ -29,11 +29,15 @@ services:
       IMAGE_ARCHIVE_MAX_MB: ${IMAGE_ARCHIVE_MAX_MB:-65536}
       TEMPLATES_URL: ${TEMPLATES_URL:-}
       VOLUME_FILTER: ${VOLUME_FILTER:-}
+      UPDATE_CHECK: ${UPDATE_CHECK:-true}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
       RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - manager-data:/data
+      # The WSL package takes the dashboard's update requests from this folder. Elsewhere it stays
+      # empty, and the dashboard only tells of a new release.
+      - ./update:/update
     networks:
       - management
 

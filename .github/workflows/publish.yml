@@ -346,9 +346,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the WSL distribution package
         run: scripts/build-wsl.sh dist/bilskirnir.wsl
-      # The README installs through the Windows helper of the latest release, which downloads the
-      # package beside it, so both are attached in one step.
-      - name: Attach the package and the Windows helper to the release
+      # The PowerShell helper goes with it: it installs and starts the package and opens it to other devices.
+      - name: Attach the package and the PowerShell helper to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

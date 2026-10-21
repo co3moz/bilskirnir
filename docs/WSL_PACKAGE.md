@@ -49,9 +49,16 @@ Next it asks whether to enable agent access (MCP); move between the answers with
 - **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every container.
 - **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every container.
 
+Then it asks who can reach the dashboard, and with it the agent endpoint, which shares its address:
+
+- **This computer only** (the default) sets `BIND_ADDRESS=127.0.0.1`. Windows programs reach it at localhost and nothing else on the network does.
+- **Other devices too** sets `BIND_ADDRESS=0.0.0.0`, so the manager listens on every address of the distribution. Windows still decides whether other devices get through to it; the setup ends with the step for the WSL networking mode in use, and [Access from other devices](#access-from-other-devices) describes them all.
+
+Before this question the setup warns when there is no password or agents need no token, since any device that reaches the address then controls every container.
+
 The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/bilskirnir/.env` and asks whether to start Bilskirnir now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `bilskirnir mcp` shows again later.
 
-A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `bilskirnir start`.
+A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`, `this`, `other`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `bilskirnir start`.
 
 ## The Windows helper
 
@@ -67,7 +74,8 @@ The helper handles what has to happen outside the distribution. Run it with the 
 | Move its disk to another folder | `move <folder>` | Moves the disk, see [Disk](#disk). |
 | Change its disk's maximum size | `resize <size>` | Changes the disk's maximum size, see [Disk](#disk). |
 | Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task; with the task registered, the entry removes it instead (`autostart disable`). |
-| Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution, see [Remove](#remove). |
+| Let other devices reach the dashboard | `lan enable` | Sets up Windows for [access from other devices](#access-from-other-devices); once that is set up, the entry removes it instead (`lan disable`). `lan status` shows what is set up. |
+| Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution and what `lan enable` set up, see [Remove](#remove). |
 
 `irm | iex` cannot pass a command. To run one without the list, for example from a script, make the helper a script block and pass the command after it:
 
@@ -86,6 +94,36 @@ WSL stops a distribution shortly after its last Windows-started process ends, ev
 
 The helper's `stop` stops the manager and shuts the distribution down.
 
+## Access from other devices
+
+The first start asks whether other devices may reach the dashboard and the agent endpoint, and records the answer as `BIND_ADDRESS` in `.env`: `127.0.0.1` for this computer only, `0.0.0.0` for other devices too. Change it later with `bilskirnir settings`, then run `bilskirnir restart`. `bilskirnir status` and `bilskirnir doctor` show which one is in effect, and `doctor` also names the WSL networking mode.
+
+Set a password before opening it. Without one the dashboard has no sign-in, and with `MCP_AUTH_MODE=none` agents need no token, so any device that reaches the address controls every container. Over plain HTTP the password and the token cross the network readable; on a network you do not trust, use the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan). Other devices open the Windows computer's address, such as `http://192.168.1.20:8080`. A name instead of an address, such as the computer's name, has to be listed in `ALLOWED_HOSTS`.
+
+`BIND_ADDRESS=0.0.0.0` opens the port inside the distribution. Whether other devices get through Windows to it depends on the WSL networking mode, a Windows setting for every distribution together, which the package leaves alone. The [Windows helper](#the-windows-helper) sets up what the mode needs: choose **Let other devices reach the dashboard**, or give it the command directly:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1))) lan enable
+```
+
+It refuses while `BIND_ADDRESS` is still `127.0.0.1`, warns when there is no password or agents need no token, and asks for administrator rights through UAC. It opens one port, the dashboard's `PORT`; for the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan), `lan enable -Port 8443` opens its `HTTPS_PORT` in place of that. The helper's `lan status` shows what is set up and the address other devices open, and `lan disable` removes all of it, as `uninstall` does.
+
+- **Mirrored** (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`): the distribution shares the network addresses of Windows, so the Hyper-V firewall only has to let the port in, through a rule named `Bilskirnir`. Switching to mirrored networking changes it for every distribution and takes effect after `wsl --shutdown`, which stops them all.
+- **NAT**, the WSL default: Windows forwards only its own localhost into WSL, so `lan enable` adds a port proxy from the port on every Windows address to the distribution and a Windows firewall rule named `Bilskirnir`. The distribution gets a new address whenever WSL restarts, and the helper's `start` and the auto-start task then point the port proxy at it. Moving the port proxy needs administrator rights, so on an administrator's account `lan enable` also registers the task `Bilskirnir LAN` with them: it reads an address from `%LOCALAPPDATA%\Bilskirnir\wsl-address`, where the helper leaves it without those rights, and moves the port proxy there if it is an IPv4 address. It runs nothing from the distribution, so nothing inside gains administrator rights through it. On another account, `start` asks through UAC each time the address has changed. After `wsl --shutdown`, run `start` again.
+
+The same by hand, in PowerShell as administrator, for port 8080:
+
+```powershell
+# Mirrored networking
+New-NetFirewallHyperVRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080
+# NAT networking; run the first two lines again whenever WSL restarts
+$address = (wsl -d Bilskirnir --exec ip -4 -o addr show dev eth0) -replace '.*inet ([0-9.]+)/.*', '$1'
+netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$address
+New-NetFirewallRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+```
+
+[Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking) covers both modes.
+
 ## Everyday commands
 
 Inside the distribution, `bilskirnir` manages the installation:
@@ -93,17 +131,19 @@ Inside the distribution, `bilskirnir` manages the installation:
 | Command | What it does |
 | --- | --- |
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
-| `bilskirnir status` | Shows the Compose services and the dashboard address. |
+| `bilskirnir status` | Shows the Compose services, the dashboard address and who can reach it. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
-| `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, settings and registry reachability. |
+| `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
 Tab completes the commands: type `bilskirnir re` and press Tab for `restart`. The package installs `bash-completion` for it, so `docker` completes as well. Packages before 0.6.0 have neither; an update does not add them.
 
-The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`. [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+`b8r` is a short name for the same command: `b8r status` is `bilskirnir status`, and Tab completes it too. Packages up to 0.6.0 lack it, and an update does not add it; `sudo ln -s bilskirnir /usr/local/bin/b8r` gives such a distribution the name without its completion.
+
+The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard). [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
 ## Update
 
@@ -130,7 +170,7 @@ The manager image also bundles the `bilskirnir` command of its release, so fixes
 - The distribution has the package files the new command relies on. The package records the level of its own files, such as the firewall watcher, in `/usr/lib/wsl/package-level`, and every command names the level it needs. When a release needs a newer package, the update says so, keeps the command and updates everything else. Only a newer package brings that command, and installing one replaces the distribution together with its Docker data, see [Remove](#remove).
 - The new command is complete: it names the level it needs and passes a syntax check.
 
-The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it.
+The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it, apart from the units of [Update from the dashboard](#update-from-the-dashboard).
 
 The command of the 0.3.0 package and of earlier ones cannot update itself, and those packages set `MANAGER_IMAGE` to `latest`. Install the command of a newer release once by hand, replacing `1.2.0` with it:
 
@@ -143,6 +183,14 @@ sudo install -m 0755 /tmp/bilskirnir /usr/local/bin/bilskirnir
 ```
 
 Then set `MANAGER_IMAGE` to that release, as described above, and run `bilskirnir update`. From then on, updates bring the command.
+
+### Update from the dashboard
+
+The manager looks up the newest release on GitHub when it starts and every six hours. When one is newer than the manager, the sidebar names it, links to its notes and offers **Update**. **Update** runs the same `bilskirnir update` in the distribution, as root: it moves `MANAGER_IMAGE` in `.env` to that release, brings the release's installation files and command, recreates the manager and downloads the catalog images you already have again. Containers keep running. The job's log is the command's output. The dashboard reloads once the new manager answers, and asks you to sign in again, since sessions end with the old manager; the new manager follows the rest of the update in the same job. The dashboard waits for running jobs to finish first, since they would end with the manager.
+
+The manager cannot reach the distribution from its container, so the two meet in `/opt/bilskirnir/update`, which `compose.yml` mounts into the manager at `/update`. The manager leaves a `request` there, `bilskirnir-update.path` notices it and starts `bilskirnir-update.service`, which renames it to `started`, writes the command's output to `log` and how it ended to `exit`. The request only names the dashboard's job; what runs is always `/usr/local/bin/bilskirnir update`. `systemctl status bilskirnir-update.service` and `/opt/bilskirnir/update/log` show the last update. The dashboard offers **Update** once that folder holds `watched`, which the package and an update write when they install the two units. On another installation the sidebar only names the release.
+
+A package from before the units gets them with its first `bilskirnir update` to a release that bundles them. Like the command, they come only from a release of `ghcr.io/co3moz/bilskirnir`, since they run as root and would stay after a manager chosen by hand is gone, and an update enables them only when it installs or changes them, so a path unit you turned off stays off. To turn off both the lookup and the button, set `UPDATE_CHECK=false` with `bilskirnir settings` and run `bilskirnir restart`; the manager then makes no request to GitHub.
 
 ## Memory, processors and disk
 
@@ -190,10 +238,10 @@ The disk file does not shrink when images or containers are deleted. Two ways re
 
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group, and its name is the dashboard's `ADMIN_USERNAME`. The distribution is a single-purpose appliance for the Windows user who installed it.
 - `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `bilskirnir settings` saves it through `sudoedit`, which keeps that owner and mode; change it any other way with `sudo`.
-- Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing LAN access.
+- Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing other devices.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
 - Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every container, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
-- The manager listens on `127.0.0.1:8080`. For LAN access set `BIND_ADDRESS=0.0.0.0` in `.env`, allow the port through the Windows firewall and forward it into WSL as described in the installation guide.
+- The manager listens on `127.0.0.1:8080`, or on `0.0.0.0:8080` when the first start allowed other devices. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).
 
 ## Docker in other WSL distributions
 
@@ -222,4 +270,4 @@ The script builds the root filesystem image, exports it with `docker export` and
 
 ## Remove
 
-The helper's **Remove it with its images, containers and volumes** (`uninstall`) removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.
+The helper's **Remove it with its images, containers and volumes** (`uninstall`) removes the auto-start task and, after confirmation, unregisters the distribution and removes what `lan enable` set up on Windows. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.
