@@ -69,7 +69,7 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 1. Call `get_settings` and `list_images` to see the available images and defaults.
 2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `container_id`.
-4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root.
+4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root. For a common application or toolchain, such as Node.js, [build the image from a template](#build-from-a-template) first and create the container from that image instead.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
 6. Call `snapshot` to save the desktop's filesystem changes. After that job completes, its image can start another container.
 7. Delete a container only when its remaining container files are no longer needed. Saved images and named volumes are preserved.
@@ -98,6 +98,18 @@ Each tool advertises its arguments and description through `tools/list`. Read op
 
 Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. `screenshot` and `act_and_observe` return a JPEG image content block with the image size in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
 
+## Build from a template
+
+The dashboard's **Templates** page lists ready-made images, applications such as Unity Hub and environments such as Node.js, and an agent can build the same images. Prefer a template to a build script of your own: its script has been tried, it may bring a compose and [MCP servers](#mcp-servers-inside-a-desktop), and the page then shows it as installed. The server instructions and the `build_image` description tell agents the same steps:
+
+1. Call `list_images`. An image built from templates names them in `template_ids`; when the one you need is already there, create the container from that image.
+2. Read `templates_url` from `get_settings`, the address of the list. It is `null` when the installation turned the page off, and then there are no templates.
+3. Fetch the list with your own HTTP client. The manager never fetches a template, so the list has to be reachable from the machine the agent runs on. Each entry of its `templates` has an `id`, a `name`, a `description`, `tags`, a `kind` (`application`, or `environment` for a toolchain) and possibly `requires`, the oldest release that can build it. Skip an entry whose `requires` is newer than `version` in `get_settings`, since that release would refuse the build.
+4. Fetch `<id>.json` from the same folder as the list. It is a build request, the JSON **Export configuration** copies.
+5. Call `build_image` with that JSON unchanged and `template_id` set to the entry's `id`, then poll `get_job` as for any build.
+
+`<id>.png` in the same folder is the icon the page shows; pass it as `icon`, a `data:image/png;base64,` URL, to show it beside the image. Several templates go into one image through `parts`, as [composes](#ask-for-values-with-composes) describe. [The development guide](DEVELOPMENT.md#add-a-template) describes the list format in full.
+
 ## Run commands and install software
 
 `exec_container` takes `container_id`, `script`, optional `root` and optional `timeout_seconds`. It runs bash with fail-on-error. The default user is UID/GID 1001:1001 and the working directory is `/home/desktop`.
@@ -121,7 +133,7 @@ A script holds the container's operation lock until it finishes, so do not start
 
 ## Ask for values with composes
 
-A compose makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_compose` takes the record's `image_id` from `list_images` and a `compose`, or `null` to remove it; `get_image_compose` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `compose` for the image it builds, and a `description`, an `icon` (a PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL) and a `template_id`, so an exported build configuration or a template from the dashboard's **Templates** page is a request it takes as it is. Instead of one `script` it takes `parts`, the scripts of several templates merged into one image, each `{"id", "name", "script"}`, run in order and each in a layer of its own, with their ids in `template_ids`; such an image's compose has a step for each template, `{"steps": [...]}`, whose scripts receive only their own parameters, as [the HTTP API](API.md#merged-templates) describes. `list_images` names an image's icon by a version instead of carrying the picture.
+A compose makes a saved image ask for values, such as an account, when a container is created from it, and run a setup script with them once the desktop is ready. `set_image_compose` takes the record's `image_id` from `list_images` and a `compose`, or `null` to remove it; `get_image_compose` returns it with its script, and `list_images` shows the parameters without it. `build_image` accepts a `compose` for the image it builds, and a `description`, an `icon` (a PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL) and a `template_id`, so an exported build configuration or [a template](#build-from-a-template) is a request it takes as it is. Instead of one `script` it takes `parts`, the scripts of several templates merged into one image, each `{"id", "name", "script"}`, run in order and each in a layer of its own, with their ids in `template_ids`; such an image's compose has a step for each template, `{"steps": [...]}`, whose scripts receive only their own parameters, as [the HTTP API](API.md#merged-templates) describes. `list_images` names an image's icon by a version instead of carrying the picture.
 
 ```json
 {
