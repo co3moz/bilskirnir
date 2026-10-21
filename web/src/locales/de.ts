@@ -1030,8 +1030,6 @@ export const de: Messages = {
   "mcp.token.once":
     "Dieses Token wird nur einmal angezeigt. Geht es verloren, ersetzen Sie es; das alte funktioniert dann nicht mehr.",
   "mcp.token.token": "Token",
-  "mcp.token.claude": "Claude Code",
-  "mcp.token.json": "Client-Konfiguration (JSON)",
   "mcp.token.replaceTitle": "Token von {name} ersetzen?",
   "mcp.token.replaceDescription":
     "Ein neues Token wird erstellt und einmal angezeigt. Agenten mit dem bisherigen verlieren sofort den Zugriff.",
@@ -1048,6 +1046,60 @@ export const de: Messages = {
   "mcp.tools.loading": "Werkzeuge werden geladen…",
   "mcp.tools.none": "Dieser Endpunkt bietet noch keine Werkzeuge.",
   "mcp.tools.endpoint": "Der Endpunkt selbst",
+  "mcp.connect.action": "Zu einem Client hinzufügen",
+  "mcp.connect.actionOf": "{name} zu einem Client hinzufügen",
+  "mcp.connect.admin": "/mcp zu einem Client hinzufügen",
+  "mcp.connect.titleOf": "{name} zu einem MCP-Client hinzufügen",
+  "mcp.connect.titleAdmin": "Bilskirnir MCP zu einem MCP-Client hinzufügen",
+  "mcp.connect.description":
+    "Wählen Sie den Client und kopieren Sie seine Einstellungen. Das Token füllt nur den Text unten aus und wird nirgendwohin gesendet.",
+  "mcp.connect.adminWarning":
+    "Bilskirnir MCP hat Administratorzugriff auf jeden Container, einschließlich Root-Befehlen und Löschen. Geben Sie einem Agenten, der weniger braucht, stattdessen einen Endpunkt.",
+  "mcp.connect.header": "Authorization-Header",
+  "mcp.connect.tokenEndpoint":
+    "Das Token des Endpunkts, einmal beim Erstellen angezeigt, oder das Administrator-MCP-Token.",
+  "mcp.connect.tokenNone":
+    "Dieser Endpunkt hat noch kein Token. Erstellen Sie eines oder verwenden Sie das Administrator-MCP-Token.",
+  "mcp.connect.tokenAdmin": "Das MCP_TOKEN dieser Installation.",
+  "mcp.connect.noHeader":
+    "Es wird kein Token gesendet, für eine Installation mit MCP_AUTH_MODE=none.",
+  "mcp.connect.client": "Client",
+  "mcp.connect.generic": "Andere",
+  "mcp.connect.install": "Zu {client} hinzufügen",
+  "mcp.connect.docs": "Dokumentation von {client}",
+  "mcp.connect.docsGeneric": "Weitere MCP-Clients",
+  "mcp.connect.snippet.command": "Befehl",
+  "mcp.connect.snippet.file": "Einstellungen",
+  "mcp.connect.snippet.wsl": "Über WSL unter Windows",
+  "mcp.connect.snippet.remote": "Über mcp-remote (Node.js)",
+  "mcp.connect.hint.claude-code":
+    "Führen Sie den Befehl in Ihrem Projekt aus, oder fügen Sie {flag} hinzu, um den Server in jedem Projekt zu nutzen. Die {file} eines Projekts teilt den Eintrag mit allen, die daran arbeiten.",
+  "mcp.connect.hint.codex":
+    "Fügen Sie den Eintrag in {file} ein. Die Codex CLI und die IDE-Erweiterung lesen sie beide.",
+  "mcp.connect.hint.vscode":
+    "Die Schaltfläche öffnet VS Code, wo Install den Server Ihren Benutzereinstellungen für den Agentenmodus von GitHub Copilot hinzufügt. Die {file} eines Arbeitsbereichs teilt den Eintrag mit einem Projekt.",
+  "mcp.connect.hint.copilot-cli":
+    "Führen Sie den Befehl aus, oder fügen Sie den Eintrag in die Einstellungen der Copilot CLI ein. Das geführte Add Server von VS Code schreibt in dieselbe Datei.",
+  "mcp.connect.hint.cursor":
+    "Die Schaltfläche öffnet Cursor und fügt den Server hinzu. Die Datei in Ihrem Home-Verzeichnis gilt für jedes Projekt, die eines Projekts nur für dieses.",
+  "mcp.connect.hint.opencode":
+    "Fügen Sie den Eintrag in die globale Konfiguration von OpenCode oder in die {file} eines Projekts ein.",
+  "mcp.connect.hint.gemini":
+    "Der Befehl fügt den Server dem aktuellen Projekt hinzu; mit {flag} jedem Projekt. Der Eintrag gehört in die Einstellungen im Home-Verzeichnis oder in einem Projekt.",
+  "mcp.connect.hint.devin":
+    "Devin Desktop ist der neue Name von Windsurf. Fügen Sie den Eintrag in seine MCP-Konfiguration ein (die letzte Datei für ein älteres Windsurf) und aktualisieren Sie dann die Server in Cascade.",
+  "mcp.connect.hint.zed":
+    "Fügen Sie den Eintrag in die Einstellungen von Zed ein. Das Agent-Panel listet den Server.",
+  "mcp.connect.hint.cline":
+    "Führen Sie den Befehl mit der Cline CLI aus, oder fügen Sie den Eintrag in der Erweiterung unter MCP Servers, Configure hinzu.",
+  "mcp.connect.hint.kiro":
+    "Fügen Sie den Eintrag in die MCP-Einstellungen von Kiro ein, im Home-Verzeichnis oder in einem Arbeitsbereich.",
+  "mcp.connect.hint.amp":
+    "Fügen Sie den Eintrag in die Einstellungen von Amp ein, im Home-Verzeichnis oder in einem Arbeitsbereich, wo Amp vor der Nutzung des Servers fragt.",
+  "mcp.connect.hint.claude-desktop":
+    "Die Connectors von Claude Desktop erreichen Server aus der Cloud von Anthropic, nicht diese Adresse, daher startet es stattdessen ein lokales Programm. Unter Windows mit dem WSL-Paket von Bilskirnir braucht die Brücke im Manager kein Token; anderswo verbindet sich mcp-remote mit der URL. Öffnen Sie die Datei über Settings, Developer, Edit Config und starten Sie Claude Desktop nach dem Speichern neu.",
+  "mcp.connect.hint.generic":
+    "Ein Client, der Streamable HTTP spricht, braucht die URL und einen Authorization-Header mit dem Bearer-Token. Einer, der nur lokale Programme startet, kann die Brücke über WSL nutzen.",
   "mcp.servers.description":
     "MCP-Server, die in Containern laufen, vom Image deklariert oder im laufenden Desktop hinzugefügt. Agenten erreichen ihre Werkzeuge über die Endpunkte, die sie einschließen.",
   "mcp.servers.loading": "Desktop-Server werden geladen…",

@@ -30,10 +30,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { plural, t } from "@/lib/i18n"
-import { claudeCommand, clientConfig, endpointUrl, toolGroups } from "@/lib/mcp"
+import { endpointUrl, toolGroups } from "@/lib/mcp"
 import { createToken, deleteEndpoint, removeServer, revokeToken } from "@/lib/mcp-api"
 import { useContainers, useEndpointTools, useMcpEndpoints } from "@/lib/queries"
 import type { EndpointToken } from "@/lib/types"
+import { ClientSetup } from "./connect-dialog"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 
@@ -54,21 +55,6 @@ function CopyField({ label, value }: { label: string; value: string }) {
         <CopyButton text={value} label={t("common.copyOf", { name: label })} />
       </div>
     </Field>
-  )
-}
-
-/** A snippet to paste into a terminal or a client's settings. */
-function CopyBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{label}</span>
-        <CopyButton text={value} label={t("common.copyOf", { name: label })} />
-      </div>
-      <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-        {value}
-      </pre>
-    </div>
   )
 }
 
@@ -94,11 +80,9 @@ export function TokenDialog({ token, ...props }: DialogProps & { token: Endpoint
           </Alert>
           <CopyField label={t("mcp.token.token")} value={token.token} />
           <CopyField label={t("mcp.endpoint.url")} value={url} />
-          <CopyBlock
-            label={t("mcp.token.claude")}
-            value={claudeCommand(endpoint.name, url, token.token)}
+          <ClientSetup
+            target={{ name: endpoint.name, url, path: endpoint.path, token: token.token }}
           />
-          <CopyBlock label={t("mcp.token.json")} value={clientConfig(url, token.token)} />
         </div>
         <DialogFooter>
           <DialogClose asChild>

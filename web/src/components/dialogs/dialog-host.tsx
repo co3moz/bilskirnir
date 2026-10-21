@@ -16,6 +16,7 @@ import {
   VolumeDialog,
 } from "./simple-dialogs"
 import { ComposeDialog } from "./compose-dialog"
+import { ConnectDialog } from "./connect-dialog"
 import { EndpointDialog } from "./endpoint-dialog"
 import { EndpointConfirmDialog, ServerRemoveDialog, TokenDialog, ToolsDialog } from "./mcp-dialogs"
 import { ServerDialog } from "./server-dialog"
@@ -85,6 +86,8 @@ function render(dialog: Dialog, open: boolean) {
       return <EndpointConfirmDialog {...props} name={dialog.name} action={dialog.action} />
     case "mcp-tools":
       return <ToolsDialog {...props} name={dialog.name} />
+    case "mcp-connect":
+      return <ConnectDialog {...props} name={dialog.name} />
     case "mcp-server":
       return <ServerDialog {...props} container={dialog.container} />
     case "mcp-server-remove":

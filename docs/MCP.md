@@ -29,7 +29,7 @@ Use the hostname and HTTPS address of your installation for LAN access. The toke
 
 `MCP_AUTH_MODE=none` accepts agent requests without a token; leave the authorization header out of the client settings, or keep it, since the manager then ignores it. The Host and Origin checks still apply, so a web page opened in a browser cannot call the endpoint, but any program that can reach the manager's address gets the same administrator access. Use it only while the manager listens on localhost.
 
-Clients configure HTTP headers in different ways. Add the URL and bearer header using your client's MCP server settings; the server does not implement an OAuth sign-in flow. It uses stateless requests, so there is no session ID to save. The SDK handles protocol negotiation, including clients using the 2025 Streamable HTTP revisions.
+Clients configure HTTP headers in different ways. Add the URL and bearer header using your client's MCP server settings; the server does not implement an OAuth sign-in flow. **Add /mcp to a client** on the dashboard's MCP page shows the command or settings entry for Claude Code, Codex, VS Code, Cursor, OpenCode, Gemini CLI and other clients, filled in with the address and a token you paste there. It uses stateless requests, so there is no session ID to save. The SDK handles protocol negotiation, including clients using the 2025 Streamable HTTP revisions.
 
 ## Connect through stdio on Windows
 
@@ -50,7 +50,7 @@ For clients that use an `mcpServers` configuration:
 
 Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
-MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent): give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`.
+MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent): give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`. Without `-e MCP_TOKEN` it sends the manager's own token, which opens every endpoint too; the dashboard's settings for Claude Desktop use that form, so no token is written into them.
 
 ### Broken responses from localhost on Windows
 
@@ -321,6 +321,8 @@ An endpoint opens with its own bearer token or the administrator's MCP token. `c
 ```bash
 claude mcp add --transport http chrome-dev http://localhost:8080/mcp/chrome-dev --header "Authorization: Bearer ENDPOINT_TOKEN"
 ```
+
+The share button beside an endpoint's URL on the dashboard shows the same for the other common clients. The token is shown only when it is created, so the dialog asks for it and fills it in; it stays in the page.
 
 ## Reach a server inside the desktop
 

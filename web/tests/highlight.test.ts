@@ -39,9 +39,11 @@ test("joining the pieces gives the code back, whatever it holds", () => {
     "${",
     '{"a": [1, -2.5e3, true, null, "\\"q\\""], "b": {}}',
     '{"broken": "line\n}',
+    '[mcp_servers.a]\nurl = "http://x" # note\nb = { "c" = \'d\', n = 1.5 }',
+    '[unclosed\nkey = "open',
   ]
   for (const sample of samples) {
-    for (const language of ["bash", "json"] as const) {
+    for (const language of ["bash", "json", "toml"] as const) {
       const tokens = highlight(sample, language)
       assert.equal(tokens.map((token) => token.text).join(""), sample, `${language}: ${sample}`)
       assert.ok(tokens.every((token) => token.text.length > 0))
@@ -127,6 +129,35 @@ test("JSON tells keys from string values", () => {
     ["operator", ","],
     ["keyword", "null"],
     ["operator", "]}"],
+  ])
+})
+
+test("TOML tells table headers, keys and values apart", () => {
+  const toml = `# Codex
+[mcp_servers.chrome-dev]
+url = "http://localhost:8080/mcp/chrome-dev"
+http_headers = { "Authorization" = "Bearer x", retries = 3, on = true }`
+  assert.deepEqual(kinds(highlight(toml, "toml")), [
+    ["comment", "# Codex"],
+    ["keyword", "[mcp_servers.chrome-dev]"],
+    ["variable", "url"],
+    ["operator", "="],
+    ["string", '"http://localhost:8080/mcp/chrome-dev"'],
+    ["variable", "http_headers"],
+    ["operator", "="],
+    ["operator", "{"],
+    ["variable", '"Authorization"'],
+    ["operator", "="],
+    ["string", '"Bearer x"'],
+    ["operator", ","],
+    ["variable", "retries"],
+    ["operator", "="],
+    ["number", "3"],
+    ["operator", ","],
+    ["variable", "on"],
+    ["operator", "="],
+    ["keyword", "true"],
+    ["operator", "}"],
   ])
 })
 
