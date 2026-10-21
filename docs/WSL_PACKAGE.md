@@ -100,7 +100,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `bilskirnir status` | Shows the Compose services, the dashboard address and who can reach it. |
 | `bilskirnir logs` | Shows the manager's recent log. |
-| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. |
+| `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
 | `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
@@ -110,7 +110,7 @@ Tab completes the commands: type `bilskirnir re` and press Tab for `restart`. Th
 
 `b8r` is a short name for the same command: `b8r status` is `bilskirnir status`, and Tab completes it too. Packages up to 0.6.0 lack it, and an update does not add it; `sudo ln -s bilskirnir /usr/local/bin/b8r` gives such a distribution the name without its completion.
 
-The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`. [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard). [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
 ## Update
 
@@ -137,7 +137,7 @@ The manager image also bundles the `bilskirnir` command of its release, so fixes
 - The distribution has the package files the new command relies on. The package records the level of its own files, such as the firewall watcher, in `/usr/lib/wsl/package-level`, and every command names the level it needs. When a release needs a newer package, the update says so, keeps the command and updates everything else. Only a newer package brings that command, and installing one replaces the distribution together with its Docker data, see [Remove](#remove).
 - The new command is complete: it names the level it needs and passes a syntax check.
 
-The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it.
+The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it, apart from the units of [Update from the dashboard](#update-from-the-dashboard).
 
 The command of the 0.3.0 package and of earlier ones cannot update itself, and those packages set `MANAGER_IMAGE` to `latest`. Install the command of a newer release once by hand, replacing `1.2.0` with it:
 
@@ -150,6 +150,14 @@ sudo install -m 0755 /tmp/bilskirnir /usr/local/bin/bilskirnir
 ```
 
 Then set `MANAGER_IMAGE` to that release, as described above, and run `bilskirnir update`. From then on, updates bring the command.
+
+### Update from the dashboard
+
+The manager looks up the newest release on GitHub when it starts and every six hours. When one is newer than the manager, the sidebar names it, links to its notes and offers **Update**. **Update** runs the same `bilskirnir update` in the distribution, as root: it moves `MANAGER_IMAGE` in `.env` to that release, brings the release's installation files and command, recreates the manager and downloads the catalog images you already have again. Containers keep running. The job's log is the command's output. The dashboard reloads once the new manager answers, and asks you to sign in again, since sessions end with the old manager; the new manager follows the rest of the update in the same job. The dashboard waits for running jobs to finish first, since they would end with the manager.
+
+The manager cannot reach the distribution from its container, so the two meet in `/opt/bilskirnir/update`, which `compose.yml` mounts into the manager at `/update`. The manager leaves a `request` there, `bilskirnir-update.path` notices it and starts `bilskirnir-update.service`, which renames it to `started`, writes the command's output to `log` and how it ended to `exit`. The request only names the dashboard's job; what runs is always `/usr/local/bin/bilskirnir update`. `systemctl status bilskirnir-update.service` and `/opt/bilskirnir/update/log` show the last update. The dashboard offers **Update** once that folder holds `watched`, which the package and an update write when they install the two units. On another installation the sidebar only names the release.
+
+A package from before the units gets them with its first `bilskirnir update` to a release that bundles them. Like the command, they come only from a release of `ghcr.io/co3moz/bilskirnir`, since they run as root and would stay after a manager chosen by hand is gone, and an update enables them only when it installs or changes them, so a path unit you turned off stays off. To turn off both the lookup and the button, set `UPDATE_CHECK=false` with `bilskirnir settings` and run `bilskirnir restart`; the manager then makes no request to GitHub.
 
 ## Memory, processors and disk
 

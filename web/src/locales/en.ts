@@ -71,6 +71,7 @@ export const en = {
   "job.volume-import": "Import volume",
   "job.volume-extract": "Extract into volume",
   "job.volume-copy": "Copy volume",
+  "job.update": "Update Bilskirnir",
 
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",
@@ -679,6 +680,21 @@ export const en = {
   "account.signOut": "Sign out",
   "account.language": "Language",
   "account.languageAutomatic": "Browser language",
+
+  "update.available": "Bilskirnir {version} is available",
+  "update.current": "This installation runs {version}.",
+  "update.manual":
+    "This installation runs {version}. Run bilskirnir update in WSL, or pull the new manager image.",
+  "update.install": "Update",
+  "update.notes": "What's new",
+  "update.confirmTitle": "Update Bilskirnir to {version}?",
+  "update.confirmText":
+    "The WSL distribution runs bilskirnir update: it sets MANAGER_IMAGE in /opt/bilskirnir/.env to {version}, downloads that release and recreates the manager. Containers keep running, and the dashboard reloads once the new manager answers.",
+  "update.running": "Updating Bilskirnir",
+  "update.runningDetail": "The dashboard reloads once the new manager answers.",
+  "update.finishing": "The new manager is finishing the update.",
+  "update.showLog": "Show log",
+  "update.done": "Bilskirnir was updated to {version}.",
 
   "dashboard.running": "{count} running",
   "dashboard.attention.one": "{count} needs attention",

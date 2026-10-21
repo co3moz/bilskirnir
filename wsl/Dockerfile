@@ -28,7 +28,7 @@ RUN systemctl enable docker containerd \
     && userdel -r ubuntu \
     && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/bilskirnir \
     && chmod 0440 /etc/sudoers.d/bilskirnir \
-    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /usr/lib/wsl /usr/share/doc/bilskirnir /etc/docker
+    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /opt/bilskirnir/update /usr/lib/wsl /usr/share/doc/bilskirnir /etc/docker
 # Every COPY names its mode, since a checkout on a Windows drive makes each file 0777. --chmod also
 # applies to a directory the COPY creates, so each destination directory exists beforehand.
 COPY --chmod=0644 wsl/daemon.json /etc/docker/daemon.json
@@ -41,6 +41,8 @@ COPY --chmod=0755 wsl/oobe.sh /usr/lib/wsl/oobe.sh
 COPY --chmod=0755 wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
 COPY --chmod=0755 wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
 COPY --chmod=0644 wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
+COPY --chmod=0644 wsl/bilskirnir-update.path /etc/systemd/system/bilskirnir-update.path
+COPY --chmod=0644 wsl/bilskirnir-update.service /etc/systemd/system/bilskirnir-update.service
 COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY --chmod=0644 wsl/bilskirnir-completion.bash /usr/share/bash-completion/completions/bilskirnir
 # b8r is a short name for the command, with the same completion. Both are links by name, so the
@@ -61,8 +63,11 @@ RUN test -n "$BILSKIRNIR_VERSION" \
     && cd /opt/bilskirnir && sha256sum compose.yml deploy/Caddyfile .env.example > .shipped.sha256
 # The package level counts changes to the package's own files that the bilskirnir command relies on.
 # An update installs the command of a newer release only when its NEEDS_PACKAGE is at most this level,
-# so a change here that the command starts to rely on raises both.
+# so a change here that the command starts to rely on raises both. The update units rely on the
+# command, not the other way round, and an update installs them where they are missing. 'watched'
+# tells the manager that the path unit takes its update requests.
 RUN dockerd --validate --config-file /etc/docker/daemon.json \
-    && systemctl enable bilskirnir-firewall.service \
+    && systemctl enable bilskirnir-firewall.service bilskirnir-update.path \
+    && touch /opt/bilskirnir/update/watched \
     && printf '1\n' > /usr/lib/wsl/package-level \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id

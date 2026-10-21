@@ -136,34 +136,44 @@ where
                 let _ = app.append_log(&task_id, &format!("Build cleanup: {e:#}"));
             }
         }
-        job = app.db.get("job", &task_id).unwrap_or(job);
-        let finished = now();
-        job.finished_at = Some(finished);
-        job.finish_stages(finished);
-        job.progress = None;
-        let reported = match result {
-            Ok(value) => {
-                job.status = "completed".into();
-                job.result = Some(value.clone());
-                Ok(value)
-            }
-            Err(e) => {
-                job.status = "failed".into();
-                job.log.push_str(&format!("\nERROR: {e:#}\n"));
-                Err(format!("{e:#}"))
-            }
-        };
-        job.trim_log();
-        if let Err(e) = app.db.put("job", &task_id, &job) {
-            tracing::error!("Could not save job result: {e}");
-        }
-        if let Err(e) = app.db.prune_jobs(KEPT_JOBS) {
-            tracing::debug!("Job history: {e:#}");
-        }
         // Nobody may be waiting; most callers return the job ID at once.
-        let _ = done.send(reported);
+        let _ = done.send(finish(&app, &task_id, job, result));
     });
     Ok((id, outcome))
+}
+
+/// Record how a job ended. `job` stands in for the saved record when that cannot be read.
+pub(crate) fn finish(
+    app: &App,
+    id: &str,
+    job: Job,
+    result: anyhow::Result<Value>,
+) -> std::result::Result<Value, String> {
+    let mut job = app.db.get("job", id).unwrap_or(job);
+    let finished = now();
+    job.finished_at = Some(finished);
+    job.finish_stages(finished);
+    job.progress = None;
+    let reported = match result {
+        Ok(value) => {
+            job.status = "completed".into();
+            job.result = Some(value.clone());
+            Ok(value)
+        }
+        Err(e) => {
+            job.status = "failed".into();
+            job.log.push_str(&format!("\nERROR: {e:#}\n"));
+            Err(format!("{e:#}"))
+        }
+    };
+    job.trim_log();
+    if let Err(e) = app.db.put("job", id, &job) {
+        tracing::error!("Could not save job result: {e}");
+    }
+    if let Err(e) = app.db.prune_jobs(KEPT_JOBS) {
+        tracing::debug!("Job history: {e:#}");
+    }
+    reported
 }
 
 /// How long a request waits for a resource a job holds before answering that it is busy.
