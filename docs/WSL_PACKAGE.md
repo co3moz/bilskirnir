@@ -41,21 +41,25 @@ The setup then detects the WSL GPU device and CUDA libraries, writes the setting
 
 A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`, `this`, `other`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `bilskirnir start`.
 
-The bundled PowerShell helper does the same from Windows and adds auto-start:
+The PowerShell helper `bilskirnir.ps1`, attached to each release next to the package, does the same from Windows and adds auto-start and [access from other devices](#access-from-other-devices). PowerShell runs no scripts by default on Windows 10 and 11, so the second line allows them for the current window only:
 
 ```powershell
-.\windows\bilskirnir.ps1 install -Package .\bilskirnir.wsl
-.\windows\bilskirnir.ps1 autostart enable
+curl.exe -fLo bilskirnir.ps1 https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1
+Set-ExecutionPolicy -Scope Process Bypass
+.\bilskirnir.ps1 install -Package .\bilskirnir.wsl
+.\bilskirnir.ps1 autostart enable
 ```
+
+In a checkout of the repository it is `windows\bilskirnir.ps1`.
 
 ## Keep it running
 
 WSL stops a distribution shortly after its last Windows-started process ends, even though Docker runs as a systemd service inside it. Two ways keep Bilskirnir available:
 
-- `.\windows\bilskirnir.ps1 start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
-- `.\windows\bilskirnir.ps1 autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
+- `.\bilskirnir.ps1 start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
+- `.\bilskirnir.ps1 autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
 
-`.\windows\bilskirnir.ps1 stop` stops the manager and shuts the distribution down.
+`.\bilskirnir.ps1 stop` stops the manager and shuts the distribution down.
 
 ## Access from other devices
 
@@ -63,26 +67,29 @@ The first start asks whether other devices may reach the dashboard and the agent
 
 Set a password before opening it. Without one the dashboard has no sign-in, and with `MCP_AUTH_MODE=none` agents need no token, so any device that reaches the address controls every container. Over plain HTTP the password and the token cross the network readable; on a network you do not trust, use the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan). Other devices open the Windows computer's address, such as `http://192.168.1.20:8080`. A name instead of an address, such as the computer's name, has to be listed in `ALLOWED_HOSTS`.
 
-`BIND_ADDRESS=0.0.0.0` opens the port inside the distribution. Whether other devices get through Windows to it depends on the WSL networking mode, a Windows setting for every distribution together, which the package leaves alone:
+`BIND_ADDRESS=0.0.0.0` opens the port inside the distribution. Whether other devices get through Windows to it depends on the WSL networking mode, a Windows setting for every distribution together, which the package leaves alone. The [PowerShell helper](#install) sets up what the mode needs:
 
-- **Mirrored** (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`): the distribution shares the network addresses of Windows, so the Hyper-V firewall only has to let the port in. In PowerShell as administrator:
+```powershell
+.\bilskirnir.ps1 lan enable
+```
 
-  ```powershell
-  New-NetFirewallHyperVRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080
-  ```
+It refuses while `BIND_ADDRESS` is still `127.0.0.1`, warns when there is no password or agents need no token, and asks for administrator rights through UAC. It opens one port, the dashboard's `PORT`; for the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan), `lan enable -Port 8443` opens its `HTTPS_PORT` in place of that. `.\bilskirnir.ps1 lan status` shows what is set up and the address other devices open, and `lan disable` removes all of it, as `uninstall` does.
 
-  Switching to mirrored networking changes it for every distribution and takes effect after `wsl --shutdown`, which stops them all.
-- **NAT**, the WSL default: Windows forwards only its own localhost into WSL. Switch to mirrored networking, or forward the port to the distribution and allow it through the Windows firewall, in PowerShell as administrator:
+- **Mirrored** (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`): the distribution shares the network addresses of Windows, so the Hyper-V firewall only has to let the port in, through a rule named `Bilskirnir`. Switching to mirrored networking changes it for every distribution and takes effect after `wsl --shutdown`, which stops them all.
+- **NAT**, the WSL default: Windows forwards only its own localhost into WSL, so `lan enable` adds a port proxy from the port on every Windows address to the distribution and a Windows firewall rule named `Bilskirnir`. The distribution gets a new address whenever WSL restarts, and `.\bilskirnir.ps1 start` and the auto-start task then point the port proxy at it. Moving the port proxy needs administrator rights, so on an administrator's account `lan enable` also registers the task `Bilskirnir LAN` with them: it reads an address from `%LOCALAPPDATA%\Bilskirnir\wsl-address`, where the helper leaves it without those rights, and moves the port proxy there if it is an IPv4 address. It runs nothing from the distribution, so nothing inside gains administrator rights through it. On another account, `start` asks through UAC each time the address has changed. After `wsl --shutdown`, run `start` again.
 
-  ```powershell
-  $address = (wsl -d Bilskirnir hostname -I).Trim().Split()[0]
-  netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$address
-  New-NetFirewallRule -DisplayName Bilskirnir -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
-  ```
+The same by hand, in PowerShell as administrator, for port 8080:
 
-  The distribution gets a new address whenever WSL restarts, so the port proxy then points nowhere: run the first two lines again to point it at the new one.
+```powershell
+# Mirrored networking
+New-NetFirewallHyperVRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080
+# NAT networking; run the first two lines again whenever WSL restarts
+$address = (wsl -d Bilskirnir --exec ip -4 -o addr show dev eth0) -replace '.*inet ([0-9.]+)/.*', '$1'
+netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$address
+New-NetFirewallRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+```
 
-Use `HTTPS_PORT` (8443) in place of 8080 for the HTTPS service. [Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking) covers both modes.
+[Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking) covers both modes.
 
 ## Everyday commands
 
@@ -161,7 +168,7 @@ WSL reads these settings only when the virtual machine starts, and `bilskirnir.p
 
 ```powershell
 wsl --shutdown
-.\windows\bilskirnir.ps1 start
+.\bilskirnir.ps1 start
 ```
 
 The manager comes back on its own; containers do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `bilskirnir doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `bilskirnir doctor` warns when it is below 8 GB.
@@ -179,10 +186,10 @@ wsl --install --from-file .\bilskirnir.wsl --location D:\WSL\Bilskirnir --vhd-si
 To change them later, stop the distribution first; other distributions can keep running:
 
 ```powershell
-.\windows\bilskirnir.ps1 stop
+.\bilskirnir.ps1 stop
 wsl --manage Bilskirnir --resize 200GB
 wsl --manage Bilskirnir --move D:\WSL\Bilskirnir
-.\windows\bilskirnir.ps1 start
+.\bilskirnir.ps1 start
 ```
 
 A smaller maximum works only while the data still fits. `bilskirnir doctor` shows the space left before the maximum and warns below 10 GB.
@@ -225,4 +232,4 @@ The script builds the root filesystem image, exports it with `docker export` and
 
 ## Remove
 
-`.\windows\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.
+`.\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution and removes what `lan enable` set up on Windows. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.

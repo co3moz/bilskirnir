@@ -26,7 +26,7 @@ esac
 exit 0
 """
 
-HYPER_V_RULE = "New-NetFirewallHyperVRule -Name Bilskirnir"
+LAN_ENABLE = "\n  .\\bilskirnir.ps1 lan enable\n"
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
@@ -72,14 +72,15 @@ class FirstStartTest(unittest.TestCase):
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
+        self.assertNotIn("lan enable", result.stdout)
 
     def test_other_devices_get_the_windows_step_of_the_networking_mode(self):
         env_example = self.install / ".env.example"
         env_example.write_text(env_example.read_text().replace("\nPORT=8080\n", "\nPORT=9090\n"))
         for networking, expected, unexpected in (
-            ("mirrored", f"{HYPER_V_RULE} ", "NAT networking"),
-            ("nat", "With NAT networking, the WSL default", HYPER_V_RULE),
-            (None, "How depends on the WSL networking mode", HYPER_V_RULE),
+            ("mirrored", "so port 9090 needs a Hyper-V firewall rule.", "NAT networking"),
+            ("nat", "so port 9090 needs a port proxy to this distribution and a Windows firewall rule.", "Hyper-V"),
+            (None, "What that takes depends on the WSL networking mode.", "Hyper-V"),
         ):
             with self.subTest(networking=networking):
                 (self.install / ".env").unlink(missing_ok=True)
@@ -90,9 +91,9 @@ class FirstStartTest(unittest.TestCase):
                 self.assertIn("listens on 0.0.0.0:9090", result.stdout)
                 self.assertIn(expected, result.stdout)
                 self.assertNotIn(unexpected, result.stdout)
+                # The Windows helper sets up every mode, and the guide has the steps by hand.
+                self.assertIn(LAN_ENABLE, result.stdout)
                 self.assertIn("WSL_PACKAGE.md#access-from-other-devices", result.stdout)
-                if networking == "mirrored":
-                    self.assertIn("-Protocol TCP -LocalPorts 9090\n", result.stdout)
 
     def test_the_question_warns_when_nothing_guards_the_address(self):
         # No password, agent access off: the first letter answers the network question.
