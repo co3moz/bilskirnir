@@ -233,17 +233,17 @@ Inspect interface changes in a live browser at desktop and narrow widths. Open s
 
 ## Publish container images
 
-The **Publish containers** workflow checks frontend and backend code and validates Compose before publishing three `linux/amd64` images:
+The **Publish containers** workflow checks frontend and backend code and validates Compose before publishing three `linux/amd64` images to GHCR and Docker Hub:
 
-| Image | Moving tags from `master` |
-| --- | --- |
-| `ghcr.io/co3moz/bilskirnir` | `latest` |
-| `ghcr.io/co3moz/bilskirnir/ubuntu-xfce` | `24.04`, `latest` |
-| `ghcr.io/co3moz/bilskirnir/ubuntu-gnome` | `24.04`, `latest` |
+| GHCR | Docker Hub | Moving tags from `master` |
+| --- | --- | --- |
+| `ghcr.io/co3moz/bilskirnir` | `co3moz/bilskirnir` | `latest` |
+| `ghcr.io/co3moz/bilskirnir/ubuntu-xfce` | `co3moz/bilskirnir-ubuntu-xfce` | `24.04`, `latest` |
+| `ghcr.io/co3moz/bilskirnir/ubuntu-gnome` | `co3moz/bilskirnir-ubuntu-gnome` | `24.04`, `latest` |
 
-Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Its manager is built with `BILSKIRNIR_RELEASE=1.2.3`: it downloads the `1.2.3` desktop images and tags them as their catalog references, and carries the version in its `bilskirnir.release` label, which `bilskirnir update` reads. Other builds leave it empty and download the catalog references. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. A pull request to `master` runs only the checks, and a newer commit on it cancels the run of the older one. Documentation-only changes trigger neither image builds nor pull request checks.
+Both registries get the same image under the same tags. Docker Hub has no nested repositories, so a desktop image's name there starts with the repository's. The image catalog, the Compose manifests and the WSL package keep naming GHCR; Docker Hub is a second place to pull the same images from. Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Its manager is built with `BILSKIRNIR_RELEASE=1.2.3`: it downloads the `1.2.3` desktop images and tags them as their catalog references, and carries the version in its `bilskirnir.release` label, which `bilskirnir update` reads. Other builds leave it empty and download the catalog references. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. A pull request to `master` runs only the checks, and a newer commit on it cancels the run of the older one. Documentation-only changes trigger neither image builds nor pull request checks.
 
-The workflow uses `GITHUB_TOKEN` with package write access, BuildKit caches in the GitHub Actions cache and actions pinned to commit SHAs. It reads each published manifest back by digest to check registry access. The two desktop images build one after the other on the same builder, so they publish the same layers for the `common` stage of `desktop/Dockerfile` and a host downloads and stores that part once; the job fails when those layers differ. The `checks` job keeps its compiled Rust dependencies with `Swatinem/rust-cache`, saved only from `master` and read by tags and pull requests. Hosted CI cannot verify WSL GPU behavior.
+The workflow publishes to GHCR with `GITHUB_TOKEN` and its package write access, and to Docker Hub as the `co3moz` account (`DOCKER_HUB_USER` in the workflow) with the `DOCKER_HUB_TOKEN` repository secret, a Docker Hub personal access token with read and write access. Without that secret the publishing jobs stop at their Docker Hub sign-in, before they push to either registry. It uses BuildKit caches in the GitHub Actions cache and actions pinned to commit SHAs, and reads each published manifest back by digest from both registries to check access. The two desktop images build one after the other on the same builder, so they publish the same layers for the `common` stage of `desktop/Dockerfile` and a host downloads and stores that part once; the job fails when those layers differ. The `checks` job keeps its compiled Rust dependencies with `Swatinem/rust-cache`, saved only from `master` and read by tags and pull requests. Hosted CI cannot verify WSL GPU behavior.
 
 ## Build the WSL distribution package
 
