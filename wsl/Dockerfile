@@ -5,7 +5,7 @@ FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg sudo systemd systemd-sysv dbus iproute2 iptables \
-    openssl less nano locales tzdata dbus-user-session libpam-systemd \
+    openssl less nano locales tzdata dbus-user-session libpam-systemd bash-completion \
     && locale-gen en_US.UTF-8 && rm -rf /var/lib/apt/lists/*
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
@@ -42,6 +42,7 @@ COPY --chmod=0755 wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
 COPY --chmod=0755 wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
 COPY --chmod=0644 wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
 COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
+COPY --chmod=0644 wsl/bilskirnir-completion.bash /usr/share/bash-completion/completions/bilskirnir
 COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
 # A package installs the manager release it was built for, however many newer ones exist by then;
 # `bilskirnir update` moves an installation forward. The first start copies this file to .env.
