@@ -1246,14 +1246,16 @@ try:
     assert "tried" not in {s["name"] for s in tool("list_mcp_servers",{"container_id":env_id})["structuredContent"]["items"]}
     _, (listed, _) = inspected({"kind":"endpoint","name":"acceptance-mcp"}, ("tools/list",{}))
     assert {t["name"] for t in listed["tools"]} == offered, listed
-    # A server that cannot start says why: its stderr, then the reason it stopped.
+    # A server that cannot start says why: its output, then the reason it stopped. Docker writes a
+    # failed exec start into the exec's stdout stream, so the reason may arrive as either stream.
     ws = WebSocket(port, "/api/mcp/inspect", cookie)
     ws.send_text(json.dumps({"kind":"trial","container":env_id,"server":{"name":"missing","command":"no-such-mcp-server"}}))
     frames = [ws.receive()]
     while frames[-1]["type"] != "closed":
         frames.append(ws.receive())
     ws.close()
-    assert frames[0]["type"] == "ready" and any(f["type"] == "stderr" and "no-such-mcp-server" in f["line"] for f in frames), frames
+    assert frames[0]["type"] == "ready" and any(f["type"] in ("stdout","stderr") and "no-such-mcp-server" in f["line"] for f in frames), frames
+    assert "127" in frames[-1]["reason"], frames
     try:
         WebSocket(port, "/api/mcp/inspect", cookie, "https://evil.example")
         raise AssertionError("cross-origin inspector accepted")
