@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiArrowDownLine, RiArrowUpLine, RiCloseLine } from "@remixicon/react"
 import { cn } from "cn"
 
-import { JsonEditor } from "@/components/json-editor"
+import { CodeEditor } from "@/components/code-editor"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { t } from "@/lib/i18n"
-import { editorSchema } from "@/lib/json-editor"
+import { editorSchema } from "@/lib/code-editor"
 import {
   childPath,
   isPlainObject,
@@ -699,7 +699,8 @@ function JsonField({ raw, ...field }: Resolved & { raw: unknown }) {
   const text = (field.draft as Extract<Draft, { kind: "text" }>).text
   return (
     <Shell id={id} {...field} error={error}>
-      <JsonEditor
+      <CodeEditor
+        language="json"
         value={text}
         schema={editorSchema(isPlainObject(raw) ? raw : {}, root)}
         label={field.name}

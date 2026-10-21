@@ -1,6 +1,8 @@
-// Monaco, loaded the first time a JSON editor shows, so no other page carries it: the editor
-// core, the features a JSON editor uses, the JSON language service, and both workers built from
-// the page's own origin. Only JSON is registered; the other languages Monaco brings stay out.
+// Monaco, loaded the first time a code editor shows, so no page carries it before: the editor
+// core, the features its editors use, the JSON language service, the coloring of every language
+// Monaco knows, and both workers built from the page's own origin. A language's coloring is a
+// small chunk of its own, loaded when text in it first opens; the language services of
+// TypeScript, CSS and HTML, with their large workers, stay out.
 import * as monaco from "monaco-editor/editor/editor.api.js"
 import "monaco-editor/editor/browser/coreCommands.js"
 import "monaco-editor/editor/browser/widget/codeEditor/codeEditorWidget.js"
@@ -29,10 +31,11 @@ import "monaco-editor/editor/common/standaloneStrings.js"
 // The package exports scripts only; this one brings the icon font's styles.
 import "monaco-editor/features/codicon/register.js"
 import { jsonDefaults } from "monaco-editor/languages/features/json/register.js"
+import "monaco-editor/languages/definitions/register.all.js"
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker"
 import JsonWorker from "monaco-editor/languages/features/json/json.worker.js?worker"
 
-import { diagnosticsOptions, hexColor, tokenRules } from "@/lib/json-editor"
+import { diagnosticsOptions, hexColor, tokenRules } from "@/lib/code-editor"
 import type { JsonSchema } from "@/lib/schema-form"
 
 // Monaco asks for its workers here before any other way, which would need blob or remote URLs.
