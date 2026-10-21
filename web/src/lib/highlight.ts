@@ -7,7 +7,7 @@ export interface Token {
   text: string
 }
 
-export type CodeLanguage = "bash" | "json"
+export type CodeLanguage = "bash" | "json" | "toml"
 
 const SHELL_FILES = new Set([
   ".bashrc",
@@ -32,7 +32,8 @@ export const lineNumbers = (text: string) =>
 
 /** Splits code into colored pieces whose texts, joined, are the code again. */
 export function highlight(code: string, language: CodeLanguage): Token[] {
-  return language === "json" ? highlightJson(code) : highlightBash(code)
+  if (language === "json") return highlightJson(code)
+  return language === "toml" ? highlightToml(code) : highlightBash(code)
 }
 
 /** Appends a piece, joining it to the previous one when both are the same kind. */
@@ -376,6 +377,75 @@ export function highlightJson(code: string): Token[] {
       continue
     }
     push(tokens, "plain", c)
+    i++
+  }
+  return tokens
+}
+
+/** The end of a string that opens at `open` with its quote; at the end of the line if unclosed. */
+function stringEnd(code: string, open: number): number {
+  const quote = code[open]
+  let j = open + 1
+  // A literal string, in single quotes, has no escapes.
+  while (j < code.length && code[j] !== quote && code[j] !== "\n")
+    j += quote === '"' && code[j] === "\\" ? 2 : 1
+  return Math.min(code[j] === quote ? j + 1 : j, code.length)
+}
+
+/**
+ * TOML: table headers, keys apart from string values, comments, numbers and `true`/`false`.
+ * Multi-line strings are colored line by line, which is close enough for a configuration snippet.
+ */
+export function highlightToml(code: string): Token[] {
+  const tokens: Token[] = []
+  let i = 0
+  // Whether only blanks stand between the start of the line and `i`, where a header may start.
+  let lineStart = true
+  while (i < code.length) {
+    const c = code[i]
+    if (c === " " || c === "\t" || c === "\r" || c === "\n") {
+      push(tokens, "plain", c)
+      if (c === "\n") lineStart = true
+      i++
+      continue
+    }
+    const atStart = lineStart
+    lineStart = false
+    if (c === "#") {
+      const end = code.indexOf("\n", i)
+      const stop = end === -1 ? code.length : end
+      push(tokens, "comment", code.slice(i, stop))
+      i = stop
+      continue
+    }
+    const header = atStart && c === "[" ? /^\[\[?[^\]\n]*\]?\]?/.exec(code.slice(i)) : null
+    if (header) {
+      push(tokens, "keyword", header[0])
+      i += header[0].length
+      continue
+    }
+    if (c === '"' || c === "'") {
+      const end = stringEnd(code, i)
+      push(tokens, /^[ \t]*[=.]/.test(code.slice(end)) ? "variable" : "string", code.slice(i, end))
+      i = end
+      continue
+    }
+    const word = /^[A-Za-z0-9_+.:-]+/.exec(code.slice(i))
+    if (word) {
+      const text = word[0]
+      const key = /^[ \t]*=/.test(code.slice(i + text.length))
+      const kind: TokenKind = key
+        ? "variable"
+        : text === "true" || text === "false"
+          ? "keyword"
+          : /^[+-]?\d/.test(text)
+            ? "number"
+            : "plain"
+      push(tokens, kind, text)
+      i += text.length
+      continue
+    }
+    push(tokens, "=,{}[]".includes(c) ? "operator" : "plain", c)
     i++
   }
   return tokens

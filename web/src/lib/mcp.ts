@@ -181,14 +181,6 @@ export function grantRequests(drafts: GrantDraft[], scopes?: McpScopes): GrantRe
 export const endpointUrl = (origin: string, path: string) =>
   `${origin.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`
 
-/** The command that adds the endpoint to Claude Code. */
-export const claudeCommand = (name: string, url: string, token: string) =>
-  `claude mcp add --transport http ${name} ${url} --header "Authorization: Bearer ${token}"`
-
-/** The endpoint as an MCP client's JSON configuration names a server. */
-export const clientConfig = (url: string, token: string) =>
-  JSON.stringify({ type: "http", url, headers: { Authorization: `Bearer ${token}` } }, null, 2)
-
 /** The endpoint routes of the manager's API. */
 export const endpointApi = (name?: string) =>
   name ? `mcp/endpoints/${encodeURIComponent(name)}` : "mcp/endpoints"

@@ -1012,8 +1012,6 @@ export const tr: Messages = {
   "mcp.token.once":
     "Bu token yalnızca bir kez gösterilir. Kaybolursa değiştirin; eskisi o zaman çalışmaz.",
   "mcp.token.token": "Token",
-  "mcp.token.claude": "Claude Code",
-  "mcp.token.json": "İstemci yapılandırması (JSON)",
   "mcp.token.replaceTitle": "{name} token'ı değiştirilsin mi?",
   "mcp.token.replaceDescription":
     "Yeni bir token oluşturulur ve bir kez gösterilir. Mevcut token'ı kullanan ajanlar erişimi hemen kaybeder.",
@@ -1029,6 +1027,58 @@ export const tr: Messages = {
   "mcp.tools.loading": "Araçlar yükleniyor…",
   "mcp.tools.none": "Bu uç nokta henüz araç sunmuyor.",
   "mcp.tools.endpoint": "Uç noktanın kendisi",
+  "mcp.connect.action": "İstemciye ekle",
+  "mcp.connect.actionOf": "{name} uç noktasını bir istemciye ekle",
+  "mcp.connect.admin": "/mcp'yi istemciye ekle",
+  "mcp.connect.titleOf": "{name} uç noktasını bir MCP istemcisine ekle",
+  "mcp.connect.titleAdmin": "Bilskirnir MCP'yi bir MCP istemcisine ekle",
+  "mcp.connect.description":
+    "İstemciyi seçin ve ayarlarını kopyalayın. Token yalnızca aşağıdaki metni doldurur, hiçbir yere gönderilmez.",
+  "mcp.connect.adminWarning":
+    "Bilskirnir MCP, root komutları ve silme dahil her konteynere yönetici erişimi verir. Daha azına ihtiyacı olan bir ajana bunun yerine bir uç nokta verin.",
+  "mcp.connect.header": "Authorization başlığı",
+  "mcp.connect.tokenEndpoint":
+    "Uç noktanın oluşturulurken bir kez gösterilen token'ı ya da yönetici MCP token'ı.",
+  "mcp.connect.tokenNone":
+    "Bu uç noktanın henüz token'ı yok. Bir tane oluşturun ya da yönetici MCP token'ını kullanın.",
+  "mcp.connect.tokenAdmin": "Bu kurulumun MCP_TOKEN değeri.",
+  "mcp.connect.noHeader": "Token gönderilmez; MCP_AUTH_MODE=none ile çalışan bir kurulum için.",
+  "mcp.connect.client": "İstemci",
+  "mcp.connect.generic": "Diğer",
+  "mcp.connect.install": "{client} içine ekle",
+  "mcp.connect.docs": "{client} belgeleri",
+  "mcp.connect.docsGeneric": "Diğer MCP istemcileri",
+  "mcp.connect.snippet.command": "Komut",
+  "mcp.connect.snippet.file": "Ayarlar",
+  "mcp.connect.snippet.wsl": "Windows'ta WSL üzerinden",
+  "mcp.connect.snippet.remote": "mcp-remote ile (Node.js)",
+  "mcp.connect.hint.claude-code":
+    "Komutu projenizde çalıştırın ya da sunucuyu her projede kullanmak için {flag} ekleyin. Bir projenin {file} dosyası girdiyi projede çalışan herkesle paylaşır.",
+  "mcp.connect.hint.codex":
+    "Girdiyi {file} dosyasına ekleyin. Codex CLI ve IDE eklentisi ikisi de onu okur.",
+  "mcp.connect.hint.vscode":
+    "Düğme VS Code'u açar; oradaki Install sunucuyu GitHub Copilot'un ajan modu için kullanıcı ayarlarınıza ekler. Bir çalışma alanının {file} dosyası girdiyi projeyle paylaşır.",
+  "mcp.connect.hint.copilot-cli":
+    "Komutu çalıştırın ya da girdiyi Copilot CLI ayarlarına ekleyin. VS Code'un rehberli Add Server akışı da aynı dosyaya yazar.",
+  "mcp.connect.hint.cursor":
+    "Düğme Cursor'ı açar ve sunucuyu ekler. Ev klasörünüzdeki dosya her projeye, bir projeninki yalnızca o projeye uygulanır.",
+  "mcp.connect.hint.opencode":
+    "Girdiyi OpenCode'un genel yapılandırmasına ya da bir projedeki {file} dosyasına ekleyin.",
+  "mcp.connect.hint.gemini":
+    "Komut sunucuyu geçerli projeye ekler; her proje için {flag} ekleyin. Girdi ev klasörünüzdeki ya da bir projedeki ayarlara gider.",
+  "mcp.connect.hint.devin":
+    "Devin Desktop, Windsurf'ün yeni adıdır. Girdiyi MCP yapılandırmasına ekleyin (eski bir Windsurf için son dosya), sonra Cascade'de sunucuları yenileyin.",
+  "mcp.connect.hint.zed": "Girdiyi Zed ayarlarına ekleyin. Ajan paneli sunucuyu listeler.",
+  "mcp.connect.hint.cline":
+    "Komutu Cline CLI ile çalıştırın ya da girdiyi eklentide MCP Servers, Configure altına ekleyin.",
+  "mcp.connect.hint.kiro":
+    "Girdiyi Kiro'nun MCP ayarlarına, ev klasörünüzde ya da bir çalışma alanında ekleyin.",
+  "mcp.connect.hint.amp":
+    "Girdiyi Amp ayarlarına, ev klasörünüzde ya da bir çalışma alanında ekleyin; Amp çalışma alanındaki sunucuyu kullanmadan önce sorar.",
+  "mcp.connect.hint.claude-desktop":
+    "Claude Desktop'ın connector'ları sunuculara bu adresten değil Anthropic'in bulutundan ulaşır, bu yüzden onun yerine yerel bir program başlatır. Windows'ta Bilskirnir WSL paketiyle yöneticideki köprü token gerektirmez; başka yerlerde mcp-remote URL'ye bağlanır. Dosyayı Settings, Developer, Edit Config ile açın ve kaydettikten sonra Claude Desktop'ı yeniden başlatın.",
+  "mcp.connect.hint.generic":
+    "Streamable HTTP konuşan bir istemciye URL ve bearer token içeren bir Authorization başlığı yeter. Yalnızca yerel programları başlatan bir istemci WSL üzerinden köprüyü kullanabilir.",
   "mcp.servers.description":
     "Konteynerlerin içinde çalışan, imajın tanımladığı ya da çalışan masaüstünde eklenen MCP sunucuları. Ajanlar araçlarına onları içeren uç noktalar üzerinden ulaşır.",
   "mcp.servers.loading": "Masaüstü sunucuları yükleniyor…",

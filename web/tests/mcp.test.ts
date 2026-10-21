@@ -2,8 +2,6 @@ import { test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
-  claudeCommand,
-  clientConfig,
   defaultAlias,
   endpointApi,
   endpointUrl,
@@ -149,19 +147,10 @@ test("scopes and servers read as a few words", () => {
   ])
 })
 
-test("a new token comes with what clients need to connect", () => {
+test("an endpoint's URL joins the dashboard's origin and its path", () => {
   const url = endpointUrl("https://bilskirnir.lan/", "/mcp/unity")
   assert.equal(url, "https://bilskirnir.lan/mcp/unity")
   assert.equal(endpointUrl("http://localhost:8080", "mcp/unity"), "http://localhost:8080/mcp/unity")
-  assert.equal(
-    claudeCommand("unity", url, "abc123"),
-    'claude mcp add --transport http unity https://bilskirnir.lan/mcp/unity --header "Authorization: Bearer abc123"'
-  )
-  assert.deepEqual(JSON.parse(clientConfig(url, "abc123")), {
-    type: "http",
-    url,
-    headers: { Authorization: "Bearer abc123" },
-  })
 })
 
 test("the API paths encode the names they carry", () => {

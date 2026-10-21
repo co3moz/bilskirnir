@@ -28,6 +28,8 @@ export type Dialog =
   | { kind: "mcp-token"; token: EndpointToken }
   | { kind: "mcp-endpoint-confirm"; name: string; action: "replace" | "revoke" | "delete" }
   | { kind: "mcp-tools"; name: string }
+  /** Client settings for an endpoint, or for Bilskirnir MCP at `/mcp` without a name. */
+  | { kind: "mcp-connect"; name?: string }
   | { kind: "mcp-server"; container?: string }
   | { kind: "mcp-server-remove"; container: string; name: string }
 

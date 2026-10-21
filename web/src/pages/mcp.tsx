@@ -11,6 +11,7 @@ import {
   RiPlayLine,
   RiPlugLine,
   RiRefreshLine,
+  RiShareForwardLine,
 } from "@remixicon/react"
 import { cn } from "cn"
 import { toast } from "sonner"
@@ -109,6 +110,13 @@ function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
           {t("inspector.open")}
         </DropdownMenuItem>
         <DropdownMenuItem
+          tone="info"
+          onSelect={() => openDialog({ kind: "mcp-connect", name: endpoint.name })}
+        >
+          <RiShareForwardLine />
+          {t("mcp.connect.action")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
           tone="edit"
           onSelect={() => openDialog({ kind: "mcp-endpoint", name: endpoint.name })}
         >
@@ -169,6 +177,20 @@ const columns: DataColumn<Row>[] = [
               text={endpoint.url}
               label={t("mcp.endpoint.copyUrlOf", { name: endpoint.name })}
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-xs"
+                  className="shrink-0"
+                  onClick={() => openDialog({ kind: "mcp-connect", name: endpoint.name })}
+                  aria-label={t("mcp.connect.actionOf", { name: endpoint.name })}
+                >
+                  <RiShareForwardLine />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("mcp.connect.action")}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )
@@ -674,10 +696,20 @@ export function McpPage() {
               ]}
             />
             {view === "endpoints" ? (
-              <Button size="sm" onClick={() => openDialog({ kind: "mcp-endpoint" })}>
-                <RiAddLine data-icon="inline-start" />
-                {t("mcp.endpoint.new")}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openDialog({ kind: "mcp-connect" })}
+                >
+                  <RiShareForwardLine data-icon="inline-start" />
+                  {t("mcp.connect.admin")}
+                </Button>
+                <Button size="sm" onClick={() => openDialog({ kind: "mcp-endpoint" })}>
+                  <RiAddLine data-icon="inline-start" />
+                  {t("mcp.endpoint.new")}
+                </Button>
+              </div>
             ) : view === "servers" ? (
               <Button size="sm" onClick={() => openDialog({ kind: "mcp-server" })}>
                 <RiAddLine data-icon="inline-start" />
