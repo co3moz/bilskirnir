@@ -1,7 +1,7 @@
 import * as React from "react"
 import { RiDeleteBack2Line, RiPlayLine, RiStopLine } from "@remixicon/react"
 
-import { CodeTextarea, CodeView } from "@/components/code-textarea"
+import { JsonEditor, JsonView } from "@/components/json-editor"
 import {
   Accordion,
   AccordionContent,
@@ -196,13 +196,15 @@ export function ItemDetail({
           </div>
           {mode === "json" ? (
             <div className="flex flex-col gap-1.5">
-              <CodeTextarea
-                language="json"
+              <JsonEditor
                 value={json}
-                onChange={(event) => setJson(event.target.value)}
-                aria-label={t("inspector.args.json")}
+                onChange={setJson}
+                onSubmit={submit}
+                schema={schema}
+                label={t("inspector.args.json")}
                 placeholder="{ }"
-                className="min-h-32"
+                minHeight={128}
+                maxHeight={480}
               />
               <p className="text-xs text-muted-foreground">{t("inspector.args.jsonHint")}</p>
             </div>
@@ -213,6 +215,7 @@ export function ItemDetail({
               onChange={setFields}
               errors={errorMap}
               clear={clear}
+              submit={submit}
             />
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -337,7 +340,7 @@ function Definition({ kind, item }: { kind: ItemKind; item: Item }) {
           <AccordionItem key={part.value} value={part.value}>
             <AccordionTrigger className="py-2 text-xs">{part.label}</AccordionTrigger>
             <AccordionContent className="pt-0 pb-3">
-              <CodeView language="json" value={part.text} label={part.label} />
+              <JsonView value={part.text} label={part.label} />
             </AccordionContent>
           </AccordionItem>
         ))}

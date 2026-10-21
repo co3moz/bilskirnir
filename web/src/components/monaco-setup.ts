@@ -1,0 +1,115 @@
+// Monaco, loaded the first time a JSON editor shows, so no other page carries it: the editor
+// core, the features a JSON editor uses, the JSON language service, and both workers built from
+// the page's own origin. Only JSON is registered; the other languages Monaco brings stay out.
+import * as monaco from "monaco-editor/editor/editor.api.js"
+import "monaco-editor/editor/browser/coreCommands.js"
+import "monaco-editor/editor/browser/widget/codeEditor/codeEditorWidget.js"
+import "monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js"
+import "monaco-editor/editor/contrib/clipboard/browser/clipboard.js"
+import "monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js"
+import "monaco-editor/editor/contrib/cursorUndo/browser/cursorUndo.js"
+import "monaco-editor/features/find/register.js"
+import "monaco-editor/editor/contrib/folding/browser/folding.js"
+import "monaco-editor/editor/contrib/format/browser/formatActions.js"
+import "monaco-editor/editor/contrib/gotoError/browser/gotoError.js"
+import "monaco-editor/editor/contrib/hover/browser/hoverContribution.js"
+import "monaco-editor/editor/contrib/indentation/browser/indentation.js"
+import "monaco-editor/editor/contrib/linesOperations/browser/linesOperations.js"
+import "monaco-editor/editor/contrib/links/browser/links.js"
+import "monaco-editor/editor/contrib/multicursor/browser/multicursor.js"
+import "monaco-editor/editor/contrib/placeholderText/browser/placeholderText.contribution.js"
+import "monaco-editor/editor/contrib/readOnlyMessage/browser/contribution.js"
+import "monaco-editor/editor/contrib/smartSelect/browser/smartSelect.js"
+import "monaco-editor/editor/contrib/snippet/browser/snippetController2.js"
+import "monaco-editor/editor/contrib/suggest/browser/suggestController.js"
+import "monaco-editor/editor/contrib/tokenization/browser/tokenization.js"
+import "monaco-editor/editor/contrib/wordHighlighter/browser/wordHighlighter.js"
+import "monaco-editor/editor/contrib/wordOperations/browser/wordOperations.js"
+import "monaco-editor/editor/common/standaloneStrings.js"
+// The package exports scripts only; this one brings the icon font's styles.
+import "monaco-editor/features/codicon/register.js"
+import { jsonDefaults } from "monaco-editor/languages/features/json/register.js"
+import EditorWorker from "monaco-editor/editor/editor.worker.js?worker"
+import JsonWorker from "monaco-editor/languages/features/json/json.worker.js?worker"
+
+import { diagnosticsOptions, hexColor, tokenRules } from "@/lib/json-editor"
+import type { JsonSchema } from "@/lib/schema-form"
+
+// Monaco asks for its workers here before any other way, which would need blob or remote URLs.
+globalThis.MonacoEnvironment = {
+  getWorker: (_module: string, label: string) =>
+    label === "json" ? new JsonWorker() : new EditorWorker(),
+}
+
+export const THEME = "bilskirnir"
+
+/** A rendered color as `#RRGGBB[AA]`: Monaco takes no oklch, which the interface's tokens use. */
+function rendered(color: string, canvas: CanvasRenderingContext2D) {
+  canvas.clearRect(0, 0, 1, 1)
+  canvas.fillStyle = "#000"
+  canvas.fillStyle = color
+  canvas.fillRect(0, 0, 1, 1)
+  return hexColor([...canvas.getImageData(0, 0, 1, 1).data])
+}
+
+/** The theme from the interface's current colors; the editor's own background stays clear. */
+function applyTheme() {
+  const style = getComputedStyle(document.documentElement)
+  const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })
+  if (!canvas) return
+  const color = (variable: string) =>
+    rendered(style.getPropertyValue(variable).trim() || "#808080", canvas)
+  const mixed = (variable: string, percent: number) =>
+    rendered(
+      `color-mix(in oklab, ${style.getPropertyValue(variable).trim()} ${percent}%, transparent)`,
+      canvas
+    )
+  const dark = document.documentElement.classList.contains("dark")
+  monaco.editor.defineTheme(THEME, {
+    base: dark ? "vs-dark" : "vs",
+    inherit: true,
+    rules: tokenRules(color),
+    colors: {
+      "editor.background": "#00000000",
+      "editor.foreground": color("--foreground"),
+      "editorCursor.foreground": color("--foreground"),
+      "editorLineNumber.foreground": color("--muted-foreground"),
+      "editorLineNumber.activeForeground": color("--foreground"),
+      "editor.lineHighlightBackground": "#00000000",
+      "editor.lineHighlightBorder": "#00000000",
+      "editor.selectionBackground": mixed("--primary", 25),
+      "editor.inactiveSelectionBackground": mixed("--primary", 15),
+      "editorGutter.background": "#00000000",
+      "editorWidget.background": color("--popover"),
+      "editorWidget.foreground": color("--popover-foreground"),
+      "editorWidget.border": color("--border"),
+      "editorSuggestWidget.background": color("--popover"),
+      "editorSuggestWidget.border": color("--border"),
+      "editorSuggestWidget.selectedBackground": color("--accent"),
+      "editorHoverWidget.background": color("--popover"),
+      "editorHoverWidget.border": color("--border"),
+      focusBorder: "#00000000",
+      "scrollbar.shadow": "#00000000",
+    },
+  })
+  monaco.editor.setTheme(THEME)
+}
+applyTheme()
+// The theme provider sets the class on the root; the editors follow when it changes.
+new MutationObserver(applyTheme).observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ["class"],
+})
+// The mono face measures differently before it has loaded.
+void document.fonts?.ready.then(() => monaco.editor.remeasureFonts())
+
+const schemas = new Map<string, JsonSchema>()
+
+/** Check the model at `model` against `schema`, or nothing when it has none. */
+export function setSchema(model: string, schema: JsonSchema | undefined) {
+  if (schema) schemas.set(model, schema)
+  else schemas.delete(model)
+  jsonDefaults.setDiagnosticsOptions(diagnosticsOptions(schemas))
+}
+
+export { monaco }
