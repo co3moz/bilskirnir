@@ -272,9 +272,9 @@ if [[ $access == other ]]; then
             echo "What that takes depends on the WSL networking mode."
             ;;
     esac
-    echo "The PowerShell helper bilskirnir.ps1, attached to the release next to bilskirnir.wsl, sets it up."
-    echo "Run it in PowerShell and confirm the administrator prompt:"
-    echo '  .\bilskirnir.ps1 lan enable'
+    echo "The Windows helper sets it up. Run it in PowerShell, choose to let other devices reach the"
+    echo "dashboard and confirm the administrator prompt:"
+    echo '  irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex'
     echo "The guide describes it, and the same steps by hand:"
     echo "  https://github.com/co3moz/bilskirnir/blob/master/docs/WSL_PACKAGE.md#access-from-other-devices"
 fi

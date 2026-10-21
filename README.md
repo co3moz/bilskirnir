@@ -35,18 +35,29 @@ Bilskirnir serves one administrator on a local machine or LAN.
 
 You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also need a Windows GPU driver with WSL support.
 
-1. Download `bilskirnir.wsl` from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest) and install it. In PowerShell, the first line downloads it into the current folder:
+1. Install the `bilskirnir.wsl` package from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest), in one of two ways.
+
+   **Option 1, the Windows helper.** Run this in PowerShell:
+
+   ```powershell
+   irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex
+   ```
+
+   It asks for a folder for the distribution's disk, which holds every image and container, and its maximum size, then downloads the package and installs it. Run the same line again later to start, stop, update, move or remove Bilskirnir.
+
+   **Option 2, the package by hand.** Download it and install it with WSL; `--location D:\WSL\Bilskirnir` keeps the disk on another drive:
 
    ```powershell
    curl.exe -fLo bilskirnir.wsl https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.wsl
    wsl --install --from-file .\bilskirnir.wsl
    ```
 
-2. Open **Bilskirnir** from the Start menu. The first start asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable agent access and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Bilskirnir.
+   Then open **Bilskirnir** from the Start menu.
+2. The first start follows, in the helper's window with option 1. It asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable agent access and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Bilskirnir.
 3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `bilskirnir mcp` shows them again.
 4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 
-WSL stops a distribution shortly after its last window closes; [Keep it running](docs/WSL_PACKAGE.md#keep-it-running) explains how to keep Bilskirnir available. The [WSL package guide](docs/WSL_PACKAGE.md) covers the `bilskirnir` command, updates, also from the dashboard, and removal.
+WSL stops a distribution shortly after its last window closes; the helper's **Start** keeps it running and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `bilskirnir` command, updates, also from the dashboard, and removal.
 
 ## Custom installation
 

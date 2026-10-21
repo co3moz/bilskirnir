@@ -26,7 +26,7 @@ esac
 exit 0
 """
 
-LAN_ENABLE = "\n  .\\bilskirnir.ps1 lan enable\n"
+LAN_ENABLE = "\n  irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex\n"
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
@@ -72,7 +72,7 @@ class FirstStartTest(unittest.TestCase):
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
-        self.assertNotIn("lan enable", result.stdout)
+        self.assertNotIn("bilskirnir.ps1", result.stdout)
 
     def test_other_devices_get_the_windows_step_of_the_networking_mode(self):
         env_example = self.install / ".env.example"
