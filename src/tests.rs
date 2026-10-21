@@ -413,6 +413,15 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     // Agents reached for docker and wsl on the host when a client hid a returned image. The
     // instructions must steer them to the download link instead, and the guide must document it.
     assert!(instructions.contains("download_url") && instructions.contains("wsl"));
+    // Agents wrote their own install scripts for toolchains a template already builds, since no
+    // tool lists templates. The instructions and build_image must point them at the list.
+    let build = tools.iter().find(|t| t["name"] == "build_image").unwrap();
+    for text in [
+        instructions.as_str(),
+        build["description"].as_str().unwrap(),
+    ] {
+        assert!(text.contains("templates_url") && text.contains("template_id"));
+    }
     let guide = include_str!("../docs/MCP.md");
     for tool in tools {
         let name = tool["name"].as_str().unwrap();
@@ -422,6 +431,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         );
     }
     assert!(guide.contains("`download_url`"));
+    assert!(guide.contains("## Build from a template") && guide.contains("`templates_url`"));
     // The count went stale once already; it is stated in the guide, so it is checked from here.
     assert!(
         guide.contains(&format!("exposes {} tools", tools.len())),
