@@ -501,7 +501,7 @@ class CompletionTest(unittest.TestCase):
         script = (
             f'source "{COMPLETION}"\n'
             'COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1))\n'
-            '_bilskirnir bilskirnir "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
+            '_bilskirnir "$1" "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
             'printf "%s\\n" "${COMPREPLY[@]}"\n'
         )
         env = {**os.environ, "PATH": f"{self.dir}:{os.environ['PATH']}"}
@@ -529,6 +529,24 @@ class CompletionTest(unittest.TestCase):
         target = f"/usr/share/bash-completion/completions/{command}"
         self.assertEqual(copy_source(package, target), "wsl/bilskirnir-completion.bash")
         self.assertRegex(package, r"apt-get install [^&]*\bbash-completion\b")
+
+    def test_the_short_name_completes_like_the_command(self):
+        # b8r is a link to the command, so its help lists the same commands.
+        (self.dir / "b8r").symlink_to("bilskirnir")
+        self.assertEqual(self.complete("b8r", "re"), ["restart"])
+        registered = subprocess.run(
+            ["bash", "-c", f'source "{COMPLETION}"; complete -p b8r'], capture_output=True, text=True
+        )
+        self.assertEqual(registered.stdout.strip(), "complete -F _bilskirnir b8r")
+
+    def test_the_package_links_the_short_name_and_its_completion(self):
+        # Completing b8r loads completions/b8r, which is the command's completion file and registers both names.
+        package = (ROOT / "wsl/Dockerfile").read_text()
+        cli = Path(re.search(r"^CLI=(\S+)$", CLI.read_text(), re.M).group(1))
+        completions = "/usr/share/bash-completion/completions"
+        self.assertEqual(copy_source(package, f"{completions}/{cli.name}"), "wsl/bilskirnir-completion.bash")
+        self.assertRegex(package, rf"\bln -s {cli.name} {cli.parent}/b8r\b")
+        self.assertRegex(package, rf"\bln -s {cli.name} {completions}/b8r\b")
 
 
 if __name__ == "__main__":
