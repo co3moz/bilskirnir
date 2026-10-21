@@ -582,3 +582,42 @@ class PortTest(unittest.TestCase):
         self.assertEqual(self.address(), "http://localhost:8080")
         (self.install / ".env").write_text("AUTH_MODE=none\n")
         self.assertEqual(self.address(), "http://localhost:8080")
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class AccessTest(unittest.TestCase):
+    """`bilskirnir status` tells who can reach the dashboard from BIND_ADDRESS, which the first start
+    sets and Compose publishes the port on, with 127.0.0.1 when it is missing or empty."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        # A running Docker and a manager that answers its health check.
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        for name in ("docker", "curl"):
+            (bin_dir / name).write_text("#!/bin/sh\nexit 0\n")
+            (bin_dir / name).chmod(0o755)
+        self.env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(self.dir), "BIND_ADDRESS": "0.0.0.0"}
+
+    def dashboard(self, settings):
+        (self.install / ".env").write_text(settings)
+        result = subprocess.run(["bash", str(self.cli), "status"], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return [line for line in result.stdout.splitlines() if line.startswith("Dashboard:")]
+
+    def test_the_status_names_who_can_reach_the_dashboard(self):
+        for settings, reach in (
+            ("AUTH_MODE=none\n", "this computer only (127.0.0.1:8080)"),
+            ("BIND_ADDRESS=\nPORT=9090\n", "this computer only (127.0.0.1:9090)"),
+            ("BIND_ADDRESS=127.0.0.1\n", "this computer only (127.0.0.1:8080)"),
+            ("BIND_ADDRESS=0.0.0.0\nPORT='9090'\n", "other devices too (0.0.0.0:9090)"),
+            ("BIND_ADDRESS='192.168.1.20'\n", "other devices too (192.168.1.20:8080)"),
+        ):
+            with self.subTest(settings=settings):
+                port = "9090" if "9090" in settings else "8080"
+                self.assertEqual(self.dashboard(settings), [f"Dashboard: http://localhost:{port}, reachable from {reach}"])

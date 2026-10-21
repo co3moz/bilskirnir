@@ -65,6 +65,17 @@ port() {
 address() {
     echo "http://localhost:$(port)"
 }
+# Who reaches the dashboard follows the address Compose publishes the port on, 127.0.0.1 unless set.
+access() {
+    local bind=
+    if [[ -f $INSTALL/.env ]]; then bind=$(setting BIND_ADDRESS); fi
+    bind=${bind:-127.0.0.1}
+    if [[ $bind == 127.* || $bind == localhost ]]; then
+        echo "this computer only ($bind:$(port))"
+    else
+        echo "other devices too ($bind:$(port))"
+    fi
+}
 # One setting from .env, without the quotes the first start puts around some values.
 setting() {
     local value
@@ -226,7 +237,7 @@ case ${1:-help} in
         if docker info >/dev/null 2>&1; then
             compose ps
             if curl -fsS "http://127.0.0.1:$(port)/healthz" >/dev/null 2>&1; then
-                echo "Dashboard: $(address)"
+                echo "Dashboard: $(address), reachable from $(access)"
             else
                 echo "The manager is not answering yet."
             fi
@@ -301,6 +312,12 @@ case ${1:-help} in
         if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
         if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
         if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
+        # Under NAT networking Windows forwards only its own localhost into WSL, whatever the bind address.
+        reach=$(access)
+        networking=$(wslinfo --networking-mode 2>/dev/null || true)
+        printf 'access:    reachable from %s, WSL networking %s' "$reach" "${networking:-unknown}"
+        if [[ $reach == other* && $networking == nat ]]; then printf '; other devices need mirrored networking or a port proxy on Windows'; fi
+        echo
         if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
         # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
@@ -340,10 +357,14 @@ case ${1:-help} in
             fi
             footer="Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
         fi
+        others=""
+        if [[ $(access) == other* ]]; then
+            others=$'\n'"  Other devices use this computer's network address in place of localhost."
+        fi
         cat <<EOF
 
 Streamable HTTP
-  URL:     $(address)/mcp$header
+  URL:     $(address)/mcp$header$others
 
 Claude Code on Windows$claude_shell:
   claude mcp add --transport http bilskirnir $(address)/mcp$claude_header
