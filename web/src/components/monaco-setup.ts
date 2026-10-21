@@ -35,10 +35,19 @@ import "monaco-editor/languages/definitions/register.all.js"
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker"
 import JsonWorker from "monaco-editor/languages/features/json/json.worker.js?worker"
 
-import { diagnosticsOptions, hexColor, tokenRules } from "@/lib/code-editor"
+import {
+  BRACKET_COLORS,
+  diagnosticsOptions,
+  hexColor,
+  MORE_FILES,
+  tokenRules,
+} from "@/lib/code-editor"
 import type { JsonSchema } from "@/lib/schema-form"
 
 // Monaco asks for its workers here before any other way, which would need blob or remote URLs.
+// Registering a language Monaco has again adds these names to the ones it already goes by.
+for (const files of MORE_FILES) monaco.languages.register(files)
+
 globalThis.MonacoEnvironment = {
   getWorker: (_module: string, label: string) =>
     label === "json" ? new JsonWorker() : new EditorWorker(),
@@ -83,6 +92,12 @@ function applyTheme() {
       "editor.selectionBackground": mixed("--primary", 25),
       "editor.inactiveSelectionBackground": mixed("--primary", 15),
       "editorGutter.background": "#00000000",
+      ...Object.fromEntries(
+        BRACKET_COLORS.map((variable, index) => [
+          `editorBracketHighlight.foreground${index + 1}`,
+          color(variable),
+        ])
+      ),
       "editorWidget.background": color("--popover"),
       "editorWidget.foreground": color("--popover-foreground"),
       "editorWidget.border": color("--border"),

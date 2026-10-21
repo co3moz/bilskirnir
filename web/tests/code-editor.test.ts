@@ -1,8 +1,9 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 
 import {
+  BRACKET_COLORS,
   diagnosticsOptions,
   editorHeight,
   editorSchema,
@@ -11,6 +12,7 @@ import {
   modelName,
   modelUri,
   monacoLanguage,
+  MORE_FILES,
   rowsHeight,
   TOKEN_COLORS,
   tokenRules,
@@ -73,6 +75,37 @@ test("a dialog's translate or a glass surface's blur keeps the editor's widgets 
   assert.equal(holdsFixed({ ...plain, willChange: "opacity" }), false)
 })
 
+test("files Monaco has no language for go to languages it has, without taking another's", () => {
+  const definitions = new URL(
+    "../node_modules/monaco-editor/esm/vs/languages/definitions/",
+    import.meta.url
+  )
+  const ids = new Set<string>()
+  const claimed = new Set<string>()
+  for (const folder of readdirSync(definitions, { withFileTypes: true })) {
+    if (!folder.isDirectory()) continue
+    const source = readFileSync(new URL(`${folder.name}/register.js`, definitions), "utf8")
+    for (const [, id] of source.matchAll(/id: "([^"]+)"/g)) ids.add(id)
+    for (const [, list] of source.matchAll(/(?:extensions|filenames): \[([^\]]*)\]/g))
+      for (const [, name] of list.matchAll(/"([^"]+)"/g)) claimed.add(name.toLowerCase())
+  }
+  assert.ok(ids.has("shell") && claimed.has(".sh"), "Monaco's own languages are read")
+  const added: string[] = []
+  for (const files of MORE_FILES) {
+    assert.ok(ids.has(files.id), `Monaco has ${files.id}`)
+    added.push(...(files.extensions ?? []), ...(files.filenames ?? []))
+  }
+  // A Monaco that learns one of these, such as TOML, should have it rather than its stand-in.
+  for (const name of added) assert.ok(!claimed.has(name.toLowerCase()), `Monaco knows ${name}`)
+  assert.equal(new Set(added).size, added.length, "each name goes to one language")
+  const language = (extension: string) =>
+    MORE_FILES.find((files) => files.extensions?.includes(extension))?.id
+  assert.equal(language(".toml"), "ini")
+  assert.equal(language(".service"), "ini")
+  assert.equal(language(".shader"), "cpp")
+  assert.equal(language(".glsl"), "cpp")
+})
+
 test("a field of some rows starts as tall as their text", () => {
   assert.equal(rowsHeight(10), 10 * 18 + 16)
 })
@@ -101,15 +134,18 @@ test("each model is checked against its own schema, and nothing is fetched", () 
 
 test("the editor's tokens take the code colors the rest of the interface uses", () => {
   const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8")
-  for (const variable of new Set(Object.values(TOKEN_COLORS)))
+  for (const variable of new Set([...Object.values(TOKEN_COLORS), ...BRACKET_COLORS]))
     assert.ok(css.includes(`${variable}:`), `index.css defines ${variable}`)
   const rules = tokenRules((variable) => (variable === "--code-string" ? "#9fd8a8" : "#ffffff"))
   assert.deepEqual(
     rules.find((rule) => rule.token === "string"),
-    { token: "string", foreground: "9fd8a8" }
+    { token: "string", foreground: "9fd8a8", fontStyle: "" }
   )
   // Comments lean, as `CodeTextarea` sets them.
   assert.equal(rules.find((rule) => rule.token === "comment")?.fontStyle, "italic")
+  // An INI section is a `metatag`, as a `#!` line is, but does not lean as one.
+  assert.equal(rules.find((rule) => rule.token === "metatag")?.fontStyle, "italic")
+  assert.equal(rules.find((rule) => rule.token === "metatag.ini")?.fontStyle, "")
   // JSON's keys are strings to Monaco, but take the color of a name.
   assert.equal(TOKEN_COLORS["string.key.json"], "--code-variable")
   assert.equal(hexColor([255, 16, 0, 255]), "#ff1000")
