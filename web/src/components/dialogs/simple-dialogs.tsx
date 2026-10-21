@@ -36,11 +36,12 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CodeTextarea } from "@/components/code-textarea"
+import { CodeEditor } from "@/components/code-editor"
 import { Textarea } from "@/components/ui/textarea"
 import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
+import { rowsHeight } from "@/lib/code-editor"
 import { closeDialog } from "@/lib/dialogs"
 import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
@@ -450,14 +451,15 @@ export function BuildImageDialog({
                       ) : (
                         <Field>
                           <FieldLabel htmlFor={`${field}-script`}>{t("compose.script")}</FieldLabel>
-                          <CodeTextarea
+                          <CodeEditor
                             id={`${field}-script`}
                             language="bash"
-                            rows={12}
+                            label={t("compose.script")}
+                            minHeight={rowsHeight(12)}
+                            maxHeight={500}
                             required
                             value={script}
-                            onChange={(event) => setScript(event.target.value)}
-                            className="max-h-[500px]"
+                            onChange={setScript}
                           />
                           <FieldDescription>{t("build.scriptHint")}</FieldDescription>
                         </Field>
@@ -562,19 +564,20 @@ function ImportConfiguration({
       <FieldGroup className="-mx-4 min-h-0 w-auto overflow-y-auto px-4 py-1">
         <Field data-invalid={!!error}>
           <FieldLabel htmlFor={`${field}-config`}>{t("build.config")}</FieldLabel>
-          <CodeTextarea
+          <CodeEditor
             id={`${field}-config`}
             language="json"
-            rows={12}
+            label={t("build.config")}
+            minHeight={rowsHeight(12)}
+            maxHeight={500}
             required
             placeholder={'{\n  "name": "Unity tools",\n  "base_image": "…",\n  "script": "…"\n}'}
             value={text}
-            onChange={(event) => {
-              setText(event.target.value)
+            onChange={(next) => {
+              setText(next)
               setError(undefined)
             }}
-            aria-invalid={!!error}
-            className="max-h-[500px]"
+            invalid={!!error}
             autoFocus
           />
           <FieldError>{error}</FieldError>

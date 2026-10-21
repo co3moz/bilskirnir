@@ -6,7 +6,7 @@ import {
   RiErrorWarningLine,
 } from "@remixicon/react"
 
-import { JsonView } from "@/components/json-editor"
+import { CodeReader } from "@/components/code-editor"
 import { CopyButton } from "@/components/copy-button"
 import {
   Accordion,
@@ -128,7 +128,8 @@ export function ResultView({
                   label={t("inspector.result.saveRaw")}
                 />
               </div>
-              <JsonView
+              <CodeReader
+                language="json"
                 value={prettyJson(shortenStrings(run.result))}
                 label={t("inspector.result.raw")}
               />
@@ -260,7 +261,8 @@ const Tag = ({ children }: { children: React.ReactNode }) => (
 /** Text, laid out as JSON when it is. */
 function TextBody({ value }: { value: string }) {
   const json = asJson(value)
-  if (json !== null) return <JsonView value={json} label={t("inspector.result.title")} />
+  if (json !== null)
+    return <CodeReader language="json" value={json} label={t("inspector.result.title")} />
   return (
     <pre className="max-h-96 overflow-auto rounded-lg bg-muted/30 p-3 font-mono text-xs break-words whitespace-pre-wrap">
       {value}
@@ -371,7 +373,11 @@ function ContentBlock({
     default:
       return (
         <Part label={head}>
-          <JsonView value={prettyJson(shortenStrings(block))} label={t("inspector.result.title")} />
+          <CodeReader
+            language="json"
+            value={prettyJson(shortenStrings(block))}
+            label={t("inspector.result.title")}
+          />
         </Part>
       )
   }
@@ -402,7 +408,8 @@ function ResourceContents({ contents }: { contents: Block }) {
           name={uri.split("/").pop() || "resource"}
         />
       ) : (
-        <JsonView
+        <CodeReader
+          language="json"
           value={prettyJson(shortenStrings(contents))}
           label={t("inspector.result.title")}
         />
@@ -457,7 +464,7 @@ function ToolResult({ result }: { result: unknown }) {
             />
           }
         >
-          <JsonView value={prettyJson(structured)} label="structuredContent" />
+          <CodeReader language="json" value={prettyJson(structured)} label="structuredContent" />
         </Part>
       )}
       {!content.length && structured === undefined && (

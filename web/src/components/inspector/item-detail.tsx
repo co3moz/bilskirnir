@@ -1,7 +1,7 @@
 import * as React from "react"
 import { RiDeleteBack2Line, RiPlayLine, RiStopLine } from "@remixicon/react"
 
-import { JsonEditor, JsonView } from "@/components/json-editor"
+import { CodeEditor, CodeReader } from "@/components/code-editor"
 import {
   Accordion,
   AccordionContent,
@@ -196,7 +196,8 @@ export function ItemDetail({
           </div>
           {mode === "json" ? (
             <div className="flex flex-col gap-1.5">
-              <JsonEditor
+              <CodeEditor
+                language="json"
                 value={json}
                 onChange={setJson}
                 onSubmit={submit}
@@ -340,7 +341,7 @@ function Definition({ kind, item }: { kind: ItemKind; item: Item }) {
           <AccordionItem key={part.value} value={part.value}>
             <AccordionTrigger className="py-2 text-xs">{part.label}</AccordionTrigger>
             <AccordionContent className="pt-0 pb-3">
-              <JsonView value={part.text} label={part.label} />
+              <CodeReader language="json" value={part.text} label={part.label} />
             </AccordionContent>
           </AccordionItem>
         ))}

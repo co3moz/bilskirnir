@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
 import { toast } from "sonner"
 
-import { CodeTextarea } from "@/components/code-textarea"
+import { CodeEditor } from "@/components/code-editor"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -35,7 +35,6 @@ import { FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Textarea } from "@/components/ui/textarea"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { downloadFile, downloadFolder } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
@@ -257,12 +256,6 @@ export function FileExplorer({
   const queue = uploads.items
 
   if (editing) {
-    const contents = {
-      "aria-label": t("files.contentsOf", { path: editing.path }),
-      value: editing.text,
-      onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) =>
-        setEditing({ ...editing, text: event.target.value }),
-    }
     return (
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -297,15 +290,16 @@ export function FileExplorer({
             </div>
           </div>
         )}
-        {editing.language ? (
-          <CodeTextarea {...contents} language={editing.language} className={paneClassName} />
-        ) : (
-          <Textarea
-            {...contents}
-            spellCheck={false}
-            className={cn("resize-none overflow-y-auto font-mono text-xs", paneClassName)}
-          />
-        )}
+        <CodeEditor
+          fill
+          label={t("files.contentsOf", { path: editing.path })}
+          language={editing.language ?? undefined}
+          path={editing.path}
+          value={editing.text}
+          onChange={(text) => setEditing((current) => current && { ...current, text })}
+          onSave={() => changed && !busy && void save()}
+          className={paneClassName}
+        />
         <FieldError>{error}</FieldError>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
