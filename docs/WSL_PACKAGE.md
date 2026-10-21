@@ -16,13 +16,32 @@ Each package installs the manager release it belongs to. The package from releas
 
 ## Install
 
-Download `bilskirnir.wsl` from a release, then either double-click it or run:
+The package installs in one of two ways. Both give the same distribution, and the Windows helper works with one installed either way.
+
+### Option 1: the Windows helper
+
+Bilskirnir's PowerShell helper, `bilskirnir.ps1`, is published beside the package in every release and runs straight from there. In PowerShell:
 
 ```powershell
+irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex
+```
+
+`irm` downloads the helper and `iex` runs it, so nothing is saved and no script policy is in the way. While Bilskirnir is not installed, it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `bilskirnir.wsl` from the latest release, registers the **Bilskirnir** distribution and runs its first start in the same window. Run the line again later for [everything else it does](#the-windows-helper).
+
+### Option 2: the package by hand
+
+WSL installs the package by itself as well. Download it, then double-click it or run the second line; `--location D:\WSL\Bilskirnir` and `--vhd-size 200GB` choose the disk's folder and maximum size:
+
+```powershell
+curl.exe -fLo bilskirnir.wsl https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.wsl
 wsl --install --from-file .\bilskirnir.wsl
 ```
 
-Open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir`. The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters.
+Then open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilskirnir` for the first start.
+
+### First start
+
+The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters.
 
 Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
 
@@ -34,21 +53,38 @@ The setup then detects the WSL GPU device and CUDA libraries, writes the setting
 
 A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `bilskirnir start`.
 
-The bundled PowerShell helper does the same from Windows and adds auto-start:
+## The Windows helper
+
+The helper handles what has to happen outside the distribution. Run it with the same line as for installing; with Bilskirnir installed, it shows whether Bilskirnir is running and where its disk is, then a numbered list:
+
+| Entry | Command | What it does |
+| --- | --- | --- |
+| Start it and keep it running | `start` | Boots the distribution, keeps it running and starts the manager, see [Keep it running](#keep-it-running). |
+| Stop it | `stop` | Stops the manager and shuts the distribution down. |
+| Show the manager state | `status` | Runs `bilskirnir status`. |
+| Open the dashboard | `open` | Opens the dashboard in the browser. |
+| Update it to the newest release | `update` | Runs [`bilskirnir update`](#update). |
+| Move its disk to another folder | `move <folder>` | Moves the disk, see [Disk](#disk). |
+| Change its disk's maximum size | `resize <size>` | Changes the disk's maximum size, see [Disk](#disk). |
+| Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task; with the task registered, the entry removes it instead (`autostart disable`). |
+| Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution, see [Remove](#remove). |
+
+`irm | iex` cannot pass a command. To run one without the list, for example from a script, make the helper a script block and pass the command after it:
 
 ```powershell
-.\windows\bilskirnir.ps1 install -Package .\bilskirnir.wsl
-.\windows\bilskirnir.ps1 autostart enable
+& ([scriptblock]::Create((irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1))) move D:\WSL\Bilskirnir
 ```
+
+`install` takes `-Location <folder>`, `-VhdSize <size>` and `-Package <file>`, a package you already have. Every command takes `-Distro <name>` for a distribution installed under another name and `-Port <port>` for a dashboard port other than the one in `.env`, and `help` lists them all. A saved copy takes the same commands, run as `powershell -ExecutionPolicy Bypass -File .\bilskirnir.ps1 <command>` because Windows runs a saved script only when allowed to; in a clone of the repository it is `windows\bilskirnir.ps1`.
 
 ## Keep it running
 
 WSL stops a distribution shortly after its last Windows-started process ends, even though Docker runs as a systemd service inside it. Two ways keep Bilskirnir available:
 
-- `.\windows\bilskirnir.ps1 start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
-- `.\windows\bilskirnir.ps1 autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
+- The helper's `start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
+- Its `autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
 
-`.\windows\bilskirnir.ps1 stop` stops the manager and shuts the distribution down.
+The helper's `stop` stops the manager and shuts the distribution down.
 
 ## Everyday commands
 
@@ -123,11 +159,10 @@ processors=12
 swap=8GB
 ```
 
-WSL reads these settings only when the virtual machine starts, and `bilskirnir.ps1 stop` stops only this distribution. Apply them with `wsl --shutdown`, which stops every WSL distribution, then start Bilskirnir again:
+WSL reads these settings only when the virtual machine starts, and the helper's `stop` stops only this distribution. Apply them with `wsl --shutdown`, which stops every WSL distribution, then start Bilskirnir again with the helper's `start`:
 
 ```powershell
 wsl --shutdown
-.\windows\bilskirnir.ps1 start
 ```
 
 The manager comes back on its own; containers do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `bilskirnir doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `bilskirnir doctor` warns when it is below 8 GB.
@@ -136,24 +171,20 @@ A container without a memory limit can use all of the virtual machine's memory. 
 
 ### Disk
 
-The distribution's virtual disk grows as it fills, up to a maximum of 1 TB unless chosen otherwise. Images, snapshots, containers and volumes all live in it, so the Windows drive that holds the disk needs the space too. Choose the location and the maximum when installing:
+The distribution's virtual disk grows as it fills, up to a maximum of 1 TB unless chosen otherwise. Images, snapshots, containers and volumes all live in it, so the Windows drive that holds the disk needs the space too. Choose the folder and the maximum when installing: the helper asks for both, and a [package installed by hand](#option-2-the-package-by-hand) takes `--location` and `--vhd-size`.
+
+To change them later, choose **Move its disk to another folder** or **Change its disk's maximum size** in the [helper](#the-windows-helper), or give it the command directly:
 
 ```powershell
-wsl --install --from-file .\bilskirnir.wsl --location D:\WSL\Bilskirnir --vhd-size 200GB
+& ([scriptblock]::Create((irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1))) move D:\WSL\Bilskirnir
+& ([scriptblock]::Create((irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1))) resize 200GB
 ```
 
-To change them later, stop the distribution first; other distributions can keep running:
-
-```powershell
-.\windows\bilskirnir.ps1 stop
-wsl --manage Bilskirnir --resize 200GB
-wsl --manage Bilskirnir --move D:\WSL\Bilskirnir
-.\windows\bilskirnir.ps1 start
-```
+WSL changes a disk only while nothing has it attached, and it keeps a stopped distribution's disk attached until the WSL virtual machine shuts down. So both stop the manager and run `wsl --shutdown`, which stops every WSL distribution; when others are running, they name them and ask first. Then they change the disk and start Bilskirnir again. The manager comes back on its own; containers do not, so start them again from the dashboard. A move to another drive copies the whole disk, which takes a while for a large one, and the folder must not hold a disk already.
 
 A smaller maximum works only while the data still fits. `bilskirnir doctor` shows the space left before the maximum and warns below 10 GB.
 
-The disk file does not shrink when images or containers are deleted. Two ways return freed space to Windows, and they exclude each other: run `wsl --manage Bilskirnir --set-sparse true` once, which WSL still labels experimental, or run `wsl --manage Bilskirnir --compact` on the stopped distribution from time to time. A sparse disk cannot be compacted.
+The disk file does not shrink when images or containers are deleted. Two ways return freed space to Windows, and they exclude each other: run `wsl --manage Bilskirnir --set-sparse true` once, which WSL still labels experimental, or run `wsl --manage Bilskirnir --compact` from time to time. Both need the disk released as above: run the helper's `stop` and `wsl --shutdown` first and its `start` afterwards. A sparse disk cannot be compacted.
 
 ## What the package decides for you
 
@@ -187,8 +218,8 @@ The package is produced from `wsl/Dockerfile` with Docker:
 scripts/build-wsl.sh dist/bilskirnir.wsl
 ```
 
-The script builds the root filesystem image, exports it with `docker export` and compresses it with `xz -9e`, which makes the package about 40% smaller than gzip; `WSL_COMPRESS=gzip` builds faster but produces a larger file. The package installs the manager version in `Cargo.toml`; `BILSKIRNIR_VERSION=1.2.0` builds one for another published release, and `BILSKIRNIR_VERSION=latest` one that follows `master`. It refuses to package a world-writable file, which a `COPY` without `--chmod` produces from a checkout on a Windows drive, or a directory its owner cannot enter, which `COPY --chmod=0644` produces when it creates the destination directory. Release tags publish the package as a GitHub release asset once the tag's images are published. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command, `keepalive.sh` is the process the Windows launcher keeps open, `daemon.json` configures Docker and `firewall-watch.sh` with `bilskirnir-firewall.service` restores Docker's firewall rules. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, `kmod-static-nodes`, which has no module tree in WSL, and `nftables`, which flushes the firewall shared by all distributions; it also installs the systemd user-session packages so launches do not warn about a missing user session.
+The script builds the root filesystem image, exports it with `docker export` and compresses it with `xz -9e`, which makes the package about 40% smaller than gzip; `WSL_COMPRESS=gzip` builds faster but produces a larger file. The package installs the manager version in `Cargo.toml`; `BILSKIRNIR_VERSION=1.2.0` builds one for another published release, and `BILSKIRNIR_VERSION=latest` one that follows `master`. It refuses to package a world-writable file, which a `COPY` without `--chmod` produces from a checkout on a Windows drive, or a directory its owner cannot enter, which `COPY --chmod=0644` produces when it creates the destination directory. Release tags publish the package and the Windows helper, `windows/bilskirnir.ps1`, as GitHub release assets once the tag's images are published. The files under `wsl/` define the distribution: `wsl.conf` enables systemd, `wsl-distribution.conf` names the distribution and points WSL at the first-start script, `oobe.sh` performs that setup, `bilskirnir` is the management command, `keepalive.sh` is the process the Windows launcher keeps open, `daemon.json` configures Docker and `firewall-watch.sh` with `bilskirnir-firewall.service` restores Docker's firewall rules. The image masks `systemd-firstboot`, which would otherwise wait on the console for a machine ID and block every other unit, `kmod-static-nodes`, which has no module tree in WSL, and `nftables`, which flushes the firewall shared by all distributions; it also installs the systemd user-session packages so launches do not warn about a missing user session.
 
 ## Remove
 
-`.\windows\bilskirnir.ps1 uninstall` removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.
+The helper's **Remove it with its images, containers and volumes** (`uninstall`) removes the auto-start task and, after confirmation, unregisters the distribution. Unregistering deletes its Docker images, containers and named volumes, so export anything you want to keep first.
