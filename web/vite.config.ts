@@ -47,6 +47,8 @@ function notices(): Plugin {
     "novnc-LICENSE.txt": "node_modules/@novnc/novnc/LICENSE.txt",
     "oxanium-LICENSE.txt": "node_modules/@fontsource-variable/oxanium/LICENSE",
     "geist-mono-LICENSE.txt": "node_modules/@fontsource-variable/geist-mono/LICENSE",
+    // Monaco bundles code of other projects, whose notices it ships beside its license.
+    "monaco-third-party-notices.txt": "node_modules/monaco-editor/ThirdPartyNotices.txt",
     "third-party-notices.txt": "../THIRD_PARTY_NOTICES.md",
     "LICENSE.txt": "../LICENSE",
   }

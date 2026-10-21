@@ -37,6 +37,12 @@ concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Every image is published to Docker Hub too, under this account with the `DOCKER_HUB_TOKEN`
+# secret. Docker Hub has no nested repositories, so a desktop image is `bilskirnir-ubuntu-xfce`
+# there. The catalog and the installation files keep naming GHCR.
+env:
+  DOCKER_HUB_USER: co3moz
+
 jobs:
   checks:
     runs-on: ubuntu-24.04
@@ -103,12 +109,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
       - name: Image names
         id: names
         env:
           REPOSITORY: ${{ github.repository }}
         run: |
           echo "image=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          hub="docker.io/$DOCKER_HUB_USER/${REPOSITORY#*/}"
+          echo "hub=${hub,,}" >> "$GITHUB_OUTPUT"
           # A release manager downloads the desktop images published under its own version.
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             echo "release=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
@@ -117,7 +131,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ steps.names.outputs.image }}
+          images: |
+            ${{ steps.names.outputs.image }}
+            ${{ steps.names.outputs.hub }}
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
@@ -140,11 +156,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=manager
           cache-to: type=gha,scope=manager,mode=max
-      - name: Verify registry manifest
+      - name: Verify the registry manifests
         env:
           IMAGE: ${{ steps.names.outputs.image }}
+          HUB: ${{ steps.names.outputs.hub }}
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: docker buildx imagetools inspect "$IMAGE@$DIGEST"
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$HUB@$DIGEST"
       - name: Published image
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
@@ -171,6 +190,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
       - name: Image names
         id: names
         env:
@@ -178,11 +203,16 @@ jobs:
         run: |
           echo "xfce=ghcr.io/${REPOSITORY,,}/ubuntu-xfce" >> "$GITHUB_OUTPUT"
           echo "gnome=ghcr.io/${REPOSITORY,,}/ubuntu-gnome" >> "$GITHUB_OUTPUT"
+          hub="docker.io/$DOCKER_HUB_USER/${REPOSITORY#*/}"
+          echo "xfce-hub=${hub,,}-ubuntu-xfce" >> "$GITHUB_OUTPUT"
+          echo "gnome-hub=${hub,,}-ubuntu-gnome" >> "$GITHUB_OUTPUT"
       - name: XFCE tags and labels
         id: xfce-meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ steps.names.outputs.xfce }}
+          images: |
+            ${{ steps.names.outputs.xfce }}
+            ${{ steps.names.outputs.xfce-hub }}
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
@@ -210,11 +240,14 @@ jobs:
             type=gha,scope=desktop-xfce
             type=gha,scope=desktop-gnome
           cache-to: type=gha,scope=desktop-xfce,mode=max
-      - name: Verify the XFCE registry manifest
+      - name: Verify the XFCE registry manifests
         env:
           IMAGE: ${{ steps.names.outputs.xfce }}
+          HUB: ${{ steps.names.outputs.xfce-hub }}
           DIGEST: ${{ steps.xfce.outputs.digest }}
-        run: docker buildx imagetools inspect "$IMAGE@$DIGEST"
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$HUB@$DIGEST"
       - name: Published XFCE image
         env:
           TAGS: ${{ steps.xfce-meta.outputs.tags }}
@@ -224,7 +257,9 @@ jobs:
         id: gnome-meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ steps.names.outputs.gnome }}
+          images: |
+            ${{ steps.names.outputs.gnome }}
+            ${{ steps.names.outputs.gnome-hub }}
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
@@ -250,11 +285,14 @@ jobs:
             type=gha,scope=desktop-gnome
             type=gha,scope=desktop-xfce
           cache-to: type=gha,scope=desktop-gnome,mode=max
-      - name: Verify the GNOME registry manifest
+      - name: Verify the GNOME registry manifests
         env:
           IMAGE: ${{ steps.names.outputs.gnome }}
+          HUB: ${{ steps.names.outputs.gnome-hub }}
           DIGEST: ${{ steps.gnome.outputs.digest }}
-        run: docker buildx imagetools inspect "$IMAGE@$DIGEST"
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$HUB@$DIGEST"
       - name: Published GNOME image
         env:
           TAGS: ${{ steps.gnome-meta.outputs.tags }}

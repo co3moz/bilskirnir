@@ -7,7 +7,7 @@ import {
 } from "@remixicon/react"
 import { cn } from "cn"
 
-import { CodeView } from "@/components/code-textarea"
+import { JsonView } from "@/components/json-editor"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -166,7 +166,7 @@ function Row({ entry }: { entry: LogEntry }) {
       {open && (
         <div className="flex flex-col gap-1 px-3 pb-3">
           {json !== null ? (
-            <CodeView language="json" value={json} className="max-h-72" />
+            <JsonView value={json} label={entry.label} maxHeight={288} />
           ) : (
             <pre className="max-h-72 overflow-auto rounded-lg bg-muted/30 p-2 font-mono text-xs break-words whitespace-pre-wrap">
               {entry.text}
