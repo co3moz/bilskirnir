@@ -15,7 +15,7 @@ MCP_ENABLED: "true"
 MCP_TOKEN: "your-random-token"
 ```
 
-With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable MCP and how agents authenticate; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
+With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable MCP, how agents authenticate and whether other devices may reach the endpoint; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
 
 Configure your MCP client with:
 

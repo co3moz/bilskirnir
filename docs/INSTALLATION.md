@@ -73,7 +73,7 @@ Agent access uses a separate token rather than the dashboard session, unless `MC
 
 For the minimal Compose example, change the port binding to `0.0.0.0:8080:8080`. For the full manifests, set `BIND_ADDRESS=0.0.0.0`. Open the manager using the host's LAN address.
 
-The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings.
+The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings. The WSL package asks at first start whether other devices may connect and [describes the Windows side](WSL_PACKAGE.md#access-from-other-devices).
 
 Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user container permissions.
 

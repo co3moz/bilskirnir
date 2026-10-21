@@ -45,6 +45,10 @@ COPY --chmod=0644 wsl/bilskirnir-update.path /etc/systemd/system/bilskirnir-upda
 COPY --chmod=0644 wsl/bilskirnir-update.service /etc/systemd/system/bilskirnir-update.service
 COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY --chmod=0644 wsl/bilskirnir-completion.bash /usr/share/bash-completion/completions/bilskirnir
+# b8r is a short name for the command, with the same completion. Both are links by name, so the
+# command an update installs answers to b8r as well.
+RUN ln -s bilskirnir /usr/local/bin/b8r \
+    && ln -s bilskirnir /usr/share/bash-completion/completions/b8r
 COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
 # A package installs the manager release it was built for, however many newer ones exist by then;
 # `bilskirnir update` moves an installation forward. The first start copies this file to .env.
