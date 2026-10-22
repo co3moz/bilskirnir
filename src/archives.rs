@@ -706,7 +706,7 @@ fn file_names(name: &str) -> (String, String) {
 }
 
 /// The image `docker load --quiet` reports, by ID or, should it apply a name after all, by name.
-fn loaded_image(output: &str) -> anyhow::Result<String> {
+pub(crate) fn loaded_image(output: &str) -> anyhow::Result<String> {
     let mut images: Vec<&str> = output
         .lines()
         .filter_map(|line| {

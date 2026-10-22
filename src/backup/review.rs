@@ -1,0 +1,361 @@
+//! Checking a backup before anything is restored. A backup is an upload like any other, so its
+//! manifest and records are held to the rules the routes that create the same things apply; and
+//! what it would create is compared with what this installation already has. A restore adds to
+//! an installation and never replaces anything in it: one name it would take that is already
+//! taken refuses the whole restore before anything is created, so no backup is half restored
+//! over items of the same name.
+use super::manifest::{FORMAT, KIND, Manifest, PartKind, Records};
+use crate::{
+    desktop_mcp::endpoint_name,
+    model::{build_scripts, image_ref, mount_target, template_id, volume_name},
+};
+use anyhow::{Context, Result, bail};
+use serde::Serialize;
+use std::collections::{BTreeSet, HashSet};
+
+/// Record ids name Docker containers, networks and tags, so they keep to lowercase letters,
+/// digits and dashes, as the ids the manager gives them do.
+pub(crate) fn record_id(id: &str) -> bool {
+    (1..=64).contains(&id.len())
+        && id.as_bytes()[0].is_ascii_alphanumeric()
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+/// The tag a restored saved image gets: Bilskirnir's own, after its record, whatever tag it had.
+/// No other name is ever applied, so a backup cannot put an image under a catalog reference or
+/// any other name this installation uses.
+pub(crate) fn image_reference(kind: &str, id: &str) -> String {
+    let repository = match kind {
+        "build" => "custom",
+        "snapshot" => "snapshot",
+        _ => "imported",
+    };
+    format!("bilskirnir/{repository}:{id}")
+}
+
+/// What an image record's kind becomes: an image registered from the host it came from was there
+/// before Bilskirnir, but here the restore put it, so it goes like an imported archive.
+pub(crate) fn image_kind(kind: &str) -> &str {
+    if kind == "import" { "archive" } else { kind }
+}
+
+/// The tag of the commit that carries a restored container's files.
+pub(crate) fn files_reference(container: &str) -> String {
+    format!("bilskirnir/container:restored-{container}")
+}
+
+/// The Docker names a container takes: its container, the one a settings change sets aside, and
+/// its two networks.
+pub(crate) fn docker_names(container: &str) -> [String; 4] {
+    [
+        format!("bilskirnir-{container}"),
+        format!("bilskirnir-{container}-previous"),
+        format!("bilskirnir-{container}-private"),
+        format!("bilskirnir-{container}-egress"),
+    ]
+}
+
+/// Check the manifest on its own: that it is a backup this release reads, that its names are
+/// ones the manager would give, and that its parts are the ones it says it carries.
+pub(crate) fn check_manifest(manifest: &Manifest) -> Result<()> {
+    if manifest.kind != KIND {
+        bail!("The file is not a Bilskirnir backup");
+    }
+    if manifest.format != FORMAT {
+        bail!(
+            "The backup was written by Bilskirnir {} in a layout this release does not read; restore it with that release or a newer one",
+            manifest.version
+        );
+    }
+    if manifest.parts.len() > super::format::PART_LIMIT {
+        bail!("The backup has too many parts");
+    }
+    let mut containers = HashSet::new();
+    for container in &manifest.containers {
+        if !record_id(&container.id) || !containers.insert(container.id.as_str()) {
+            bail!(
+                "The backup names an invalid container id {:?}",
+                container.id
+            );
+        }
+    }
+    let mut images = HashSet::new();
+    for image in &manifest.images {
+        if !record_id(&image.id) || !images.insert(image.id.as_str()) {
+            bail!("The backup names an invalid image id {:?}", image.id);
+        }
+    }
+    let mut endpoints = HashSet::new();
+    for name in &manifest.endpoints {
+        endpoint_name(name)?;
+        if !endpoints.insert(name.as_str()) {
+            bail!("The backup names the endpoint {name} twice");
+        }
+    }
+    let mut volumes = HashSet::new();
+    for volume in &manifest.volumes {
+        volume_name(&volume.name)?;
+        if !volumes.insert(volume.name.as_str()) {
+            bail!("The backup names the volume {} twice", volume.name);
+        }
+        if volume.owner.as_ref().is_some_and(|owner| !record_id(owner))
+            || volume
+                .parameter
+                .as_ref()
+                .is_some_and(|p| p.is_empty() || p.len() > 128 || p.contains([',', '\n', '\0']))
+        {
+            bail!("The backup names invalid owner labels for {}", volume.name);
+        }
+    }
+    let mut parts = HashSet::new();
+    for part in &manifest.parts {
+        let carried = match part.kind {
+            PartKind::Image => manifest
+                .images
+                .iter()
+                .any(|i| i.id == part.target && i.image),
+            PartKind::Files => manifest
+                .containers
+                .iter()
+                .any(|c| c.id == part.target && c.files),
+            PartKind::Volume => manifest
+                .volumes
+                .iter()
+                .any(|v| v.name == part.target && v.included),
+        };
+        if !carried || !parts.insert((part.kind, part.target.as_str())) {
+            bail!("The backup's parts do not match its manifest");
+        }
+    }
+    let expected = manifest.images.iter().filter(|i| i.image).count()
+        + manifest.containers.iter().filter(|c| c.files).count()
+        + manifest.volumes.iter().filter(|v| v.included).count();
+    if expected != manifest.parts.len() {
+        bail!("The backup's parts do not match its manifest");
+    }
+    if manifest
+        .secrets_left_out
+        .iter()
+        .any(|id| !containers.contains(id.as_str()))
+    {
+        bail!("The backup's manifest names an unknown container");
+    }
+    Ok(())
+}
+
+/// Check the records against the manifest and against what the routes that make the same records
+/// accept. Nothing in them is trusted for a Docker name: those come from the ids again.
+pub(crate) fn check_records(manifest: &Manifest, records: &Records) -> Result<()> {
+    let same = |a: BTreeSet<&str>, b: BTreeSet<&str>, what: &str| {
+        if a != b {
+            bail!("The backup's {what} do not match its manifest");
+        }
+        Ok(())
+    };
+    same(
+        records.containers.iter().map(|c| c.id.as_str()).collect(),
+        manifest.containers.iter().map(|c| c.id.as_str()).collect(),
+        "containers",
+    )?;
+    same(
+        records.images.iter().map(|i| i.id.as_str()).collect(),
+        manifest.images.iter().map(|i| i.id.as_str()).collect(),
+        "images",
+    )?;
+    same(
+        records.endpoints.iter().map(|e| e.name.as_str()).collect(),
+        manifest.endpoints.iter().map(String::as_str).collect(),
+        "endpoints",
+    )?;
+    if records.containers.len() != manifest.containers.len()
+        || records.images.len() != manifest.images.len()
+        || records.endpoints.len() != manifest.endpoints.len()
+    {
+        bail!("The backup holds a record twice");
+    }
+    for container in &records.containers {
+        let named =
+            |error: anyhow::Error| error.context(format!("Container {}", container.spec.name));
+        container.spec.validate().map_err(named)?;
+        for mount in container.compose_mounts() {
+            volume_name(&mount.volume)
+                .and_then(|_| mount_target(&mount.target))
+                .map_err(named)?;
+        }
+    }
+    for image in &records.images {
+        let named = |error: anyhow::Error| error.context(format!("Image {}", image.name));
+        if image.name.trim().is_empty()
+            || image.name.chars().count() > 100
+            || image.description.len() > 4096
+        {
+            bail!("The backup holds an image with an invalid name or description");
+        }
+        if let Some(compose) = &image.compose {
+            compose.validate().map_err(named)?;
+        }
+        if let Some(icon) = &image.icon {
+            icon.validate().map_err(named)?;
+        }
+        if let Some(build) = &image.build {
+            image_ref(&build.base_image)
+                .and_then(|_| build_scripts(&build.script, &build.parts))
+                .and_then(|_| crate::desktop_mcp::check_declarations(&build.mcp))
+                .map_err(named)?;
+        }
+        for id in &image.template_ids {
+            template_id(id).map_err(named)?;
+        }
+    }
+    let mut pinned = HashSet::new();
+    for compose in &records.composes {
+        if !pinned.insert(compose.container_id.as_str())
+            || !manifest
+                .containers
+                .iter()
+                .any(|c| c.id == compose.container_id)
+        {
+            bail!("The backup holds a compose of an unknown container");
+        }
+        compose.pinned.compose.validate()?;
+    }
+    for endpoint in &records.endpoints {
+        let mut aliases = HashSet::new();
+        for grant in &endpoint.grants {
+            if !manifest
+                .containers
+                .iter()
+                .any(|c| c.id == grant.container_id)
+                || !crate::desktop_mcp::slug(&grant.alias, 24)
+                || !aliases.insert(grant.alias.as_str())
+            {
+                bail!(
+                    "The endpoint {} names a container the backup does not hold",
+                    endpoint.name
+                );
+            }
+        }
+        if endpoint
+            .token_hash
+            .as_ref()
+            .is_some_and(|hash| hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            bail!("The endpoint {} has an invalid token hash", endpoint.name);
+        }
+    }
+    Ok(())
+}
+
+/// What this installation has that a restore would collide with.
+#[derive(Debug, Default)]
+pub(crate) struct Present {
+    /// Record ids and endpoint names in the database.
+    pub containers: HashSet<String>,
+    pub images: HashSet<String>,
+    pub composes: HashSet<String>,
+    pub endpoints: HashSet<String>,
+    /// Names Docker has.
+    pub docker_containers: HashSet<String>,
+    pub networks: HashSet<String>,
+    pub volumes: HashSet<String>,
+    /// Image tags as `repository:tag`.
+    pub tags: HashSet<String>,
+}
+
+/// One name a restore would take that is taken already.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub(crate) struct Conflict {
+    /// `container`, `image`, `endpoint` or `volume`.
+    pub kind: &'static str,
+    /// What the backup calls it.
+    pub name: String,
+}
+
+/// A backup compared with this installation.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub(crate) struct Review {
+    pub conflicts: Vec<Conflict>,
+    /// Volumes the containers mount that the backup does not carry and this installation lacks.
+    pub missing_volumes: Vec<String>,
+}
+
+pub(crate) fn review(manifest: &Manifest, present: &Present) -> Review {
+    let mut conflicts = BTreeSet::new();
+    for container in &manifest.containers {
+        let taken = present.containers.contains(&container.id)
+            || present.composes.contains(&container.id)
+            || present.tags.contains(&files_reference(&container.id))
+            || docker_names(&container.id).iter().any(|name| {
+                present.docker_containers.contains(name) || present.networks.contains(name)
+            });
+        if taken {
+            conflicts.insert(Conflict {
+                kind: "container",
+                name: container.name.clone(),
+            });
+        }
+    }
+    for image in &manifest.images {
+        // The kind decides the tag; any of them taken is a conflict, whichever it would be.
+        let taken = present.images.contains(&image.id)
+            || ["build", "snapshot", "archive"].iter().any(|kind| {
+                image.image && present.tags.contains(&image_reference(kind, &image.id))
+            });
+        if taken {
+            conflicts.insert(Conflict {
+                kind: "image",
+                name: image.name.clone(),
+            });
+        }
+    }
+    for name in &manifest.endpoints {
+        if present.endpoints.contains(name) {
+            conflicts.insert(Conflict {
+                kind: "endpoint",
+                name: name.clone(),
+            });
+        }
+    }
+    let mut missing_volumes = Vec::new();
+    for volume in &manifest.volumes {
+        let here = present.volumes.contains(&volume.name);
+        if volume.included && here {
+            conflicts.insert(Conflict {
+                kind: "volume",
+                name: volume.name.clone(),
+            });
+        } else if !volume.included && !here {
+            missing_volumes.push(volume.name.clone());
+        }
+    }
+    Review {
+        conflicts: conflicts.into_iter().collect(),
+        missing_volumes,
+    }
+}
+
+/// The refusal a restore answers with when names are taken.
+pub(crate) fn conflict_message(conflicts: &[Conflict]) -> String {
+    let names = conflicts
+        .iter()
+        .map(|c| format!("{} {}", c.kind, c.name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "This installation already has what the backup would create: {names}. Delete or rename them first, or restore into a new installation"
+    )
+}
+
+/// The manifest a request or an upload sent, read with its limit.
+pub(crate) fn parse_manifest(data: &[u8]) -> Result<Manifest> {
+    let manifest: Manifest =
+        serde_json::from_slice(data).context("The file is not a Bilskirnir backup")?;
+    check_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+#[cfg(test)]
+#[path = "review_tests.rs"]
+mod tests;

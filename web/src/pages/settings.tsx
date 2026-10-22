@@ -8,6 +8,7 @@ import {
 } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { BackupCard } from "@/components/backup-card"
 import { PageBody, SectionHeading } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -220,6 +221,10 @@ export function SettingsPage() {
       <SectionHeading title={t("settings.version")} />
       <div className="px-4 lg:px-6">
         <VersionCard />
+      </div>
+      <SectionHeading title={t("backup.title")} description={t("backup.description")} />
+      <div className="px-4 lg:px-6">
+        <BackupCard />
       </div>
       <SectionHeading
         title={t("settings.configuration")}

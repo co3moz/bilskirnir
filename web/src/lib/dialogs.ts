@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 
+import type { BackupManifest, BackupReview } from "./backup"
 import type { ImportedBuild } from "./build-config"
 import type { EndpointToken } from "./types"
 
@@ -33,6 +34,14 @@ export type Dialog =
   | { kind: "mcp-server"; container?: string }
   | { kind: "mcp-server-remove"; container: string; name: string }
   | { kind: "update" }
+  /** The confirmation of a restore, with what the backup holds and what is in its way. */
+  | {
+      kind: "restore"
+      file: File
+      manifest: BackupManifest
+      review: BackupReview
+      limit: number
+    }
 
 type State = { dialog: Dialog | null; open: boolean; seq: number }
 

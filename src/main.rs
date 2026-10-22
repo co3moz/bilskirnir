@@ -3,6 +3,7 @@ mod apps;
 mod archives;
 mod audio;
 mod auth;
+mod backup;
 mod capture;
 mod catalog;
 mod compose;
@@ -96,6 +97,14 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/system", get(api::system))
         .route("/api/update", get(releases::status).post(releases::start))
         .route("/api/update/check", post(releases::check))
+        .route("/api/backup", get(backup::export))
+        .route("/api/backup/check", post(backup::check))
+        .route(
+            "/api/backup/restore",
+            post(backup::restore).layer(tower_http::limit::RequestBodyLimitLayer::new(
+                usize::try_from(app.config.archive_limit).unwrap_or(usize::MAX),
+            )),
+        )
         .route("/api/usage", get(usage::all))
         .route("/api/containers", get(api::containers).post(api::create))
         .route(

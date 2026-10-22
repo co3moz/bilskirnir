@@ -19,6 +19,7 @@ The name is a nod to Thor.
 - **Composes** that ask for values such as an account when a container is created, and run a setup script with them.
 - **Templates**: ready-made images from the project wiki, installed with their script shown for review, and an icon for every saved image.
 - **Volumes** that keep your files after a container is deleted.
+- **Backup and restore** of the whole installation in one file, to move it to another computer with its containers, files, images, volumes and agent endpoints.
 - **Drag and drop uploads** into a container.
 - **An interface in English, German, French, Spanish and Turkish**, following the browser's language.
 

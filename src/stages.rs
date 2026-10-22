@@ -41,10 +41,33 @@ pub(crate) const RECREATE_STAGES: [(&str, &str); 4] = [
     ("cleanup", "Cleaning up"),
 ];
 
+/// The stages of an installation backup. A part that is not in the backup skips its stage.
+pub(crate) const BACKUP_STAGES: [(&str, &str); 4] = [
+    ("plan", "Reading the installation"),
+    ("images", "Transferring the saved images"),
+    ("files", "Transferring the containers' files"),
+    ("volumes", "Transferring the volumes"),
+];
+
+/// The stages of a restore. The upload goes on through `volumes`; the last two follow it.
+pub(crate) const RESTORE_STAGES: [(&str, &str); 6] = [
+    ("verify", "Checking the backup against this installation"),
+    ("images", "Transferring the saved images"),
+    ("files", "Transferring the containers' files"),
+    ("volumes", "Transferring the volumes"),
+    ("records", "Saving the records"),
+    ("containers", "Creating the containers"),
+];
+
 /// Every job's stages. The interface names a stage by its name alone, so a name two jobs share is
 /// the same step with the same words.
-pub(crate) const JOB_STAGES: [&[(&str, &str)]; 3] =
-    [&BUILD_STAGES, &SNAPSHOT_STAGES, &RECREATE_STAGES];
+pub(crate) const JOB_STAGES: [&[(&str, &str)]; 5] = [
+    &BUILD_STAGES,
+    &SNAPSHOT_STAGES,
+    &RECREATE_STAGES,
+    &BACKUP_STAGES,
+    &RESTORE_STAGES,
+];
 
 /// A longer line is no stage marker, so it is logged without waiting for its end.
 const LINE_LIMIT: usize = 65_536;

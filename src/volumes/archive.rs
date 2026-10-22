@@ -4,6 +4,7 @@
 //! the same two helpers into each other.
 mod copy;
 mod ending;
+mod stream;
 
 use super::{Access, HELPER_LIMIT, MOUNT, Volume, helper_args, helper_error, helper_name};
 use crate::{
@@ -37,6 +38,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+pub(crate) use stream::VolumeWriter;
 use tokio::{
     io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
     process::{Child, ChildStdin},

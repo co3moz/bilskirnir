@@ -29,6 +29,33 @@ impl Db {
         let rows = stmt.query_map([kind], |r| r.get::<_, String>(0))?;
         rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
     }
+    /// Every record of `kind` with its id, oldest first, for records that do not carry their id.
+    pub fn entries<T: DeserializeOwned>(&self, kind: &str) -> Result<Vec<(String, T)>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id, data FROM records WHERE kind=?1 ORDER BY rowid")?;
+        let rows = stmt.query_map([kind], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        rows.map(|r| {
+            let (id, data) = r?;
+            Ok((id, serde_json::from_str(&data)?))
+        })
+        .collect()
+    }
+    /// Insert records that must arrive together, as `(kind, id, value)`, in one transaction: all
+    /// of them or none. An existing record is never replaced; one of the same kind and id fails it.
+    pub fn insert_all(&self, records: &[(&str, &str, serde_json::Value)]) -> Result<()> {
+        let mut conn = self.0.lock().unwrap();
+        let transaction = conn.transaction()?;
+        for (kind, id, value) in records {
+            transaction.execute(
+                "INSERT INTO records(kind,id,data) VALUES(?1,?2,?3)",
+                params![kind, id, serde_json::to_string(value)?],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
     pub fn remove(&self, kind: &str, id: &str) -> Result<()> {
         self.0.lock().unwrap().execute(
             "DELETE FROM records WHERE kind=?1 AND id=?2",

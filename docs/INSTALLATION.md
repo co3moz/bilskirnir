@@ -132,7 +132,7 @@ New containers use the updated catalog images. Existing containers and snapshots
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |
 | Saved image and snapshot layers | The host Docker Engine's image store | Preserved. |
 
-A snapshot alone is not a backup of the whole installation. It excludes volumes and the manager database. Protect the manager data volume, your project volumes and any images you need to recreate containers.
+A snapshot alone is not a backup of the whole installation: it excludes volumes and the manager database. A backup from **Settings** is one. It carries the manager's records and, as you choose, the saved images, each container's files and the named volumes; [moving to another computer](#move-to-another-computer) describes it. The settings in `.env` and the catalog images stay out of it.
 
 Uploads are temporarily staged in the manager data volume. The manager accepts two transfers at once, each with a one-hour limit. Manager-side temporary upload files are removed after completion or cancellation, and leftover staging files are cleaned on startup. Make room for staging as well as the destination files.
 
@@ -161,6 +161,16 @@ Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-shor
 If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
 
 If file uploads report a permission error, check that the chosen volume is writable by UID/GID 1001:1001. Raising the upload size limit will not fix destination permissions.
+
+## Move to another computer
+
+A backup moves an installation, A, to another computer or a fresh installation, B. What it carries and how it streams are described in [the API guide](API.md#backup-and-restore).
+
+1. On A, open **Settings** and, under **Backup and restore**, tick **Saved images**, **Containers' files** and **Volumes** to move everything. **Secret values** adds the values of the composes' secret parameters; without them, a reset on B runs those setups without the values. Select **Download backup**. Containers may keep running; Docker pauses each desktop briefly while it saves its files.
+2. Copy the file to B. It is not encrypted. It holds your files, the hashes of the MCP endpoints' tokens and, when ticked, secret values in plain text, so keep it where only you can read it, encrypt it with a tool such as `gpg --symmetric` or 7-Zip before it crosses a network share, and delete it once B works. Nothing is staged on either manager's disk: A streams the backup into your download, and B loads it into Docker as it uploads, so B needs room for the images, files and volumes themselves.
+3. Install Bilskirnir on B with a new data volume. Settings do not travel in the backup, since they live in `.env` outside the manager. In the WSL package, run `bilskirnir settings` on B and copy the values you changed in A's `/opt/bilskirnir/.env`, such as `ADMIN_PASSWORD`, `MCP_TOKEN` and `BIND_ADDRESS`, then `bilskirnir restart`; with Compose, copy `.env` and recreate the manager. A restore reads at most `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) after decompression, so raise it on B for a larger backup.
+4. On B, choose the file under **Restore a backup**. The dashboard lists what it creates and anything B already has under the same name; a restore never replaces anything, so a conflict stops it before it starts. Select **Restore** and keep the tab open until the upload ends. The job then saves the records and creates the containers.
+5. The containers come back stopped, with the same hostname, MAC address and machine ID, so node-locked licenses stay valid. Start them from **Containers**. A container restored without its files, or one that mounts a volume the backup did not carry, shows why. **Retry setup** creates the first from its image, downloading a catalog image when B has none yet, and runs its compose setup again, and the second once its volume is on B. Agents keep their endpoint tokens. While A stays in use, the same tokens open both installations, so give the endpoints on one side new ones with **Replace token** on the **MCP** page.
 
 ## Move an older installation
 
