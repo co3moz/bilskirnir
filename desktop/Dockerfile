@@ -44,15 +44,30 @@ COPY gpu-run.sh /usr/local/bin/gpu-run
 COPY desktop-gnome.sh /usr/local/bin/desktop-gnome
 COPY desktop-healthcheck.sh /usr/local/bin/desktop-healthcheck
 COPY bilskirnir-mcp.py /usr/local/bin/bilskirnir-mcp
-RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp
+COPY bilskirnir-mcp-tray.py /usr/local/bin/bilskirnir-mcp-tray
+# The tray of both sessions: its menu entry, icons and autostart entry.
+COPY mcp-tray/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY mcp-tray/icons/ /usr/local/share/icons/hicolor/
+COPY mcp-tray/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp \
+        /usr/local/bin/bilskirnir-mcp-tray \
+    && chmod -R u=rwX,go=rX /usr/local/share/icons/hicolor \
+    && chmod 644 /usr/local/share/applications/bilskirnir-mcp.desktop \
+        /etc/xdg/autostart/bilskirnir-mcp-tray.desktop
 
 FROM common AS xfce-packages
 # librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon
-# that exists only as SVG stay blank. The GNOME stage installs it too.
+# that exists only as SVG stay blank. The GNOME stage installs it too. PyGObject and Ayatana's
+# AppIndicator run the MCP servers tray, which XFCE's Status Tray and GNOME's AppIndicator
+# extension show alike.
 RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-terminal librsvg2-common \
+    python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
     && rm -rf /var/lib/apt/lists/*
 FROM xfce-packages AS xfce
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
+COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
+COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
@@ -70,9 +85,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends ubuntu-wallpapers fonts-ubuntu \
     librsvg2-common gir1.2-dbusmenu-glib-0.4 ibus \
+    python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
     && rm -rf /var/lib/apt/lists/*
 FROM gnome-packages AS gnome
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
+COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
+COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gnome-container.session /usr/share/gnome-session/sessions/bilskirnir-ubuntu.session
 ENV DESKTOP_SESSION=gnome

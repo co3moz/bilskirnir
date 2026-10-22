@@ -316,8 +316,10 @@ fn load(app: &App, name: &str) -> Result<Endpoint> {
     app.db.get(ENDPOINTS, name).map_err(|_| missing())
 }
 
-/// Tell the agents of the endpoints covering `container_id` that their tools changed.
+/// Tell the agents of the endpoints covering `container_id` that their tools changed, and the
+/// desktops what their servers are now.
 pub(crate) fn announce(app: &App, container_id: &str) {
+    app.desktop_mcp.report_changes();
     for endpoint in app.db.list::<Endpoint>(ENDPOINTS).unwrap_or_default() {
         if endpoint
             .grants
@@ -335,6 +337,7 @@ fn release(app: &App, name: &str) {
         .pool
         .retain(|(endpoint, _, _)| endpoint != name);
     let _ = app.desktop_mcp.changes.send(name.to_owned());
+    app.desktop_mcp.report_changes();
 }
 
 pub async fn endpoints(State(app): State<Arc<App>>) -> Result<Json<Value>> {
@@ -370,6 +373,7 @@ pub async fn create_endpoint(
         created_at: now(),
     };
     app.db.put(ENDPOINTS, &endpoint.name, &endpoint)?;
+    app.desktop_mcp.report_changes();
     Ok(Json(
         json!({"endpoint": summary(&app, &endpoint), "token": token}),
     ))
@@ -414,6 +418,7 @@ pub async fn token(State(app): State<Arc<App>>, Path(name): Path<String>) -> Res
     app.db.put(ENDPOINTS, &name, &endpoint)?;
     // Sessions opened with the old token end with it.
     app.desktop_mcp.close_service(&name);
+    app.desktop_mcp.report_changes();
     Ok(Json(
         json!({"endpoint": summary(&app, &endpoint), "token": token}),
     ))
@@ -430,6 +435,7 @@ pub async fn revoke_token(
     endpoint.token_created_at = None;
     app.db.put(ENDPOINTS, &name, &endpoint)?;
     app.desktop_mcp.close_service(&name);
+    app.desktop_mcp.report_changes();
     Ok(Json(summary(&app, &endpoint)))
 }
 
@@ -503,6 +509,7 @@ pub(crate) async fn automatic_endpoint(app: &App, container: &Container) -> anyh
         created_at: now(),
     };
     app.db.put(ENDPOINTS, &name, &endpoint)?;
+    app.desktop_mcp.report_changes();
     Ok(name)
 }
 

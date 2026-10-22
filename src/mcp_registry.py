@@ -3,6 +3,10 @@
 The image declares servers in /etc/bilskirnir/mcp.d and the desktop user in
 ~/.config/bilskirnir/mcp, one JSON file per server named after it. Symlinks are never followed.
 stdout carries one JSON document per line and nothing else.
+
+While it watches, the manager sends the state of the servers and the endpoints that reach this
+desktop on stdin, one JSON document per line, and the helper keeps the latest in the desktop's
+runtime folder for bilskirnir-mcp and its tray, until stdin closes.
 """
 import json
 import os
@@ -14,9 +18,13 @@ import time
 
 IMAGE = "/etc/bilskirnir/mcp.d"
 CONTAINER = "/home/desktop/.config/bilskirnir/mcp"
+STATUS = "/run/desktop/bilskirnir"
+STATUS_FILE = "mcp-status.json"
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 FILE_LIMIT = 64 * 1024
 SERVER_LIMIT = 64
+# Tool lists of every server with their descriptions, as the manager trims them.
+STATUS_LIMIT = 16 << 20
 
 
 def open_folder(path, create=False):
@@ -116,17 +124,100 @@ def signature(path):
         os.close(folder)
 
 
+def write_status(status):
+    """Replace the status file atomically, and return the inode it has now."""
+    data = (json.dumps(status, separators=(",", ":")) + "\n").encode("utf-8")
+    folder = open_folder(STATUS, create=True)
+    try:
+        temporary = ".%s.%d.tmp" % (STATUS_FILE, os.getpid())
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                             dir_fd=folder)
+        try:
+            with os.fdopen(descriptor, "wb") as file:
+                file.write(data)
+                inode = os.fstat(file.fileno()).st_ino
+            os.rename(temporary, STATUS_FILE, src_dir_fd=folder, dst_dir_fd=folder)
+        except BaseException:
+            try:
+                os.unlink(temporary, dir_fd=folder)
+            except OSError:
+                pass
+            raise
+        return inode
+    finally:
+        os.close(folder)
+
+
+def clear_status(inode):
+    """Remove the status file if it is still the one this helper wrote."""
+    try:
+        folder = open_folder(STATUS)
+    except OSError:
+        return
+    try:
+        if os.stat(STATUS_FILE, dir_fd=folder, follow_symlinks=False).st_ino == inode:
+            os.unlink(STATUS_FILE, dir_fd=folder)
+    except OSError:
+        pass
+    finally:
+        os.close(folder)
+
+
+def received(line):
+    """The status a line from the manager carries, or None."""
+    try:
+        document = json.loads(line)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    status = document.get("status") if isinstance(document, dict) else None
+    return status if isinstance(status, dict) else None
+
+
 def watch():
-    """Print the listing now and whenever it changes, until stdin closes."""
+    """Print the listing now and whenever it changes, and keep the status the manager sends, until
+    stdin closes."""
     last = None
-    while True:
-        current = (signature(IMAGE), signature(CONTAINER))
-        if current != last:
-            emit(listing())
-            last = current
-        readable, _, _ = select.select([sys.stdin], [], [], 2)
-        if readable and not sys.stdin.buffer.read1(4096):
-            return
+    descriptor = sys.stdin.fileno()
+    buffer = bytearray()
+    skipping = False
+    inode = None
+    try:
+        while True:
+            current = (signature(IMAGE), signature(CONTAINER))
+            if current != last:
+                emit(listing())
+                last = current
+            readable, _, _ = select.select([descriptor], [], [], 2)
+            if not readable:
+                continue
+            chunk = os.read(descriptor, 1 << 16)
+            if not chunk:
+                return
+            start = 0
+            while True:
+                end = chunk.find(b"\n", start)
+                if end < 0:
+                    if not skipping:
+                        buffer += chunk[start:]
+                        # A line longer than the limit is dropped up to its end.
+                        if len(buffer) > STATUS_LIMIT:
+                            buffer.clear()
+                            skipping = True
+                    break
+                if not skipping:
+                    buffer += chunk[start:end]
+                    status = received(bytes(buffer))
+                    if status is not None:
+                        try:
+                            inode = write_status(status)
+                        except OSError:
+                            pass
+                buffer.clear()
+                skipping = False
+                start = end + 1
+    finally:
+        if inode is not None:
+            clear_status(inode)
 
 
 def write(name):

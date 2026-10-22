@@ -1196,6 +1196,21 @@ try:
     assert own and own[0]["has_token"] is False, endpoints
     created = tool("create_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all"}]})["structuredContent"]
     scoped = created["token"]
+    # The desktop hears the same: bilskirnir-mcp reads the manager's report of its servers and of
+    # the endpoints that reach it, never a token, and the tray that shows them runs in its session.
+    def reported():
+        listing = json.loads(docker("exec","--user","1001:1001",container,"bilskirnir-mcp","list","--json"))
+        states = {s["name"]: (s.get("status") or {}).get("state") for s in listing["servers"] if s["active"]}
+        reached = {e["name"]: e for e in listing.get("endpoints", [])}
+        if listing["watched"] and states.get("echo") == states.get("api") == "ready" and "acceptance-mcp" in reached:
+            return listing, reached
+        return None
+    listing, reached = wait_for(reported, 60)
+    assert reached["acceptance-mcp"]["has_token"] is True and reached["acceptance-mcp"]["scopes"] == ["view"], reached
+    assert reached[own[0]["name"]]["has_token"] is False and scoped not in json.dumps(listing) and "token_hash" not in json.dumps(listing), listing
+    assert docker("exec",container,"stat","-c","%a %U","/run/desktop/bilskirnir/mcp-status.json").strip() == b"600 desktop"
+    assert docker("exec",container,"pgrep","-u","1001","-f","bilskirnir-mcp-tray",check=False).strip(), "the MCP tray does not run in the session"
+    print("PASS the desktop reads its servers' states and endpoints, and the MCP tray runs", flush=True)
     session = endpoint_session("acceptance-mcp", scoped)
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
     assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container"}, offered

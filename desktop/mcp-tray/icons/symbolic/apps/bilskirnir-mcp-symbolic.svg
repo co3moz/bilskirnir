@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 64 64">
+  <!-- The hammer pendant of Bilskirnir's mark as one shape, the gem cut out; the panel recolors it. -->
+  <path fill="#bebebe" fill-rule="evenodd" d="M4 15C15 13 24 8 32 3c8 5 17 10 28 12v12H42l-5 25c4 0 7 2 7 5s-3 4-6 4H26c-3 0-6-1-6-4s3-5 7-5l-5-25H4V15Zm28-5.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 1 0 0-9Z"/>
+</svg>

@@ -14,11 +14,14 @@
 //! desktop servers, with a bearer token of its own that opens nothing else.
 //!
 //! The MCP page's inspector reaches any of these servers from the dashboard over a WebSocket.
+//! Each running desktop is told the state of its servers and the endpoints that reach it, for
+//! `bilskirnir-mcp` and the tray inside it.
 mod client;
 mod endpoints;
 mod gateway;
 mod inspect;
 mod registry;
+mod report;
 mod scopes;
 mod servers;
 mod watch;
@@ -56,6 +59,8 @@ pub struct DesktopMcp {
     logs: Mutex<HashMap<String, String>>,
     /// The names of endpoints whose tool list changed, for the agents connected to them.
     changes: tokio::sync::broadcast::Sender<String>,
+    /// Wakes the reporters of the running desktops when a server or an endpoint changed.
+    reports: tokio::sync::watch::Sender<()>,
     /// The MCP service of each endpoint that was reached, with what ends its sessions.
     services: Mutex<HashMap<String, gateway::Service>>,
     /// The inspectors that may be open at once.
@@ -70,6 +75,7 @@ impl Default for DesktopMcp {
             pool: client::Pool::default(),
             logs: Mutex::default(),
             changes: tokio::sync::broadcast::channel(64).0,
+            reports: tokio::sync::watch::channel(()).0,
             services: Mutex::default(),
             inspectors: Arc::new(tokio::sync::Semaphore::new(inspect::INSPECTORS)),
         }
