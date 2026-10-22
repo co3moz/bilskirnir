@@ -152,6 +152,13 @@ export const formatNumber = (value: number, options?: Intl.NumberFormatOptions) 
 export const formatDate = (seconds: number, options?: Intl.DateTimeFormatOptions) =>
   new Date(seconds * 1000).toLocaleString(regions[current], options)
 
+/** A time relative to now, short, such as "5 min. ago" or "yesterday", in the current language. */
+export const formatRelative = (value: number, unit: Intl.RelativeTimeFormatUnit) =>
+  new Intl.RelativeTimeFormat(regions[current], { numeric: "auto", style: "short" }).format(
+    value,
+    unit
+  )
+
 /** A list such as "a, b and c" in the current language, without the serial comma in English. */
 export const formatList = (items: string[]) =>
   new Intl.ListFormat(current === "en" ? "en-GB" : regions[current], {

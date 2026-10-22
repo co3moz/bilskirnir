@@ -16,6 +16,7 @@
 //! The MCP page's inspector reaches any of these servers from the dashboard over a WebSocket.
 //! Each running desktop is told the state of its servers and the endpoints that reach it, for
 //! `bilskirnir-mcp` and the tray inside it.
+mod audit;
 mod client;
 mod endpoints;
 mod gateway;

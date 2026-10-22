@@ -1,3 +1,4 @@
+mod activity;
 mod api;
 mod apps;
 mod archives;
@@ -287,6 +288,7 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
+        .route("/api/activity", get(activity::list))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)

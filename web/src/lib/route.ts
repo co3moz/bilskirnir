@@ -9,11 +9,17 @@ export type Page =
   | "mcp"
   | "files"
   | "jobs"
+  | "activity"
   | "settings"
 export type Route =
-  | { page: Exclude<Page, "files"> }
+  | { page: Exclude<Page, "files" | "activity"> }
   /** The files page, with the container it shows when one was chosen. */
   | { page: "files"; container?: string }
+  /**
+   * The agent activity log, narrowed to a container or a caller (`administrator` or
+   * `endpoint:NAME`), with one call's details open when `entry` names it.
+   */
+  | { page: "activity"; container?: string; caller?: string; entry?: number }
   | { page: "desktop"; id: string }
 
 const pages: Page[] = [
@@ -25,26 +31,60 @@ const pages: Page[] = [
   "mcp",
   "files",
   "jobs",
+  "activity",
   "settings",
 ]
 
+/** The activity page's filters, from the part of its link after `?`. */
+function activityRoute(search: string): Route {
+  const query = new URLSearchParams(search)
+  const entry = Number(query.get("entry"))
+  return {
+    page: "activity",
+    ...(query.get("container") ? { container: query.get("container")! } : {}),
+    ...(query.get("caller") ? { caller: query.get("caller")! } : {}),
+    ...(Number.isSafeInteger(entry) && entry > 0 ? { entry } : {}),
+  }
+}
+
 /** Pages live in the URL fragment, so the manager serves one index.html for all of them. */
 export function parseRoute(hash: string): Route {
-  const [page, id] = hash.replace(/^#\/?/, "").split("/")
+  const link = hash.replace(/^#\/?/, "")
+  const at = link.indexOf("?")
+  const [path, search] = at < 0 ? [link, ""] : [link.slice(0, at), link.slice(at + 1)]
+  const [page, id] = path.split("/")
   if (page === "desktop" && id) return { page: "desktop", id: decodeURIComponent(id) }
   if (page === "files") return id ? { page, container: decodeURIComponent(id) } : { page }
-  return { page: pages.includes(page as Page) ? (page as Exclude<Page, "files">) : "dashboard" }
+  if (page === "activity") return activityRoute(search)
+  return {
+    page: pages.includes(page as Page)
+      ? (page as Exclude<Page, "files" | "activity">)
+      : "dashboard",
+  }
 }
 
 export function href(route: Route) {
   if (route.page === "desktop") return `#/desktop/${encodeURIComponent(route.id)}`
   if (route.page === "files" && route.container)
     return `#/files/${encodeURIComponent(route.container)}`
+  if (route.page === "activity") {
+    const query = new URLSearchParams()
+    if (route.container) query.set("container", route.container)
+    if (route.caller) query.set("caller", route.caller)
+    if (route.entry) query.set("entry", String(route.entry))
+    const search = query.toString()
+    return search ? `#/activity?${search}` : "#/activity"
+  }
   return `#/${route.page}`
 }
 
 export function navigate(route: Route) {
   location.hash = href(route)
+}
+
+/** Go to `route` in place of the current entry of the browser's history, as a filter does. */
+export function replaceRoute(route: Route) {
+  location.replace(href(route))
 }
 
 const subscribe = (listener: () => void) => {

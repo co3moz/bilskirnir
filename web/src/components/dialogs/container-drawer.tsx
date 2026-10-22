@@ -12,6 +12,7 @@ import {
   RiUploadLine,
 } from "@remixicon/react"
 
+import { ContainerActivity } from "@/components/container-activity"
 import { PrimaryAction, SpecBadges } from "@/components/container-card"
 import { ContainerPreview } from "@/components/container-preview"
 import { StatusBadge } from "@/components/status-badge"
@@ -165,6 +166,8 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
         <React.Suspense fallback={<Skeleton className="h-[140px] rounded-xl" />}>
           <ContainerUsage item={item} />
         </React.Suspense>
+        <Separator />
+        <ContainerActivity id={id} />
         <Separator />
         <dl className="grid grid-cols-2 gap-4">
           <Fact label={t("spec.resolution")}>{spec.resolution}</Fact>

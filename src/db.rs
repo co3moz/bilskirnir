@@ -8,7 +8,12 @@ impl Db {
     pub fn open(path: &std::path::Path) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id));")?;
+        crate::activity::create_table(&conn)?;
         Ok(Self(Mutex::new(conn)))
+    }
+    /// The connection itself, for a module with a table of its own, such as the agent activity.
+    pub(crate) fn connection(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.0.lock().unwrap()
     }
     pub fn put<T: Serialize>(&self, kind: &str, id: &str, value: &T) -> Result<()> {
         self.0.lock().unwrap().execute("INSERT INTO records(kind,id,data) VALUES(?1,?2,?3) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data", params![kind,id,serde_json::to_string(value)?])?;

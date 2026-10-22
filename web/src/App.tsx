@@ -13,6 +13,7 @@ import { closeDialog, openDialog } from "@/lib/dialogs"
 import { t, useLocale } from "@/lib/i18n"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
+import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
 import { FilesPage } from "@/pages/files"
 import { ContainersPage } from "@/pages/containers"
@@ -38,6 +39,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   mcp: McpPage,
   files: FilesPage,
   jobs: JobsPage,
+  activity: ActivityPage,
   settings: SettingsPage,
 }
 

@@ -1,6 +1,7 @@
 import { Fragment } from "react"
 
 import { closeDialog, useDialogState, type Dialog } from "@/lib/dialogs"
+import { ActivityDrawer } from "./activity-drawer"
 import { ContainerDrawer } from "./container-drawer"
 import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
 import { JobDrawer } from "./job-drawer"
@@ -93,6 +94,8 @@ function render(dialog: Dialog, open: boolean) {
       return <ServerDialog {...props} container={dialog.container} />
     case "mcp-server-remove":
       return <ServerRemoveDialog {...props} container={dialog.container} name={dialog.name} />
+    case "activity":
+      return <ActivityDrawer {...props} endpoint={dialog.endpoint} />
     case "update":
       return <UpdateDialog {...props} />
   }

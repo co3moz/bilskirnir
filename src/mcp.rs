@@ -1,7 +1,7 @@
 use crate::{
-    App, api, apps, audio, auth, capture, compose, desktop_input, desktop_mcp, error, exec, files,
-    gamepad, image_removal, layers, recordings, terminal, transfers, uploads, usage, volumes,
-    waits, windows,
+    App, activity, api, apps, audio, auth, capture, compose, desktop_input, desktop_mcp, error,
+    exec, files, gamepad, image_removal, layers, recordings, terminal, transfers, uploads, usage,
+    volumes, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -163,8 +163,21 @@ impl ServerHandler for BilskirnirMcp {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
+        // Every call is recorded in the agent activity log; see activity.rs.
+        let caller = activity::Caller::of(&self.app, None, &context);
+        let call = activity::Call::start(&self.app, caller.clone(), &request);
+        let response = activity::as_caller(caller, Box::pin(self.answer(request))).await;
+        call.finish(&self.app, &response);
+        response
+    }
+}
+
+impl BilskirnirMcp {
+    /// Run a tool call: an unknown tool or arguments its schema does not take are refused, and an
+    /// error of the tool itself is its result.
+    async fn answer(&self, request: CallToolRequestParams) -> Result<CallToolResponse, ErrorData> {
         let tool = self
             .get_tool(&request.name)
             .ok_or_else(|| ErrorData::invalid_params("Unknown Bilskirnir tool", None))?;

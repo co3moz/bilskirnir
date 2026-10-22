@@ -7,7 +7,7 @@ use super::{
     registry::{SERVERS, ServerRecord},
     scopes::{Target, catalog},
 };
-use crate::{App, error, mcp};
+use crate::{App, activity, error, mcp};
 use axum::{
     Json,
     body::Body,
@@ -243,6 +243,37 @@ impl EndpointMcp {
             }
         }
     }
+    /// Answer a tool call, telling `call` what the tool reaches once that is known.
+    async fn answer(
+        &self,
+        request: CallToolRequestParams,
+        call: &mut activity::Call,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let endpoint = self.endpoint()?;
+        let entry = catalog(&self.app, &endpoint)
+            .into_iter()
+            .find(|entry| entry.tool.name == request.name)
+            .ok_or_else(|| ErrorData::invalid_params("Unknown tool on this endpoint", None))?;
+        let args = Value::Object(request.arguments.unwrap_or_default());
+        super::audit::describe(&self.app, &entry, &args, call);
+        // A container tool's schema is Bilskirnir's own, so its arguments are checked here as
+        // /mcp checks them. A desktop server checks its own.
+        if !matches!(entry.target, Target::Server { .. }) {
+            mcp::check_arguments(&entry.tool, &args)?;
+        }
+        // In a task of its own, as /mcp's requests run, so a session's machinery does not add to
+        // the stack the container tools' dispatch needs.
+        let endpoint = self.clone();
+        let result = match tokio::spawn(async move { endpoint.run(entry.target, args).await }).await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(error)) => CallToolResult::error(vec![ContentBlock::text(error.1)]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(format!(
+                "The tool stopped unexpectedly: {error}"
+            ))]),
+        };
+        Ok(result.into())
+    }
 }
 
 impl ServerHandler for EndpointMcp {
@@ -281,31 +312,14 @@ impl ServerHandler for EndpointMcp {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        let endpoint = self.endpoint()?;
-        let entry = catalog(&self.app, &endpoint)
-            .into_iter()
-            .find(|entry| entry.tool.name == request.name)
-            .ok_or_else(|| ErrorData::invalid_params("Unknown tool on this endpoint", None))?;
-        let args = Value::Object(request.arguments.unwrap_or_default());
-        // A container tool's schema is Bilskirnir's own, so its arguments are checked here as
-        // /mcp checks them. A desktop server checks its own.
-        if !matches!(entry.target, Target::Server { .. }) {
-            mcp::check_arguments(&entry.tool, &args)?;
-        }
-        // In a task of its own, as /mcp's requests run, so a session's machinery does not add to
-        // the stack the container tools' dispatch needs.
-        let endpoint = self.clone();
-        let result = match tokio::spawn(async move { endpoint.run(entry.target, args).await }).await
-        {
-            Ok(Ok(result)) => result,
-            Ok(Err(error)) => CallToolResult::error(vec![ContentBlock::text(error.1)]),
-            Err(error) => CallToolResult::error(vec![ContentBlock::text(format!(
-                "The tool stopped unexpectedly: {error}"
-            ))]),
-        };
-        Ok(result.into())
+        // Every call is recorded in the agent activity log; see activity.rs.
+        let caller = activity::Caller::of(&self.app, Some(&self.name), &context);
+        let mut call = activity::Call::start(&self.app, caller, &request);
+        let response = Box::pin(self.answer(request, &mut call)).await;
+        call.finish(&self.app, &response);
+        response
     }
     fn accepted_subscription_filter(
         &self,

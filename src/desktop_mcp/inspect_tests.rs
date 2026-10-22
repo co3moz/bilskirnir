@@ -446,6 +446,12 @@ async fn the_administrators_mcp_answers_through_the_inspector_without_a_token() 
         1024 * 1024,
         "{frame}"
     );
+    // The agent activity log tells the dashboard's own calls apart from an agent's.
+    let rows = crate::activity::recorded(&app, 1).await;
+    assert_eq!(
+        (rows[0].tool.as_str(), rows[0].credential.as_str()),
+        ("get_settings", "inspector")
+    );
 }
 
 #[tokio::test]

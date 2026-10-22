@@ -32,6 +32,8 @@ export type Dialog =
   | { kind: "mcp-connect"; name?: string }
   | { kind: "mcp-server"; container?: string }
   | { kind: "mcp-server-remove"; container: string; name: string }
+  /** The agent activity of an MCP endpoint. */
+  | { kind: "activity"; endpoint: string }
   | { kind: "update" }
 
 type State = { dialog: Dialog | null; open: boolean; seq: number }

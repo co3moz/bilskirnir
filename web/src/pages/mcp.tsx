@@ -10,6 +10,7 @@ import {
   RiMore2Line,
   RiPlayLine,
   RiPlugLine,
+  RiPulseLine,
   RiRefreshLine,
   RiShareForwardLine,
 } from "@remixicon/react"
@@ -115,6 +116,13 @@ function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
         >
           <RiShareForwardLine />
           {t("mcp.connect.action")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          tone="info"
+          onSelect={() => openDialog({ kind: "activity", endpoint: endpoint.name })}
+        >
+          <RiPulseLine />
+          {t("activity.endpoint.action")}
         </DropdownMenuItem>
         <DropdownMenuItem
           tone="edit"

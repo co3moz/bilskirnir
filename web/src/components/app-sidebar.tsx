@@ -9,6 +9,7 @@ import {
   RiListCheck3,
   RiComputerLine,
   RiPlugLine,
+  RiPulseLine,
   RiBookletLine,
   RiSettings3Line,
 } from "@remixicon/react"
@@ -41,6 +42,7 @@ const navMain = [
   { page: "mcp", icon: <RiPlugLine /> },
   { page: "files", icon: <RiFolderOpenLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
+  { page: "activity", icon: <RiPulseLine /> },
   { page: "settings", icon: <RiSettings3Line /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
