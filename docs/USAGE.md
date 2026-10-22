@@ -136,7 +136,7 @@ A compose makes an image ask for a few values each time a container is created f
 
 Whatever the type, the script receives text: a number as `42`, on or off as `true` or `false`, and several choices one per line, which `while read -r item; do ...; done <<< "$PLATFORMS"` reads one at a time. A volume parameter is the exception: the script reads its path, `/opt/unity`, and the name of the chosen volume from the same name with `_VOLUME` appended, such as `UNITY_HOME_VOLUME`, which is empty without a volume.
 
-The upload dialog offers a container's volume and folder parameters by their labels under **From the image**, so files go straight into the folder the setup script prepared. A volume parameter's folder is offered with or without a volume.
+The upload dialog offers a container's volume and folder parameters by their labels under **From the image**, so files go straight into the folder the setup script prepared; an image of several merged templates lists them under each template's name instead. A volume parameter's folder is offered with or without a volume.
 
 In **New container**, a volume parameter lists the named volumes. **Create new volume…** creates one right there, named after the parameter unless you change it, and chooses it; it works when there are no volumes yet. **No volume** leaves the folder inside the container, where a reset discards it and snapshots keep it. Either way the folder exists and belongs to the desktop user before the script runs, so a script installing into `$UNITY_HOME` works without root. The container's details list the volume under **Volumes**; it stays mounted after a reset or a settings change, and the volume settings cannot mount it at a second path or mount another volume at its path.
 

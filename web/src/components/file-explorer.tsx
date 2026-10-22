@@ -38,7 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { downloadFile, downloadFolder } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
-import { canonicalFolder, HOME, type QuickFolder } from "@/lib/desktop-paths"
+import { canonicalFolder, HOME, placeGroups, type QuickFolder } from "@/lib/desktop-paths"
 import { shortDate } from "@/lib/format"
 import { codeLanguage, type CodeLanguage } from "@/lib/highlight"
 import { formatNumber, rich, t } from "@/lib/i18n"
@@ -80,8 +80,6 @@ const kindIcons: Record<Exclude<QuickFolder["kind"], "home">, React.ReactNode> =
   volume: <RiDatabase2Line aria-hidden />,
   recent: <RiHistoryLine aria-hidden />,
 }
-
-const GROUPS: QuickFolder["kind"][] = ["home", "compose", "volume", "recent"]
 
 /** The upload queue of the open folder, rendered again whenever it reports progress. */
 function useUploads(onDone: () => void) {
@@ -461,39 +459,38 @@ export function FileExplorer({
             aria-label={t("folders.places")}
             className="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:overflow-visible md:p-0"
           >
-            {GROUPS.map((kind) => {
-              const group = places.filter((place) => place.kind === kind)
-              if (!group.length) return null
-              return (
-                <div
-                  key={kind}
-                  className="flex shrink-0 gap-1 md:flex-col md:gap-0.5 md:pt-3 md:first:pt-0"
+            {placeGroups(places).map((group) => (
+              <div
+                key={group.places[0].path}
+                className="flex shrink-0 gap-1 md:flex-col md:gap-0.5 md:pt-3 md:first:pt-0"
+              >
+                <span
+                  title={group.step}
+                  className="hidden truncate px-2 pb-0.5 text-xs text-muted-foreground md:block"
                 >
-                  <span className="hidden px-2 pb-0.5 text-xs text-muted-foreground md:block">
-                    {t(`folders.group.${kind}`)}
-                  </span>
-                  {group.map((place) => (
-                    <Button
-                      key={place.path}
-                      type="button"
-                      variant={place.path === path ? "secondary" : "ghost"}
-                      size="sm"
-                      aria-current={place.path === path ? "location" : undefined}
-                      title={place.path}
-                      onClick={() => go(place.path)}
-                      className="max-w-56 justify-start md:max-w-none"
+                  {group.step ?? t(`folders.group.${group.kind}`)}
+                </span>
+                {group.places.map((place) => (
+                  <Button
+                    key={place.path}
+                    type="button"
+                    variant={place.path === path ? "secondary" : "ghost"}
+                    size="sm"
+                    aria-current={place.path === path ? "location" : undefined}
+                    title={place.path}
+                    onClick={() => go(place.path)}
+                    className="max-w-56 justify-start md:max-w-none"
+                  >
+                    {place.kind === "home" ? homeIcons[place.path] : kindIcons[place.kind]}
+                    <span
+                      className={cn("truncate", place.kind === "recent" && "font-mono text-xs")}
                     >
-                      {place.kind === "home" ? homeIcons[place.path] : kindIcons[place.kind]}
-                      <span
-                        className={cn("truncate", place.kind === "recent" && "font-mono text-xs")}
-                      >
-                        {place.label}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              )
-            })}
+                      {place.label}
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            ))}
           </nav>
         )}
         <div
