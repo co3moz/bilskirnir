@@ -712,9 +712,12 @@ export const tr: Messages = {
   "settings.about.SECURE_COOKIE": "Oturum çerezini yalnızca HTTPS üzerinden gönderir.",
   "settings.about.ALLOWED_HOSTS":
     "Panelin localhost ve özel adresler dışında yanıt verdiği host adları, DESKTOP_HOST dahil.",
-  "settings.about.MCP_ENABLED": "/mcp ve MCP uç noktalarının ajanlara yanıt verip vermediği.",
-  "settings.about.MCP_AUTH_MODE": "token, /mcp için MCP_TOKEN ister; none onu açık bırakır.",
-  "settings.about.MCP_TOKEN": "/mcp'nin istediği bearer token.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Her konteynere ulaşan kök /mcp'nin ajanlara yanıt verip vermediği. MCP uç noktaları her durumda yanıt verir.",
+  "settings.about.MCP_AUTH_MODE":
+    "token, /mcp ve MCP uç noktaları için token ister; none ikisini de açık bırakır.",
+  "settings.about.MCP_TOKEN":
+    "Yöneticinin bearer token'ı: /mcp onu ister ve her MCP uç noktasını açar.",
   "settings.about.DESKTOP_IMAGE": "Oluşturma formunun ilk seçtiği imaj.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Masaüstlerindeki tarayıcıların ve Electron uygulamalarının sandbox'ını açmasına izin verir.",
@@ -991,9 +994,9 @@ export const tr: Messages = {
   "import.docker.reference": "İmaj referansı",
   "import.archive.tab": "Arşiv dosyası",
   "import.docker.tab": "Docker imajı",
-  "mcp.off": "MCP kapalı",
-  "mcp.offHint":
-    "Uç noktalar ajanlara yalnızca bu kurulumda MCP etkinken yanıt verir (MCP_ENABLED). Yine de onları burada hazırlayabilirsiniz.",
+  "mcp.rootOff": "Kök /mcp kapalı",
+  "mcp.rootOffHint":
+    "Aşağıdaki uç noktalar ajanlara her durumda kendi token'larıyla yanıt verir. Her konteynere ulaşan kök /mcp, kurulumun .env dosyasındaki ROOT_MCP_ENABLED ayarına uyar.",
   "mcp.view.endpoints": "Uç noktalar",
   "mcp.view.servers": "Masaüstü sunucuları",
   "mcp.view.inspector": "Test",
@@ -1254,7 +1257,7 @@ export const tr: Messages = {
   "inspector.target.placeholder": "Bir sunucu seçin…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP kapalı",
+  "inspector.target.rootOff": "Kök /mcp kapalı",
   "inspector.target.stopped": "konteyner durdurulmuş",
   "inspector.status.connecting": "Sunucu başlatılıyor…",
   "inspector.status.initializing": "Bağlanılıyor…",

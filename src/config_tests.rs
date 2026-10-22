@@ -9,13 +9,22 @@ fn read(path: &str) -> String {
     std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap()
 }
 
-/// The names in the `environment:` list of a manifest's manager service.
-fn passed(manifest: &str) -> Vec<String> {
+/// The lines of the `environment:` list of a manifest's manager service, without its comments.
+fn environment(manifest: &str) -> Vec<&str> {
     let service = &manifest[manifest.find("\n  manager:\n").unwrap()..];
     let list = &service[service.find("\n    environment:\n").unwrap() + 18..];
     list.lines()
         .take_while(|line| line.starts_with("      "))
-        .map(|line| line.trim().split(':').next().unwrap().to_owned())
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .collect()
+}
+
+/// The names in the `environment:` list of a manifest's manager service.
+fn passed(manifest: &str) -> Vec<String> {
+    environment(manifest)
+        .into_iter()
+        .map(|line| line.split(':').next().unwrap().to_owned())
         .collect()
 }
 
@@ -54,8 +63,13 @@ fn the_page_shows_every_setting_compose_passes_to_the_manager() {
     for manifest in ["compose.yml", "compose.ghcr.yml"] {
         let passed = passed(&read(manifest));
         assert!(passed.len() > 10, "{manifest}: {passed:?}");
-        // The log filter is read by the logger, not the configuration.
-        for name in passed.iter().filter(|name| *name != "RUST_LOG") {
+        // The log filter is read by the logger, not the configuration, and a renamed variable
+        // only stands in for its new name.
+        let renamed = |name: &String| RENAMED.iter().any(|renamed| renamed.old == name);
+        for name in passed
+            .iter()
+            .filter(|name| *name != "RUST_LOG" && !renamed(name))
+        {
             assert!(
                 shown.contains(name),
                 "{manifest} passes {name}, which the settings page does not show"
@@ -127,4 +141,76 @@ async fn the_configuration_route_needs_a_session_and_is_documented() {
     let body: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["variables"][0]["name"], "AUTH_MODE");
     assert!(read("docs/API.md").contains("| GET | `/api/configuration` |"));
+}
+
+#[test]
+fn a_renamed_variable_keeps_its_meaning_and_startup_says_to_rename_it() {
+    let read = |vars: &[(&str, &str)]| {
+        let vars: Vec<(String, String)> = vars
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        let get = move |key: &str| {
+            vars.iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, value)| value.clone())
+        };
+        let mut notices = Vec::new();
+        let value = renamed_value(&get, &RENAMED[0], &mut notices);
+        (value, notices)
+    };
+    // The new name alone, or the old one empty as Compose passes it once .env lost it.
+    for vars in [
+        &[("ROOT_MCP_ENABLED", "true")][..],
+        &[("ROOT_MCP_ENABLED", "true"), ("MCP_ENABLED", "")],
+    ] {
+        let (value, notices) = read(vars);
+        assert_eq!(value.unwrap().as_deref(), Some("true"));
+        assert!(notices.is_empty(), "{notices:?}");
+    }
+    assert_eq!(read(&[]).0.unwrap(), None);
+    // An .env from before the rename keeps its value and hears of the new name and the release.
+    let (value, notices) = read(&[("MCP_ENABLED", "true")]);
+    assert_eq!(value.unwrap().as_deref(), Some("true"));
+    assert!(
+        notices[0].contains("MCP_ENABLED was renamed ROOT_MCP_ENABLED in Bilskirnir 0.7.0"),
+        "{notices:?}"
+    );
+    // As the manifests pass it: the new name falls back to the old one, which is passed too.
+    let (value, notices) = read(&[("ROOT_MCP_ENABLED", "true"), ("MCP_ENABLED", "true")]);
+    assert_eq!(value.unwrap().as_deref(), Some("true"));
+    assert!(notices[0].contains("Remove MCP_ENABLED"), "{notices:?}");
+    // Two names that disagree are not guessed between.
+    let error = read(&[("ROOT_MCP_ENABLED", "false"), ("MCP_ENABLED", "true")])
+        .0
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("disagree"), "{error}");
+}
+
+#[test]
+fn the_manifests_carry_a_renamed_variable_over_to_its_new_name() {
+    for manifest in ["compose.yml", "compose.ghcr.yml"] {
+        let manifest = read(manifest);
+        let lines = environment(&manifest);
+        for Renamed { old, new, .. } in RENAMED {
+            // The old value applies while .env has no new one, and the old name reaches the
+            // manager, empty once it is gone, so startup can tell an .env that still has it.
+            assert!(
+                lines
+                    .iter()
+                    .any(|line| line.starts_with(&format!("{new}: ${{{new}:-${{{old}:-"))),
+                "{lines:?}"
+            );
+            assert!(
+                lines.contains(&format!("{old}: ${{{old}:-}}").as_str()),
+                "{lines:?}"
+            );
+        }
+    }
+    let example = read(".env.example");
+    for Renamed { old, new, .. } in RENAMED {
+        assert!(example.contains(&format!("\n{new}=")));
+        assert!(!example.contains(&format!("\n{old}=")));
+    }
 }

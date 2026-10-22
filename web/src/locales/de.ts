@@ -727,9 +727,12 @@ export const de: Messages = {
   "settings.about.SECURE_COOKIE": "Sendet das Sitzungscookie nur über HTTPS.",
   "settings.about.ALLOWED_HOSTS":
     "Hostnamen, auf die das Dashboard neben localhost und privaten Adressen antwortet, samt DESKTOP_HOST.",
-  "settings.about.MCP_ENABLED": "Ob /mcp und die MCP-Endpunkte Agenten antworten.",
-  "settings.about.MCP_AUTH_MODE": "token verlangt MCP_TOKEN für /mcp; none lässt es offen.",
-  "settings.about.MCP_TOKEN": "Das Bearer-Token, das /mcp verlangt.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Ob das Root-/mcp, das jeden Container erreicht, Agenten antwortet. MCP-Endpunkte antworten in jedem Fall.",
+  "settings.about.MCP_AUTH_MODE":
+    "token verlangt ein Token für /mcp und die MCP-Endpunkte; none lässt beide offen.",
+  "settings.about.MCP_TOKEN":
+    "Das Bearer-Token des Administrators: /mcp verlangt es, und es öffnet jeden MCP-Endpunkt.",
   "settings.about.DESKTOP_IMAGE": "Das Image, das das Erstellformular zuerst auswählt.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Lässt Browser und Electron-Apps in Desktops ihre Sandbox starten.",
@@ -1011,9 +1014,9 @@ export const de: Messages = {
   "import.docker.reference": "Image-Referenz",
   "import.archive.tab": "Archivdatei",
   "import.docker.tab": "Docker-Image",
-  "mcp.off": "MCP ist ausgeschaltet",
-  "mcp.offHint":
-    "Endpunkte antworten Agenten nur, wenn MCP für diese Installation aktiviert ist (MCP_ENABLED). Vorbereiten können Sie sie hier trotzdem.",
+  "mcp.rootOff": "Das Root-/mcp ist ausgeschaltet",
+  "mcp.rootOffHint":
+    "Die Endpunkte unten antworten Agenten in jedem Fall mit ihren eigenen Tokens. Das Root-/mcp, das jeden Container erreicht, folgt ROOT_MCP_ENABLED in der .env der Installation.",
   "mcp.view.endpoints": "Endpunkte",
   "mcp.view.servers": "Desktop-Server",
   "mcp.view.inspector": "Inspektor",
@@ -1279,7 +1282,7 @@ export const de: Messages = {
   "inspector.target.placeholder": "Server wählen…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP ist ausgeschaltet",
+  "inspector.target.rootOff": "Root-/mcp ist ausgeschaltet",
   "inspector.target.stopped": "Container gestoppt",
   "inspector.status.connecting": "Server wird gestartet…",
   "inspector.status.initializing": "Verbindung wird aufgebaut…",

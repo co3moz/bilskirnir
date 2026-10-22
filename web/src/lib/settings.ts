@@ -20,7 +20,7 @@ export const SECTION_OF: Record<string, Section> = {
   ADMIN_PASSWORD: "access",
   SECURE_COOKIE: "access",
   ALLOWED_HOSTS: "access",
-  MCP_ENABLED: "mcp",
+  ROOT_MCP_ENABLED: "mcp",
   MCP_AUTH_MODE: "mcp",
   MCP_TOKEN: "mcp",
   DESKTOP_IMAGE: "desktops",

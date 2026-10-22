@@ -718,9 +718,12 @@ export const es: Messages = {
   "settings.about.SECURE_COOKIE": "Envía la cookie de sesión solo por HTTPS.",
   "settings.about.ALLOWED_HOSTS":
     "Nombres de host a los que responde el panel además de localhost y las direcciones privadas, DESKTOP_HOST incluido.",
-  "settings.about.MCP_ENABLED": "Si /mcp y los endpoints MCP responden a los agentes.",
-  "settings.about.MCP_AUTH_MODE": "token exige MCP_TOKEN en /mcp; none lo deja abierto.",
-  "settings.about.MCP_TOKEN": "El token bearer que exige /mcp.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Si el /mcp raíz, que llega a todos los contenedores, responde a los agentes. Los puntos de acceso MCP responden en cualquier caso.",
+  "settings.about.MCP_AUTH_MODE":
+    "token exige un token en /mcp y en los puntos de acceso MCP; none deja ambos abiertos.",
+  "settings.about.MCP_TOKEN":
+    "El token bearer del administrador: /mcp lo exige y abre todos los puntos de acceso MCP.",
   "settings.about.DESKTOP_IMAGE": "La imagen que el formulario de creación elige primero.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Permite que los navegadores y las apps Electron de los escritorios inicien su sandbox.",
@@ -999,9 +1002,9 @@ export const es: Messages = {
   "import.docker.reference": "Referencia de la imagen",
   "import.archive.tab": "Archivo comprimido",
   "import.docker.tab": "Imagen de Docker",
-  "mcp.off": "MCP está desactivado",
-  "mcp.offHint":
-    "Los puntos de acceso solo responden a los agentes cuando MCP está activado en esta instalación (MCP_ENABLED). Aun así, puedes prepararlos aquí.",
+  "mcp.rootOff": "El /mcp raíz está desactivado",
+  "mcp.rootOffHint":
+    "Los puntos de acceso de abajo responden a los agentes con sus propios tokens en cualquier caso. El /mcp raíz, que llega a todos los contenedores, sigue ROOT_MCP_ENABLED en el .env de la instalación.",
   "mcp.view.endpoints": "Puntos de acceso",
   "mcp.view.servers": "Servidores del escritorio",
   "mcp.view.inspector": "Inspector",
@@ -1268,7 +1271,7 @@ export const es: Messages = {
   "inspector.target.placeholder": "Elige un servidor…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP está desactivado",
+  "inspector.target.rootOff": "/mcp raíz desactivado",
   "inspector.target.stopped": "contenedor detenido",
   "inspector.status.connecting": "Iniciando el servidor…",
   "inspector.status.initializing": "Conectando…",

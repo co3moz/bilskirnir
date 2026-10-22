@@ -228,6 +228,24 @@ class UpdateTest(unittest.TestCase):
                 self.assertFalse(any(call.startswith("docker tag ") for call in calls))
 
 
+    def test_a_renamed_setting_gets_its_new_name_before_the_manager_starts(self):
+        before = f"MANAGER_IMAGE={REPOSITORY}:0.2.0\nMCP_ENABLED=true\nMCP_TOKEN='a$b'\n"
+        result, env_file, calls = self.update(before)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\nROOT_MCP_ENABLED=true\nMCP_TOKEN='a$b'\n")
+        self.assertIn("Renamed MCP_ENABLED to ROOT_MCP_ENABLED in .env.", result.stdout)
+        rename = next(i for i, call in enumerate(calls) if call.startswith("sudo sed -i s/^MCP_ENABLED="))
+        self.assertLess(rename, calls.index("docker compose up -d"))
+        # With the new name there already, it applies and the old one goes.
+        result, env_file, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\nROOT_MCP_ENABLED=false\nMCP_ENABLED=true\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\nROOT_MCP_ENABLED=false\n")
+        self.assertIn("Removed MCP_ENABLED from .env; ROOT_MCP_ENABLED applies.", result.stdout)
+        # An .env without the old name is left as it is.
+        result, env_file, _ = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\nROOT_MCP_ENABLED=true\n")
+        self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\nROOT_MCP_ENABLED=true\n")
+        self.assertNotIn("MCP_ENABLED", result.stdout)
+
     def test_the_installation_files_come_from_the_new_manager_before_it_starts(self):
         result, env_file, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -666,6 +684,41 @@ class PortTest(unittest.TestCase):
         self.assertEqual(self.address(), "http://localhost:8080")
         (self.install / ".env").write_text("AUTH_MODE=none\n")
         self.assertEqual(self.address(), "http://localhost:8080")
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class McpTest(unittest.TestCase):
+    """`bilskirnir mcp` follows ROOT_MCP_ENABLED, and MCP_ENABLED, its name before 0.7.0, while the new
+    one is missing, as the manager does."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.env = {"PATH": "/usr/bin:/bin", "HOME": str(self.dir)}
+
+    def mcp(self, settings):
+        (self.install / ".env").write_text(settings)
+        return subprocess.run(["bash", str(self.cli), "mcp"], env=self.env, capture_output=True, text=True)
+
+    def test_the_root_endpoint_is_shown_under_either_name(self):
+        for settings in ("ROOT_MCP_ENABLED=true\nMCP_TOKEN='secret-token'\n", "MCP_ENABLED=true\nMCP_TOKEN=secret-token\n"):
+            with self.subTest(settings=settings):
+                result = self.mcp(settings)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("URL:     http://localhost:8080/mcp", result.stdout)
+                self.assertIn("Authorization: Bearer secret-token", result.stdout)
+
+    def test_without_the_root_endpoint_it_points_at_the_dashboards_endpoints(self):
+        for settings in ("ROOT_MCP_ENABLED=false\nMCP_ENABLED=true\nMCP_TOKEN=x\n", "MCP_TOKEN=x\n"):
+            with self.subTest(settings=settings):
+                result = self.mcp(settings)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("MCP endpoints made on the dashboard's MCP page work without it", result.stderr)
+                self.assertIn("ROOT_MCP_ENABLED=true", result.stderr)
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")

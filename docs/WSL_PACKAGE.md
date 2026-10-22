@@ -43,11 +43,11 @@ Then open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilski
 
 The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters.
 
-Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
+Next it asks whether to enable root agent access, the MCP endpoint `/mcp` that reaches every container; move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default, and it sets `ROOT_MCP_ENABLED`. [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers can be made on the dashboard later whatever the answer, each with its own token. With root agent access on, it asks how agents authenticate:
 
 - **Random token** (the default) generates a 64-character token.
 - **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every container.
-- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every container.
+- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, to `/mcp` and to every MCP endpoint, and anything that can reach the dashboard address controls every container.
 
 Then it asks who can reach the dashboard, and with it the agent endpoint, which shares its address:
 
@@ -240,7 +240,7 @@ The disk file does not shrink when images or containers are deleted. Two ways re
 - `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `bilskirnir settings` saves it through `sudoedit`, which keeps that owner and mode; change it any other way with `sudo`.
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing other devices.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
-- Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every container, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
+- Root agent access is enabled unless the first start turned it off: `ROOT_MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); root agent access grants administrator access to every container, so set `ROOT_MCP_ENABLED=false` in `.env` and restart if no agent needs that, and give agents [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers instead, which answer either way. Without a token it is safe only while the manager listens on localhost. Installations from before 0.7.0 have the setting as `MCP_ENABLED`, which keeps working until `bilskirnir update` renames it.
 - The manager listens on `127.0.0.1:8080`, or on `0.0.0.0:8080` when the first start allowed other devices. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).
 
 ## Docker in other WSL distributions

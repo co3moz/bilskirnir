@@ -35,9 +35,9 @@ The dashboard's **Settings** page lists the settings below with the values the m
 | `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
-| `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
-| `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled in `token` mode; 1 to 256 visible ASCII characters without spaces. Wrap it in single quotes when it contains `$` or `#`. |
-| `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token. Anyone who can reach the manager's address can then control every desktop, so keep it on localhost. |
+| `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.7.0: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `bilskirnir update` renames it. |
+| `MCP_TOKEN` | Empty | The administrator's bearer token, required when `ROOT_MCP_ENABLED=true` in `token` mode; 1 to 256 visible ASCII characters without spaces. It opens every MCP endpoint too, also while `/mcp` is off. Wrap it in single quotes when it contains `$` or `#`. |
+| `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token, on `/mcp` and on every MCP endpoint, whether or not `/mcp` is on. Anyone who can reach the manager's address can then control every container that `/mcp` or an endpoint reaches, so keep it on localhost. |
 | `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled containers. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |

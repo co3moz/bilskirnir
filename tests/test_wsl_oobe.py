@@ -68,7 +68,11 @@ class FirstStartTest(unittest.TestCase):
         # Answers end after the password, so every menu takes its default.
         result = self.first_start("alice\nsecret123\nsecret123\n")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.settings()["BIND_ADDRESS"], "127.0.0.1")
+        settings = self.settings()
+        self.assertEqual(settings["BIND_ADDRESS"], "127.0.0.1")
+        # Root agent access is on by default, under the name it has had since 0.7.0.
+        self.assertEqual(settings["ROOT_MCP_ENABLED"], "true")
+        self.assertNotIn("MCP_ENABLED", settings)
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
@@ -100,7 +104,7 @@ class FirstStartTest(unittest.TestCase):
         result = self.first_start("alice\n\nno\no\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         settings = self.settings()
-        self.assertEqual((settings["AUTH_MODE"], settings["MCP_ENABLED"], settings["BIND_ADDRESS"]),
+        self.assertEqual((settings["AUTH_MODE"], settings["ROOT_MCP_ENABLED"], settings["BIND_ADDRESS"]),
                          ("none", "false", "0.0.0.0"))
         before, after = result.stdout.split("Who can reach the dashboard?", 1)
         self.assertIn("There is no password, so any device that reaches the dashboard controls every desktop.", before)

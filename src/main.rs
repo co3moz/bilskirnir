@@ -373,9 +373,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let config = config::Config::load()?;
-    if config.mcp_enabled && config.mcp_token.is_none() {
+    for notice in &config.notices {
+        tracing::warn!("{notice}");
+    }
+    if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
-            "MCP_AUTH_MODE=none: /mcp accepts requests without a token from any allowed host"
+            "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"
         );
     }
     tokio::fs::create_dir_all(&config.data).await?;

@@ -31,17 +31,17 @@ export function targetKey(target: InspectTarget): string {
 }
 
 /**
- * What the inspector can open: Bilskirnir's own MCP and the endpoints while MCP is on, and the
- * desktop servers of the running containers. A stopped container's servers are listed too, so
- * it is clear why they cannot be opened.
+ * What the inspector can open: Bilskirnir's own MCP while the root /mcp is on, the endpoints, which
+ * answer either way, and the desktop servers of the running containers. A stopped container's
+ * servers are listed too, so it is clear why they cannot be opened.
  */
 export function targetGroups(
   servers: DesktopServer[],
   endpoints: McpEndpoint[],
   containers: Pick<ContainerItem, "id" | "state" | "spec">[],
-  mcpEnabled: boolean
+  rootMcpEnabled: boolean
 ): TargetGroup[] {
-  const off = mcpEnabled ? undefined : t("inspector.target.mcpOff")
+  const off = rootMcpEnabled ? undefined : t("inspector.target.rootOff")
   const running = new Set(containers.filter((c) => c.state === "running").map((c) => c.id))
   const names = new Map(containers.map((c) => [c.id, c.spec.name]))
   const groups: TargetGroup[] = [
@@ -64,7 +64,7 @@ export function targetGroups(
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((endpoint) => {
           const target: InspectTarget = { kind: "endpoint", name: endpoint.name }
-          return { key: targetKey(target), target, label: endpoint.path, unavailable: off }
+          return { key: targetKey(target), target, label: endpoint.path }
         }),
     })
   const byContainer = new Map<string, DesktopServer[]>()

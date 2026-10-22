@@ -29,12 +29,13 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             allowed_hosts: vec![],
             upload_limit: 1024 * 1024,
             archive_limit: 4 * 1024 * 1024,
-            mcp_enabled: false,
+            root_mcp_enabled: false,
             mcp_token: Some(String::new()),
             templates_url: None,
             volume_filter: None,
             update_check: false,
             update_dir: "update".into(),
+            notices: Vec::new(),
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
@@ -63,7 +64,7 @@ fn spec() -> model::ContainerSpec {
 pub(crate) fn mcp_app() -> Arc<App> {
     let mut app = app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
-    config.mcp_enabled = true;
+    config.root_mcp_enabled = true;
     config.mcp_token = Some("test-token-with-at-least-32-characters".into());
     app
 }
@@ -290,7 +291,7 @@ async fn mcp_requires_its_own_token_and_rejects_cross_origin_access() {
         ),
     ] {
         let mut app = mcp_app();
-        Arc::get_mut(&mut app).unwrap().config.mcp_enabled = enabled;
+        Arc::get_mut(&mut app).unwrap().config.root_mcp_enabled = enabled;
         let mut req = Request::builder()
             .method("POST")
             .uri("/mcp")

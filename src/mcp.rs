@@ -67,7 +67,7 @@ async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> Respo
 }
 
 pub(crate) fn reject(app: &App, req: &Request) -> Option<Response> {
-    if !app.config.mcp_enabled {
+    if !app.config.root_mcp_enabled {
         return Some(StatusCode::NOT_FOUND.into_response());
     }
     if req.headers().contains_key(header::ORIGIN) && !auth::origin_matches(req.headers()) {

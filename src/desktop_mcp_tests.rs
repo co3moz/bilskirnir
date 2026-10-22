@@ -1130,7 +1130,7 @@ async fn an_excluded_tool_is_unknown_on_the_endpoint() {
 }
 
 #[tokio::test]
-async fn endpoints_answer_only_while_mcp_is_enabled_and_from_the_dashboards_origin() {
+async fn endpoints_answer_only_from_the_dashboards_origin() {
     let app = mcp_app();
     app.db
         .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
@@ -1169,18 +1169,59 @@ async fn endpoints_answer_only_while_mcp_is_enabled_and_from_the_dashboards_orig
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let disabled = app_with_endpoint_but_mcp_off();
-    let (status, _, _) = call(
-        disabled,
-        "/mcp/chrome-dev",
-        Some(ADMIN),
-        None,
-        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
 }
-fn app_with_endpoint_but_mcp_off() -> Arc<App> {
+
+#[tokio::test]
+async fn endpoints_answer_with_their_tokens_while_the_root_mcp_is_off() {
+    // ROOT_MCP_ENABLED=false, without an administrator's token.
+    let app = app(true);
+    assert!(!app.config.root_mcp_enabled);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    let Json(created) = create_endpoint(
+        State(app.clone()),
+        Json(
+            serde_json::from_value(json!({"name":"chrome-dev","grants":[{"container_id":"c1","scopes":["view"],"servers":"all"}]}))
+                .unwrap(),
+        ),
+    )
+    .await
+    .unwrap();
+    let token = created["token"].as_str().unwrap().to_owned();
+    open_session(&app, "/mcp/chrome-dev", &token).await;
+    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}});
+    // The endpoint still needs its token, and the empty administrator's token opens nothing.
+    for bearer in [None, Some(""), Some(ADMIN)] {
+        let (status, _, _) = call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            bearer,
+            None,
+            initialize.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{bearer:?}");
+    }
+    // The root /mcp stays off, also for the endpoint's token.
+    let (status, _, _) = call(app.clone(), "/mcp", Some(&token), None, initialize.clone()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // MCP_AUTH_MODE=none opens the endpoints without a token only while /mcp is on: with the root
+    // channel off, nothing answers an agent without a token.
+    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
+    let mut closed = app_with_endpoint_but_root_mcp_off();
+    Arc::get_mut(&mut closed).unwrap().config.mcp_token = None;
+    let (status, _, body) = call(closed, "/mcp/chrome-dev", None, None, initialize.clone()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    let mut open = app_with_endpoint_but_root_mcp_off();
+    let config = &mut Arc::get_mut(&mut open).unwrap().config;
+    config.mcp_token = None;
+    config.root_mcp_enabled = true;
+    let (status, _, body) = call(open, "/mcp/chrome-dev", None, None, initialize).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["result"]["serverInfo"].is_object(), "{body}");
+}
+fn app_with_endpoint_but_root_mcp_off() -> Arc<App> {
     let app = app(true);
     app.db
         .put(

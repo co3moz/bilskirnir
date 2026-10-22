@@ -736,9 +736,12 @@ export const en = {
   "settings.about.SECURE_COOKIE": "Sends the session cookie over HTTPS only.",
   "settings.about.ALLOWED_HOSTS":
     "Host names the dashboard answers besides localhost and private addresses, DESKTOP_HOST included.",
-  "settings.about.MCP_ENABLED": "Whether /mcp and the MCP endpoints answer agents.",
-  "settings.about.MCP_AUTH_MODE": "token requires MCP_TOKEN on /mcp; none leaves it open.",
-  "settings.about.MCP_TOKEN": "The bearer token /mcp requires.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Whether the root /mcp, which reaches every container, answers agents. MCP endpoints answer either way.",
+  "settings.about.MCP_AUTH_MODE":
+    "token requires a token on /mcp and the MCP endpoints; none leaves both open.",
+  "settings.about.MCP_TOKEN":
+    "The administrator's bearer token: /mcp requires it, and it opens every MCP endpoint.",
   "settings.about.DESKTOP_IMAGE": "The image the create form selects first.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Lets browsers and Electron apps in desktops start their sandbox.",
@@ -1024,9 +1027,9 @@ export const en = {
   "import.archive.tab": "Archive file",
   "import.docker.tab": "Docker image",
 
-  "mcp.off": "MCP is turned off",
-  "mcp.offHint":
-    "Endpoints answer agents only when MCP is enabled for this installation (MCP_ENABLED). You can still prepare them here.",
+  "mcp.rootOff": "The root /mcp is turned off",
+  "mcp.rootOffHint":
+    "The endpoints below answer agents with their own tokens either way. The root /mcp, which reaches every container, follows ROOT_MCP_ENABLED in the installation's .env.",
   "mcp.view.endpoints": "Endpoints",
   "mcp.view.servers": "Desktop servers",
   "mcp.view.inspector": "Inspector",
@@ -1280,7 +1283,7 @@ export const en = {
   "inspector.target.placeholder": "Choose a server…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP is turned off",
+  "inspector.target.rootOff": "Root /mcp is turned off",
   "inspector.target.stopped": "container stopped",
   "inspector.status.connecting": "Starting the server…",
   "inspector.status.initializing": "Connecting…",

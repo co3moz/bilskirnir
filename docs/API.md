@@ -29,7 +29,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
 | POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
 | POST | `/api/logout` | Sign out. |
-| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
+| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `root_mcp_enabled`, whether the root `/mcp` answers (`ROOT_MCP_ENABLED`); the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer either way. Before 0.7.0 the field was `mcp_enabled`. |
 | GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Settings** page; secrets only say whether they are set. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
@@ -548,7 +548,7 @@ An endpoint is created with:
 {"kind": "administrator"}
 ```
 
-A `server` is a desktop server the manager knows, and a `trial` is a declaration, as registering takes it, tried before it is saved. Both need a running container and start in a `docker exec` of their own as the desktop user, apart from the connections endpoints hold, and closing the socket ends it. Being a second process, a server that locks something of its own, such as a browser profile, may refuse to start while an agent's connection to it is open. An `endpoint` offers the tools its agents see and `administrator` those of `/mcp`; both are served inside the manager without a token, and only while MCP is enabled.
+A `server` is a desktop server the manager knows, and a `trial` is a declaration, as registering takes it, tried before it is saved. Both need a running container and start in a `docker exec` of their own as the desktop user, apart from the connections endpoints hold, and closing the socket ends it. Being a second process, a server that locks something of its own, such as a browser profile, may refuse to start while an agent's connection to it is open. An `endpoint` offers the tools its agents see and `administrator` those of `/mcp`; both are served inside the manager without a token, `administrator` only while the root `/mcp` is on (`ROOT_MCP_ENABLED`).
 
 Every later frame from the browser is one JSON-RPC message, or a batch, on one line, at most 1.1 MB. Every frame from the manager is a JSON object with a `type`:
 

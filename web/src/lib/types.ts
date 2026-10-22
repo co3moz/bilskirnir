@@ -313,8 +313,8 @@ export type Settings = {
   templates_url: string | null
   /** The label a volume needs to be listed and mounted, or `null` when every volume is. */
   volume_filter: string | null
-  /** Whether MCP endpoints answer agents (MCP_ENABLED). */
-  mcp_enabled: boolean
+  /** Whether the root /mcp answers agents (ROOT_MCP_ENABLED); MCP endpoints answer either way. */
+  root_mcp_enabled: boolean
 }
 
 /** `GET update`: this release, the newest one and whether the dashboard can update to it. */

@@ -96,6 +96,26 @@ set_setting() {
         printf '%s=%s\n' "$1" "$2" | sudo tee -a "$INSTALL/.env" >/dev/null
     fi
 }
+# Settings a release renamed, as OLD=NEW. The manager reads an old name while the new one is
+# missing and says to rename it; an update renames it in .env, or drops it when the new name is
+# there already, since that one applies.
+RENAMED_SETTINGS=(MCP_ENABLED=ROOT_MCP_ENABLED)
+rename_settings() {
+    local pair old new
+    for pair in "${RENAMED_SETTINGS[@]}"; do
+        old=${pair%%=*} new=${pair#*=}
+        if ! grep -q "^$old=" "$INSTALL/.env"; then
+            continue
+        fi
+        if grep -q "^$new=" "$INSTALL/.env"; then
+            sudo sed -i "/^$old=/d" "$INSTALL/.env"
+            echo "Removed $old from .env; $new applies."
+        else
+            sudo sed -i "s/^$old=/$new=/" "$INSTALL/.env"
+            echo "Renamed $old to $new in .env."
+        fi
+    done
+}
 # Prints the version of the newest published release, without the v of its tag.
 newest_release() {
     local version
@@ -314,6 +334,7 @@ case ${1:-help} in
         update_cli "$image"
         update_install_files "$image"
         update_units "$image"
+        rename_settings
         compose pull
         compose up -d
         update_profiles
@@ -356,7 +377,7 @@ case ${1:-help} in
         printf 'access:    reachable from %s, WSL networking %s' "$reach" "${networking:-unknown}"
         if [[ $reach == other* && $networking == nat ]]; then printf '; other devices need mirrored networking or a port proxy on Windows'; fi
         echo
-        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
         # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
         if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
@@ -366,13 +387,16 @@ case ${1:-help} in
         ;;
     mcp)
         require_settings
-        enabled=$(sed -n 's/^MCP_ENABLED=//p' "$INSTALL/.env" | tail -n1)
+        # Called MCP_ENABLED before 0.7.0; the manager still reads that name while the new one is missing.
+        enabled=$(setting ROOT_MCP_ENABLED)
+        if [[ -z $enabled ]]; then enabled=$(setting MCP_ENABLED); fi
         mode=$(sed -n 's/^MCP_AUTH_MODE=//p' "$INSTALL/.env" | tail -n1)
         token=$(sed -n 's/^MCP_TOKEN=//p' "$INSTALL/.env" | tail -n1)
         # The first start single-quotes the token so Compose keeps $ and # literal; older files have none.
         if [[ $token =~ ^\'(.*)\'$ || $token =~ ^\"(.*)\"$ ]]; then token=${BASH_REMATCH[1]}; fi
         if [[ $enabled != true || ($mode != none && -z $token) ]]; then
-            echo "Agent access is disabled. Set MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
+            echo "Root agent access (/mcp) is off. MCP endpoints made on the dashboard's MCP page work without it, each with its own token, and its Connect shows their client settings." >&2
+            echo "To turn on /mcp, which reaches every desktop, set ROOT_MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
             exit 1
         fi
         distro=${WSL_DISTRO_NAME:-Bilskirnir}

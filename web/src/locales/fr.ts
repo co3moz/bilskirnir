@@ -725,9 +725,12 @@ export const fr: Messages = {
   "settings.about.SECURE_COOKIE": "N'envoie le cookie de session qu'en HTTPS.",
   "settings.about.ALLOWED_HOSTS":
     "Noms d'hôte auxquels le tableau de bord répond en plus de localhost et des adresses privées, DESKTOP_HOST compris.",
-  "settings.about.MCP_ENABLED": "Si /mcp et les points de terminaison MCP répondent aux agents.",
-  "settings.about.MCP_AUTH_MODE": "token exige MCP_TOKEN sur /mcp ; none le laisse ouvert.",
-  "settings.about.MCP_TOKEN": "Le jeton bearer qu'exige /mcp.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Si le /mcp racine, qui atteint chaque conteneur, répond aux agents. Les points d'accès MCP répondent dans tous les cas.",
+  "settings.about.MCP_AUTH_MODE":
+    "token exige un jeton sur /mcp et les points d'accès MCP ; none laisse les deux ouverts.",
+  "settings.about.MCP_TOKEN":
+    "Le jeton bearer de l'administrateur : /mcp l'exige, et il ouvre chaque point d'accès MCP.",
   "settings.about.DESKTOP_IMAGE": "L'image que le formulaire de création choisit d'abord.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Permet aux navigateurs et aux applications Electron des bureaux de lancer leur sandbox.",
@@ -1006,9 +1009,9 @@ export const fr: Messages = {
   "import.docker.reference": "Référence de l'image",
   "import.archive.tab": "Fichier d'archive",
   "import.docker.tab": "Image Docker",
-  "mcp.off": "MCP est désactivé",
-  "mcp.offHint":
-    "Les points d'accès ne répondent aux agents que si MCP est activé pour cette installation (MCP_ENABLED). Vous pouvez tout de même les préparer ici.",
+  "mcp.rootOff": "Le /mcp racine est désactivé",
+  "mcp.rootOffHint":
+    "Les points d'accès ci-dessous répondent aux agents avec leurs propres jetons dans tous les cas. Le /mcp racine, qui atteint chaque conteneur, suit ROOT_MCP_ENABLED dans le .env de l'installation.",
   "mcp.view.endpoints": "Points d'accès",
   "mcp.view.servers": "Serveurs du bureau",
   "mcp.view.inspector": "Inspecteur",
@@ -1276,7 +1279,7 @@ export const fr: Messages = {
   "inspector.target.placeholder": "Choisir un serveur…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP est désactivé",
+  "inspector.target.rootOff": "/mcp racine désactivé",
   "inspector.target.stopped": "conteneur arrêté",
   "inspector.status.connecting": "Démarrage du serveur…",
   "inspector.status.initializing": "Connexion…",

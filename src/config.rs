@@ -30,8 +30,12 @@ pub struct Config {
     pub upload_limit: u64,
     /// The largest unpacked image archive an import accepts, in bytes.
     pub archive_limit: u64,
-    pub mcp_enabled: bool,
-    /// The bearer token `/mcp` requires, or `None` when `MCP_AUTH_MODE=none` turns the check off.
+    /// Whether the root `/mcp` answers: the administrator's agent channel to every container, the
+    /// one not made on the dashboard. The MCP endpoints at `/mcp/<name>` answer either way.
+    pub root_mcp_enabled: bool,
+    /// The administrator's bearer token, which `/mcp` requires and which opens every MCP endpoint
+    /// too, or `None` when `MCP_AUTH_MODE=none` turns the check off for both. Empty when no token
+    /// is set, which opens nothing.
     pub mcp_token: Option<String>,
     /// The template list the templates page reads in the browser, or `None` to turn it off.
     pub templates_url: Option<String>,
@@ -42,16 +46,63 @@ pub struct Config {
     pub update_check: bool,
     /// Where the WSL package takes update requests from the dashboard; see [`crate::releases`].
     pub update_dir: PathBuf,
+    /// What startup has to say about the settings it was given, such as a renamed variable that
+    /// is still set; logged once the manager starts.
+    pub notices: Vec<String>,
 }
+/// A variable a release renamed. An installation keeps its `.env` across upgrades, so the old name
+/// keeps its meaning while the new one is not set, and startup says to rename it.
+pub(crate) struct Renamed {
+    pub old: &'static str,
+    pub new: &'static str,
+    /// The release that renamed it.
+    pub release: &'static str,
+}
+pub(crate) const RENAMED: &[Renamed] = &[Renamed {
+    old: "MCP_ENABLED",
+    new: "ROOT_MCP_ENABLED",
+    release: "0.7.0",
+}];
 /// The template list on the project's GitHub wiki.
 pub(crate) const TEMPLATES_URL: &str =
     "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json";
 fn flag(key: &str, default: bool) -> Result<bool> {
-    match env::var(key).as_deref() {
-        Ok("true" | "1") => Ok(true),
-        Ok("false" | "0") => Ok(false),
-        Err(_) => Ok(default),
+    flag_value(key, env::var(key).ok().as_deref(), default)
+}
+fn flag_value(key: &str, value: Option<&str>, default: bool) -> Result<bool> {
+    match value {
+        Some("true" | "1") => Ok(true),
+        Some("false" | "0") => Ok(false),
+        None => Ok(default),
         _ => bail!("{key}: must be true or false"),
+    }
+}
+/// The value of a renamed setting under either of its names. Empty counts as not set, since
+/// Compose passes the old name empty once `.env` no longer has it.
+pub(crate) fn renamed_value(
+    get: &dyn Fn(&str) -> Option<String>,
+    renamed: &Renamed,
+    notices: &mut Vec<String>,
+) -> Result<Option<String>> {
+    let set = |key: &str| get(key).filter(|value| !value.is_empty());
+    let Renamed { old, new, release } = renamed;
+    match (set(new), set(old)) {
+        (new_value, None) => Ok(new_value),
+        (None, Some(old_value)) => {
+            notices.push(format!(
+                "{old} was renamed {new} in Bilskirnir {release}. Its value still applies; rename it in .env."
+            ));
+            Ok(Some(old_value))
+        }
+        (Some(new_value), Some(old_value)) if new_value == old_value => {
+            notices.push(format!(
+                "{old} was renamed {new} in Bilskirnir {release}, and {new} applies. Remove {old} from .env."
+            ));
+            Ok(Some(new_value))
+        }
+        (Some(new_value), Some(old_value)) => bail!(
+            "{old}={old_value} and {new}={new_value} disagree. {old} was renamed {new} in Bilskirnir {release}; remove {old} from .env"
+        ),
     }
 }
 impl Config {
@@ -80,9 +131,12 @@ impl Config {
             None
         };
         let audio = flag("AUDIO_ENABLED", true)?;
-        let mcp_enabled = flag("MCP_ENABLED", false)?;
+        let mut notices = Vec::new();
+        let get = |key: &str| env::var(key).ok();
+        let root_mcp = renamed_value(&get, &RENAMED[0], &mut notices)?;
+        let root_mcp_enabled = flag_value("ROOT_MCP_ENABLED", root_mcp.as_deref(), false)?;
         let mcp_token = mcp_token(
-            mcp_enabled,
+            root_mcp_enabled,
             env::var("MCP_AUTH_MODE").ok().as_deref(),
             env::var("MCP_TOKEN").unwrap_or_default(),
         )?;
@@ -132,12 +186,13 @@ impl Config {
                 .collect(),
             upload_limit: upload_mb * 1024 * 1024,
             archive_limit: archive_mb * 1024 * 1024,
-            mcp_enabled,
+            root_mcp_enabled,
             mcp_token,
             templates_url: templates_url(env::var("TEMPLATES_URL").ok().as_deref())?,
             volume_filter: volume_filter(env::var("VOLUME_FILTER").ok().as_deref())?,
             update_check: flag("UPDATE_CHECK", true)?,
             update_dir: crate::releases::UPDATE_DIR.into(),
+            notices,
         };
         super::model::image_ref(&cfg.base_image)?;
         if let Some(profile) = cfg.seccomp_profile()
@@ -183,7 +238,7 @@ impl Config {
             value("SECURE_COOKIE", json!(self.secure_cookie)),
             value("ALLOWED_HOSTS", json!(self.allowed_hosts.join(","))),
             value("MANAGER_CONTAINER", json!(self.manager)),
-            value("MCP_ENABLED", json!(self.mcp_enabled)),
+            value("ROOT_MCP_ENABLED", json!(self.root_mcp_enabled)),
             value(
                 "MCP_AUTH_MODE",
                 json!(on(self.mcp_token.is_some(), "token")),
@@ -293,7 +348,9 @@ pub(crate) fn docker_socket(host: Option<&str>) -> Option<PathBuf> {
     }
 }
 
-/// An unset mode keeps the token requirement, so only an explicit `none` opens the endpoint.
+/// An unset mode keeps the token requirement, so only an explicit `none` opens `/mcp` and the MCP
+/// endpoints without one. The token itself is required only while the root `/mcp` is on; without
+/// it, an endpoint opens with its own token.
 pub(crate) fn mcp_token(
     enabled: bool,
     mode: Option<&str>,
@@ -314,7 +371,7 @@ pub(crate) fn validate_mcp_token(enabled: bool, token: &str) -> Result<()> {
         && (!(1..=256).contains(&token.len()) || !token.bytes().all(|b| b.is_ascii_graphic()))
     {
         bail!(
-            "MCP_TOKEN must contain 1 to 256 visible ASCII characters without spaces when MCP_ENABLED=true (or use MCP_AUTH_MODE=none)"
+            "MCP_TOKEN must contain 1 to 256 visible ASCII characters without spaces when ROOT_MCP_ENABLED=true (or use MCP_AUTH_MODE=none)"
         );
     }
     Ok(())

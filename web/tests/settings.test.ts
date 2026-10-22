@@ -20,7 +20,7 @@ test("settings are listed by section in the manager's order, unknown ones last",
     { name: "AUTH_MODE", value: "password" },
     { name: "ADMIN_PASSWORD", secret: true, set: true },
     { name: "SOMETHING_NEWER", value: "x" },
-    { name: "MCP_ENABLED", value: false },
+    { name: "ROOT_MCP_ENABLED", value: false },
   ]
   assert.deepEqual(
     sections(variables).map(({ section, variables }) => [
@@ -29,7 +29,7 @@ test("settings are listed by section in the manager's order, unknown ones last",
     ]),
     [
       ["access", ["AUTH_MODE", "ADMIN_PASSWORD"]],
-      ["mcp", ["MCP_ENABLED"]],
+      ["mcp", ["ROOT_MCP_ENABLED"]],
       ["manager", ["UPDATE_CHECK"]],
       ["misc", ["SOMETHING_NEWER"]],
     ]

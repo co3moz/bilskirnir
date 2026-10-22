@@ -16,11 +16,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 /// How often the manager looks for desktops that started or stopped.
 const SUPERVISE_EVERY: Duration = Duration::from_secs(10);
 
-/// Watch every running desktop while MCP is enabled, and close idle server connections.
+/// Watch every running desktop and close idle server connections. The MCP endpoints, which
+/// answer whether or not the root `/mcp` is on, and the MCP page need the servers' tool lists.
 pub(crate) fn spawn(app: Arc<App>) {
-    if !app.config.mcp_enabled {
-        return;
-    }
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SUPERVISE_EVERY);
         loop {
