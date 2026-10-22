@@ -22,6 +22,15 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             secure_cookie: false,
             audio: true,
             microphone: true,
+            internet: true,
+            sudo: true,
+            gamepad: true,
+            defaults: config::Features {
+                gpu: true,
+                internet: true,
+                sudo: true,
+                ..Default::default()
+            },
             wsl_gpu: true,
             cuda: true,
             adapter: String::new(),
@@ -2322,5 +2331,162 @@ fn the_desktop_seccomp_profile_adds_only_user_namespaces_to_dockers_default() {
             .any(|rule| rule["names"] == serde_json::json!(["clone3"])
                 && rule["errnoRet"] == 38
                 && rule["excludes"]["caps"] == serde_json::json!(["CAP_SYS_ADMIN"]))
+    );
+}
+#[tokio::test]
+async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_them() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.internet = false;
+        config.sudo = false;
+        config.gamepad = false;
+    }
+    let without = || {
+        let mut spec = spec();
+        spec.internet = false;
+        spec.sudo = false;
+        spec.gamepad = false;
+        spec
+    };
+    // A new container cannot have them.
+    for (feature, says) in [
+        ("internet", "INTERNET_ENABLED"),
+        ("sudo", "SUDO_ENABLED"),
+        ("gamepad", "GAMEPAD_ENABLED"),
+    ] {
+        let mut spec = without();
+        match feature {
+            "internet" => spec.internet = true,
+            "sudo" => spec.sudo = true,
+            _ => spec.gamepad = true,
+        }
+        let error = app
+            .create_container("refused", spec.clone(), Default::default(), "create-job")
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(says), "{error}");
+        // Nor can a settings change turn one on.
+        let env = model::Container {
+            id: "off".into(),
+            container: "bilskirnir-off".into(),
+            private_network: "bilskirnir-off-private".into(),
+            egress_network: "bilskirnir-off-egress".into(),
+            source_image_id: "sha256:source".into(),
+            created_at: 0,
+            spec: without(),
+            last_error: None,
+            desktop: None,
+            working_image: None,
+            setup: None,
+        };
+        let request = serde_json::json!({ feature: true });
+        let error = app
+            .settings_preview(&env, request.as_object().unwrap())
+            .unwrap_err();
+        assert!(error.to_string().contains(says), "{error}");
+    }
+    // A container created before the switch keeps all three, also when it is created again.
+    let mut kept = spec();
+    kept.gamepad = true;
+    let env = model::Container {
+        id: "kept".into(),
+        container: "bilskirnir-kept".into(),
+        private_network: "bilskirnir-kept-private".into(),
+        egress_network: "bilskirnir-kept-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: kept,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    let (_, changes) = app
+        .settings_preview(
+            &env,
+            serde_json::json!({"name": "Renamed"}).as_object().unwrap(),
+        )
+        .unwrap();
+    assert_eq!(changes.live, ["name"]);
+    let args = app.container_args(&env);
+    assert!(args.iter().any(|arg| arg == "/dev/uinput"), "{args:?}");
+    assert!(
+        args.iter().any(|arg| arg == "DESKTOP_SUDO=true"),
+        "{args:?}"
+    );
+    // What the manager carries itself stops while the feature is off.
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    let input: gamepad::GamepadInput =
+        serde_json::from_value(serde_json::json!({"actions": [{"type": "reset"}]})).unwrap();
+    let error = gamepad::gamepad_input(&app, "kept", &input)
+        .await
+        .unwrap_err();
+    assert!(error.1.contains("GAMEPAD_ENABLED"), "{}", error.1);
+    // Internet cannot be given while it is off; the switch refuses before any job, while turning
+    // it off goes on as before.
+    let internet = |enabled: bool| {
+        let app = app.clone();
+        async move {
+            router(app)
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/containers/kept/internet")
+                        .header("host", "localhost:8080")
+                        .header("x-bilskirnir-request", "1")
+                        .header("content-type", "application/json")
+                        .body(Body::from(
+                            serde_json::json!({ "enabled": enabled }).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    assert_eq!(internet(true).await, StatusCode::BAD_REQUEST);
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+}
+#[tokio::test]
+async fn the_settings_route_tells_the_features_and_their_defaults() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.wsl_gpu = false;
+        config.cuda = false;
+        config.sudo = false;
+    }
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .uri("/api/settings")
+                .header("host", "localhost:8080")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        (
+            &body["gpu_enabled"],
+            &body["sudo_enabled"],
+            &body["internet_enabled"]
+        ),
+        (
+            &serde_json::json!(false),
+            &serde_json::json!(false),
+            &serde_json::json!(true)
+        )
+    );
+    // The configured defaults turn GPU access and sudo on, which the installation has off.
+    assert_eq!(
+        body["defaults"],
+        serde_json::json!({"gpu": false, "internet": true, "sudo": false, "audio": false, "microphone": false, "gamepad": false})
     );
 }

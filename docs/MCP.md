@@ -71,7 +71,7 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 ## A useful first workflow
 
 1. Call `get_settings` and `list_images` to see the available images and defaults.
-2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
+2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A feature it leaves out, such as `gpu` or `internet`, gets the installation's default, which `get_settings` reports in `defaults`; one the installation switched off, such as `internet_enabled: false`, is refused. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `container_id`.
 4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root. For a common application or toolchain, such as Node.js, [build the image from a template](#build-from-a-template) first and create the container from that image instead.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.

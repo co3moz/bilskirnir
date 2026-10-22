@@ -26,6 +26,13 @@ pub struct Config {
     pub secure_cookie: bool,
     pub audio: bool,
     pub microphone: bool,
+    /// Whether desktops may have internet access, `sudo` and a virtual gamepad. Like `audio`, a
+    /// switched-off feature cannot be chosen for a desktop; see [`crate::App::installation_allows`].
+    pub internet: bool,
+    pub sudo: bool,
+    pub gamepad: bool,
+    /// The features of a new container as the installation sets them; see [`Config::feature_defaults`].
+    pub defaults: Features,
     pub wsl_gpu: bool,
     pub cuda: bool,
     pub adapter: String,
@@ -64,6 +71,17 @@ pub struct Config {
     /// settings' text in it is what the Settings page starts from.
     pub environment: BTreeMap<String, String>,
 }
+/// The features of a new container: what the create form starts with, and what a create request gets
+/// when it leaves one out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct Features {
+    pub gpu: bool,
+    pub internet: bool,
+    pub sudo: bool,
+    pub audio: bool,
+    pub microphone: bool,
+    pub gamepad: bool,
+}
 /// A variable a release renamed. An installation keeps its `.env` across upgrades, so the old name
 /// keeps its meaning while the new one is not set, and startup says to rename it.
 pub(crate) struct Renamed {
@@ -91,6 +109,15 @@ pub(crate) const EDITABLE: &[&str] = &[
     "GPU_ADAPTER",
     "AUDIO_ENABLED",
     "MICROPHONE_ENABLED",
+    "INTERNET_ENABLED",
+    "SUDO_ENABLED",
+    "GAMEPAD_ENABLED",
+    "GPU_DEFAULT",
+    "INTERNET_DEFAULT",
+    "SUDO_DEFAULT",
+    "AUDIO_DEFAULT",
+    "MICROPHONE_DEFAULT",
+    "GAMEPAD_DEFAULT",
     "UPLOAD_MAX_MB",
     "IMAGE_ARCHIVE_MAX_MB",
     "TEMPLATES_URL",
@@ -338,6 +365,19 @@ impl Config {
             secure_cookie: flag("SECURE_COOKIE", false)?,
             audio,
             microphone: audio && flag("MICROPHONE_ENABLED", true)?,
+            internet: flag("INTERNET_ENABLED", true)?,
+            sudo: flag("SUDO_ENABLED", true)?,
+            gamepad: flag("GAMEPAD_ENABLED", true)?,
+            // As the create form chose before these settings: GPU access where the installation
+            // has it, internet and sudo, and neither sound nor a gamepad.
+            defaults: Features {
+                gpu: flag("GPU_DEFAULT", true)?,
+                internet: flag("INTERNET_DEFAULT", true)?,
+                sudo: flag("SUDO_DEFAULT", true)?,
+                audio: flag("AUDIO_DEFAULT", false)?,
+                microphone: flag("MICROPHONE_DEFAULT", false)?,
+                gamepad: flag("GAMEPAD_DEFAULT", false)?,
+            },
             wsl_gpu: flag("WSL_GPU", true)?,
             cuda: flag("NVIDIA_COMPUTE", true)?,
             adapter: var("GPU_ADAPTER").unwrap_or_default(),
@@ -429,6 +469,15 @@ impl Config {
             value("GPU_ADAPTER", json!(self.adapter)),
             value("AUDIO_ENABLED", json!(self.audio)),
             value("MICROPHONE_ENABLED", json!(self.microphone)),
+            value("INTERNET_ENABLED", json!(self.internet)),
+            value("SUDO_ENABLED", json!(self.sudo)),
+            value("GAMEPAD_ENABLED", json!(self.gamepad)),
+            value("GPU_DEFAULT", json!(self.defaults.gpu)),
+            value("INTERNET_DEFAULT", json!(self.defaults.internet)),
+            value("SUDO_DEFAULT", json!(self.defaults.sudo)),
+            value("AUDIO_DEFAULT", json!(self.defaults.audio)),
+            value("MICROPHONE_DEFAULT", json!(self.defaults.microphone)),
+            value("GAMEPAD_DEFAULT", json!(self.defaults.gamepad)),
             value("UPLOAD_MAX_MB", mib(self.upload_limit)),
             value("IMAGE_ARCHIVE_MAX_MB", mib(self.archive_limit)),
             value(
@@ -441,6 +490,26 @@ impl Config {
             ),
             value("UPDATE_CHECK", json!(self.update_check)),
         ]
+    }
+
+    /// Whether desktops may have GPU access: through the WSL GPU, CUDA or both.
+    pub(crate) fn gpu_enabled(&self) -> bool {
+        self.wsl_gpu || self.cuda
+    }
+
+    /// The features a new container starts with: the installation's defaults, but never one it
+    /// has switched off. The microphone travels over the audio connection, so it is on only
+    /// with audio; [`crate::api::create`] decides that for a request that chooses audio itself.
+    pub(crate) fn feature_defaults(&self) -> Features {
+        let audio = self.defaults.audio && self.audio;
+        Features {
+            gpu: self.defaults.gpu && self.gpu_enabled(),
+            internet: self.defaults.internet && self.internet,
+            sudo: self.defaults.sudo && self.sudo,
+            audio,
+            microphone: self.defaults.microphone && self.microphone && audio,
+            gamepad: self.defaults.gamepad && self.gamepad,
+        }
     }
 
     /// Whether the manager answers requests for this host name.

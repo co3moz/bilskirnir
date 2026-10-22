@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled,"internet_enabled":app.config.internet,"sudo_enabled":app.config.sudo,"gamepad_enabled":app.config.gamepad,"defaults":app.config.feature_defaults()}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -161,15 +161,43 @@ pub struct CreateContainer {
     #[serde(default = "default_true")]
     pub mcp_endpoint: bool,
 }
-pub async fn create(
-    State(app): State<Arc<App>>,
-    Json(body): Json<CreateContainer>,
-) -> Result<Json<Value>> {
+/// A create request with the installation's defaults for the features it leaves out. Only a
+/// request gets them: the serde defaults of [`ContainerSpec`] fill the fields that records saved
+/// before a field existed lack, and keep their meaning.
+pub(crate) fn creation_request(
+    config: &crate::config::Config,
+    mut body: Value,
+) -> Result<CreateContainer> {
+    let defaults = config.feature_defaults();
+    if let Value::Object(request) = &mut body {
+        for (feature, default) in [
+            ("gpu", defaults.gpu),
+            ("internet", defaults.internet),
+            ("sudo", defaults.sudo),
+            ("audio", defaults.audio),
+            ("gamepad", defaults.gamepad),
+        ] {
+            request.entry(feature).or_insert(json!(default));
+        }
+        // The microphone travels over the audio connection.
+        let audio = request.get("audio") == Some(&Value::Bool(true));
+        request.entry("microphone").or_insert(json!(
+            audio && config.defaults.microphone && config.microphone
+        ));
+    }
+    serde_json::from_value(body).map_err(|e| {
+        Error(
+            StatusCode::BAD_REQUEST,
+            format!("Invalid container request: {e}"),
+        )
+    })
+}
+pub async fn create(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Result<Json<Value>> {
     let CreateContainer {
         spec,
         parameters,
         mcp_endpoint,
-    } = body;
+    } = creation_request(&app.config, body)?;
     spec.validate()?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     // A compose found by the name the request uses is checked now; the job checks again once
@@ -249,6 +277,13 @@ pub async fn internet(
     Json(body): Json<Internet>,
 ) -> Result<Json<Value>> {
     app.container(&id)?;
+    // Turning it off stays possible on a container that has it.
+    if body.enabled && !app.config.internet {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "Internet access is disabled for this installation (INTERNET_ENABLED=false)".into(),
+        ));
+    }
     launch(
         app,
         "internet",

@@ -315,6 +315,12 @@ export type Settings = {
   volume_filter: string | null
   /** Whether the root /mcp answers agents (ROOT_MCP_ENABLED); MCP endpoints answer either way. */
   root_mcp_enabled: boolean
+  /** Whether the installation allows these container features (INTERNET_ENABLED and so on). */
+  internet_enabled?: boolean
+  sudo_enabled?: boolean
+  gamepad_enabled?: boolean
+  /** What a new container gets of each feature unless it asks otherwise. */
+  defaults?: Record<"gpu" | "internet" | "sudo" | "audio" | "microphone" | "gamepad", boolean>
 }
 
 /** `GET update`: this release, the newest one and whether the dashboard can update to it. */

@@ -715,6 +715,7 @@ export const de: Messages = {
   "settings.section.access": "Anmeldung und Zugriff",
   "settings.section.mcp": "Agentenzugriff (MCP)",
   "settings.section.desktops": "Desktops",
+  "settings.section.features": "Container-Funktionen",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Grenzen",
   "settings.section.content": "Vorlagen und Volumes",
@@ -776,6 +777,21 @@ export const de: Messages = {
     "Lässt Browser und Electron-Apps in Desktops ihre Sandbox starten.",
   "settings.about.AUDIO_ENABLED": "Desktop-Ton im Browser.",
   "settings.about.MICROPHONE_ENABLED": "Das Mikrofon des Browsers in Desktops; braucht Ton.",
+  "settings.about.INTERNET_ENABLED": "Ob Container Internetzugang haben dürfen.",
+  "settings.about.SUDO_ENABLED": "Ob Container dem Desktop-Benutzer sudo geben dürfen.",
+  "settings.about.GAMEPAD_ENABLED": "Ob Container das virtuelle Gamepad haben dürfen.",
+  "settings.about.GPU_DEFAULT":
+    "Ob ein neuer Container GPU-Zugriff erhält, sofern er nichts anderes verlangt.",
+  "settings.about.INTERNET_DEFAULT":
+    "Ob ein neuer Container Internetzugang erhält, sofern er nichts anderes verlangt.",
+  "settings.about.SUDO_DEFAULT":
+    "Ob ein neuer Container dem Desktop-Benutzer sudo gibt, sofern er nichts anderes verlangt.",
+  "settings.about.AUDIO_DEFAULT":
+    "Ob ein neuer Container Ton erhält, sofern er nichts anderes verlangt.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Ob ein neuer Container mit Ton das Mikrofon erhält, sofern er nichts anderes verlangt.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Ob ein neuer Container das virtuelle Gamepad erhält, sofern er nichts anderes verlangt.",
   "settings.about.WSL_GPU": "Grafikbeschleunigung über die WSL-GPU.",
   "settings.about.NVIDIA_COMPUTE": "CUDA über das NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER":

@@ -713,6 +713,7 @@ export const fr: Messages = {
   "settings.section.access": "Connexion et accès",
   "settings.section.mcp": "Accès des agents (MCP)",
   "settings.section.desktops": "Bureaux",
+  "settings.section.features": "Fonctions des conteneurs",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Limites",
   "settings.section.content": "Modèles et volumes",
@@ -774,6 +775,19 @@ export const fr: Messages = {
     "Permet aux navigateurs et aux applications Electron des bureaux de lancer leur sandbox.",
   "settings.about.AUDIO_ENABLED": "Le son du bureau dans le navigateur.",
   "settings.about.MICROPHONE_ENABLED": "Le micro du navigateur dans les bureaux ; requiert le son.",
+  "settings.about.INTERNET_ENABLED": "Si les conteneurs peuvent avoir accès à Internet.",
+  "settings.about.SUDO_ENABLED": "Si les conteneurs peuvent donner sudo à l'utilisateur du bureau.",
+  "settings.about.GAMEPAD_ENABLED": "Si les conteneurs peuvent avoir la manette virtuelle.",
+  "settings.about.GPU_DEFAULT": "Si un nouveau conteneur a accès au GPU, sauf demande contraire.",
+  "settings.about.INTERNET_DEFAULT":
+    "Si un nouveau conteneur a accès à Internet, sauf demande contraire.",
+  "settings.about.SUDO_DEFAULT":
+    "Si un nouveau conteneur donne sudo à l'utilisateur du bureau, sauf demande contraire.",
+  "settings.about.AUDIO_DEFAULT": "Si un nouveau conteneur a le son, sauf demande contraire.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Si un nouveau conteneur avec le son a le microphone, sauf demande contraire.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Si un nouveau conteneur a la manette virtuelle, sauf demande contraire.",
   "settings.about.WSL_GPU": "Accélération graphique par le GPU de WSL.",
   "settings.about.NVIDIA_COMPUTE": "CUDA via le NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER":

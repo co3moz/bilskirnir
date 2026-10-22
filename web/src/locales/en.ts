@@ -724,6 +724,7 @@ export const en = {
   "settings.section.access": "Sign-in and access",
   "settings.section.mcp": "Agent access (MCP)",
   "settings.section.desktops": "Desktops",
+  "settings.section.features": "Container features",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Limits",
   "settings.section.content": "Templates and volumes",
@@ -785,6 +786,19 @@ export const en = {
     "Lets browsers and Electron apps in desktops start their sandbox.",
   "settings.about.AUDIO_ENABLED": "Desktop sound in the browser.",
   "settings.about.MICROPHONE_ENABLED": "The browser's microphone in desktops; needs sound.",
+  "settings.about.INTERNET_ENABLED": "Whether containers may have internet access.",
+  "settings.about.SUDO_ENABLED": "Whether containers may give the desktop user sudo.",
+  "settings.about.GAMEPAD_ENABLED": "Whether containers may have the virtual gamepad.",
+  "settings.about.GPU_DEFAULT": "Whether a new container gets GPU access unless it asks otherwise.",
+  "settings.about.INTERNET_DEFAULT":
+    "Whether a new container gets internet access unless it asks otherwise.",
+  "settings.about.SUDO_DEFAULT":
+    "Whether a new container gives the desktop user sudo unless it asks otherwise.",
+  "settings.about.AUDIO_DEFAULT": "Whether a new container gets sound unless it asks otherwise.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Whether a new container with sound gets the microphone unless it asks otherwise.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Whether a new container gets the virtual gamepad unless it asks otherwise.",
   "settings.about.WSL_GPU": "Graphics acceleration through the WSL GPU.",
   "settings.about.NVIDIA_COMPUTE": "CUDA through the NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER": "The Mesa D3D12 adapter by vendor or model; empty picks one.",

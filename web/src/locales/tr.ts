@@ -701,6 +701,7 @@ export const tr: Messages = {
   "settings.section.access": "Giriş ve erişim",
   "settings.section.mcp": "Ajan erişimi (MCP)",
   "settings.section.desktops": "Masaüstleri",
+  "settings.section.features": "Konteyner özellikleri",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Sınırlar",
   "settings.section.content": "Şablonlar ve volume'lar",
@@ -760,6 +761,20 @@ export const tr: Messages = {
     "Masaüstlerindeki tarayıcıların ve Electron uygulamalarının sandbox'ını açmasına izin verir.",
   "settings.about.AUDIO_ENABLED": "Masaüstü sesi tarayıcıda.",
   "settings.about.MICROPHONE_ENABLED": "Tarayıcının mikrofonu masaüstlerinde; ses gerekir.",
+  "settings.about.INTERNET_ENABLED": "Konteynerlerin internet erişimi olup olamayacağı.",
+  "settings.about.SUDO_ENABLED": "Konteynerlerin masaüstü kullanıcısına sudo verip veremeyeceği.",
+  "settings.about.GAMEPAD_ENABLED": "Konteynerlerin sanal gamepad'e sahip olup olamayacağı.",
+  "settings.about.GPU_DEFAULT":
+    "Yeni bir konteynerin, aksi istenmedikçe GPU erişimi alıp almayacağı.",
+  "settings.about.INTERNET_DEFAULT":
+    "Yeni bir konteynerin, aksi istenmedikçe internet erişimi alıp almayacağı.",
+  "settings.about.SUDO_DEFAULT":
+    "Yeni bir konteynerin, aksi istenmedikçe masaüstü kullanıcısına sudo verip vermeyeceği.",
+  "settings.about.AUDIO_DEFAULT": "Yeni bir konteynerin, aksi istenmedikçe ses alıp almayacağı.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Sesli yeni bir konteynerin, aksi istenmedikçe mikrofon alıp almayacağı.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Yeni bir konteynerin, aksi istenmedikçe sanal gamepad alıp almayacağı.",
   "settings.about.WSL_GPU": "WSL GPU'su üzerinden grafik hızlandırma.",
   "settings.about.NVIDIA_COMPUTE": "NVIDIA Container Toolkit ile CUDA.",
   "settings.about.GPU_ADAPTER":

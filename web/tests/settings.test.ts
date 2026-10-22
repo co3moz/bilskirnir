@@ -6,6 +6,7 @@ import { en } from "../src/locales/en"
 import {
   changesOf,
   choiceIndex,
+  featureDraft,
   FIELDS,
   initialText,
   releaseState,
@@ -14,7 +15,7 @@ import {
   shownValue,
   textProblem,
 } from "../src/lib/settings"
-import type { ConfigVariable } from "../src/lib/types"
+import type { ConfigVariable, Settings } from "../src/lib/types"
 
 test("every setting the page knows is still an installation setting and says what it does", () => {
   const example = readFileSync(new URL("../../.env.example", import.meta.url), "utf8")
@@ -148,4 +149,43 @@ test("a choice reads its own values and leaves the rest to the user's text", () 
   assert.equal(choiceIndex(field, ""), 0)
   assert.equal(choiceIndex(field, "none"), 1)
   assert.equal(choiceIndex(field, "https://example.com/index.json"), -1)
+})
+
+test("a new container starts from the installation's defaults, and a manager without them as before", () => {
+  const settings = {
+    gpu_enabled: true,
+    defaults: {
+      gpu: false,
+      internet: false,
+      sudo: true,
+      audio: true,
+      microphone: true,
+      gamepad: true,
+    },
+  } as Settings
+  assert.deepEqual(featureDraft({}, settings), {
+    gpu: false,
+    internet: false,
+    sudo: true,
+    audio: true,
+    microphone: true,
+    gamepad: true,
+  })
+  // A container's own settings win, and the microphone stays off without sound.
+  assert.deepEqual(featureDraft({ audio: false, internet: true }, settings), {
+    gpu: false,
+    internet: true,
+    sudo: true,
+    audio: false,
+    microphone: false,
+    gamepad: true,
+  })
+  assert.deepEqual(featureDraft({}, { gpu_enabled: false } as Settings), {
+    gpu: false,
+    internet: true,
+    sudo: true,
+    audio: false,
+    microphone: false,
+    gamepad: false,
+  })
 })

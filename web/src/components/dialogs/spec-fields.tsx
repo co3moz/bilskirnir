@@ -39,12 +39,13 @@ import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { formatPorts, parsePorts, PORTS_PATTERN } from "@/lib/ports"
+import { featureDraft, FEATURES, type Feature } from "@/lib/settings"
 import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
 import { mountableVolumes } from "@/lib/volume-files"
 
 const RESOLUTIONS = ["1920x1080", "1600x900", "1280x720", "2560x1440", "3840x2160"]
-const FLAGS = ["gpu", "internet", "sudo", "audio", "microphone", "gamepad"] as const
-type Flag = (typeof FLAGS)[number]
+const FLAGS = FEATURES
+type Flag = Feature
 
 const FLAG_ICONS: Record<Flag, RemixiconComponentType> = {
   gpu: RiCpuLine,
@@ -67,18 +68,14 @@ export type SpecDraft = {
 
 let mountKey = 0
 
+/** The draft of a container's settings, or for a new one the installation's defaults. */
 export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): SpecDraft {
   return {
     resolution: spec.resolution || RESOLUTIONS[0],
     shm_mb: String(spec.shm_mb ?? 512),
     cpus: spec.cpus ? String(spec.cpus) : "",
     memory_mb: spec.memory_mb ? String(spec.memory_mb) : "",
-    gpu: spec.gpu ?? settings?.gpu_enabled !== false,
-    internet: spec.internet ?? true,
-    sudo: spec.sudo ?? true,
-    audio: spec.audio ?? false,
-    microphone: spec.microphone ?? false,
-    gamepad: spec.gamepad ?? false,
+    ...featureDraft(spec, settings),
     ports: formatPorts(spec.ports),
     mounts: (spec.mounts ?? []).map((mount) => ({ ...mount, key: ++mountKey })),
   }
@@ -149,9 +146,9 @@ export function SpecFields({
     gpu: settings?.gpu_enabled ?? true,
     audio: settings?.audio_enabled ?? true,
     microphone: settings?.microphone_enabled ?? true,
-    internet: true,
-    sudo: true,
-    gamepad: true,
+    internet: settings?.internet_enabled ?? true,
+    sudo: settings?.sudo_enabled ?? true,
+    gamepad: settings?.gamepad_enabled ?? true,
   }
   const blocked = FLAGS.filter((flag) => !enabled[flag] && !spec?.[flag])
   const set = (patch: Partial<SpecDraft>) => onChange({ ...draft, ...patch })

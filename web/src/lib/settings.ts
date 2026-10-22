@@ -1,12 +1,13 @@
 import type { MessageKey } from "@/locales/en"
 
-import type { ConfigVariable, UpdateStatus } from "./types"
+import type { ConfigVariable, ContainerSpec, Settings, UpdateStatus } from "./types"
 
 /** The sections of the settings page's configuration, in their order. */
 export const SECTIONS = [
   "access",
   "mcp",
   "desktops",
+  "features",
   "gpu",
   "limits",
   "content",
@@ -28,8 +29,17 @@ export const SECTION_OF: Record<string, Section> = {
   MCP_TOKEN: "mcp",
   DESKTOP_IMAGE: "desktops",
   DESKTOP_USER_NAMESPACES: "desktops",
-  AUDIO_ENABLED: "desktops",
-  MICROPHONE_ENABLED: "desktops",
+  AUDIO_ENABLED: "features",
+  MICROPHONE_ENABLED: "features",
+  INTERNET_ENABLED: "features",
+  SUDO_ENABLED: "features",
+  GAMEPAD_ENABLED: "features",
+  GPU_DEFAULT: "features",
+  INTERNET_DEFAULT: "features",
+  SUDO_DEFAULT: "features",
+  AUDIO_DEFAULT: "features",
+  MICROPHONE_DEFAULT: "features",
+  GAMEPAD_DEFAULT: "features",
   WSL_GPU: "gpu",
   NVIDIA_COMPUTE: "gpu",
   GPU_ADAPTER: "gpu",
@@ -92,6 +102,15 @@ export const FIELDS: Record<string, Field> = {
   },
   AUDIO_ENABLED: { kind: "switch" },
   MICROPHONE_ENABLED: { kind: "switch" },
+  INTERNET_ENABLED: { kind: "switch" },
+  SUDO_ENABLED: { kind: "switch" },
+  GAMEPAD_ENABLED: { kind: "switch" },
+  GPU_DEFAULT: { kind: "switch" },
+  INTERNET_DEFAULT: { kind: "switch" },
+  SUDO_DEFAULT: { kind: "switch" },
+  AUDIO_DEFAULT: { kind: "switch" },
+  MICROPHONE_DEFAULT: { kind: "switch" },
+  GAMEPAD_DEFAULT: { kind: "switch" },
   UPLOAD_MAX_MB: { kind: "number", min: 1, max: 65536 },
   IMAGE_ARCHIVE_MAX_MB: { kind: "number", min: 1, max: 1048576 },
   TEMPLATES_URL: {
@@ -185,4 +204,30 @@ export function releaseState(
   // A failed look keeps the release seen before, which still tells whether this one is current.
   if (update.newest) return "current"
   return update.error ? "failed" : "unchecked"
+}
+
+/** The features of the create and settings forms. */
+export const FEATURES = ["gpu", "internet", "sudo", "audio", "microphone", "gamepad"] as const
+export type Feature = (typeof FEATURES)[number]
+
+/**
+ * A container's features, or a new container's from the installation's defaults (`GPU_DEFAULT`
+ * and the others), which never include one the installation switched off. A manager from before
+ * the defaults sends none, and the form starts as it did then.
+ */
+export function featureDraft(
+  spec: Partial<ContainerSpec>,
+  settings?: Settings
+): Record<Feature, boolean> {
+  const defaults = settings?.defaults
+  const audio = spec.audio ?? defaults?.audio ?? false
+  return {
+    gpu: spec.gpu ?? defaults?.gpu ?? settings?.gpu_enabled !== false,
+    internet: spec.internet ?? defaults?.internet ?? true,
+    sudo: spec.sudo ?? defaults?.sudo ?? true,
+    audio,
+    // The microphone travels over the audio connection.
+    microphone: spec.microphone ?? (audio && (defaults?.microphone ?? false)),
+    gamepad: spec.gamepad ?? defaults?.gamepad ?? false,
+  }
 }

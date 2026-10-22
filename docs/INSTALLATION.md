@@ -30,7 +30,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 
 The dashboard's **Settings** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
 
-In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `bilskirnir settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
+In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `bilskirnir settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
@@ -45,6 +45,15 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
 | `AUDIO_ENABLED` | `true` | Allows containers to use browser sound. |
 | `MICROPHONE_ENABLED` | `true` | Allows microphone input when audio is also enabled. |
+| `INTERNET_ENABLED` | `true` | Allows containers internet access. `false` refuses it for new containers, in setting changes and on the internet switch. |
+| `SUDO_ENABLED` | `true` | Allows containers to give the desktop user `sudo`. `false` refuses it for new containers and in setting changes. |
+| `GAMEPAD_ENABLED` | `true` | Allows the virtual gamepad. `false` refuses it for new containers and in setting changes, and the manager passes no gamepad input. |
+| `GPU_DEFAULT` | `true` | Whether a new container gets GPU access unless it asks otherwise, where `WSL_GPU` or `NVIDIA_COMPUTE` allows it. |
+| `INTERNET_DEFAULT` | `true` | Whether a new container gets internet access unless it asks otherwise. |
+| `SUDO_DEFAULT` | `true` | Whether a new container gives the desktop user `sudo` unless it asks otherwise. |
+| `AUDIO_DEFAULT` | `false` | Whether a new container gets sound unless it asks otherwise. |
+| `MICROPHONE_DEFAULT` | `false` | Whether a new container with sound gets the microphone unless it asks otherwise. |
+| `GAMEPAD_DEFAULT` | `false` | Whether a new container gets the virtual gamepad unless it asks otherwise. |
 | `DESKTOP_USER_NAMESPACES` | `true` | Lets processes in a container create user namespaces, which Chrome, Edge, other Chromium-based browsers and Electron applications use for their sandbox. Containers get Docker's default seccomp profile with this one addition (`desktop/seccomp.json`); calls that need `CAP_SYS_ADMIN`, such as `mount`, stay blocked. Set `false` to keep Docker's default: those applications then start only with `--no-sandbox`, and opening a link in such a default browser fails. It applies when a container is created, so an existing container changes after a reset or a settings change that recreates it. |
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
@@ -68,6 +77,8 @@ The full manifests also accept these Compose settings:
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
+
+The container features of the create form have a switch and a default each. GPU access is on while `WSL_GPU` or `NVIDIA_COMPUTE` is, which choose how a container gets it, so it has no switch of its own. The defaults are what the form starts with and what a request to `POST /api/containers` or the MCP `create_container` gets when it leaves a feature out; one the installation switched off is never a default, and the microphone is one only with sound. Before 0.7.0 such a request got no GPU access while the form chose it; `GPU_DEFAULT=true` gives requests what the form gives, so set it to `false` to keep the old answer. A switched-off feature is refused when a container is created or a setting change turns it on, and the form shows its chip turned off. A container that already has it keeps it in its settings, also when a reset or a settings change creates it again, as audio always worked: the manager only refuses what it carries itself while the feature is off, the audio and microphone channels and gamepad input. Turn internet or `sudo` off in such a container's settings to take it away. Image builds keep their own internet setting, since templates install packages.
 
 Containers created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 

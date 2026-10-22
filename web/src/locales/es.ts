@@ -706,6 +706,7 @@ export const es: Messages = {
   "settings.section.access": "Inicio de sesión y acceso",
   "settings.section.mcp": "Acceso de agentes (MCP)",
   "settings.section.desktops": "Escritorios",
+  "settings.section.features": "Funciones de los contenedores",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Límites",
   "settings.section.content": "Plantillas y volúmenes",
@@ -768,6 +769,20 @@ export const es: Messages = {
   "settings.about.AUDIO_ENABLED": "El sonido del escritorio en el navegador.",
   "settings.about.MICROPHONE_ENABLED":
     "El micrófono del navegador en los escritorios; necesita sonido.",
+  "settings.about.INTERNET_ENABLED": "Si los contenedores pueden tener acceso a internet.",
+  "settings.about.SUDO_ENABLED": "Si los contenedores pueden dar sudo al usuario del escritorio.",
+  "settings.about.GAMEPAD_ENABLED": "Si los contenedores pueden tener el mando virtual.",
+  "settings.about.GPU_DEFAULT":
+    "Si un contenedor nuevo tiene acceso a la GPU, salvo que pida otra cosa.",
+  "settings.about.INTERNET_DEFAULT":
+    "Si un contenedor nuevo tiene acceso a internet, salvo que pida otra cosa.",
+  "settings.about.SUDO_DEFAULT":
+    "Si un contenedor nuevo da sudo al usuario del escritorio, salvo que pida otra cosa.",
+  "settings.about.AUDIO_DEFAULT": "Si un contenedor nuevo tiene sonido, salvo que pida otra cosa.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Si un contenedor nuevo con sonido tiene micrófono, salvo que pida otra cosa.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Si un contenedor nuevo tiene el mando virtual, salvo que pida otra cosa.",
   "settings.about.WSL_GPU": "Aceleración gráfica mediante la GPU de WSL.",
   "settings.about.NVIDIA_COMPUTE": "CUDA mediante NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER": "El adaptador Mesa D3D12 por fabricante o modelo; vacío elige uno.",

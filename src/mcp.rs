@@ -737,10 +737,13 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
                 "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name: with a compose of several steps STEP_ID.NAME, or NAME alone when only one step asks for it. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none; with new_volume, an empty string or no value has the job create a volume for this container, named bilskirnir-CONTAINER_ID-parameter-name, or bilskirnir-CONTAINER_ID-step-id-parameter-name for a step of several, and \"-\" gives it none unless it is required."},
-                "resolution":{"type":"string","default":"1920x1080"},"gpu":{"type":"boolean","default":false},
-                "internet":{"type":"boolean","default":true},"audio":{"type":"boolean","default":false},
-                "microphone":{"type":"boolean","default":false},"sudo":{"type":"boolean","default":true},
-                "gamepad":{"type":"boolean","default":false,"description":"Attach /dev/uinput so gamepad_input can create a virtual controller."},
+                "resolution":{"type":"string","default":"1920x1080"},
+                "gpu":{"type":"boolean","description":"Leave out for the installation's default, get_settings defaults.gpu. Refused while gpu_enabled is false."},
+                "internet":{"type":"boolean","description":"Leave out for the installation's default, get_settings defaults.internet. Refused while internet_enabled is false."},
+                "audio":{"type":"boolean","description":"Leave out for the installation's default, get_settings defaults.audio. Refused while audio_enabled is false."},
+                "microphone":{"type":"boolean","description":"Needs audio. Left out, it follows get_settings defaults.microphone when the container gets audio. Refused while microphone_enabled is false."},
+                "sudo":{"type":"boolean","description":"Leave out for the installation's default, get_settings defaults.sudo. Refused while sudo_enabled is false."},
+                "gamepad":{"type":"boolean","description":"Attach /dev/uinput so gamepad_input can create a virtual controller. Leave out for the installation's default, get_settings defaults.gamepad. Refused while gamepad_enabled is false."},
                 "hostname":{"type":"string","maxLength":63,"description":"Machine identity, kept across resets, retries and settings changes; leave out for the Docker container name. Set it, with mac_address and machine_id, only to take over the identity of a container this one replaces."},
                 "mac_address":{"type":"string","description":"Unicast MAC address such as 02:42:ac:11:00:02, on every network interface; leave out for a random one."},
                 "machine_id":{"type":"string","description":"32 hex digits written to /etc/machine-id and /var/lib/dbus/machine-id; leave out for a random one."},
@@ -766,7 +769,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "set_internet",
-            "Attach or detach Docker internet egress while keeping browser desktop access. Returns job_id.",
+            "Attach or detach Docker internet egress while keeping browser desktop access. Attaching is refused while get_settings internet_enabled is false. Returns job_id.",
             json!({"container_id":id,"enabled":{"type":"boolean"}}),
             &["container_id", "enabled"],
             false,
@@ -775,7 +778,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
