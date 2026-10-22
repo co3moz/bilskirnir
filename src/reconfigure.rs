@@ -162,6 +162,9 @@ impl App {
         enabled.audio &= !env.spec.audio;
         enabled.microphone &= !env.spec.microphone;
         enabled.gpu &= !env.spec.gpu;
+        enabled.internet &= !env.spec.internet;
+        enabled.sudo &= !env.spec.sudo;
+        enabled.gamepad &= !env.spec.gamepad;
         self.installation_allows(&enabled)?;
         let changes = classify(&env.spec, &spec);
         Ok((spec, changes))

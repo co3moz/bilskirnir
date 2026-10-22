@@ -47,6 +47,8 @@ COPY deploy/Caddyfile /app/install/deploy/Caddyfile
 COPY wsl/bilskirnir /app/install/bilskirnir
 COPY wsl/bilskirnir-update.path /app/install/systemd/bilskirnir-update.path
 COPY wsl/bilskirnir-update.service /app/install/systemd/bilskirnir-update.service
+COPY wsl/bilskirnir-settings.path /app/install/systemd/bilskirnir-settings.path
+COPY wsl/bilskirnir-settings.service /app/install/systemd/bilskirnir-settings.service
 COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
 ENV DATA_DIR=/data WEB_DIR=/app/web DESKTOP_CONTEXT=/app/desktop LISTEN_ADDR=0.0.0.0:8080
 WORKDIR /app

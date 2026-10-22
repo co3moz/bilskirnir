@@ -321,7 +321,7 @@ async fn refusal(app: &Arc<App>, target: Target) -> (StatusCode, String) {
 }
 
 #[tokio::test]
-async fn a_server_opens_only_when_it_is_known_and_declared_and_mcp_targets_only_while_mcp_is_on() {
+async fn a_server_opens_only_when_it_is_known_and_declared_and_the_root_mcp_only_while_it_is_on() {
     let app = app(false);
     app.db
         .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
@@ -386,23 +386,23 @@ async fn a_server_opens_only_when_it_is_known_and_declared_and_mcp_targets_only_
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(message.contains("127.0.0.1"), "{message}");
 
-    for target in [
-        Target::Administrator,
-        Target::Endpoint { name: "c1".into() },
-    ] {
-        let (status, message) = refusal(&app, target).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert!(message.contains("MCP_ENABLED"), "{message}");
-    }
-    let (status, message) = refusal(
-        &mcp_app(),
-        Target::Endpoint {
-            name: "nobody".into(),
-        },
-    )
-    .await;
+    // Only the root /mcp follows ROOT_MCP_ENABLED; an endpoint answers either way, so the root
+    // being off is not why an unknown one is refused.
+    let (status, message) = refusal(&app, Target::Administrator).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(message.contains("nobody"), "{message}");
+    assert!(message.contains("ROOT_MCP_ENABLED=false"), "{message}");
+    for app in [app.clone(), mcp_app()] {
+        let (status, message) = refusal(
+            &app,
+            Target::Endpoint {
+                name: "nobody".into(),
+            },
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(message.contains("nobody"), "{message}");
+        assert!(!message.contains("ROOT_MCP"), "{message}");
+    }
 }
 
 const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"inspector-test","version":"1"}}}"#;

@@ -4,6 +4,7 @@ import { toast } from "sonner"
 
 import { AppSidebar, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
+import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -13,6 +14,7 @@ import { closeDialog, openDialog } from "@/lib/dialogs"
 import { t, useLocale } from "@/lib/i18n"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
+import { useServerEvents } from "@/lib/server-events"
 import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
 import { FilesPage } from "@/pages/files"
@@ -92,6 +94,7 @@ function Shell({ page }: { page: Page }) {
             </Button>
           )}
         </SiteHeader>
+        <HumanRequestsBanner />
         <Content />
       </SidebarInset>
     </SidebarProvider>
@@ -103,6 +106,7 @@ function Authenticated() {
   const settings = useSettings()
   const locale = useLocale()
   const key = href(route)
+  useServerEvents()
 
   // A dialog belongs to the page it was opened on.
   React.useEffect(() => closeDialog(), [key])

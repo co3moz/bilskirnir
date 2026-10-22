@@ -27,6 +27,7 @@ When a catalog image is missing, its row under **Images** offers a download butt
 | HTTP API, settings and authentication | `src/main.rs`, `src/api.rs`, `src/config.rs`, `src/auth.rs` |
 | Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
 | Catalog image downloads and their progress | `src/pulls.rs` |
+| Settings page changes through the WSL package | `src/config/changes.rs`, `src/package_requests.rs`, `web/src/components/configuration-editor.tsx`, `web/src/lib/settings.ts`, `wsl/bilskirnir-settings.path`, `wsl/bilskirnir-settings.service` |
 | Settings changes after creation | `src/reconfigure.rs` |
 | Composes and their setup runs | `src/compose.rs`, `src/setup_runner.py`, `tests/test_setup_runner.py`, `web/src/lib/compose.ts`, `web/src/components/dialogs/compose-dialog.tsx` |
 | Metadata and image catalog | `src/db.rs`, `src/model.rs`, `src/catalog.rs`, `desktop/profiles.json` |

@@ -156,6 +156,13 @@ pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Res
     body.validate()?;
     let _guard = app.hold(&format!("container:{id}")).await?;
     let env = app.container(id)?;
+    // Like the audio channels, the manager carries no input while the installation has it off.
+    if !app.config.gamepad {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "The virtual gamepad is disabled for this installation (GAMEPAD_ENABLED=false)".into(),
+        ));
+    }
     if !env.spec.gamepad {
         return Err(Error(
             StatusCode::BAD_REQUEST,

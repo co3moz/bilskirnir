@@ -43,11 +43,11 @@ Then open the new **Bilskirnir** entry from the Start menu or run `wsl -d Bilski
 
 The first start asks for one username and password. They create the Linux user and are also the dashboard sign-in; an empty password leaves the Linux user without one and turns dashboard sign-in off (`AUTH_MODE=none`). A password needs at least eight characters.
 
-Next it asks whether to enable agent access (MCP); move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default. With agent access on, it asks how agents authenticate:
+Next it asks whether to enable root agent access, the MCP endpoint `/mcp` that reaches every container; move between the answers with the up and down arrows and confirm with Enter. **Yes** is the default, and it sets `ROOT_MCP_ENABLED`. [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers can be made on the dashboard later whatever the answer, each with its own token. With root agent access on, it asks how agents authenticate:
 
 - **Random token** (the default) generates a 64-character token.
 - **Custom token** takes a token you type: 1 to 256 visible ASCII characters without spaces or single quotes. It is stored in single quotes in `.env`, so `$` and `#` stay literal. A short token is easy to guess, and whoever has it controls every container.
-- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, and anything that can reach the dashboard address controls every container.
+- **None** sets `MCP_AUTH_MODE=none`: agents connect without a token, to `/mcp` and to every MCP endpoint, and anything that can reach the dashboard address controls every container.
 
 Then it asks who can reach the dashboard, and with it the agent endpoint, which shares its address:
 
@@ -134,7 +134,7 @@ Inside the distribution, `bilskirnir` manages the installation:
 | `bilskirnir status` | Shows the Compose services, the dashboard address and who can reach it. |
 | `bilskirnir logs` | Shows the manager's recent log. |
 | `bilskirnir update` | Moves the manager, its `compose.yml` and the `bilskirnir` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
-| `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. |
+| `bilskirnir settings` | Opens `/opt/bilskirnir/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `bilskirnir restart` afterwards. The dashboard changes some settings itself, see [Settings from the dashboard](#settings-from-the-dashboard). |
 | `bilskirnir doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and registry reachability. |
 | `bilskirnir open` | Opens the dashboard in the Windows browser. |
 | `bilskirnir mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
@@ -143,7 +143,7 @@ Tab completes the commands: type `bilskirnir re` and press Tab for `restart`. Th
 
 `b8r` is a short name for the same command: `b8r status` is `bilskirnir status`, and Tab completes it too. Packages up to 0.6.0 lack it, and an update does not add it; `sudo ln -s bilskirnir /usr/local/bin/b8r` gives such a distribution the name without its completion.
 
-The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard). [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
+The installation files live in `/opt/bilskirnir`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard), and `.env.previous` after a settings change from the dashboard. [`bilskirnir update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/bilskirnir`.
 
 ## Update
 
@@ -170,7 +170,7 @@ The manager image also bundles the `bilskirnir` command of its release, so fixes
 - The distribution has the package files the new command relies on. The package records the level of its own files, such as the firewall watcher, in `/usr/lib/wsl/package-level`, and every command names the level it needs. When a release needs a newer package, the update says so, keeps the command and updates everything else. Only a newer package brings that command, and installing one replaces the distribution together with its Docker data, see [Remove](#remove).
 - The new command is complete: it names the level it needs and passes a syntax check.
 
-The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it, apart from the units of [Update from the dashboard](#update-from-the-dashboard).
+The new command is written beside the old one and renamed over it, so an interrupted update leaves one of the two whole. The update then starts over with the new command, which copies the installation files by its release's rules and recreates the manager. Changes you made to the command itself are not kept. The rest of the distribution, such as Docker, the firewall watcher and the first-start setup, stays as the package installed it, apart from the units of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard).
 
 The command of the 0.3.0 package and of earlier ones cannot update itself, and those packages set `MANAGER_IMAGE` to `latest`. Install the command of a newer release once by hand, replacing `1.2.0` with it:
 
@@ -191,6 +191,19 @@ The manager looks up the newest release on GitHub when it starts and every six h
 The manager cannot reach the distribution from its container, so the two meet in `/opt/bilskirnir/update`, which `compose.yml` mounts into the manager at `/update`. The manager leaves a `request` there, `bilskirnir-update.path` notices it and starts `bilskirnir-update.service`, which renames it to `started`, writes the command's output to `log` and how it ended to `exit`. The request only names the dashboard's job; what runs is always `/usr/local/bin/bilskirnir update`. `systemctl status bilskirnir-update.service` and `/opt/bilskirnir/update/log` show the last update. The dashboard offers **Update** once that folder holds `watched`, which the package and an update write when they install the two units. On another installation the sidebar only names the release.
 
 A package from before the units gets them with its first `bilskirnir update` to a release that bundles them. Like the command, they come only from a release of `ghcr.io/co3moz/bilskirnir`, since they run as root and would stay after a manager chosen by hand is gone, and an update enables them only when it installs or changes them, so a path unit you turned off stays off. To turn off both the lookup and the button, set `UPDATE_CHECK=false` with `bilskirnir settings` and run `bilskirnir restart`; the manager then makes no request to GitHub.
+
+## Settings from the dashboard
+
+The dashboard's **Settings** page changes some settings itself: the cookie and host names, the default image, the user namespaces, the GPU switches, the container features' switches and defaults, the upload and archive limits, the templates list, the volume filter and the release checks; [the installation guide](INSTALLATION.md#settings) names them. Each gets a control, and **Apply and restart** lists the changes and warns when running jobs would end with the manager. The rest, the sign-in, the root MCP and its token, `MANAGER_CONTAINER` and what only Compose reads, such as `PORT` and `BIND_ADDRESS`, are marked **CLI only**: change them with `bilskirnir settings`, then run `bilskirnir restart`.
+
+`.env` stays the only place settings are kept. The manager checks each change with the code it reads its settings with when it starts, so a value it would refuse is refused before anything restarts, and leaves the change as `settings-request` in `/opt/bilskirnir/update`, the folder of [Update from the dashboard](#update-from-the-dashboard). `bilskirnir-settings.path` notices it and starts `bilskirnir-settings.service`, which renames it to `settings-started` and runs `bilskirnir apply-settings` with it as root, writing the output to `settings-log` and how it ended to `settings-exit`. The command:
+
+- accepts only the settings the page may change, each value one line of printable ASCII without quotes, `$`, `#`, backslashes, backquotes or spaces at either end, and changes nothing when a line is anything else;
+- waits for nothing and changes nothing while `bilskirnir-update.service` runs;
+- keeps the previous file as `/opt/bilskirnir/.env.previous`, replaces only the lines of the changed settings, keeping comments, order and every other line, and adds a setting `.env` lacks at the end;
+- recreates the manager and waits up to 90 seconds for it to answer its health check. When it does not, the command puts `.env.previous` back, recreates the manager again and fails, so the dashboard's job fails with the log saying why.
+
+The job's log is the command's output. Desktops keep running; the page reloads once the new manager answers, and asks you to sign in again, since sessions end with the old manager, which then follows the rest of the job. `systemctl status bilskirnir-settings.service` and `/opt/bilskirnir/update/settings-log` show the last change. The page offers the controls once the folder holds `settings-watched`, which the package and an update write when they install the two units; like the update's units, they come only from a release, and a package from before them gets them with its first `bilskirnir update`.
 
 ## Memory, processors and disk
 
@@ -237,10 +250,10 @@ The disk file does not shrink when images or containers are deleted. Two ways re
 ## What the package decides for you
 
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group, and its name is the dashboard's `ADMIN_USERNAME`. The distribution is a single-purpose appliance for the Windows user who installed it.
-- `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `bilskirnir settings` saves it through `sudoedit`, which keeps that owner and mode; change it any other way with `sudo`.
+- `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `bilskirnir settings` saves it through `sudoedit`, which keeps that owner and mode, as do a settings change from the dashboard and its `.env.previous`; change it any other way with `sudo`.
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing other devices.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
-- Agent access is enabled unless the first start turned it off: `MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); agent access grants administrator access to every container, so set `MCP_ENABLED=false` in `.env` and restart if no agent will use this installation. Without a token it is safe only while the manager listens on localhost.
+- Root agent access is enabled unless the first start turned it off: `ROOT_MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `bilskirnir mcp` prints the endpoint, the token and the [client settings](MCP.md); root agent access grants administrator access to every container, so set `ROOT_MCP_ENABLED=false` in `.env` and restart if no agent needs that, and give agents [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers instead, which answer either way. Without a token it is safe only while the manager listens on localhost. Installations from before 0.7.0 have the setting as `MCP_ENABLED`, which keeps working until `bilskirnir update` renames it.
 - The manager listens on `127.0.0.1:8080`, or on `0.0.0.0:8080` when the first start allowed other devices. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).
 
 ## Docker in other WSL distributions

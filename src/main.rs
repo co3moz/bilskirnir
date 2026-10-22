@@ -13,10 +13,12 @@ mod desktop_input;
 mod desktop_mcp;
 mod docker;
 mod error;
+mod events;
 mod exec;
 mod files;
 mod folder_archive;
 mod gamepad;
+mod human;
 mod icons;
 mod identity;
 mod image_removal;
@@ -26,6 +28,7 @@ mod mcp;
 mod media;
 mod model;
 mod mount_parents;
+mod package_requests;
 mod process;
 mod proxy;
 mod pulls;
@@ -78,6 +81,10 @@ pub struct App {
     desktop_mcp: desktop_mcp::DesktopMcp,
     /// The newest release GitHub named, for the dashboard's update.
     releases: releases::Releases,
+    /// What the signed-in dashboards hear as it happens, such as a job that ended.
+    events: events::Hub,
+    /// Agents' requests for a person, in memory only.
+    human: human::Requests,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -93,7 +100,10 @@ fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
-        .route("/api/configuration", get(api::configuration))
+        .route(
+            "/api/configuration",
+            get(config::changes::configuration).post(config::changes::change),
+        )
         .route("/api/system", get(api::system))
         .route("/api/update", get(releases::status).post(releases::start))
         .route("/api/update/check", post(releases::check))
@@ -288,6 +298,9 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
+        .route("/api/events", get(events::stream))
+        .route("/api/human-requests", get(human::list))
+        .route("/api/human-requests/{id}/answer", post(human::answer))
         .route("/api/activity", get(activity::list))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
@@ -375,9 +388,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let config = config::Config::load()?;
-    if config.mcp_enabled && config.mcp_token.is_none() {
+    for notice in &config.notices {
+        tracing::warn!("{notice}");
+    }
+    if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
-            "MCP_AUTH_MODE=none: /mcp accepts requests without a token from any allowed host"
+            "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"
         );
     }
     tokio::fs::create_dir_all(&config.data).await?;
@@ -386,12 +402,16 @@ async fn main() -> anyhow::Result<()> {
     // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
     db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
-    // An update the WSL distribution runs replaces the manager on its way, and goes on.
+    // An update or a settings change the WSL distribution runs replaces the manager on its way,
+    // and goes on.
     let mut interrupted_builds = Vec::new();
     let mut updates = Vec::new();
+    let mut settings_changes = Vec::new();
     for mut job in db.list::<model::Job>("job")? {
         if releases::resumable(&config.update_dir, &job) {
             updates.push(job);
+        } else if config::changes::resumable(&config.update_dir, &job) {
+            settings_changes.push(job);
         } else if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
             job.finished_at = Some(model::now());
@@ -424,12 +444,17 @@ async fn main() -> anyhow::Result<()> {
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
+        events: events::Hub::default(),
+        human: human::Requests::default(),
     });
     usage::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
     releases::spawn(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
+    }
+    for job in settings_changes {
+        config::changes::resume(app.clone(), job);
     }
     let reconcile = app.clone();
     let cleanup = app.clone();
@@ -462,12 +487,16 @@ async fn main() -> anyhow::Result<()> {
     });
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("Bilskirnir listening: {listen}");
+    let closing = app.clone();
     axum::serve(
         listener,
         router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
-    .with_graceful_shutdown(async {
+    .with_graceful_shutdown(async move {
         let _ = tokio::signal::ctrl_c().await;
+        // Event streams and waits for a person never end on their own, and shutdown waits for
+        // every response.
+        closing.events.close();
     })
     .await?;
     Ok(())

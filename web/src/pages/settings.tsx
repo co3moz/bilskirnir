@@ -1,16 +1,10 @@
 import * as React from "react"
-import {
-  RiAlertLine,
-  RiArrowUpCircleLine,
-  RiExternalLinkLine,
-  RiLockLine,
-  RiRefreshLine,
-} from "@remixicon/react"
+import { RiArrowUpCircleLine, RiExternalLinkLine, RiRefreshLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { ConfigurationEditor } from "@/components/configuration-editor"
 import { PageBody, SectionHeading } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,10 +21,10 @@ import { Spinner } from "@/components/ui/spinner"
 import { api } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
 import { shortDate } from "@/lib/format"
-import { has, t } from "@/lib/i18n"
-import { queryClient, useConfiguration, useUpdate } from "@/lib/queries"
-import { releaseState, sections, shownValue } from "@/lib/settings"
-import type { ConfigVariable, UpdateStatus } from "@/lib/types"
+import { t } from "@/lib/i18n"
+import { queryClient, useUpdate } from "@/lib/queries"
+import { releaseState } from "@/lib/settings"
+import type { UpdateStatus } from "@/lib/types"
 
 function ReleaseBadge({ state }: { state: ReturnType<typeof releaseState> }) {
   const label = t(`settings.state.${state}`)
@@ -167,54 +161,7 @@ function VersionCard() {
   )
 }
 
-function Value({ variable }: { variable: ConfigVariable }) {
-  const shown = shownValue(variable)
-  if (shown.kind === "secret")
-    return (
-      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-        <RiLockLine className="size-3.5 shrink-0" />
-        {shown.set ? t("settings.secretSet") : t("settings.notSet")}
-      </span>
-    )
-  if (shown.kind === "empty")
-    return <span className="text-muted-foreground">{t("settings.notSet")}</span>
-  return <span className="font-mono text-xs break-all">{shown.text}</span>
-}
-
-/** One section of the configuration: each setting's name, what it does and its value. */
-function SectionCard({ title, variables }: { title: string; variables: ConfigVariable[] }) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="@container/settings">
-        <dl className="flex flex-col divide-y">
-          {variables.map((variable) => {
-            const about = `settings.about.${variable.name}`
-            return (
-              <div
-                key={variable.name}
-                className="grid gap-1 py-2.5 first:pt-0 last:pb-0 @md/settings:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @md/settings:gap-4"
-              >
-                <dt className="flex min-w-0 flex-col gap-0.5">
-                  <code className="font-mono text-xs font-medium break-all">{variable.name}</code>
-                  {has(about) && <span className="text-xs text-muted-foreground">{t(about)}</span>}
-                </dt>
-                <dd className="min-w-0 text-sm @md/settings:text-right">
-                  <Value variable={variable} />
-                </dd>
-              </div>
-            )
-          })}
-        </dl>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function SettingsPage() {
-  const configuration = useConfiguration()
   return (
     <PageBody>
       <SectionHeading title={t("settings.version")} />
@@ -225,25 +172,7 @@ export function SettingsPage() {
         title={t("settings.configuration")}
         description={t("settings.configurationHint")}
       />
-      <div className="grid grid-cols-1 items-start gap-4 px-4 lg:px-6 @5xl/main:grid-cols-2">
-        {configuration.error ? (
-          <Alert variant="destructive">
-            <RiAlertLine />
-            <AlertTitle>{t("settings.configurationFailed")}</AlertTitle>
-            <AlertDescription>{configuration.error.message}</AlertDescription>
-          </Alert>
-        ) : !configuration.data ? (
-          <Skeleton className="h-72 rounded-2xl" />
-        ) : (
-          sections(configuration.data.variables).map(({ section, variables }) => (
-            <SectionCard
-              key={section}
-              title={t(`settings.section.${section}`)}
-              variables={variables}
-            />
-          ))
-        )}
-      </div>
+      <ConfigurationEditor />
     </PageBody>
   )
 }

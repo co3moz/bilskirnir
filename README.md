@@ -10,7 +10,7 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 75 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 76 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
 - **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Bilskirnir's tools and those servers' tools, with a token of their own.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
@@ -53,7 +53,7 @@ You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also n
    ```
 
    Then open **Bilskirnir** from the Start menu.
-2. The first start follows, in the helper's window with option 1. It asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable agent access and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Bilskirnir.
+2. The first start follows, in the helper's window with option 1. It asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable root agent access at `/mcp` and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Bilskirnir.
 3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `bilskirnir mcp` shows them again.
 4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 

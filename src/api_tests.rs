@@ -324,3 +324,84 @@ async fn creation_jobs_carry_the_name_of_what_they_make() {
         "other jobs name nothing"
     );
 }
+
+#[test]
+fn a_create_request_gets_the_installations_defaults_for_the_features_it_leaves_out() {
+    let mut app = crate::tests::app(false);
+    let config = &mut Arc::get_mut(&mut app).unwrap().config;
+    let request = |body: Value| creation_request(config, body).unwrap().spec;
+    let features = |spec: ContainerSpec| {
+        [
+            spec.gpu,
+            spec.internet,
+            spec.sudo,
+            spec.audio,
+            spec.microphone,
+            spec.gamepad,
+        ]
+    };
+    let plain = json!({"name": "Plain", "image": "sha256:a"});
+    // The defaults as they were: GPU access where the installation has it, internet and sudo.
+    assert_eq!(
+        features(request(plain.clone())),
+        [true, true, true, false, false, false]
+    );
+    config.defaults = crate::config::Features {
+        gpu: false,
+        internet: false,
+        sudo: false,
+        audio: true,
+        microphone: true,
+        gamepad: true,
+    };
+    let config = &*config;
+    let request = |body: Value| creation_request(config, body).unwrap().spec;
+    assert_eq!(
+        features(request(plain.clone())),
+        [false, false, false, true, true, true]
+    );
+    // What a request asks for is kept, and the microphone follows the request's audio.
+    let asked = json!({"name": "Asked", "image": "sha256:a", "gpu": true, "audio": false});
+    assert_eq!(
+        features(request(asked)),
+        [true, false, false, false, false, true]
+    );
+    // A malformed request is refused as one.
+    let error = creation_request(
+        config,
+        json!({"name": "Bad", "image": "sha256:a", "gpu": "yes"}),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.0, StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn a_switched_off_feature_is_never_a_default_and_stored_records_keep_theirs() {
+    let mut app = crate::tests::app(false);
+    let config = &mut Arc::get_mut(&mut app).unwrap().config;
+    config.defaults = crate::config::Features {
+        gpu: true,
+        internet: true,
+        sudo: true,
+        audio: true,
+        microphone: true,
+        gamepad: true,
+    };
+    config.wsl_gpu = false;
+    config.cuda = false;
+    config.internet = false;
+    config.sudo = false;
+    config.gamepad = false;
+    config.microphone = false;
+    let spec = creation_request(config, json!({"name": "Off", "image": "sha256:a"}))
+        .unwrap()
+        .spec;
+    assert!(!spec.gpu && !spec.internet && !spec.sudo && !spec.microphone && !spec.gamepad);
+    assert!(spec.audio);
+    // A record saved before the features existed reads as it always did, whatever the
+    // installation's defaults: the serde defaults are not the configured ones.
+    let stored: ContainerSpec =
+        serde_json::from_value(json!({"name": "Old", "image": "sha256:a"})).unwrap();
+    assert!(!stored.gpu && stored.internet && stored.sudo && !stored.audio && !stored.gamepad);
+}

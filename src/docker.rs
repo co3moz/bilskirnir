@@ -103,8 +103,23 @@ impl App {
             .get(CONTAINERS, id)
             .map_err(crate::error::Error::from)
     }
-    /// Settings the installation has switched off cannot be chosen for a desktop.
+    /// Settings the installation has switched off cannot be chosen for a desktop. A desktop that
+    /// has one keeps it in its settings, also when it is created again; the manager only refuses
+    /// to carry what it carries itself, the audio channels and gamepad input, while it is off.
     pub(crate) fn installation_allows(&self, spec: &ContainerSpec) -> Result<()> {
+        if spec.internet && !self.config.internet {
+            bail!(
+                "Internet access is disabled for this installation (INTERNET_ENABLED=false); use the container without internet"
+            );
+        }
+        if spec.sudo && !self.config.sudo {
+            bail!(
+                "sudo is disabled for this installation (SUDO_ENABLED=false); use the container without sudo"
+            );
+        }
+        if spec.gamepad && !self.config.gamepad {
+            bail!("The virtual gamepad is disabled for this installation (GAMEPAD_ENABLED=false)");
+        }
         if spec.audio && !self.config.audio {
             bail!("Audio is disabled for this installation");
         }
@@ -712,7 +727,9 @@ impl App {
     pub fn set_progress(&self, id: &str, progress: Option<Value>) -> Result<()> {
         let mut job: Job = self.db.get("job", id)?;
         job.progress = progress;
-        self.db.put("job", id, &job)
+        self.db.put("job", id, &job)?;
+        self.events.progress(id, job.progress.as_ref());
+        Ok(())
     }
     pub async fn docker_logged(&self, id: &str, args: &[String]) -> Result<()> {
         self.docker_logged_input(id, args, None).await

@@ -104,6 +104,22 @@ export const en = {
   "jobs.downloadProgress": "Image download progress",
   "jobs.viewContainers": "View containers",
 
+  "events.jobCompleted": "{action} completed",
+  "events.jobFailed": "{action} failed",
+  "events.jobInterrupted": "{action} interrupted",
+
+  "human.title": "Agents waiting for a person",
+  "human.asks": "An agent in {name} needs a person",
+  "human.openDesktop": "Open desktop",
+  "human.done": "Done",
+  "human.decline": "Decline",
+  "human.replyPlaceholder": "Reply (optional)",
+  "human.replyTo": "Reply to the agent in {name}",
+  "human.via": "via {endpoint}",
+  "human.justNow": "just now",
+  "human.minutesAgo": "{minutes} min ago",
+  "human.hoursAgo": "{hours} h ago",
+
   "activity.title": "Agent activity",
   "activity.description":
     "Every tool call agents made over MCP, and every transfer link they used, newest first.",
@@ -793,33 +809,88 @@ export const en = {
   "settings.updateTo": "Update to {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
-    "What the manager runs with, read from its environment when it started. Passwords and tokens are never shown. Change a setting in .env, with bilskirnir settings in the WSL package, then restart the manager.",
+    "What the manager runs with, read from its environment when it started. Passwords and tokens are never shown.",
   "settings.configurationFailed": "The configuration could not be read",
   "settings.secretSet": "Set, hidden",
   "settings.notSet": "Not set",
   "settings.section.access": "Sign-in and access",
   "settings.section.mcp": "Agent access (MCP)",
   "settings.section.desktops": "Desktops",
+  "settings.section.features": "Container features",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Limits",
   "settings.section.content": "Templates and volumes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Other",
+  "settings.edit.readOnly":
+    "On this installation the settings change in .env: edit it and recreate the manager, such as with docker compose up -d. In the WSL package this page changes most of them.",
+  "settings.edit.editableHint":
+    "Change a setting with its control, then choose Apply and restart: the WSL package writes it to .env and recreates the manager. A setting marked CLI only changes with bilskirnir settings in a Bilskirnir terminal, then bilskirnir restart.",
+  "settings.edit.cliOnly": "CLI only",
+  "settings.edit.cliOnlyHint":
+    "Change it with bilskirnir settings in a Bilskirnir terminal, then run bilskirnir restart.",
+  "settings.edit.changed": "Changed",
+  "settings.edit.reset": "Undo the change to {name}",
+  "settings.edit.mib": "MiB",
+  "settings.edit.changes.one": "{count} setting changed",
+  "settings.edit.changes.other": "{count} settings changed",
+  "settings.edit.discard": "Discard",
+  "settings.edit.apply": "Apply and restart",
+  "settings.edit.fix": "Fix the marked settings first.",
+  "settings.edit.confirmTitle": "Apply the settings and restart the manager?",
+  "settings.edit.confirmText":
+    "The WSL package writes these settings to .env, keeps the previous file as .env.previous and recreates the manager. Desktops keep running; sign in again once the manager is back. If the new manager does not answer, the previous settings come back.",
+  "settings.edit.jobs.one": "{count} running job ends with the manager.",
+  "settings.edit.jobs.other": "{count} running jobs end with the manager.",
+  "settings.edit.confirmJobs": "Interrupt and restart",
+  "settings.edit.running": "Applying the settings",
+  "settings.edit.runningDetail":
+    "The manager restarts with the new settings, and the page reloads once it answers.",
+  "settings.edit.done": "The manager runs with the new settings.",
+  "settings.edit.failed":
+    "The settings change did not succeed; the manager runs with the previous settings.",
+  "settings.edit.problem.text":
+    "Use one line of printable ASCII, without quotes, $, #, backslashes, backquotes or spaces at either end.",
+  "settings.edit.problem.number": "Enter a whole number from {min} to {max}.",
+  "settings.choice.automatic": "Automatic",
+  "settings.choice.wiki": "Bilskirnir wiki",
+  "settings.choice.off": "Turned off",
+  "settings.choice.ownLabel": "Bilskirnir's own label",
+  "settings.choice.everyVolume": "Every volume",
+  "settings.choice.custom": "Other",
   "settings.about.AUTH_MODE":
     "password asks for the administrator's password; none turns sign-in off.",
   "settings.about.ADMIN_USERNAME": "The administrator's user name.",
   "settings.about.ADMIN_PASSWORD": "The administrator's password.",
   "settings.about.SECURE_COOKIE": "Sends the session cookie over HTTPS only.",
   "settings.about.ALLOWED_HOSTS":
-    "Host names the dashboard answers besides localhost and private addresses, DESKTOP_HOST included.",
-  "settings.about.MCP_ENABLED": "Whether /mcp and the MCP endpoints answer agents.",
-  "settings.about.MCP_AUTH_MODE": "token requires MCP_TOKEN on /mcp; none leaves it open.",
-  "settings.about.MCP_TOKEN": "The bearer token /mcp requires.",
+    "Host names the dashboard answers besides localhost, private addresses and DESKTOP_HOST, separated by commas.",
+  "settings.about.DESKTOP_HOST":
+    "The host name of the optional HTTPS service, which the dashboard answers as well.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Whether the root /mcp, which reaches every container, answers agents. MCP endpoints answer either way.",
+  "settings.about.MCP_AUTH_MODE":
+    "token requires a token on /mcp and the MCP endpoints; none leaves both open.",
+  "settings.about.MCP_TOKEN":
+    "The administrator's bearer token: /mcp requires it, and it opens every MCP endpoint.",
   "settings.about.DESKTOP_IMAGE": "The image the create form selects first.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Lets browsers and Electron apps in desktops start their sandbox.",
   "settings.about.AUDIO_ENABLED": "Desktop sound in the browser.",
   "settings.about.MICROPHONE_ENABLED": "The browser's microphone in desktops; needs sound.",
+  "settings.about.INTERNET_ENABLED": "Whether containers may have internet access.",
+  "settings.about.SUDO_ENABLED": "Whether containers may give the desktop user sudo.",
+  "settings.about.GAMEPAD_ENABLED": "Whether containers may have the virtual gamepad.",
+  "settings.about.GPU_DEFAULT": "Whether a new container gets GPU access unless it asks otherwise.",
+  "settings.about.INTERNET_DEFAULT":
+    "Whether a new container gets internet access unless it asks otherwise.",
+  "settings.about.SUDO_DEFAULT":
+    "Whether a new container gives the desktop user sudo unless it asks otherwise.",
+  "settings.about.AUDIO_DEFAULT": "Whether a new container gets sound unless it asks otherwise.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Whether a new container with sound gets the microphone unless it asks otherwise.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Whether a new container gets the virtual gamepad unless it asks otherwise.",
   "settings.about.WSL_GPU": "Graphics acceleration through the WSL GPU.",
   "settings.about.NVIDIA_COMPUTE": "CUDA through the NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER": "The Mesa D3D12 adapter by vendor or model; empty picks one.",
@@ -1100,9 +1171,9 @@ export const en = {
   "import.archive.tab": "Archive file",
   "import.docker.tab": "Docker image",
 
-  "mcp.off": "MCP is turned off",
-  "mcp.offHint":
-    "Endpoints answer agents only when MCP is enabled for this installation (MCP_ENABLED). You can still prepare them here.",
+  "mcp.rootOff": "The root /mcp is turned off",
+  "mcp.rootOffHint":
+    "The endpoints below answer agents with their own tokens either way. The root /mcp, which reaches every container, follows ROOT_MCP_ENABLED in the installation's .env.",
   "mcp.view.endpoints": "Endpoints",
   "mcp.view.servers": "Desktop servers",
   "mcp.view.inspector": "Inspector",
@@ -1164,7 +1235,8 @@ export const en = {
   "mcp.scope.view.description":
     "Screenshots, windows, the accessibility tree, waits, status and logs.",
   "mcp.scope.input": "Input",
-  "mcp.scope.input.description": "Mouse, keyboard, window placement and the gamepad.",
+  "mcp.scope.input.description":
+    "Mouse, keyboard, window placement, the gamepad and asking a person for help.",
   "mcp.scope.applications": "Applications",
   "mcp.scope.applications.description":
     "Launch and stop applications, and read their logs and metrics.",
@@ -1356,7 +1428,7 @@ export const en = {
   "inspector.target.placeholder": "Choose a server…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP is turned off",
+  "inspector.target.rootOff": "Root /mcp is turned off",
   "inspector.target.stopped": "container stopped",
   "inspector.status.connecting": "Starting the server…",
   "inspector.status.initializing": "Connecting…",

@@ -282,7 +282,9 @@ pub async fn transfer(
     query: std::result::Result<Query<Size>, QueryRejection>,
     body: Body,
 ) -> Response {
-    if !app.config.mcp_enabled {
+    // Only the root /mcp issues links (create_transfer is in no endpoint scope), so they answer
+    // only while it is on.
+    if !app.config.root_mcp_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     if headers.contains_key(header::ORIGIN) && !auth::origin_matches(&headers) {

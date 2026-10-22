@@ -28,21 +28,32 @@ Edit the exported `.env` before starting the manager. Run these export commands 
 
 The minimal README example keeps settings directly in Compose. The full manifests read them from `.env`. Recreate the manager with `docker compose up -d` after changing its environment; for the full registry manifest, use `docker compose -f compose.ghcr.yml up -d`.
 
-The dashboard's **Settings** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set, and it changes nothing. Of the Compose settings in the second table it shows only `MANAGER_CONTAINER`, since Compose keeps the others to itself.
+The dashboard's **Settings** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
+
+In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `bilskirnir settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
 | `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
-| `MCP_ENABLED` | `false` | Enable the embedded agent endpoint at `/mcp`. |
-| `MCP_TOKEN` | Empty | Separate bearer token, required when MCP is enabled in `token` mode; 1 to 256 visible ASCII characters without spaces. Wrap it in single quotes when it contains `$` or `#`. |
-| `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token. Anyone who can reach the manager's address can then control every desktop, so keep it on localhost. |
+| `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.7.0: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `bilskirnir update` renames it. |
+| `MCP_TOKEN` | Empty | The administrator's bearer token, required when `ROOT_MCP_ENABLED=true` in `token` mode; 1 to 256 visible ASCII characters without spaces. It opens every MCP endpoint too, also while `/mcp` is off. Wrap it in single quotes when it contains `$` or `#`. |
+| `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token, on `/mcp` and on every MCP endpoint, whether or not `/mcp` is on. Anyone who can reach the manager's address can then control every container that `/mcp` or an endpoint reaches, so keep it on localhost. |
 | `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled containers. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
 | `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
 | `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
 | `AUDIO_ENABLED` | `true` | Allows containers to use browser sound. |
 | `MICROPHONE_ENABLED` | `true` | Allows microphone input when audio is also enabled. |
+| `INTERNET_ENABLED` | `true` | Allows containers internet access. `false` refuses it for new containers, in setting changes and on the internet switch. |
+| `SUDO_ENABLED` | `true` | Allows containers to give the desktop user `sudo`. `false` refuses it for new containers and in setting changes. |
+| `GAMEPAD_ENABLED` | `true` | Allows the virtual gamepad. `false` refuses it for new containers and in setting changes, and the manager passes no gamepad input. |
+| `GPU_DEFAULT` | `true` | Whether a new container gets GPU access unless it asks otherwise, where `WSL_GPU` or `NVIDIA_COMPUTE` allows it. |
+| `INTERNET_DEFAULT` | `true` | Whether a new container gets internet access unless it asks otherwise. |
+| `SUDO_DEFAULT` | `true` | Whether a new container gives the desktop user `sudo` unless it asks otherwise. |
+| `AUDIO_DEFAULT` | `false` | Whether a new container gets sound unless it asks otherwise. |
+| `MICROPHONE_DEFAULT` | `false` | Whether a new container with sound gets the microphone unless it asks otherwise. |
+| `GAMEPAD_DEFAULT` | `false` | Whether a new container gets the virtual gamepad unless it asks otherwise. |
 | `DESKTOP_USER_NAMESPACES` | `true` | Lets processes in a container create user namespaces, which Chrome, Edge, other Chromium-based browsers and Electron applications use for their sandbox. Containers get Docker's default seccomp profile with this one addition (`desktop/seccomp.json`); calls that need `CAP_SYS_ADMIN`, such as `mount`, stay blocked. Set `false` to keep Docker's default: those applications then start only with `--no-sandbox`, and opening a link in such a default browser fails. It applies when a container is created, so an existing container changes after a reset or a settings change that recreates it. |
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
@@ -50,7 +61,7 @@ The dashboard's **Settings** page lists the settings below with the values the m
 | `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
 | `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `bilskirnir.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
 | `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts, every six hours and when **Check now** on the **Settings** page asks. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `bilskirnir update`. `false` turns both off, and the manager makes no request to GitHub. |
-| `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
+| `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. `DESKTOP_HOST` is accepted as well; Compose passes it on its own. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 
 The full manifests also accept these Compose settings:
@@ -66,6 +77,8 @@ The full manifests also accept these Compose settings:
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
+
+The container features of the create form have a switch and a default each. GPU access is on while `WSL_GPU` or `NVIDIA_COMPUTE` is, which choose how a container gets it, so it has no switch of its own. The defaults are what the form starts with and what a request to `POST /api/containers` or the MCP `create_container` gets when it leaves a feature out; one the installation switched off is never a default, and the microphone is one only with sound. Before 0.7.0 such a request got no GPU access while the form chose it; `GPU_DEFAULT=true` gives requests what the form gives, so set it to `false` to keep the old answer. A switched-off feature is refused when a container is created or a setting change turns it on, and the form shows its chip turned off. A container that already has it keeps it in its settings, also when a reset or a settings change creates it again, as audio always worked: the manager only refuses what it carries itself while the feature is off, the audio and microphone channels and gamepad input. Turn internet or `sudo` off in such a container's settings to take it away. Image builds keep their own internet setting, since templates install packages.
 
 Containers created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 

@@ -344,7 +344,7 @@ async fn an_mcp_client_calls_a_tool_of_an_mcp_server_in_the_desktop() {
     // Bilskirnir's own MCP endpoint stands in for a server inside the desktop.
     let mut inner = app(false);
     let config = &mut Arc::get_mut(&mut inner).unwrap().config;
-    config.mcp_enabled = true;
+    config.root_mcp_enabled = true;
     config.mcp_token = None;
     let service = serve(crate::router(inner)).await;
     let proxy = front(service).await;

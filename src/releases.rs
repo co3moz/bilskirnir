@@ -7,31 +7,30 @@
 //! Only the WSL package updates from the dashboard, with the same `bilskirnir update` a terminal
 //! runs: it moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the release, brings that release's
 //! installation files and command, and recreates this container. None of that is reachable from
-//! inside the container, and the manager never reaches into the distribution itself. Instead the
-//! package mounts `/opt/bilskirnir/update` here at [`UPDATE_DIR`], with a [`WATCHED`] file in it.
-//! The manager leaves a [`REQUEST`] naming its job there, and `bilskirnir-update.path` in the
-//! distribution starts `bilskirnir-update.service`, which renames the request to [`STARTED`], runs
-//! the command as root with its output in [`LOG`] and writes how it ended to [`EXIT`]. The job
-//! follows that log. The command replaces this container on the way, so the next manager finds
-//! the job still running and follows it to its end; see [`resumable`].
+//! inside the container, so the manager asks the package through the folder it mounts at
+//! [`UPDATE_DIR`], with a [`WATCHED`] file in it once the units below take requests; see
+//! [`crate::package_requests`]. The manager leaves a [`REQUEST`] naming its job there, and
+//! `bilskirnir-update.path` in the distribution starts `bilskirnir-update.service`, which renames
+//! the request to [`STARTED`], runs the command as root with its output in [`LOG`] and writes how
+//! it ended to [`EXIT`]. The next manager follows the update to its end; see [`resumable`].
 use crate::{
     App,
     error::{Error, Result},
     jobs,
     model::{Job, now},
-    process::TextDecoder,
+    package_requests::{self, Channel},
 };
 use anyhow::{Context, bail};
 use axum::{Json, extract::State, http::StatusCode};
 use serde_json::{Value, json};
 use std::{
-    io::{ErrorKind, SeekFrom},
     path::Path,
     process::Stdio,
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+pub(crate) use package_requests::Timing;
 
 /// This manager's release.
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -54,26 +53,23 @@ pub(crate) const LOG: &str = "log";
 pub(crate) const EXIT: &str = "exit";
 /// The kind of the job that follows an update.
 pub(crate) const JOB: &str = "update";
+/// The update's files in the folder.
+pub(crate) const UPDATE: Channel = Channel {
+    job: JOB,
+    request: REQUEST,
+    started: STARTED,
+    log: LOG,
+    exit: EXIT,
+    path_unit: "bilskirnir-update.path",
+    command: "bilskirnir update",
+};
 
-/// How long an update job waits for each thing it expects.
-#[derive(Clone, Copy)]
-pub(crate) struct Timing {
-    /// The distribution taking the request, which its path unit does at once.
-    pub take: Duration,
-    /// Between two reads of the log.
-    pub poll: Duration,
-    /// The whole update. The service's own limit is two hours; a little more covers reading
-    /// what it wrote last.
-    pub limit: Duration,
-}
+/// The service's own limit is two hours; a little more covers reading what it wrote last.
 pub(crate) const TIMING: Timing = Timing {
     take: Duration::from_secs(30),
     poll: Duration::from_secs(1),
     limit: Duration::from_secs(2 * 3600 + 300),
 };
-/// How much of the log one read takes; the rest comes with the next.
-const READ_LIMIT: u64 = 1 << 20;
-
 /// What the last look at GitHub found.
 #[derive(Default)]
 pub(crate) struct Releases {
@@ -207,10 +203,6 @@ pub(crate) fn installable(dir: &Path) -> bool {
     dir.join(WATCHED).is_file()
 }
 
-fn active(job: &Job) -> bool {
-    job.status == "queued" || job.status == "running"
-}
-
 /// `GET /api/update`: this release, the newest one and whether the dashboard can update to it.
 pub async fn status(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let check = app.releases.last.lock().unwrap().clone();
@@ -274,17 +266,6 @@ pub async fn start(State(app): State<Arc<App>>) -> Result<Json<Value>> {
 
 /// Leave the request, wait for the distribution to take it and follow the update.
 pub(crate) async fn run(app: &App, id: &str, timing: Timing) -> anyhow::Result<Value> {
-    let dir = &app.config.update_dir;
-    // What the last update left; the request alone names this job.
-    for name in [REQUEST, STARTED, LOG, EXIT] {
-        remove(&dir.join(name)).await?;
-    }
-    // Renamed into place, so the path unit never finds half a request.
-    let partial = dir.join(format!("{REQUEST}.new"));
-    tokio::fs::write(&partial, format!("{id}\n"))
-        .await
-        .with_context(|| format!("Could not write {}", partial.display()))?;
-    tokio::fs::rename(&partial, dir.join(REQUEST)).await?;
     let target = app
         .releases
         .available()
@@ -293,138 +274,31 @@ pub(crate) async fn run(app: &App, id: &str, timing: Timing) -> anyhow::Result<V
         id,
         &format!("Asked the WSL distribution to run bilskirnir update, which moves this installation to {target}."),
     )?;
-    let taken = async {
-        loop {
-            if read_text(&dir.join(STARTED)).await?.as_deref() == Some(id) {
-                return anyhow::Ok(());
-            }
-            tokio::time::sleep(timing.poll / 4).await;
-        }
-    };
-    if let Ok(result) = tokio::time::timeout(timing.take, taken).await {
-        result?;
-    } else {
-        // A request taken later would start an update that nobody follows.
-        remove(&dir.join(REQUEST)).await?;
-        if read_text(&dir.join(STARTED)).await?.as_deref() != Some(id) {
-            bail!(
-                "The WSL distribution did not take the request. Check 'systemctl status bilskirnir-update.path' there, or run 'bilskirnir update' in a Bilskirnir terminal"
-            );
-        }
-    }
-    follow(app, id, timing).await
+    let ended = package_requests::request(app, &UPDATE, id, &[], timing).await?;
+    outcome(&ended)
 }
 
-/// Whether an update job outlived the manager that started it: the distribution took its
-/// request, so `bilskirnir update` replaced that manager and goes on, or ended while no manager
-/// was there to see it.
+/// Whether an update job outlived the manager that started it; see
+/// [`package_requests::resumable`].
 pub(crate) fn resumable(dir: &Path, job: &Job) -> bool {
-    job.kind == JOB
-        && active(job)
-        && std::fs::read_to_string(dir.join(STARTED)).is_ok_and(|started| started.trim() == job.id)
+    package_requests::resumable(&UPDATE, dir, job)
 }
 
 /// Follow an update the previous manager started, to its end.
 pub(crate) fn resume(app: Arc<App>, job: Job) {
-    tokio::spawn(async move {
-        let id = job.id.clone();
-        let result = async {
-            // The log is read again from its start.
-            let mut record: Job = app.db.get("job", &id)?;
-            record.log = "The manager restarted while bilskirnir update ran in the WSL distribution; its output follows.\n".into();
-            app.db.put("job", &id, &record)?;
-            follow(&app, &id, TIMING).await
-        }
-        .await;
-        let _ = jobs::finish(&app, &id, job, result);
-    });
-}
-
-async fn follow(app: &App, id: &str, timing: Timing) -> anyhow::Result<Value> {
-    let dir = &app.config.update_dir;
-    let mut log = LogReader::default();
-    let mut waited = Duration::ZERO;
-    loop {
-        // The service writes how it ended after its last output, so the log is whole by then.
-        let ended = read_text(&dir.join(EXIT)).await?;
-        let mut read = log.read(app, id, &dir.join(LOG)).await?;
-        if let Some(ended) = ended {
-            while read > 0 {
-                read = log.read(app, id, &dir.join(LOG)).await?;
-            }
-            log.finish(app, id)?;
-            return outcome(&ended);
-        }
-        if waited >= timing.limit {
-            bail!("bilskirnir update did not end within two hours");
-        }
-        tokio::time::sleep(timing.poll).await;
-        waited += timing.poll;
-    }
+    package_requests::resume(app, &UPDATE, job, TIMING, outcome);
 }
 
 /// The job's result from what the service wrote when it ended: systemd's result for the
 /// service and the command's exit status.
 pub(crate) fn outcome(ended: &str) -> anyhow::Result<Value> {
-    let ended = ended.trim();
-    if ended.split_whitespace().next() == Some("success") {
+    if package_requests::succeeded(ended) {
         return Ok(json!({"version": VERSION}));
     }
-    bail!("bilskirnir update did not succeed in the WSL distribution ({ended:.80})")
-}
-
-/// The command's output as it grows, added to the job a whole line at a time.
-#[derive(Default)]
-struct LogReader {
-    offset: u64,
-    decoder: TextDecoder,
-    partial: String,
-}
-
-impl LogReader {
-    /// Add what was written since the last read; returns how many bytes that was.
-    async fn read(&mut self, app: &App, id: &str, path: &Path) -> anyhow::Result<u64> {
-        let mut file = match tokio::fs::File::open(path).await {
-            Ok(file) => file,
-            // The service has not started the command yet.
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(0),
-            Err(error) => return Err(error).context("Could not read the update's log"),
-        };
-        file.seek(SeekFrom::Start(self.offset)).await?;
-        let mut bytes = Vec::new();
-        file.take(READ_LIMIT).read_to_end(&mut bytes).await?;
-        self.offset += bytes.len() as u64;
-        self.partial.push_str(&self.decoder.push(&bytes));
-        if let Some(end) = self.partial.rfind('\n') {
-            let lines: String = self.partial.drain(..=end).collect();
-            app.append_log(id, lines.trim_end_matches('\n'))?;
-        }
-        Ok(bytes.len() as u64)
-    }
-    fn finish(&mut self, app: &App, id: &str) -> anyhow::Result<()> {
-        self.partial.push_str(&self.decoder.finish());
-        if !self.partial.is_empty() {
-            app.append_log(id, &std::mem::take(&mut self.partial))?;
-        }
-        Ok(())
-    }
-}
-
-async fn read_text(path: &Path) -> anyhow::Result<Option<String>> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(text) => Ok(Some(text.trim().to_owned())),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error).with_context(|| format!("Could not read {}", path.display())),
-    }
-}
-
-async fn remove(path: &Path) -> anyhow::Result<()> {
-    match tokio::fs::remove_file(path).await {
-        Err(error) if error.kind() != ErrorKind::NotFound => {
-            Err(error).with_context(|| format!("Could not remove {}", path.display()))
-        }
-        _ => Ok(()),
-    }
+    bail!(
+        "bilskirnir update did not succeed in the WSL distribution ({:.80})",
+        ended.trim()
+    )
 }
 
 #[cfg(test)]

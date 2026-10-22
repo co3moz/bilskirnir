@@ -1130,7 +1130,7 @@ async fn an_excluded_tool_is_unknown_on_the_endpoint() {
 }
 
 #[tokio::test]
-async fn endpoints_answer_only_while_mcp_is_enabled_and_from_the_dashboards_origin() {
+async fn endpoints_answer_only_from_the_dashboards_origin() {
     let app = mcp_app();
     app.db
         .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
@@ -1169,18 +1169,59 @@ async fn endpoints_answer_only_while_mcp_is_enabled_and_from_the_dashboards_orig
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let disabled = app_with_endpoint_but_mcp_off();
-    let (status, _, _) = call(
-        disabled,
-        "/mcp/chrome-dev",
-        Some(ADMIN),
-        None,
-        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
 }
-fn app_with_endpoint_but_mcp_off() -> Arc<App> {
+
+#[tokio::test]
+async fn endpoints_answer_with_their_tokens_while_the_root_mcp_is_off() {
+    // ROOT_MCP_ENABLED=false, without an administrator's token.
+    let app = app(true);
+    assert!(!app.config.root_mcp_enabled);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    let Json(created) = create_endpoint(
+        State(app.clone()),
+        Json(
+            serde_json::from_value(json!({"name":"chrome-dev","grants":[{"container_id":"c1","scopes":["view"],"servers":"all"}]}))
+                .unwrap(),
+        ),
+    )
+    .await
+    .unwrap();
+    let token = created["token"].as_str().unwrap().to_owned();
+    open_session(&app, "/mcp/chrome-dev", &token).await;
+    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}});
+    // The endpoint still needs its token, and the empty administrator's token opens nothing.
+    for bearer in [None, Some(""), Some(ADMIN)] {
+        let (status, _, _) = call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            bearer,
+            None,
+            initialize.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{bearer:?}");
+    }
+    // The root /mcp stays off, also for the endpoint's token.
+    let (status, _, _) = call(app.clone(), "/mcp", Some(&token), None, initialize.clone()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // MCP_AUTH_MODE=none opens the endpoints without a token only while /mcp is on: with the root
+    // channel off, nothing answers an agent without a token.
+    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
+    let mut closed = app_with_endpoint_but_root_mcp_off();
+    Arc::get_mut(&mut closed).unwrap().config.mcp_token = None;
+    let (status, _, body) = call(closed, "/mcp/chrome-dev", None, None, initialize.clone()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    let mut open = app_with_endpoint_but_root_mcp_off();
+    let config = &mut Arc::get_mut(&mut open).unwrap().config;
+    config.mcp_token = None;
+    config.root_mcp_enabled = true;
+    let (status, _, body) = call(open, "/mcp/chrome-dev", None, None, initialize).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["result"]["serverInfo"].is_object(), "{body}");
+}
+fn app_with_endpoint_but_root_mcp_off() -> Arc<App> {
     let app = app(true);
     app.db
         .put(
@@ -1393,6 +1434,69 @@ fn a_tool_list_an_endpoint_cannot_carry_is_refused() {
     wide.description = Some("x".repeat(1 << 20).into());
     let error = check_tool_list(&[wide]).unwrap_err().to_string();
     assert!(error.contains("larger than 1 MiB"), "{error}");
+}
+
+#[tokio::test]
+async fn request_human_comes_with_input_and_asks_only_for_the_endpoints_container() {
+    let app = mcp_app();
+    for (id, name) in [("c1", "Chrome dev"), ("c2", "Unity")] {
+        app.db.put(CONTAINERS, id, &container(id, name)).unwrap();
+    }
+    let viewer = endpoint("viewer", vec![grant("c1", "chrome-dev", &[Scope::View])]);
+    assert!(!names(&app, &viewer).contains(&"request_human".to_owned()));
+    let driver = endpoint(
+        "chrome-dev",
+        vec![grant("c1", "chrome-dev", &[Scope::Input])],
+    );
+    let entry = catalog(&app, &driver)
+        .into_iter()
+        .find(|entry| entry.tool.name == "request_human")
+        .expect("input offers request_human");
+    assert!(
+        !entry.tool.input_schema["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("container_id")
+    );
+    let annotations = entry.tool.annotations.unwrap();
+    assert_eq!(annotations.read_only_hint, Some(false));
+    assert_eq!(annotations.destructive_hint, Some(false));
+    app.db.put(ENDPOINTS, "chrome-dev", &driver).unwrap();
+    let session = open_session(&app, "/mcp/chrome-dev", ADMIN).await;
+    let ask = |arguments: Value| {
+        call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            Some(ADMIN),
+            Some(&session),
+            json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"request_human","arguments":arguments}}),
+        )
+    };
+    let (_, _, body) = ask(json!({"message": "Solve the CAPTCHA", "wait_seconds": 0})).await;
+    let asked = &body["result"]["structuredContent"];
+    assert_eq!(asked["status"], "pending", "{body}");
+    let pending = app.human.pending();
+    assert_eq!(pending[0].container_id, "c1");
+    assert_eq!(pending[0].endpoint.as_deref(), Some("chrome-dev"));
+    let (_, _, body) = ask(json!({"request_id": asked["request_id"], "wait_seconds": 0})).await;
+    assert_eq!(
+        body["result"]["structuredContent"]["status"], "pending",
+        "{body}"
+    );
+    // Another container's request is not this endpoint's to wait on, nor its container_id.
+    let other = app
+        .human
+        .ask(
+            &app.container("c2").unwrap(),
+            "Accept the license",
+            None,
+            &app.events,
+        )
+        .unwrap();
+    let (_, _, body) = ask(json!({"request_id": other.id, "wait_seconds": 0})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    let (_, _, body) = ask(json!({"container_id": "c2", "message": "Elsewhere"})).await;
+    assert!(body["error"].is_object(), "{body}");
 }
 
 #[test]
