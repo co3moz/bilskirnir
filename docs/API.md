@@ -36,6 +36,9 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
 | POST | `/api/update` | Ask the WSL package to run `bilskirnir update`; returns a job. See [updates](#updates). |
 | POST | `/api/update/check` | Ask GitHub for the newest release now; answers as `GET /api/update` does. See [updates](#updates). |
+| GET | `/api/backup` | Download a [backup](#backup-and-restore) of the whole installation; `images`, `volumes`, `files` and `secrets` choose its optional parts. The transfer is a `backup` job. |
+| POST | `/api/backup/check` | Compare a backup's manifest with this installation: the names a [restore](#backup-and-restore) would take that are in use, and the volumes it would lack. |
+| POST | `/api/backup/restore` | Stream a backup with optional `size` and restore it; returns a `restore` job once the whole backup has arrived. |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
 | POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. `mcp_endpoint: false` leaves out its own [MCP endpoint](#desktop-mcp-servers-and-endpoints). |
@@ -508,6 +511,60 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+
+## Backup and restore
+
+`GET /api/backup` streams a backup of the whole installation as a `.tar.gz` the browser saves as it is made, so one installation can be moved to another or kept aside. It always holds the installation's records:
+
+- every container's record, with its settings, its machine identity (hostname, MAC address and machine ID) and its compose setup's state;
+- each container's pinned compose and the values it was given;
+- the MCP endpoints, with their grants and the hashes of their tokens, so the tokens agents hold keep working where the backup is restored. A hash does not reveal its token.
+
+Query parameters of `true` or `false`, all `false` by default, add the optional parts, which can be tens of gigabytes:
+
+| Parameter | What it adds |
+| --- | --- |
+| `images` | The saved images, as their records with names, descriptions, icons, composes and build configurations, and each image Docker still has as a `docker save` of its ID with every layer. Catalog images stay out: the installation the backup returns to downloads them when it needs them. Without `images` the saved images stay out altogether. |
+| `files` | Each container's files: a commit of its container layer made for the backup, saved the same way and removed afterwards, or the commit a settings change left a container whose Docker container is missing. Docker pauses a running desktop while it commits. Named volumes, `/tmp` and `/run` are not part of it. |
+| `volumes` | The named volumes the containers mount, also one `VOLUME_FILTER` leaves out, and those Bilskirnir created that the volume list shows, read as a [volume export](#volume-archives) reads them. The manager's own volumes never are. |
+| `secrets` | The values of the composes' secret parameters. Without it they are left out, and the manifest names the containers whose values were. |
+
+Jobs, the applications, terminals and recordings of running desktops, the tool lists of [desktop MCP servers](#desktop-mcp-servers-and-endpoints), which the manager reads again once a desktop runs, and any record kind added later stay out. So do the installation's settings, which live in `.env` outside the manager; [the installation guide](INSTALLATION.md#move-to-another-computer) says how they move.
+
+```bash
+curl --cookie bilskirnir.cookies --remote-name --remote-header-name \
+  'http://localhost:8080/api/backup?images=true&volumes=true&files=true'
+```
+
+The backup is an ordinary tar inside gzip. Its first entry, `bilskirnir-backup.json`, is the manifest: `kind` (`bilskirnir-backup`), `format`, the `version` that wrote it, `created_at`, the `included` parts, the `containers`, `images`, `volumes` and `endpoints` by name, and the `parts` in order. It holds no secret value. `records.json` follows with the records. Each part is then a `docker save` stream or a volume's plain tar in entries `parts/NNNN/NNNNNNNN` of at most 4 MiB, closed by `parts/NNNN/end` with the part's `bytes` and its BLAKE2s-256 digest `blake2s`; `bilskirnir-backup-end.json` comes last. Joined in order, a part's entries are the stream as Docker or tar wrote it, so `cat parts/0001/0* | docker load` loads an image without Bilskirnir. tar needs an entry's size before its data, and Docker and tar tell a stream's length only when it ends, so the manager holds one entry in memory at a time and writes nothing to its disk; the browser's file is the only copy. An image and a container's files are each saved whole, so the desktop layers they share are in the backup once for each of them.
+
+The transfer is a `backup` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent and whose stages are `plan`, which reads the installation, then `images`, `files` and `volumes`, each skipped when the backup has no such part. If Docker or tar fails partway, the download ends with an error instead of a short file. One backup or restore runs at a time, another answers 409, and each takes one of the two archive transfer slots (429 while both are in use).
+
+`POST /api/backup/check` takes the manifest as its JSON body, as the dashboard reads it from the start of the file, and answers what a restore here would meet: `{"conflicts": [{"kind": "container", "name": "Unity"}], "missing_volumes": ["projects"]}`. A conflict is a name the restore would take that this installation already uses: a container's record, Docker container, networks or the tag of its files; a saved image's record or tag; an endpoint's name; a volume the backup carries. A missing volume is one a container mounts that the backup does not carry and this installation lacks.
+
+`POST /api/backup/restore` takes the backup as an `application/octet-stream` body, with its exact `size` when it is known, as an [image import](#image-archives) does:
+
+```bash
+curl --cookie bilskirnir.cookies \
+  --header 'X-Bilskirnir-Request: 1' \
+  --header 'Content-Type: application/octet-stream' \
+  --request POST --upload-file bilskirnir-backup-20261022-134506.tar.gz \
+  'http://localhost:8080/api/backup/restore?size=FILE_SIZE_IN_BYTES'
+```
+
+A restore needs `MANAGER_CONTAINER` and reads the upload as it arrives, at most `IMAGE_ARCHIVE_MAX_MB` after decompression, in a `restore` job:
+
+- `verify` reads the manifest and the records and holds them to the rules of the routes that create the same things. A restore adds to an installation and never replaces anything in it: a backup that would take a name in use is refused with 409 and the conflicts named, before anything is created. Delete or rename those first, or restore into a new installation.
+- `images` and `files` load each image through the checks an [image import](#image-archives) applies, so no name the stream carries is applied, and tag it with Bilskirnir's own name after its record: `bilskirnir/custom:<id>` for a script build, `bilskirnir/snapshot:<id>` for a snapshot, `bilskirnir/imported:<id>` for the others, whose kind becomes `archive` since this installation's copy is the restore's own. A container's files get `bilskirnir/container:restored-<id>`. Docker gives a loaded image the ID its own image store computes, and every record that names an image ID is moved to it.
+- `volumes` creates each volume anew, with the owner labels of one a `new_volume` parameter made, and unpacks it as the desktop user, keeping the modes it was saved with. The name must not exist.
+- `records` saves every record at once, once the whole backup has arrived and each part's length and digest matched. The response to the upload comes here: `{"job_id": ...}`.
+- `containers` creates each container whose files came along from them, with its networks, its hostname, its MAC address and its machine ID, and leaves it stopped. A container without its files is saved with an error that says so: a retry (`POST /api/containers/{id}/retry`, **Retry setup** in the dashboard) creates it from its image and runs its compose setup again. One that mounts a volume this installation lacks waits the same way until the volume is here and it is retried.
+
+A part whose length or digest does not match, an upload that stops early and a backup without its last entry fail the restore, and the images, tags and volumes it created are removed again. The job's result names the containers it `created`, those `not_created` with the reason, the restored `volumes` and `endpoints`, and the containers whose secret values the backup left out, whose compose setup a reset runs without them.
+
+A reset, or a retry that creates a missing container again from its image, finds the image a container started from by its ID; when Docker does not have it, as with a catalog image of the installation the backup came from, it uses the catalog image the container's settings name and downloads it when needed. A restored container whose source was a saved image the backup did not carry runs from its files, but cannot be reset.
+
+There is no MCP tool for backups or restores: a restore creates containers and images at once, and a backup carries the installation's secrets.
 
 ## Transfer links
 

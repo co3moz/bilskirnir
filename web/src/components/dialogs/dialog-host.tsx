@@ -25,6 +25,7 @@ import { IconDialog } from "./icon-dialog"
 import { ImageDrawer } from "./image-drawer"
 import { UploadDialog } from "./upload-dialog"
 import { UpdateDialog } from "./update-dialog"
+import { RestoreDialog } from "./restore-dialog"
 import { DownloadDialog } from "./download-dialog"
 import { VolumeBrowser } from "./volume-browser"
 import { VolumeImportDialog } from "./volume-import-dialog"
@@ -98,5 +99,15 @@ function render(dialog: Dialog, open: boolean) {
       return <ActivityDrawer {...props} endpoint={dialog.endpoint} />
     case "update":
       return <UpdateDialog {...props} />
+    case "restore":
+      return (
+        <RestoreDialog
+          {...props}
+          file={dialog.file}
+          manifest={dialog.manifest}
+          review={dialog.review}
+          limit={dialog.limit}
+        />
+      )
   }
 }

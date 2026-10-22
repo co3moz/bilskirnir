@@ -69,6 +69,8 @@ export const fr: Messages = {
   "job.volume-extract": "Extraction dans un volume",
   "job.volume-copy": "Copie de volume",
   "job.update": "Mise à jour de Bilskirnir",
+  "job.backup": "Sauvegarde de l'installation",
+  "job.restore": "Restauration d'une sauvegarde",
   "jobs.target.container": "Conteneur {id}",
   "jobs.target.image": "Image {id}",
   "jobs.log.queued": "En attente de démarrage…",
@@ -330,6 +332,13 @@ export const fr: Messages = {
   "stage.record": "Enregistrement de la fiche de l'image",
   "stage.stop": "Arrêt du conteneur",
   "stage.create": "Création du nouveau conteneur",
+  "stage.plan": "Lecture de l'installation",
+  "stage.images": "Transfert des images enregistrées",
+  "stage.files": "Transfert des fichiers des conteneurs",
+  "stage.volumes": "Transfert des volumes",
+  "stage.verify": "Vérification de la sauvegarde par rapport à cette installation",
+  "stage.records": "Enregistrement des fiches",
+  "stage.containers": "Création des conteneurs",
   "stages.title": "Étapes",
   "stages.total": "Total",
   "stages.pending": "Pas commencée",
@@ -558,6 +567,77 @@ export const fr: Messages = {
   "archives.progress": "Progression du téléversement de l'archive",
   "archives.cancel": "Annuler l'importation",
   "archives.importingNow": "Importation…",
+
+  "backup.title": "Sauvegarde et restauration",
+  "backup.description":
+    "Conservez toute l'installation dans un fichier, ou apportez une sauvegarde dans celle-ci.",
+  "backup.create": "Sauvegarder",
+  "backup.always":
+    "Une sauvegarde contient toujours les conteneurs avec leurs réglages et leur identité de machine, les valeurs de leurs composes et les points d'accès MCP avec leurs jetons.",
+  "backup.images": "Images enregistrées",
+  "backup.imagesHint.one":
+    "{count} image enregistrée, avec son icône et son compose. Les images du catalogue sont téléchargées à nouveau là où elle est restaurée.",
+  "backup.imagesHint.other":
+    "{count} images enregistrées, avec leurs icônes et leurs composes. Les images du catalogue sont téléchargées à nouveau là où elles sont restaurées.",
+  "backup.files": "Fichiers des conteneurs",
+  "backup.filesHint.one":
+    "Ce que {count} conteneur garde hors de ses volumes. Docker met brièvement en pause un bureau en marche pour l'enregistrer.",
+  "backup.filesHint.other":
+    "Ce que {count} conteneurs gardent hors de leurs volumes. Docker met brièvement en pause un bureau en marche pour l'enregistrer.",
+  "backup.volumes": "Volumes",
+  "backup.volumesHint.one": "{count} volume nommé, jamais ceux du gestionnaire.",
+  "backup.volumesHint.other": "{count} volumes nommés, jamais ceux du gestionnaire.",
+  "backup.secrets": "Valeurs secrètes",
+  "backup.secretsHint":
+    "Les valeurs des paramètres secrets des composes, comme des mots de passe de licence.",
+  "backup.secretsWarning":
+    "Le fichier contiendra ces valeurs en clair. Gardez-le là où vous seul pouvez le lire, et supprimez-le une fois restauré.",
+  "backup.download": "Télécharger la sauvegarde",
+  "backup.unencrypted":
+    "Le fichier n'est pas chiffré. Avec les images, les fichiers et les volumes, il peut peser des dizaines de gigaoctets.",
+  "backup.downloading": "Sauvegarde de l'installation",
+  "backup.downloadingDetail":
+    "Le téléchargement grandit pendant que la sauvegarde se fait. Tâches indique où elle en est.",
+  "backup.restore": "Restaurer une sauvegarde",
+  "backup.restoreHint":
+    "Une restauration ne fait qu'ajouter ce que contient la sauvegarde, et s'arrête avant de commencer si un nom est déjà utilisé.",
+  "backup.choose": "Déposez une sauvegarde ici ou choisissez un fichier",
+  "backup.reading": "Lecture de la sauvegarde…",
+  "backup.notBackup": "Ce fichier n'est pas une sauvegarde Bilskirnir.",
+  "backup.newer":
+    "Bilskirnir {version} a écrit cette sauvegarde dans un format que cette version ne sait pas lire. Mettez d'abord à jour.",
+  "backup.finishing": "Envoyée. Fin de la restauration…",
+  "backup.keepOpen": "Gardez Bilskirnir ouvert jusqu'à la fin de l'envoi.",
+  "backup.cancel": "Annuler la restauration",
+  "backup.restoring": "Restauration de la sauvegarde",
+  "backup.restoringDetail":
+    "L'envoi est terminé. La tâche enregistre les fiches et crée les conteneurs.",
+  "backup.confirmTitle": "Restaurer cette sauvegarde ?",
+  "backup.confirmFrom": "Créée par Bilskirnir {version} le {date}.",
+  "backup.stopped":
+    "Les conteneurs reviennent arrêtés, avec leur nom d'hôte, leur adresse MAC et leur identifiant de machine.",
+  "backup.nothing":
+    "La sauvegarde ne contient ni conteneurs, ni images, ni volumes, ni points d'accès.",
+  "backup.list.containers": "Conteneurs",
+  "backup.list.withoutFiles": "Conteneurs sans leurs fichiers",
+  "backup.list.images": "Images enregistrées",
+  "backup.list.recordsOnly": "Fiches d'images sans leurs images",
+  "backup.list.volumes": "Volumes",
+  "backup.list.endpoints": "Points d'accès MCP",
+  "backup.withoutFilesHint":
+    "Un conteneur sans ses fichiers attend que « Nouvelle tentative de configuration » le crée depuis son image et relance sa configuration.",
+  "backup.secretsLeftOut":
+    "La sauvegarde ne contient pas les valeurs secrètes de {names} ; leur configuration s'exécute sans elles si elle est relancée.",
+  "backup.missingVolumes":
+    "Ni dans la sauvegarde ni sur cette installation : {names}. Les conteneurs qui les montent attendent qu'ils soient là.",
+  "backup.conflicts": "Déjà présent sur cette installation",
+  "backup.conflictsHint":
+    "Supprimez-les ou renommez-les d'abord, ou restaurez dans une nouvelle installation.",
+  "backup.conflict.container": "Conteneur {name}",
+  "backup.conflict.image": "Image enregistrée {name}",
+  "backup.conflict.endpoint": "Point d'accès MCP {name}",
+  "backup.conflict.volume": "Volume {name}",
+  "backup.restoreAction": "Restaurer",
   "files.name.empty": "Saisissez un nom.",
   "files.name.dots": "Choisissez un autre nom.",
   "files.name.slashes": "Saisissez un nom sans barres obliques.",

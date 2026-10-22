@@ -408,7 +408,14 @@ pub(crate) fn directory(name: &str, mode: u32, owner: u32, mtime: u64) -> Option
     (name.len() <= 100).then(|| header(name, b'5', mode, owner.into(), 0, mtime.min(0o77777777777)))
 }
 
-fn header(name: &str, typeflag: u8, mode: u64, owner: u64, size: u64, mtime: u64) -> [u8; BLOCK] {
+pub(crate) fn header(
+    name: &str,
+    typeflag: u8,
+    mode: u64,
+    owner: u64,
+    size: u64,
+    mtime: u64,
+) -> [u8; BLOCK] {
     let mut header = [0u8; BLOCK];
     header[..name.len()].copy_from_slice(name.as_bytes());
     octal(&mut header[100..108], mode);

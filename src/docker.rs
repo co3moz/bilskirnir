@@ -285,6 +285,15 @@ impl App {
             }
             // A container recreated from the source image lacks what the compose setup changed.
             crate::compose::setup_again(&mut env);
+            // One restored from another installation's backup may name that installation's image
+            // ID; the catalog image it names is downloaded instead. A desktop with the manager's
+            // own volume is refused below, before anything is downloaded, and an image that is
+            // still missing is reported there and kept on the record.
+            if crate::volumes::refuse_manager_volumes(&info, &env.mounts()).is_ok()
+                && let Err(error) = self.source_image(&mut env, job_id).await
+            {
+                let _ = self.append_log(job_id, &format!("{error:#}"));
+            }
         }
         crate::identity::adopt(&mut env, existing.as_ref());
         self.db.put(CONTAINERS, id, &env)?;
@@ -302,6 +311,14 @@ impl App {
         Ok(json!({"container_id":id}))
     }
     async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
+        self.provision_and(env, manager, true).await
+    }
+    /// Create a container its record describes, with its networks, and leave it stopped, as a
+    /// restore does.
+    pub(crate) async fn create_stopped(&self, env: &Container, manager: &str) -> Result<()> {
+        self.provision_and(env, manager, false).await
+    }
+    async fn provision_and(&self, env: &Container, manager: &str, start: bool) -> Result<()> {
         // Validate all existing resources before creating or starting anything.
         env.spec.validate()?;
         let manager_info = self.inspect("container", manager).await?;
@@ -366,7 +383,7 @@ impl App {
             }
             let mut saved = env.clone();
             self.set_internet(&mut saved, env.spec.internet).await?;
-            if info["State"]["Running"] != true {
+            if start && info["State"]["Running"] != true {
                 // Also a container an earlier attempt created without its machine ID.
                 self.write_machine_id(env).await?;
                 self.hand_over_mount_parents(env).await?;
@@ -382,7 +399,9 @@ impl App {
             self.connect_network(env, &env.egress_network, &env.container)
                 .await?;
         }
-        self.docker(&["start", &env.container]).await?;
+        if start {
+            self.docker(&["start", &env.container]).await?;
+        }
         Ok(())
     }
     /// The `docker create` arguments for a container: every setting that Docker
@@ -668,7 +687,7 @@ impl App {
         }
         crate::volumes::refuse_manager_volumes(&info, &env.mounts())?;
         // Check the image before touching the container, so a missing image leaves the desktop intact.
-        self.inspect("image", &env.source_image_id)
+        self.source_image(&mut env, job_id)
             .await
             .context("Source image is missing; the container was left unchanged")?;
         let existing = match self.optional_inspect("container", &env.container).await? {

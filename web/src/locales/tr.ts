@@ -68,6 +68,8 @@ export const tr: Messages = {
   "job.volume-extract": "Volume'a arşiv açma",
   "job.volume-copy": "Volume kopyalama",
   "job.update": "Bilskirnir güncelleme",
+  "job.backup": "Kurulumu yedekleme",
+  "job.restore": "Yedeği geri yükleme",
   "jobs.target.container": "Konteyner {id}",
   "jobs.target.image": "İmaj {id}",
   "jobs.log.queued": "Başlaması bekleniyor…",
@@ -327,6 +329,13 @@ export const tr: Messages = {
   "stage.record": "İmaj kaydını yazma",
   "stage.stop": "Konteyneri durdurma",
   "stage.create": "Yeni konteyneri oluşturma",
+  "stage.plan": "Kurulumu okuma",
+  "stage.images": "Kayıtlı imajları aktarma",
+  "stage.files": "Konteyner dosyalarını aktarma",
+  "stage.volumes": "Volume'leri aktarma",
+  "stage.verify": "Yedeği bu kurulumla karşılaştırma",
+  "stage.records": "Kayıtları kaydetme",
+  "stage.containers": "Konteynerleri oluşturma",
   "stages.title": "Aşamalar",
   "stages.total": "Toplam",
   "stages.pending": "Başlamadı",
@@ -550,6 +559,77 @@ export const tr: Messages = {
   "archives.progress": "Arşiv yükleme ilerlemesi",
   "archives.cancel": "İçe aktarmayı iptal et",
   "archives.importingNow": "İçe aktarılıyor…",
+
+  "backup.title": "Yedekleme ve geri yükleme",
+  "backup.description":
+    "Tüm kurulumu tek bir dosyada saklayın ya da bir yedeği bu kuruluma getirin.",
+  "backup.create": "Yedekle",
+  "backup.always":
+    "Bir yedek her zaman konteynerleri ayarları ve makine kimlikleriyle, compose değerlerini ve MCP uç noktalarını token'larıyla birlikte içerir.",
+  "backup.images": "Kayıtlı imajlar",
+  "backup.imagesHint.one":
+    "Simgesi ve compose'uyla {count} kayıtlı imaj. Katalog imajları, yedeğin geri yüklendiği yerde yeniden indirilir.",
+  "backup.imagesHint.other":
+    "Simgeleri ve compose'larıyla {count} kayıtlı imaj. Katalog imajları, yedeğin geri yüklendiği yerde yeniden indirilir.",
+  "backup.files": "Konteyner dosyaları",
+  "backup.filesHint.one":
+    "{count} konteynerin volume'leri dışında tuttukları. Docker bunları kaydederken çalışan masaüstünü kısa bir süre duraklatır.",
+  "backup.filesHint.other":
+    "{count} konteynerin volume'leri dışında tuttukları. Docker bunları kaydederken çalışan her masaüstünü kısa bir süre duraklatır.",
+  "backup.volumes": "Volume'ler",
+  "backup.volumesHint.one":
+    "{count} adlandırılmış volume. Yöneticinin kendi volume'leri asla yedeklenmez.",
+  "backup.volumesHint.other":
+    "{count} adlandırılmış volume. Yöneticinin kendi volume'leri asla yedeklenmez.",
+  "backup.secrets": "Gizli değerler",
+  "backup.secretsHint":
+    "Compose'ların gizli parametrelerinin değerleri, örneğin lisans parolaları.",
+  "backup.secretsWarning":
+    "Dosya bu değerleri düz metin olarak içerecek. Yalnızca sizin okuyabileceğiniz bir yerde saklayın ve geri yükledikten sonra silin.",
+  "backup.download": "Yedeği indir",
+  "backup.unencrypted":
+    "Dosya şifrelenmez. İmajlar, dosyalar ve volume'lerle onlarca gigabayt tutabilir.",
+  "backup.downloading": "Kurulum yedekleniyor",
+  "backup.downloadingDetail":
+    "Yedek oluşturuldukça indirme büyür. İşler sayfası ne kadar ilerlediğini gösterir.",
+  "backup.restore": "Yedeği geri yükle",
+  "backup.restoreHint":
+    "Geri yükleme yalnızca yedektekileri ekler; bir ad zaten kullanılıyorsa başlamadan durur.",
+  "backup.choose": "Yedeği buraya bırakın ya da bir dosya seçin",
+  "backup.reading": "Yedek okunuyor…",
+  "backup.notBackup": "Bu dosya bir Bilskirnir yedeği değil.",
+  "backup.newer":
+    "Bu yedeği Bilskirnir {version}, bu sürümün okuyamadığı bir düzende yazdı. Önce güncelleyin.",
+  "backup.finishing": "Yüklendi. Geri yükleme tamamlanıyor…",
+  "backup.keepOpen": "Yükleme bitene kadar Bilskirnir'i açık tutun.",
+  "backup.cancel": "Geri yüklemeyi iptal et",
+  "backup.restoring": "Yedek geri yükleniyor",
+  "backup.restoringDetail": "Yükleme bitti. İş, kayıtları kaydedip konteynerleri oluşturuyor.",
+  "backup.confirmTitle": "Bu yedek geri yüklensin mi?",
+  "backup.confirmFrom": "Bilskirnir {version} ile {date} tarihinde oluşturuldu.",
+  "backup.stopped":
+    "Konteynerler durdurulmuş olarak; ana bilgisayar adları, MAC adresleri ve makine kimlikleriyle geri gelir.",
+  "backup.nothing": "Yedekte konteyner, imaj, volume ya da uç nokta yok.",
+  "backup.list.containers": "Konteynerler",
+  "backup.list.withoutFiles": "Dosyaları olmayan konteynerler",
+  "backup.list.images": "Kayıtlı imajlar",
+  "backup.list.recordsOnly": "İmajı olmayan imaj kayıtları",
+  "backup.list.volumes": "Volume'ler",
+  "backup.list.endpoints": "MCP uç noktaları",
+  "backup.withoutFilesHint":
+    "Dosyaları olmayan bir konteyner, Kurulumu yeniden deneme onu imajından oluşturup kurulumunu yeniden çalıştırana kadar bekler.",
+  "backup.secretsLeftOut":
+    "Yedek, {names} için gizli değerleri içermiyor; kurulumları yeniden çalışırsa onlarsız çalışır.",
+  "backup.missingVolumes":
+    "Ne yedekte ne de bu kurulumda: {names}. Bunları bağlayan konteynerler, volume'ler gelene kadar bekler.",
+  "backup.conflicts": "Bu kurulumda zaten var",
+  "backup.conflictsHint":
+    "Önce bunları silin ya da yeniden adlandırın veya yeni bir kurulumda geri yükleyin.",
+  "backup.conflict.container": "Konteyner {name}",
+  "backup.conflict.image": "Kayıtlı imaj {name}",
+  "backup.conflict.endpoint": "MCP uç noktası {name}",
+  "backup.conflict.volume": "Volume {name}",
+  "backup.restoreAction": "Geri yükle",
   "files.name.empty": "Bir ad girin.",
   "files.name.dots": "Başka bir ad seçin.",
   "files.name.slashes": "Eğik çizgi içermeyen bir ad girin.",

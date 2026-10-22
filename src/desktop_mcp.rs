@@ -28,12 +28,14 @@ mod servers;
 mod watch;
 
 pub(crate) use endpoints::{
-    automatic_endpoint, create_endpoint, delete_endpoint, endpoint_tools, endpoints, revoke_token,
-    scopes_list, token, update_endpoint,
+    ENDPOINTS, Endpoint, automatic_endpoint, create_endpoint, delete_endpoint, endpoint_name,
+    endpoint_tools, endpoints, revoke_token, scopes_list, token, update_endpoint,
 };
 pub(crate) use gateway::endpoint;
 pub(crate) use inspect::inspect;
-pub(crate) use registry::{Declaration, check_declarations, write_declarations};
+#[cfg(test)]
+pub(crate) use registry::SERVERS;
+pub(crate) use registry::{Declaration, check_declarations, slug, write_declarations};
 pub(crate) use servers::{
     all_servers, container_servers, refresh_server, register_server, unregister_server,
 };

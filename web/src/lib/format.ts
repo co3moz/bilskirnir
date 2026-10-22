@@ -108,7 +108,8 @@ export function jobTarget(
   images = new Map<string, string>()
 ) {
   if (!job.resource) return ""
-  if (job.resource === "update") return "Bilskirnir"
+  // An update, a backup and a restore work on the whole installation.
+  if (job.resource === "update" || job.resource === "installation") return "Bilskirnir"
   const [kind, id] = job.resource.split(/:(.*)/s)
   const reported = job.result?.name as string | undefined
   // Jobs from before environments were called containers name them `environment:<id>`.

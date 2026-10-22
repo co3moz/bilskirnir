@@ -117,6 +117,11 @@ device_volume = f"bilskirnir-test-device-{tag}"
 device_copy_volume = f"bilskirnir-test-device-copy-{tag}"
 linked_volume = f"bilskirnir-test-linked-{tag}"
 installs_volume = f"bilskirnir-test-installs-{tag}"
+# A second manager backs up and restores, so its volume filter can keep other volumes out.
+backup_manager = f"bilskirnir-test-backup-{tag}"
+backup_data = f"bilskirnir-test-backup-data-{tag}"
+backup_volume = f"bilskirnir-test-backup-volume-{tag}"
+backup_ids = []
 cache_volume = f"bilskirnir-test-cache-{tag}"
 settings_volume = f"bilskirnir-test-settings-{tag}"
 absent_volume = f"bilskirnir-test-absent-{tag}"
@@ -2064,6 +2069,83 @@ try:
     container_ids.remove(edit)
     assert deletion["deleted"] == edit and json.loads(docker("image", "inspect", carried, check=False) or b"[]") == []
     print("PASS settings change in place, recreation that keeps files, and carried image cleanup", flush=True)
+    # A backup of the whole installation, on a manager of its own whose volume filter lists only
+    # the volumes it creates: a container with its files and a volume, and the snapshot it saved,
+    # come back from the backup after they were deleted, with the same files and machine identity.
+    main_port, main_client = port, client
+    docker("run", "-d", "--name", backup_manager, "--label", "bilskirnir.manager=true", "--label", f"bilskirnir.test={tag}", "-e", f"MANAGER_CONTAINER={backup_manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", f"VOLUME_FILTER=bilskirnir.backup-test={tag}", "-e", "UPDATE_CHECK=false", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{backup_data}:/data", "-p", "127.0.0.1::8080", "bilskirnir/manager:local")
+    try:
+        port = int(docker("port", backup_manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
+        client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        login()
+        api("volumes", {"name": backup_volume})
+        api(f"volumes/{backup_volume}/files/write", {"path": "/kept.txt", "data": "kept in a volume\n"})
+        backed = job(api("containers", {"name": "Backed up", "image": xfce["reference"], "gpu": False, "internet": False, "mounts": [{"volume": backup_volume, "target": "/home/desktop/Kept"}]}))["container_id"]
+        backup_ids.append(backed)
+        backed_container = f"bilskirnir-{backed}"
+        ready(backed_container)
+        docker("exec", "--user", "desktop", backed_container, "sh", "-c", "printf layer > /home/desktop/layer-marker")
+        backed_spec = api(f"containers/{backed}")["spec"]
+        backed_identity = machine(backed_container)
+        assert backed_identity == recorded(backed_spec)
+        saved = job(api(f"containers/{backed}/snapshot", {"name": f"backup {tag}"}))
+        # The backup streams into the download as it is made; its job is named in the response.
+        archive = os.path.join(tempfile.mkdtemp(), "backup.tar.gz")
+        with client.open(f"http://127.0.0.1:{port}/api/backup?images=true&volumes=true&files=true&secrets=false", timeout=1800) as response, open(archive, "wb") as out:
+            backup_job = response.headers["X-Job-Id"]
+            shutil.copyfileobj(response, out)
+        made = wait_for(lambda: (j if (j := api(f"jobs/{backup_job}"))["status"] not in ("queued", "running") else None), 180)
+        assert made["status"] == "completed" and made["kind"] == "backup", made
+        assert [stage["name"] for stage in made["stages"] if "started_at" in stage] == ["plan", "images", "files", "volumes"], made["stages"]
+        with tarfile.open(archive, "r:gz") as backup:
+            first = backup.next()
+            assert first.name == "bilskirnir-backup.json", first.name
+            manifest = json.load(backup.extractfile(first))
+            # An ordinary tar: a part's chunks are the docker save stream, as tar lists them.
+            names = backup.getnames()
+        assert [(c["id"], c["files"]) for c in manifest["containers"]] == [(backed, True)], manifest
+        assert [(i["id"], i["image"]) for i in manifest["images"]] == [(saved["id"], True)], manifest
+        assert [v["name"] for v in manifest["volumes"] if v["included"]] == [backup_volume], manifest
+        assert names[-1] == "bilskirnir-backup-end.json" and "parts/0002/end" in names, names[-5:]
+        # While the names are in use, the check names them and nothing is restored.
+        conflicts = api("backup/check", manifest)["conflicts"]
+        assert {"kind": "container", "name": "Backed up"} in conflicts and {"kind": "volume", "name": backup_volume} in conflicts, conflicts
+        job(api(f"containers/{backed}", method="DELETE"))
+        api(f"images/{saved['id']}", method="DELETE")
+        api(f"volumes/{backup_volume}", method="DELETE")
+        assert json.loads(docker("volume", "inspect", backup_volume, check=False) or b"[]") == []
+        assert api("backup/check", manifest) == {"conflicts": [], "missing_volumes": []}
+        size = os.path.getsize(archive)
+        with open(archive, "rb") as body:
+            request = urllib.request.Request(f"http://127.0.0.1:{port}/api/backup/restore?size={size}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Bilskirnir-Request": "1"})
+            with client.open(request, timeout=3600) as response:
+                restoring = json.loads(response.read())
+        restored = job(restoring)
+        image_refs.append(f"bilskirnir/container:restored-{backed}")
+        assert restored["created"] == [backed] and restored["volumes"] == [backup_volume] and restored["not_created"] == [], restored
+        assert [s["name"] for s in api(f"jobs/{restoring['job_id']}")["stages"]] == ["verify", "images", "files", "volumes", "records", "containers"]
+        # Created stopped, from its files, with its settings and identity.
+        assert docker("inspect", "--format", "{{.State.Status}}", backed_container).decode().strip() == "created"
+        back = api(f"containers/{backed}")
+        assert back["spec"] == backed_spec and back["working_image"]["reference"] == f"bilskirnir/container:restored-{backed}", back
+        image = next(i for i in api("images") if i["id"] == saved["id"])
+        assert image["reference"] == f"bilskirnir/snapshot:{saved['id']}" and image["available"], image
+        job(api(f"containers/{backed}/action", {"action": "start"}))
+        ready(backed_container)
+        assert docker("exec", backed_container, "cat", "/home/desktop/layer-marker") == b"layer"
+        assert docker("exec", backed_container, "cat", "/home/desktop/Kept/kept.txt") == b"kept in a volume\n"
+        assert machine(backed_container) == backed_identity
+        print("PASS a backup brings back a container's files, its volume, its snapshot and its machine identity after they were deleted", flush=True)
+        job(api(f"containers/{backed}", method="DELETE"))
+        backup_ids.remove(backed)
+        api(f"images/{saved['id']}", method="DELETE")
+        api(f"volumes/{backup_volume}", method="DELETE")
+        shutil.rmtree(os.path.dirname(archive), ignore_errors=True)
+    finally:
+        port, client = main_port, main_client
+        info = json.loads(docker("inspect", backup_manager, check=False) or b"[]")
+        if info and info[0]["Config"]["Labels"].get("bilskirnir.test") == tag:
+            docker("rm", "--force", backup_manager, check=False)
     for eid in list(container_ids):
         deletion = api(f"containers/{eid}", method="DELETE")
         result = job(deletion)
@@ -2103,6 +2185,18 @@ finally:
     info=inspect_cleanup("container",holder)
     if info and info["Config"]["Labels"].get("bilskirnir.test")==tag:
         docker("rm","--force",holder,check=False)
+    # The backup manager goes first, so the networks of its containers have no member left.
+    info=inspect_cleanup("container",backup_manager)
+    if info and info["Config"]["Labels"].get("bilskirnir.test")==tag:
+        docker("rm","--force",backup_manager,check=False)
+    for eid in backup_ids:
+        info=inspect_cleanup("container",f"bilskirnir-{eid}")
+        if info and info["Config"]["Labels"].get("bilskirnir.environment")==eid:
+            docker("rm","--force",info["Id"],check=False)
+        for network in [f"bilskirnir-{eid}-private",f"bilskirnir-{eid}-egress"]:
+            info=inspect_cleanup("network",network)
+            if info and info["Labels"].get("bilskirnir.environment")==eid:
+                docker("network","rm",info["Id"],check=False)
     image_fixture=inspect_cleanup("container",f"bilskirnir-test-image-{tag}")
     if image_fixture and image_fixture["Config"]["Labels"].get("bilskirnir.test")==tag:
         docker("rm","--force",f"bilskirnir-test-image-{tag}",check=False)
@@ -2118,7 +2212,7 @@ finally:
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
-    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,settings_volume,absent_volume,outside_volume]: docker("volume","rm",name,check=False)
+    for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,settings_volume,absent_volume,outside_volume,backup_volume,backup_data]: docker("volume","rm",name,check=False)
     # A volume created for one of this run's containers goes only while its label names that container.
     for name in own_volumes:
         info=inspect_cleanup("volume",name)

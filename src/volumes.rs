@@ -28,11 +28,11 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
-pub(crate) use archive::{Extract, Import, copy, export, extract, import};
+pub(crate) use archive::{Extract, Import, VolumeWriter, copy, export, extract, import};
 pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };
-pub(crate) use owned::{RemovedVolumes, mark_owners, removable};
+pub(crate) use owned::{OWNER, PARAMETER, RemovedVolumes, mark_owners, removable};
 pub(crate) use remove::{mounted_by, remove};
 
 /// Where a helper mounts the volume.

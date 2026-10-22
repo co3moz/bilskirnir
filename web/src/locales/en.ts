@@ -72,6 +72,8 @@ export const en = {
   "job.volume-extract": "Extract into volume",
   "job.volume-copy": "Copy volume",
   "job.update": "Update Bilskirnir",
+  "job.backup": "Back up installation",
+  "job.restore": "Restore backup",
 
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",
@@ -335,6 +337,13 @@ export const en = {
   "stage.record": "Saving the image record",
   "stage.stop": "Stopping the container",
   "stage.create": "Creating the new container",
+  "stage.plan": "Reading the installation",
+  "stage.images": "Transferring the saved images",
+  "stage.files": "Transferring the containers' files",
+  "stage.volumes": "Transferring the volumes",
+  "stage.verify": "Checking the backup against this installation",
+  "stage.records": "Saving the records",
+  "stage.containers": "Creating the containers",
   "stages.title": "Stages",
   "stages.total": "Total",
   "stages.pending": "Not started",
@@ -565,6 +574,73 @@ export const en = {
   "archives.progress": "Archive upload progress",
   "archives.cancel": "Cancel import",
   "archives.importingNow": "Importing…",
+
+  "backup.title": "Backup and restore",
+  "backup.description": "Keep the whole installation in one file, or bring a backup into this one.",
+  "backup.create": "Back up",
+  "backup.always":
+    "A backup always holds the containers with their settings and machine identity, their compose values and the MCP endpoints with their tokens.",
+  "backup.images": "Saved images",
+  "backup.imagesHint.one":
+    "{count} saved image, with its icon and compose. Catalog images download again where it is restored.",
+  "backup.imagesHint.other":
+    "{count} saved images, with their icons and composes. Catalog images download again where they are restored.",
+  "backup.files": "Containers' files",
+  "backup.filesHint.one":
+    "What {count} container keeps outside its volumes. Docker pauses a running desktop briefly to save it.",
+  "backup.filesHint.other":
+    "What {count} containers keep outside their volumes. Docker pauses a running desktop briefly to save it.",
+  "backup.volumes": "Volumes",
+  "backup.volumesHint.one": "{count} named volume, never the manager's own.",
+  "backup.volumesHint.other": "{count} named volumes, never the manager's own.",
+  "backup.secrets": "Secret values",
+  "backup.secretsHint": "The values of the composes' secret parameters, such as license passwords.",
+  "backup.secretsWarning":
+    "The file will hold these values in plain text. Keep it where only you can read it, and delete it once it is restored.",
+  "backup.download": "Download backup",
+  "backup.unencrypted":
+    "The file is not encrypted. With images, files and volumes it can take tens of gigabytes.",
+  "backup.downloading": "Backing up the installation",
+  "backup.downloadingDetail":
+    "The download grows while the backup is made. Jobs shows how far it is.",
+  "backup.restore": "Restore a backup",
+  "backup.restoreHint":
+    "A restore only adds what the backup holds, and stops before it starts if a name is already in use.",
+  "backup.choose": "Drop a backup here or choose a file",
+  "backup.reading": "Reading the backup…",
+  "backup.notBackup": "This file is not a Bilskirnir backup.",
+  "backup.newer":
+    "Bilskirnir {version} wrote this backup in a layout this release cannot read. Update first.",
+  "backup.finishing": "Uploaded. Finishing the restore…",
+  "backup.keepOpen": "Keep Bilskirnir open until the upload ends.",
+  "backup.cancel": "Cancel restore",
+  "backup.restoring": "Restoring the backup",
+  "backup.restoringDetail":
+    "The upload has ended. The job saves the records and creates the containers.",
+  "backup.confirmTitle": "Restore this backup?",
+  "backup.confirmFrom": "Made by Bilskirnir {version} on {date}.",
+  "backup.stopped":
+    "Containers come back stopped, with their hostname, MAC address and machine ID.",
+  "backup.nothing": "The backup holds no containers, images, volumes or endpoints.",
+  "backup.list.containers": "Containers",
+  "backup.list.withoutFiles": "Containers without their files",
+  "backup.list.images": "Saved images",
+  "backup.list.recordsOnly": "Image records without their images",
+  "backup.list.volumes": "Volumes",
+  "backup.list.endpoints": "MCP endpoints",
+  "backup.withoutFilesHint":
+    "A container without its files waits until Retry setup creates it from its image and runs its setup again.",
+  "backup.secretsLeftOut":
+    "The backup left out the secret values of {names}; their setup runs without them if it runs again.",
+  "backup.missingVolumes":
+    "Not in the backup and not on this installation: {names}. The containers that mount them wait until they are here.",
+  "backup.conflicts": "Already on this installation",
+  "backup.conflictsHint": "Delete or rename these first, or restore into a new installation.",
+  "backup.conflict.container": "Container {name}",
+  "backup.conflict.image": "Saved image {name}",
+  "backup.conflict.endpoint": "MCP endpoint {name}",
+  "backup.conflict.volume": "Volume {name}",
+  "backup.restoreAction": "Restore",
 
   "files.name.empty": "Enter a name.",
   "files.name.dots": "Choose another name.",

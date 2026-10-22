@@ -38,7 +38,7 @@ const RUNNER: &str = include_str!("setup_runner.py");
 /// Gives the desktop user the folders of the volume parameters; runs as root.
 const PATHS: &str = include_str!("setup_paths.py");
 /// The database kind of each container's pinned compose and parameter values.
-const PINNED: &str = "environment-setup";
+pub(crate) const PINNED: &str = "environment-setup";
 const PARAMETER_LIMIT: usize = 32;
 const STEP_LIMIT: usize = 8;
 /// What the scripts of a compose take together.

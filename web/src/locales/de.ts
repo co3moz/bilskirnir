@@ -69,6 +69,8 @@ export const de: Messages = {
   "job.volume-extract": "In Volume entpacken",
   "job.volume-copy": "Volume kopieren",
   "job.update": "Bilskirnir aktualisieren",
+  "job.backup": "Installation sichern",
+  "job.restore": "Sicherung wiederherstellen",
   "jobs.target.container": "Container {id}",
   "jobs.target.image": "Image {id}",
   "jobs.log.queued": "Wartet auf den Start…",
@@ -332,6 +334,13 @@ export const de: Messages = {
   "stage.record": "Image-Eintrag speichern",
   "stage.stop": "Container stoppen",
   "stage.create": "Neuen Container erstellen",
+  "stage.plan": "Installation lesen",
+  "stage.images": "Gespeicherte Images übertragen",
+  "stage.files": "Dateien der Container übertragen",
+  "stage.volumes": "Volumes übertragen",
+  "stage.verify": "Sicherung mit dieser Installation abgleichen",
+  "stage.records": "Einträge speichern",
+  "stage.containers": "Container erstellen",
   "stages.title": "Phasen",
   "stages.total": "Gesamt",
   "stages.pending": "Nicht begonnen",
@@ -562,6 +571,75 @@ export const de: Messages = {
   "archives.progress": "Fortschritt des Archiv-Uploads",
   "archives.cancel": "Import abbrechen",
   "archives.importingNow": "Wird importiert…",
+
+  "backup.title": "Sicherung und Wiederherstellung",
+  "backup.description":
+    "Die ganze Installation in einer Datei sichern oder eine Sicherung hierher übernehmen.",
+  "backup.create": "Sichern",
+  "backup.always":
+    "Eine Sicherung enthält immer die Container mit ihren Einstellungen und ihrer Maschinenidentität, ihre Compose-Werte und die MCP-Endpunkte mit ihren Tokens.",
+  "backup.images": "Gespeicherte Images",
+  "backup.imagesHint.one":
+    "{count} gespeichertes Image mit Symbol und Compose. Katalog-Images werden dort, wo es wiederhergestellt wird, neu heruntergeladen.",
+  "backup.imagesHint.other":
+    "{count} gespeicherte Images mit Symbolen und Composes. Katalog-Images werden dort, wo sie wiederhergestellt werden, neu heruntergeladen.",
+  "backup.files": "Dateien der Container",
+  "backup.filesHint.one":
+    "Was {count} Container außerhalb seiner Volumes hat. Docker hält einen laufenden Desktop dafür kurz an.",
+  "backup.filesHint.other":
+    "Was {count} Container außerhalb ihrer Volumes haben. Docker hält einen laufenden Desktop dafür kurz an.",
+  "backup.volumes": "Volumes",
+  "backup.volumesHint.one": "{count} benanntes Volume, nie das des Managers.",
+  "backup.volumesHint.other": "{count} benannte Volumes, nie die des Managers.",
+  "backup.secrets": "Geheime Werte",
+  "backup.secretsHint": "Die Werte der geheimen Compose-Parameter, etwa Lizenzpasswörter.",
+  "backup.secretsWarning":
+    "Die Datei enthält diese Werte im Klartext. Bewahren Sie sie so auf, dass nur Sie sie lesen können, und löschen Sie sie nach der Wiederherstellung.",
+  "backup.download": "Sicherung herunterladen",
+  "backup.unencrypted":
+    "Die Datei ist nicht verschlüsselt. Mit Images, Dateien und Volumes kann sie Dutzende Gigabyte groß werden.",
+  "backup.downloading": "Installation wird gesichert",
+  "backup.downloadingDetail":
+    "Der Download wächst, während die Sicherung entsteht. Unter Aufträge sehen Sie den Fortschritt.",
+  "backup.restore": "Sicherung wiederherstellen",
+  "backup.restoreHint":
+    "Eine Wiederherstellung fügt nur hinzu, was die Sicherung enthält, und bricht vor dem Start ab, wenn ein Name schon vergeben ist.",
+  "backup.choose": "Sicherung hier ablegen oder Datei auswählen",
+  "backup.reading": "Sicherung wird gelesen…",
+  "backup.notBackup": "Diese Datei ist keine Bilskirnir-Sicherung.",
+  "backup.newer":
+    "Bilskirnir {version} hat diese Sicherung in einem Format geschrieben, das diese Version nicht lesen kann. Aktualisieren Sie zuerst.",
+  "backup.finishing": "Hochgeladen. Wiederherstellung wird abgeschlossen…",
+  "backup.keepOpen": "Lassen Sie Bilskirnir geöffnet, bis der Upload endet.",
+  "backup.cancel": "Wiederherstellung abbrechen",
+  "backup.restoring": "Sicherung wird wiederhergestellt",
+  "backup.restoringDetail":
+    "Der Upload ist beendet. Der Auftrag speichert die Einträge und erstellt die Container.",
+  "backup.confirmTitle": "Diese Sicherung wiederherstellen?",
+  "backup.confirmFrom": "Erstellt von Bilskirnir {version} am {date}.",
+  "backup.stopped":
+    "Container kommen gestoppt zurück, mit ihrem Hostnamen, ihrer MAC-Adresse und ihrer Maschinen-ID.",
+  "backup.nothing": "Die Sicherung enthält keine Container, Images, Volumes oder Endpunkte.",
+  "backup.list.containers": "Container",
+  "backup.list.withoutFiles": "Container ohne ihre Dateien",
+  "backup.list.images": "Gespeicherte Images",
+  "backup.list.recordsOnly": "Image-Einträge ohne ihre Images",
+  "backup.list.volumes": "Volumes",
+  "backup.list.endpoints": "MCP-Endpunkte",
+  "backup.withoutFilesHint":
+    "Ein Container ohne seine Dateien wartet, bis „Einrichtung wiederholen“ ihn aus seinem Image erstellt und seine Einrichtung erneut ausführt.",
+  "backup.secretsLeftOut":
+    "Die Sicherung enthält die geheimen Werte von {names} nicht; deren Einrichtung läuft ohne sie, wenn sie erneut läuft.",
+  "backup.missingVolumes":
+    "Weder in der Sicherung noch in dieser Installation: {names}. Die Container, die sie einbinden, warten, bis sie da sind.",
+  "backup.conflicts": "Bereits in dieser Installation",
+  "backup.conflictsHint":
+    "Löschen oder benennen Sie diese zuerst um, oder stellen Sie in einer neuen Installation wieder her.",
+  "backup.conflict.container": "Container {name}",
+  "backup.conflict.image": "Gespeichertes Image {name}",
+  "backup.conflict.endpoint": "MCP-Endpunkt {name}",
+  "backup.conflict.volume": "Volume {name}",
+  "backup.restoreAction": "Wiederherstellen",
   "files.name.empty": "Geben Sie einen Namen ein.",
   "files.name.dots": "Wählen Sie einen anderen Namen.",
   "files.name.slashes": "Geben Sie einen Namen ohne Schrägstriche ein.",
