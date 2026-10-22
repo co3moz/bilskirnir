@@ -117,8 +117,9 @@ while true; do
 done
 
 echo
-echo "Agents such as Claude Code use the desktops through the MCP endpoint."
-choose "Enable agent access (MCP)?" "Yes" "No"
+echo "Agents such as Claude Code reach every desktop through the root MCP endpoint, /mcp. MCP endpoints"
+echo "for chosen desktops can be made on the dashboard later, whatever you answer here."
+choose "Enable root agent access (/mcp)?" "Yes" "No"
 mcp=$choice
 mcp_auth=""
 mcp_token=""
@@ -184,9 +185,9 @@ else
     set_setting AUTH_MODE none
 fi
 set_setting ADMIN_USERNAME "$username"
-# Agent access defaults to on with a random token; the answers above can choose a custom one or none.
+# Root agent access defaults to on with a random token; the answers above can choose a custom one or none.
 if [[ $mcp == yes ]]; then
-    set_setting MCP_ENABLED true
+    set_setting ROOT_MCP_ENABLED true
     if [[ $mcp_auth == none ]]; then
         set_setting MCP_AUTH_MODE none
     else
@@ -194,7 +195,7 @@ if [[ $mcp == yes ]]; then
         set_setting MCP_TOKEN "'${mcp_token:-$(openssl rand -hex 32)}'"
     fi
 else
-    set_setting MCP_ENABLED false
+    set_setting ROOT_MCP_ENABLED false
 fi
 # Compose publishes the manager's port on this address inside WSL; Windows decides the rest.
 if [[ $access == other ]]; then
@@ -251,7 +252,8 @@ if [[ $mcp == yes ]]; then
     echo
     echo "'bilskirnir mcp' shows this again, and 'bilskirnir doctor' checks Docker, the GPU and the network."
 else
-    echo "Agent access (MCP) is off; 'bilskirnir mcp' explains how to turn it on."
+    echo "Root agent access (/mcp) is off; MCP endpoints made on the dashboard work without it, and"
+    echo "'bilskirnir mcp' explains how to turn it on."
     echo "'bilskirnir doctor' checks Docker, the GPU and the network."
 fi
 if [[ $access == other ]]; then

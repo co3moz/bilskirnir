@@ -233,7 +233,7 @@ def job(response):
 
 
 def start_manager():
-    docker("run", "-d", "--name", manager, "--label", "bilskirnir.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "MCP_ENABLED=true", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
+    docker("run", "-d", "--name", manager, "--label", "bilskirnir.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "ROOT_MCP_ENABLED=true", "-e", "GPU_DEFAULT=false", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
     return int(docker("port", manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
 
 
@@ -747,6 +747,11 @@ try:
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     # The templates page reads the wiki's list in the browser, so the policy allows that host.
     assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
+    # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
+    # the defaults; the others keep what the create form chose before them.
+    settings = api("settings")
+    assert settings["defaults"] == {"gpu": False, "internet": True, "sudo": True, "audio": False, "microphone": False, "gamepad": False}, settings
+    assert settings["root_mcp_enabled"] and settings["internet_enabled"] and settings["sudo_enabled"] and settings["gamepad_enabled"], settings
     with client.open(f"http://127.0.0.1:{port}/", timeout=30) as response:
         policy = response.headers["Content-Security-Policy"]
     assert "connect-src 'self' https://raw.githubusercontent.com;" in policy, policy

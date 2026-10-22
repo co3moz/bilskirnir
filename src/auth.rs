@@ -110,7 +110,7 @@ impl App {
             .trim_start_matches('[')
             .trim_end_matches(']')
             .to_ascii_lowercase();
-        if name == "localhost" || self.config.allowed_hosts.contains(&name) {
+        if name == "localhost" || self.config.host_allowed(&name) {
             return true;
         }
         match name.parse::<std::net::IpAddr>() {

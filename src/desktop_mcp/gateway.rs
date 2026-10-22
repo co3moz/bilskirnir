@@ -81,12 +81,10 @@ impl super::DesktopMcp {
     }
 }
 
-/// Whether a request may use the endpoint: MCP is enabled, the origin is the dashboard's or
-/// none, and the bearer token is the endpoint's or the administrator's.
+/// Whether a request may use the endpoint: the origin is the dashboard's or none, and the bearer
+/// token is the endpoint's or the administrator's. Endpoints answer whether or not the root
+/// `/mcp` is on (`ROOT_MCP_ENABLED`), since they are made on the dashboard for an agent of their own.
 fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
-    if !app.config.mcp_enabled {
-        return Some(StatusCode::NOT_FOUND.into_response());
-    }
     // Whether the endpoint exists is told only to a caller whose token opens something, so the
     // names, which follow the containers', cannot be listed from the LAN.
     let endpoint = app.db.get::<Endpoint>(ENDPOINTS, name).ok();
@@ -107,9 +105,14 @@ fn authorize(app: &App, name: &str, request: &Request) -> Option<Response> {
                 .into_response(),
         );
     }
-    let Some(administrator) = &app.config.mcp_token else {
-        // MCP_AUTH_MODE=none: the administrator's channel is open, so this one is too.
-        return if endpoint.is_some() { None } else { missing() };
+    let administrator = match &app.config.mcp_token {
+        // MCP_AUTH_MODE=none: the administrator's channel is open, so this one is too. With the
+        // root /mcp off nothing is open without a token, and an endpoint takes only its own.
+        None if app.config.root_mcp_enabled => {
+            return if endpoint.is_some() { None } else { missing() };
+        }
+        None => "",
+        Some(token) => token.as_str(),
     };
     let token = request
         .headers()

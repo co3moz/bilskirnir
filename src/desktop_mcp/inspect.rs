@@ -248,8 +248,8 @@ pub(super) async fn open(app: &Arc<App>, target: Target) -> Result<(Value, Peer)
             });
             Ok((described, desktop(app, &container, &server.spec).await?))
         }
+        // An endpoint answers whether or not the root /mcp is on, here as on its route.
         Target::Endpoint { name } => {
-            enabled(app)?;
             app.db.get::<Endpoint>(ENDPOINTS, &name).map_err(|_| {
                 Error(
                     StatusCode::NOT_FOUND,
@@ -260,21 +260,21 @@ pub(super) async fn open(app: &Arc<App>, target: Target) -> Result<(Value, Peer)
             Ok((server, serve(EndpointMcp::new(app.clone(), name))))
         }
         Target::Administrator => {
-            enabled(app)?;
+            root_enabled(app)?;
             let server = json!({"kind": "administrator", "path": "/mcp"});
             Ok((server, serve(BilskirnirMcp::new(app.clone()))))
         }
     }
 }
 
-/// Endpoints and `/mcp` answer only while MCP is enabled, here as on their routes.
-fn enabled(app: &App) -> Result<()> {
-    if app.config.mcp_enabled {
+/// `/mcp` answers only while the root MCP is on, here as on its route.
+fn root_enabled(app: &App) -> Result<()> {
+    if app.config.root_mcp_enabled {
         Ok(())
     } else {
         Err(Error(
             StatusCode::NOT_FOUND,
-            "MCP is turned off (MCP_ENABLED=false)".into(),
+            "The root MCP is turned off (ROOT_MCP_ENABLED=false)".into(),
         ))
     }
 }

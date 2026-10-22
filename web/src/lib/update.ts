@@ -1,10 +1,10 @@
 import { quietWhileRestarting, refreshAll } from "./queries"
-import type { UpdateStatus } from "./types"
 
 /**
- * Following an update across the manager's restart. `bilskirnir update` replaces the manager
- * container on its way: requests fail while it is away, and the new one keeps no sessions and
- * serves the interface of its own release. So the page reloads as soon as a new manager answers.
+ * Following an update or a settings change across the manager's restart. `bilskirnir update` and
+ * `bilskirnir apply-settings` replace the manager container on their way: requests fail while it
+ * is away, and the new one keeps no sessions and may serve the interface of another release. So
+ * the page reloads as soon as a new manager answers.
  */
 
 /** What one look at the manager found. */
@@ -29,33 +29,37 @@ const LOOK_EVERY = 1500
 const UPDATED_FROM = "bilskirnir.updatedFrom"
 let following = false
 
-async function look(): Promise<Answer> {
+/** What a restart is followed by: the update's status, or the configuration a settings change is on. */
+type Restart = "update" | "settings"
+
+async function look(restart: Restart, from: string): Promise<Answer> {
   try {
-    const response = await fetch("/api/update", { credentials: "same-origin", cache: "no-store" })
+    const path = restart === "update" ? "/api/update" : "/api/configuration"
+    const response = await fetch(path, { credentials: "same-origin", cache: "no-store" })
     if (response.status === 401) return { kind: "signed-out" }
     if (!response.ok) return { kind: "away" }
-    const status = (await response.json()) as UpdateStatus
-    return { kind: "status", current: status.current, running: !!status.job_id }
+    const status = (await response.json()) as { current?: string; job_id?: string | null }
+    // A settings change keeps the release, so only the manager being away tells it restarted.
+    return { kind: "status", current: status.current ?? from, running: !!status.job_id }
   } catch {
     return { kind: "away" }
   }
 }
 
-/** Follow an update from release `from` until a new manager answers, then reload into it. */
-export function followUpdate(from: string) {
+/**
+ * Follow a restart from release `from` until a new manager answers, then reload into it: an
+ * update's, or a settings change's, which keeps the release.
+ */
+export function followRestart(restart: Restart, from: string, reloaded?: () => void) {
   if (following) return
   following = true
   quietWhileRestarting(true)
   let away = false
   const tick = async () => {
-    const answer = await look()
+    const answer = await look(restart, from)
     const step = next(answer, from, away)
     if (step === "reload") {
-      try {
-        sessionStorage.setItem(UPDATED_FROM, from)
-      } catch {
-        // The notice after the reload is a convenience.
-      }
+      reloaded?.()
       location.reload()
       return
     }
@@ -69,6 +73,17 @@ export function followUpdate(from: string) {
     window.setTimeout(tick, LOOK_EVERY)
   }
   window.setTimeout(tick, LOOK_EVERY)
+}
+
+/** Follow an update from release `from` until a new manager answers, then reload into it. */
+export function followUpdate(from: string) {
+  followRestart("update", from, () => {
+    try {
+      sessionStorage.setItem(UPDATED_FROM, from)
+    } catch {
+      // The notice after the reload is a convenience.
+    }
+  })
 }
 
 /** The release an update reloaded the page from, read once. */

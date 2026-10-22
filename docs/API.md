@@ -29,8 +29,9 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
 | POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
 | POST | `/api/logout` | Sign out. |
-| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
+| GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `root_mcp_enabled`, whether the root `/mcp` answers (`ROOT_MCP_ENABLED`); the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer either way. Before 0.7.0 the field was `mcp_enabled`. The container features the installation allows are `gpu_enabled`, `internet_enabled`, `sudo_enabled`, `audio_enabled`, `microphone_enabled` and `gamepad_enabled`, and `defaults` holds what a new container gets of each, `{"gpu", "internet", "sudo", "audio", "microphone", "gamepad"}`; see [creating a container](#create-a-container-and-follow-the-job). |
 | GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Settings** page; secrets only say whether they are set. See [configuration](#configuration). |
+| POST | `/api/configuration` | Check a change of the editable settings, or have the WSL package write it to `.env` and recreate the manager; returns a job. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
 | POST | `/api/update` | Ask the WSL package to run `bilskirnir update`; returns a job. See [updates](#updates). |
@@ -163,11 +164,11 @@ Creation accepts `name`, `image` and these optional fields:
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `resolution` | `1920x1080` | Desktop size, from 320x240 to 7680x4320. |
-| `gpu` | `false` | Request GPU access supported by the installation. |
-| `internet` | `true` | Attach the Docker egress network. |
-| `audio`, `microphone` | `false` | Enable supported browser media; microphone also needs audio. |
-| `sudo` | `true` | Allow the desktop user to use sudo. |
-| `gamepad` | `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
+| `gpu` | `GPU_DEFAULT`, `true` | Request GPU access supported by the installation. |
+| `internet` | `INTERNET_DEFAULT`, `true` | Attach the Docker egress network. |
+| `audio`, `microphone` | `AUDIO_DEFAULT` and `MICROPHONE_DEFAULT`, `false` | Enable supported browser media; microphone also needs audio, and is left off by default without it. |
+| `sudo` | `SUDO_DEFAULT`, `true` | Allow the desktop user to use sudo. |
+| `gamepad` | `GAMEPAD_DEFAULT`, `false` | Attach `/dev/uinput` so the gamepad route can create a virtual controller. |
 | `hostname` | The Docker container name | The desktop's [machine identity](#machine-identity): one label of letters, digits and hyphens, at most 63 characters. |
 | `mac_address` | Random | A unicast MAC address such as `02:42:ac:11:00:02`. Capitals and hyphens are accepted and stored as lowercase with colons. |
 | `machine_id` | Random | 32 hex digits, written to `/etc/machine-id` and `/var/lib/dbus/machine-id`. A UUID with hyphens is accepted. |
@@ -176,6 +177,8 @@ Creation accepts `name`, `image` and these optional fields:
 | `shm_mb` | `512` | Shared memory size, at least 64 MiB. |
 | `mounts` | `[]` | Objects with `volume`, absolute `target` and optional `readonly`. The manager's own volumes, such as its data volume, are refused, here and whenever the container is created again. |
 | `parameters` | `{}` | Values for the [compose](#composes) parameters of the image, by name, or as `STEP.NAME` for a [compose of several steps](#steps). |
+
+A feature a request leaves out gets the installation's default, which `GET /api/settings` reports in `defaults`, and never one the installation switched off. A feature the installation switched off, `gpu_enabled`, `internet_enabled`, `sudo_enabled`, `audio_enabled`, `microphone_enabled` or `gamepad_enabled` being `false`, is refused when a request asks for it, here, when a [settings change](#change-settings-after-creation) turns it on and on `POST /api/containers/{id}/internet`. A container that has one keeps it in its settings, also when it is created again; while the feature is off the manager refuses only what it carries itself, the audio and microphone channels and gamepad input. Before 0.7.0 a request without `gpu` got none; now it gets GPU access where the installation has it, as the create form always chose.
 
 ### Machine identity
 
@@ -548,7 +551,7 @@ An endpoint is created with:
 {"kind": "administrator"}
 ```
 
-A `server` is a desktop server the manager knows, and a `trial` is a declaration, as registering takes it, tried before it is saved. Both need a running container and start in a `docker exec` of their own as the desktop user, apart from the connections endpoints hold, and closing the socket ends it. Being a second process, a server that locks something of its own, such as a browser profile, may refuse to start while an agent's connection to it is open. An `endpoint` offers the tools its agents see and `administrator` those of `/mcp`; both are served inside the manager without a token, and only while MCP is enabled.
+A `server` is a desktop server the manager knows, and a `trial` is a declaration, as registering takes it, tried before it is saved. Both need a running container and start in a `docker exec` of their own as the desktop user, apart from the connections endpoints hold, and closing the socket ends it. Being a second process, a server that locks something of its own, such as a browser profile, may refuse to start while an agent's connection to it is open. An `endpoint` offers the tools its agents see and `administrator` those of `/mcp`; both are served inside the manager without a token, `administrator` only while the root `/mcp` is on (`ROOT_MCP_ENABLED`).
 
 Every later frame from the browser is one JSON-RPC message, or a batch, on one line, at most 1.1 MB. Every frame from the manager is a JSON object with a `type`:
 
@@ -688,7 +691,9 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 
 ## Configuration
 
-`GET /api/configuration` returns `{"variables": [...]}`, the settings of `.env.example` that Compose passes to the manager, in the order the dashboard's **Settings** page lists them. Each has the `name` it has in `.env` and the `value` the manager runs with, read once when it started: a string, a number for the limits in MiB, a boolean for the switches or `null` for a container name left unset. A value is what the manager made of its environment rather than the text it was given, so an empty `TEMPLATES_URL` reads as the wiki's list, `none` as `"none"`, and `ALLOWED_HOSTS` includes `DESKTOP_HOST`. `ADMIN_PASSWORD` and `MCP_TOKEN` come as `{"name": ..., "secret": true, "set": ...}`, without a value: neither ever leaves the manager. The route changes nothing; settings change in `.env` and take effect when the manager is recreated.
+`GET /api/configuration` returns `{"variables": [...], "editable": ..., "job_id": ...}`. `variables` are the settings of `.env.example` that Compose passes to the manager, in the order the dashboard's **Settings** page lists them. Each has the `name` it has in `.env` and the `value` the manager runs with, read once when it started: a string, a number for the limits in MiB, a boolean for the switches or `null` for a name left unset. A value is what the manager made of its environment rather than the text it was given, so an empty `TEMPLATES_URL` reads as the wiki's list and `none` as `"none"`. `ALLOWED_HOSTS` is the list `.env` gives, and `DESKTOP_HOST`, which the manager answers too, comes on its own. `ADMIN_PASSWORD` and `MCP_TOKEN` come as `{"name": ..., "secret": true, "set": ...}`, without a value: neither ever leaves the manager. Every other setting says whether the Settings page may change it, `"editable"`, and an editable one also has its `text`, the value as its environment gave it, empty when it gave none. `editable` at the top says whether this installation takes changes from the dashboard: only the WSL package does, once its `bilskirnir-settings.path` unit watches the folder it mounts at `/update`. `job_id` is a change that is running.
+
+`POST /api/configuration` changes settings, with `{"changes": {"NAME": "text", ...}}`, the text each setting gets in `.env`. The editable ones are `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, `INTERNET_ENABLED`, `SUDO_ENABLED`, `GAMEPAD_ENABLED`, `GPU_DEFAULT`, `INTERNET_DEFAULT`, `SUDO_DEFAULT`, `AUDIO_DEFAULT`, `MICROPHONE_DEFAULT`, `GAMEPAD_DEFAULT`, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`; sign-in, the root MCP and its token, `MANAGER_CONTAINER` and what only Compose reads change in `.env` alone. A text must be one line of at most 2048 printable ASCII characters, without quotes, `$`, `#`, backslashes, backquotes or spaces at either end, which `.env` would read otherwise, and the manager reads each change with the code it starts with, alone and together, so a value it would refuse when it starts again is refused before anything restarts. With `"dry_run": true` nothing changes and the answer is `{"errors": {"NAME": "..."}, "error": ..., "running_jobs": n}`: what is wrong with each setting, what is wrong with them only together, and how many jobs a restart would interrupt. Otherwise a change answers 400 with the problems, 400 when every value is the one the manager has, and 409 on an installation other than the WSL package, while an update or another change runs, and while other jobs run unless `"interrupt_jobs": true`, since they end with the manager. It returns a job of kind `settings`: the manager leaves the change in the folder, and the distribution runs `bilskirnir apply-settings` as root, which accepts only these settings, checks each value again, rewrites only their lines of `/opt/bilskirnir/.env`, keeps the previous file as `.env.previous` and recreates the manager. When the new manager does not answer within 90 seconds, it puts the previous file back and recreates the manager again, and the job fails. The job's log is that command's output, and the next manager follows the job to its end; sessions end with the old manager, so sign in again.
 
 ## Limits and results
 
