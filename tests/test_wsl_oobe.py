@@ -70,7 +70,7 @@ class FirstStartTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         settings = self.settings()
         self.assertEqual(settings["BIND_ADDRESS"], "127.0.0.1")
-        # Root agent access is on by default, under the name it has had since 0.7.0.
+        # Root agent access is on by default, under the name it has had since 0.6.3.
         self.assertEqual(settings["ROOT_MCP_ENABLED"], "true")
         self.assertNotIn("MCP_ENABLED", settings)
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)

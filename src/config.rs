@@ -93,7 +93,7 @@ pub(crate) struct Renamed {
 pub(crate) const RENAMED: &[Renamed] = &[Renamed {
     old: "MCP_ENABLED",
     new: "ROOT_MCP_ENABLED",
-    release: "0.7.0",
+    release: "0.6.3",
 }];
 /// The settings the dashboard's Settings page may change, through the WSL package. The rest, such
 /// as the sign-in, the root MCP and its token, and what only Compose reads, change only in `.env`,

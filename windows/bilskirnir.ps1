@@ -317,7 +317,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         if ($settings["AUTH_MODE"] -eq "none") {
             Write-Warning "The dashboard has no password (AUTH_MODE=none), so any device that reaches it controls every container."
         }
-        # ROOT_MCP_ENABLED was called MCP_ENABLED before 0.7.0, and the manager still reads the old name
+        # ROOT_MCP_ENABLED was called MCP_ENABLED before 0.6.3, and the manager still reads the old name
         # while the new one is missing. MCP endpoints made on the dashboard answer either way.
         $rootMcp = $settings["ROOT_MCP_ENABLED"]
         if (-not $rootMcp) { $rootMcp = $settings["MCP_ENABLED"] }

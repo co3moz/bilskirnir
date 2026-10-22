@@ -15,7 +15,7 @@ services:
       AUTH_MODE: ${AUTH_MODE:-password}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      # MCP_ENABLED, its name before 0.7.0, still applies while ROOT_MCP_ENABLED is not set, and is
+      # MCP_ENABLED, its name before 0.6.3, still applies while ROOT_MCP_ENABLED is not set, and is
       # passed on so the manager can say to rename it.
       ROOT_MCP_ENABLED: ${ROOT_MCP_ENABLED:-${MCP_ENABLED:-false}}
       MCP_ENABLED: ${MCP_ENABLED:-}

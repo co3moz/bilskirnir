@@ -17,7 +17,7 @@ MCP_TOKEN: "your-random-token"
 
 With the full installation manifests, set `ROOT_MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable root agent access, how agents authenticate and whether other devices may reach the endpoint; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled root server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
 
-The setting was called `MCP_ENABLED` before 0.7.0. An `.env` that still has the old name keeps working while `ROOT_MCP_ENABLED` is missing, and the manager logs that it should be renamed; it refuses to start when the two names disagree. `bilskirnir update` renames it in the WSL package.
+The setting was called `MCP_ENABLED` before 0.6.3. An `.env` that still has the old name keeps working while `ROOT_MCP_ENABLED` is missing, and the manager logs that it should be renamed; it refuses to start when the two names disagree. `bilskirnir update` renames it in the WSL package.
 
 [MCP endpoints](#mcp-endpoints-for-one-agent) made on the dashboard, or by an agent on `/mcp`, are not affected by this setting: each answers with its own token, so an agent can be given chosen containers while `/mcp` stays off.
 
