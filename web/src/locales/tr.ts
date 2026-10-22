@@ -98,6 +98,10 @@ export const tr: Messages = {
   "jobs.archiveProgress": "Arşiv ilerlemesi",
   "jobs.downloadProgress": "İmaj indirme ilerlemesi",
   "jobs.viewContainers": "Konteynerleri görüntüle",
+
+  "events.jobCompleted": "{action} tamamlandı",
+  "events.jobFailed": "{action} başarısız oldu",
+  "events.jobInterrupted": "{action} yarıda kesildi",
   "containers.customDesktop": "Özel masaüstü",
   "containers.new": "Yeni konteyner",
   "containers.connect": "Bağlan",

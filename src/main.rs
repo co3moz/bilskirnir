@@ -12,6 +12,7 @@ mod desktop_input;
 mod desktop_mcp;
 mod docker;
 mod error;
+mod events;
 mod exec;
 mod files;
 mod folder_archive;
@@ -77,6 +78,8 @@ pub struct App {
     desktop_mcp: desktop_mcp::DesktopMcp,
     /// The newest release GitHub named, for the dashboard's update.
     releases: releases::Releases,
+    /// What the signed-in dashboards hear as it happens, such as a job that ended.
+    events: events::Hub,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -287,6 +290,7 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
+        .route("/api/events", get(events::stream))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)
@@ -422,6 +426,7 @@ async fn main() -> anyhow::Result<()> {
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
+        events: events::Hub::default(),
     });
     usage::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
@@ -460,12 +465,15 @@ async fn main() -> anyhow::Result<()> {
     });
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("Bilskirnir listening: {listen}");
+    let closing = app.clone();
     axum::serve(
         listener,
         router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
-    .with_graceful_shutdown(async {
+    .with_graceful_shutdown(async move {
         let _ = tokio::signal::ctrl_c().await;
+        // Event streams never end on their own, and shutdown waits for every response.
+        closing.events.close();
     })
     .await?;
     Ok(())

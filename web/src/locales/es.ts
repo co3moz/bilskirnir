@@ -99,6 +99,10 @@ export const es: Messages = {
   "jobs.archiveProgress": "Progreso del archivo comprimido",
   "jobs.downloadProgress": "Progreso de descarga de la imagen",
   "jobs.viewContainers": "Ver contenedores",
+
+  "events.jobCompleted": "Completado: {action}",
+  "events.jobFailed": "Falló: {action}",
+  "events.jobInterrupted": "Interrumpido: {action}",
   "containers.customDesktop": "Escritorio personalizado",
   "containers.new": "Nuevo contenedor",
   "containers.connect": "Conectar",

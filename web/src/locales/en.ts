@@ -104,6 +104,10 @@ export const en = {
   "jobs.downloadProgress": "Image download progress",
   "jobs.viewContainers": "View containers",
 
+  "events.jobCompleted": "{action} completed",
+  "events.jobFailed": "{action} failed",
+  "events.jobInterrupted": "{action} interrupted",
+
   "containers.customDesktop": "Custom desktop",
   "containers.new": "New container",
   "containers.connect": "Connect",

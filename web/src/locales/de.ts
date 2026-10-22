@@ -101,6 +101,10 @@ export const de: Messages = {
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
   "jobs.viewContainers": "Container anzeigen",
+
+  "events.jobCompleted": "Abgeschlossen: {action}",
+  "events.jobFailed": "Fehlgeschlagen: {action}",
+  "events.jobInterrupted": "Unterbrochen: {action}",
   "containers.customDesktop": "Eigener Desktop",
   "containers.new": "Neuer Container",
   "containers.connect": "Verbinden",

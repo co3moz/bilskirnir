@@ -51,6 +51,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
+        events: events::Hub::default(),
     })
 }
 fn spec() -> model::ContainerSpec {

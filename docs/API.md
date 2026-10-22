@@ -128,6 +128,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
+| GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, while the session lasts. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
 
 The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/containers/{id}/audio/{direction}`, where direction is `output` or `input`. They use the browser session and require a matching Origin. VNC uses the binary subprotocol. Most automation clients can use screenshots and `/input` instead of implementing a VNC viewer.
@@ -672,6 +673,27 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 `gpu.state` is `sampling`, `idle` while no GPU container runs, `unavailable` with a `reason`, or `disabled` when the installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false). Each of `gpu.devices` has `index`, `name`, `memory_total` and samples of `t`, `utilization` (percent) and `memory` (bytes); a figure the driver does not report is `null`. These are the whole GPU's figures, which `scope: "host"` says: WSL gives Linux a paravirtual GPU whose driver reports neither processes nor containers, and Windows applications count too. They come from `nvidia-smi`, so only NVIDIA GPUs report them. While a GPU container runs, the manager runs it in a helper container from its own image that gets the GPU device, no network, no capabilities and a read-only root, and ends with the manager.
 
 `GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started. A deleted container's ID is still answered while its samples are in the window, and returns 404 once they have aged out.
+
+## Event stream
+
+`GET /api/events` tells a signed-in client what happens as it happens, so it does not have to poll for it. It is a [server-sent event](https://html.spec.whatwg.org/multipage/server-sent-events.html) stream that a browser reads with `EventSource`, which sends the session cookie, and that curl follows with `--no-buffer`:
+
+```bash
+curl --no-buffer --cookie bilskirnir.cookies http://localhost:8080/api/events
+```
+
+Every event is unnamed, and its data is one JSON object whose `type` says what it is:
+
+| `type` | Fields | Sent when |
+| --- | --- | --- |
+| `ready` | | The stream opened; always the first event. |
+| `job` | `job`: `id`, `kind`, `resource`, `name`, `status`, `created_at`, `finished_at` and `error` | A job was queued, started, began a [stage](#create-a-container-and-follow-the-job) or ended. `status` is as `GET /api/jobs/{job_id}` reports it; `error` is the first line of a failed job's error, at most 300 characters, and `null` otherwise. The job's log and result stay on its route. |
+| `job-progress` | `id`, `progress` | A running job measured its `progress` again, as its route reports it: at most once a second for each job, and `null` when the measured step ended. |
+| `resync` | | The client fell more than 256 events behind and missed some; read again what it shows. |
+
+Nothing is replayed: a client reads the lists it shows when it connects and again after any gap, such as a lost connection or a `resync`, since the events of that gap are gone. A comment line every 15 seconds keeps an idle stream open through proxies. The stream ends when its session signs out or expires, and when the manager stops; reconnect with a growing delay, and sign in again when the reconnection answers `401`. The dashboard keeps one stream for each open page, closes it a minute after the page goes to the background and reconnects when it comes back. Container states that Docker changes, such as a desktop that exits, are not events; the lists still poll for those.
+
+A proxy in front of the manager must pass the stream on as it arrives. The bundled Caddy configuration does, since Caddy flushes `text/event-stream` responses at once, and the manager sends `X-Accel-Buffering: no` for nginx.
 
 ## Updates
 

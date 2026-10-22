@@ -712,7 +712,9 @@ impl App {
     pub fn set_progress(&self, id: &str, progress: Option<Value>) -> Result<()> {
         let mut job: Job = self.db.get("job", id)?;
         job.progress = progress;
-        self.db.put("job", id, &job)
+        self.db.put("job", id, &job)?;
+        self.events.progress(id, job.progress.as_ref());
+        Ok(())
     }
     pub async fn docker_logged(&self, id: &str, args: &[String]) -> Result<()> {
         self.docker_logged_input(id, args, None).await
