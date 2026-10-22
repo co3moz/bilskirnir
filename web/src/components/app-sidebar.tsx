@@ -10,6 +10,7 @@ import {
   RiComputerLine,
   RiPlugLine,
   RiBookletLine,
+  RiSettings3Line,
 } from "@remixicon/react"
 
 import { NavContainers } from "@/components/nav-containers"
@@ -40,6 +41,7 @@ const navMain = [
   { page: "mcp", icon: <RiPlugLine /> },
   { page: "files", icon: <RiFolderOpenLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
+  { page: "settings", icon: <RiSettings3Line /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
 const repository = "https://github.com/co3moz/bilskirnir"

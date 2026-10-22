@@ -13,10 +13,11 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
     "mcp",
     "files",
     "jobs",
+    "settings",
   ] as const)
     assert.deepEqual(parseRoute(href({ page })), { page })
   assert.deepEqual(parseRoute(""), { page: "dashboard" })
-  assert.deepEqual(parseRoute("#/settings"), { page: "dashboard" })
+  assert.deepEqual(parseRoute("#/nowhere"), { page: "dashboard" })
   assert.deepEqual(parseRoute("#/desktop"), { page: "dashboard" })
 })
 

@@ -635,6 +635,7 @@ export const de: Messages = {
   "nav.documentation": "Dokumentation",
   "nav.mcp": "MCP",
   "nav.files": "Dateien",
+  "nav.settings": "Einstellungen",
   "filesPage.title": "Container-Dateien",
   "filesPage.description":
     "Durchsuche die Dateien eines laufenden Containers als Desktop-Benutzer und öffne eine Textdatei, um sie zu lesen oder zu ändern.",
@@ -685,6 +686,69 @@ export const de: Messages = {
   "update.finishing": "Der neue Manager schließt die Aktualisierung ab.",
   "update.showLog": "Protokoll anzeigen",
   "update.done": "Bilskirnir wurde auf {version} aktualisiert.",
+
+  "settings.version": "Version",
+  "settings.versionHint":
+    "Bilskirnir sucht beim Start und alle sechs Stunden nach einer neuen Version.",
+  "settings.release": "Bilskirnir {version}",
+  "settings.state.current": "Aktuell",
+  "settings.state.available": "Update verfügbar",
+  "settings.state.updating": "Wird aktualisiert",
+  "settings.state.off": "Prüfung aus",
+  "settings.state.failed": "Prüfung fehlgeschlagen",
+  "settings.state.unchecked": "Noch nicht geprüft",
+  "settings.newest": "Neueste Version",
+  "settings.checkedAt": "Zuletzt geprüft",
+  "settings.never": "Nie",
+  "settings.checkFailed": "Die letzte Prüfung ist fehlgeschlagen: {error}",
+  "settings.checksOff":
+    "Die Versionsprüfung ist mit UPDATE_CHECK=false ausgeschaltet, der Manager fragt GitHub also nie.",
+  "settings.check": "Jetzt prüfen",
+  "settings.upToDate": "Bilskirnir {version} ist die neueste Version.",
+  "settings.updateTo": "Auf {version} aktualisieren",
+  "settings.configuration": "Konfiguration",
+  "settings.configurationHint":
+    "Womit der Manager läuft, beim Start aus seiner Umgebung gelesen. Passwörter und Tokens werden nie angezeigt. Ändern Sie eine Einstellung in .env, im WSL-Paket mit bilskirnir settings, und starten Sie den Manager neu.",
+  "settings.configurationFailed": "Die Konfiguration konnte nicht gelesen werden",
+  "settings.secretSet": "Gesetzt, verborgen",
+  "settings.notSet": "Nicht gesetzt",
+  "settings.section.access": "Anmeldung und Zugriff",
+  "settings.section.mcp": "Agentenzugriff (MCP)",
+  "settings.section.desktops": "Desktops",
+  "settings.section.gpu": "GPU",
+  "settings.section.limits": "Grenzen",
+  "settings.section.content": "Vorlagen und Volumes",
+  "settings.section.manager": "Manager",
+  "settings.section.misc": "Sonstiges",
+  "settings.about.AUTH_MODE":
+    "password fragt nach dem Administratorpasswort; none schaltet die Anmeldung aus.",
+  "settings.about.ADMIN_USERNAME": "Der Benutzername des Administrators.",
+  "settings.about.ADMIN_PASSWORD": "Das Passwort des Administrators.",
+  "settings.about.SECURE_COOKIE": "Sendet das Sitzungscookie nur über HTTPS.",
+  "settings.about.ALLOWED_HOSTS":
+    "Hostnamen, auf die das Dashboard neben localhost und privaten Adressen antwortet, samt DESKTOP_HOST.",
+  "settings.about.MCP_ENABLED": "Ob /mcp und die MCP-Endpunkte Agenten antworten.",
+  "settings.about.MCP_AUTH_MODE": "token verlangt MCP_TOKEN für /mcp; none lässt es offen.",
+  "settings.about.MCP_TOKEN": "Das Bearer-Token, das /mcp verlangt.",
+  "settings.about.DESKTOP_IMAGE": "Das Image, das das Erstellformular zuerst auswählt.",
+  "settings.about.DESKTOP_USER_NAMESPACES":
+    "Lässt Browser und Electron-Apps in Desktops ihre Sandbox starten.",
+  "settings.about.AUDIO_ENABLED": "Desktop-Ton im Browser.",
+  "settings.about.MICROPHONE_ENABLED": "Das Mikrofon des Browsers in Desktops; braucht Ton.",
+  "settings.about.WSL_GPU": "Grafikbeschleunigung über die WSL-GPU.",
+  "settings.about.NVIDIA_COMPUTE": "CUDA über das NVIDIA Container Toolkit.",
+  "settings.about.GPU_ADAPTER":
+    "Der Mesa-D3D12-Adapter nach Hersteller oder Modell; leer wählt einen aus.",
+  "settings.about.UPLOAD_MAX_MB": "Die größte Datei, die ein Upload annimmt, in MiB.",
+  "settings.about.IMAGE_ARCHIVE_MAX_MB":
+    "Das größte Image- oder Volume-Archiv, das ein Import entpackt, in MiB.",
+  "settings.about.TEMPLATES_URL":
+    "Die Liste, die die Vorlagenseite liest; none schaltet die Seite aus.",
+  "settings.about.VOLUME_FILTER":
+    "Das Label, das ein Volume zum Auflisten und Einbinden braucht; none listet jedes Volume.",
+  "settings.about.MANAGER_CONTAINER":
+    "Der eigene Container des Managers, den Bilskirnir nicht anrührt.",
+  "settings.about.UPDATE_CHECK": "Sucht alle sechs Stunden auf GitHub nach neuen Versionen.",
   "dashboard.running": "{count} laufend",
   "dashboard.attention.one": "{count} benötigt Aufmerksamkeit",
   "dashboard.attention.other": "{count} benötigen Aufmerksamkeit",

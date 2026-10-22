@@ -1,7 +1,15 @@
 import { useSyncExternalStore } from "react"
 
 export type Page =
-  "dashboard" | "containers" | "images" | "templates" | "volumes" | "mcp" | "files" | "jobs"
+  | "dashboard"
+  | "containers"
+  | "images"
+  | "templates"
+  | "volumes"
+  | "mcp"
+  | "files"
+  | "jobs"
+  | "settings"
 export type Route =
   | { page: Exclude<Page, "files"> }
   /** The files page, with the container it shows when one was chosen. */
@@ -17,6 +25,7 @@ const pages: Page[] = [
   "mcp",
   "files",
   "jobs",
+  "settings",
 ]
 
 /** Pages live in the URL fragment, so the manager serves one index.html for all of them. */

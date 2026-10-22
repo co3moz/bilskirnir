@@ -92,8 +92,10 @@ fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
+        .route("/api/configuration", get(api::configuration))
         .route("/api/system", get(api::system))
         .route("/api/update", get(releases::status).post(releases::start))
+        .route("/api/update/check", post(releases::check))
         .route("/api/usage", get(usage::all))
         .route("/api/containers", get(api::containers).post(api::create))
         .route(

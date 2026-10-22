@@ -336,6 +336,17 @@ export type UpdateStatus = {
   job_id: string | null
 }
 
+/**
+ * One setting of `GET configuration`, named as in `.env`, with the value the manager runs with. A
+ * secret comes without its value, which never leaves the manager.
+ */
+export type ConfigVariable =
+  | { name: string; value: string | number | boolean | null; secret?: undefined }
+  | { name: string; secret: true; set: boolean }
+
+/** `GET configuration`: the installation's settings, in the order the settings page lists them. */
+export type Configuration = { variables: ConfigVariable[] }
+
 export type SystemInfo = {
   connected: boolean
   version?: string

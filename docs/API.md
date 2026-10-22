@@ -30,9 +30,11 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `mcp_enabled`, whether `/mcp` and the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer. |
+| GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Settings** page; secrets only say whether they are set. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
 | POST | `/api/update` | Ask the WSL package to run `bilskirnir update`; returns a job. See [updates](#updates). |
+| POST | `/api/update/check` | Ask GitHub for the newest release now; answers as `GET /api/update` does. See [updates](#updates). |
 | GET | `/api/usage` | CPU, memory, disk and network use of every container once a second for the last 30 minutes, with the host's GPU; `since` returns only newer samples. See [resource usage](#resource-usage). |
 | GET | `/api/containers` | Managed containers, state and health. |
 | POST | `/api/containers` | Create a container, with values for its image's [compose](#composes) in `parameters`; returns a job. `mcp_endpoint: false` leaves out its own [MCP endpoint](#desktop-mcp-servers-and-endpoints). |
@@ -673,7 +675,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 
 ## Updates
 
-Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when it starts and every six hours. `GET /api/update` returns:
+Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when it starts and every six hours. `POST /api/update/check` asks at once and answers with the same fields as `GET /api/update` once GitHub has answered, within 30 seconds. A check asked for while another runs waits for that one and takes its answer, so a second click makes no second request; GitHub allows a host 60 such requests an hour. It answers 409 while the lookup is turned off. A failed check is not an error of the request: `error` says why, as below. `GET /api/update` returns:
 
 - `enabled`: whether the manager looks for releases at all.
 - `current`: this manager's release.
@@ -683,6 +685,10 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 - `job_id`: the running update job, or `null`.
 
 `POST /api/update` starts that update and returns a job. It answers 409 while the lookup is turned off, on an installation other than the WSL package, without a newer release and while any job runs, since every job ends with the manager. The manager leaves a request in the folder the package mounts at `/update`, and the distribution runs `bilskirnir update` as root, which moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the newest release and recreates the manager. The job's log is that command's output. The new manager finds the job still running and follows it to its end; sessions end with the old manager, so sign in again.
+
+## Configuration
+
+`GET /api/configuration` returns `{"variables": [...]}`, the settings of `.env.example` that Compose passes to the manager, in the order the dashboard's **Settings** page lists them. Each has the `name` it has in `.env` and the `value` the manager runs with, read once when it started: a string, a number for the limits in MiB, a boolean for the switches or `null` for a container name left unset. A value is what the manager made of its environment rather than the text it was given, so an empty `TEMPLATES_URL` reads as the wiki's list, `none` as `"none"`, and `ALLOWED_HOSTS` includes `DESKTOP_HOST`. `ADMIN_PASSWORD` and `MCP_TOKEN` come as `{"name": ..., "secret": true, "set": ...}`, without a value: neither ever leaves the manager. The route changes nothing; settings change in `.env` and take effect when the manager is recreated.
 
 ## Limits and results
 

@@ -38,11 +38,15 @@ fn job(id: &str, kind: &str, status: &str) -> Job {
 }
 
 async fn call(app: Arc<App>, method: &str) -> (StatusCode, Value) {
+    request(app, method, "/api/update").await
+}
+
+async fn request(app: Arc<App>, method: &str, uri: &str) -> (StatusCode, Value) {
     let response = crate::router(app)
         .oneshot(
             Request::builder()
                 .method(method)
-                .uri("/api/update")
+                .uri(uri)
                 .header("host", "localhost:8080")
                 .header("x-bilskirnir-request", "1")
                 .body(Body::empty())
@@ -130,10 +134,66 @@ fn a_failed_check_keeps_the_release_seen_before() {
     releases.record(Ok("999.0.0".into()));
     releases.record(Err(anyhow::anyhow!("GitHub is unreachable")));
     assert_eq!(releases.available().as_deref(), Some("999.0.0"));
-    let check = releases.0.lock().unwrap().clone();
+    let check = releases.last.lock().unwrap().clone();
     assert_eq!(check.error.as_deref(), Some("GitHub is unreachable"));
     releases.record(Ok(VERSION.into()));
     assert_eq!(releases.available(), None);
+}
+
+#[tokio::test]
+async fn a_check_asked_for_during_another_takes_its_answer() {
+    let releases = Arc::new(Releases::default());
+    let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ask = |version: &'static str, answer: Option<tokio::sync::oneshot::Receiver<()>>| {
+        let asked = asked.clone();
+        async move {
+            asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if let Some(answer) = answer {
+                answer.await.unwrap();
+            }
+            anyhow::Ok(version.to_owned())
+        }
+    };
+    let (answer, answered) = tokio::sync::oneshot::channel();
+    let first = tokio::spawn({
+        let (releases, ask) = (releases.clone(), ask("999.0.0", Some(answered)));
+        async move { releases.check(ask).await }
+    });
+    while asked.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+        tokio::task::yield_now().await;
+    }
+    // A second click while GitHub has not answered the first waits for that answer.
+    let second = tokio::spawn({
+        let (releases, ask) = (releases.clone(), ask("1000.0.0", None));
+        async move { releases.check(ask).await }
+    });
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    answer.send(()).unwrap();
+    first.await.unwrap();
+    second.await.unwrap();
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(releases.available().as_deref(), Some("999.0.0"));
+    // One asked for afterwards asks again.
+    releases.check(ask("1000.0.0", None)).await;
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert_eq!(releases.available().as_deref(), Some("1000.0.0"));
+}
+
+#[tokio::test]
+async fn a_check_now_is_refused_while_checks_are_turned_off() {
+    let dir = folder();
+    let (status, body) = request(app_in(&dir, false), "POST", "/api/update/check").await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("UPDATE_CHECK=false")
+    );
+    assert!(include_str!("../docs/API.md").contains("| POST | `/api/update/check` |"));
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
