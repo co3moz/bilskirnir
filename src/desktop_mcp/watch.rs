@@ -1,9 +1,11 @@
 //! Following what the desktops declare: one helper per running desktop prints its declarations
-//! whenever they change, and the manager reads the tools of a new or changed server once.
+//! whenever they change, and the manager reads the tools of a new or changed server once. The
+//! same helper hears the desktop's reports.
 use super::{
     client,
     endpoints::announce,
     registry::{Found, SERVERS, ServerRecord, watch_args},
+    report,
     servers::records,
 };
 use crate::{App, model::now};
@@ -66,7 +68,8 @@ async fn supervise(app: &Arc<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Read a desktop's declarations as they change, until the desktop stops.
+/// Read a desktop's declarations as they change, and tell it what the manager knows of its
+/// servers, until the desktop stops.
 async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
     let child = app
         .command(&watch_args(&docker_id))
@@ -75,8 +78,12 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
         .stderr(Stdio::null())
         .spawn();
     if let Ok(mut child) = child {
-        // stdin stays open: the helper ends when it closes, with this task.
-        let _stdin = child.stdin.take();
+        // stdin carries the reports and stays open: the helper ends when it closes, with this
+        // task.
+        let reporter = child
+            .stdin
+            .take()
+            .map(|stdin| tokio::spawn(report::send_reports(app.clone(), record_id.clone(), stdin)));
         if let Some(stdout) = child.stdout.take() {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -88,6 +95,9 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
                     Err(error) => tracing::debug!("Desktop MCP servers of {record_id}: {error:#}"),
                 }
             }
+        }
+        if let Some(reporter) = reporter {
+            reporter.abort();
         }
         let _ = child.kill().await;
     }

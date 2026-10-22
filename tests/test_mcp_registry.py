@@ -1,6 +1,7 @@
 """The desktop's MCP server declarations as the manager reads them: both folders listed, a bad
 file reported instead of hiding the others, writes atomic and private, and no symlink followed
-on the way in or out. Also the bilskirnir-mcp command, which writes the same files."""
+on the way in or out; the status the manager sends kept for the desktop while it watches. Also
+the bilskirnir-mcp command, which writes the same files and reads that status."""
 
 import contextlib
 import importlib.machinery
@@ -12,6 +13,8 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -131,6 +134,106 @@ class RegistryTest(unittest.TestCase):
         self.assertIsNone(registry.signature(str(self.root / "missing")))
 
 
+class WatchTest(unittest.TestCase):
+    """The watcher keeps the status the manager sends in the desktop's runtime folder while the
+    manager is there, and nothing else reaches stdout."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.root)
+        self.runtime = self.root / "run/desktop"
+        self.runtime.mkdir(parents=True)
+        self.status = self.runtime / "bilskirnir/mcp-status.json"
+        for name, value in (("IMAGE", self.root / "image"), ("CONTAINER", self.root / "mine"),
+                            ("STATUS", self.runtime / "bilskirnir")):
+            patch = mock.patch.object(registry, name, str(value))
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def start(self):
+        reading, self.writing = os.pipe()
+        self.addCleanup(os.close, reading)
+        source = mock.Mock()
+        source.fileno.return_value = reading
+        self.output = Output()
+        patches = [mock.patch.object(registry.sys, "stdout", self.output),
+                   mock.patch.object(registry.sys, "stdin", source)]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.thread = threading.Thread(target=registry.watch, daemon=True)
+        self.thread.start()
+        # Runs first, so a failed test still ends the watcher before its pipe closes.
+        self.addCleanup(self.stop)
+
+    def send(self, data):
+        os.write(self.writing, data)
+
+    def stop(self):
+        if self.writing is not None:
+            os.close(self.writing)
+            self.writing = None
+        self.thread.join(10)
+        self.assertFalse(self.thread.is_alive())
+
+    def wait_for(self, check):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if check():
+                return
+            time.sleep(0.02)
+        self.fail("timed out")
+
+    def read_status(self):
+        try:
+            return json.loads(self.status.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def test_the_latest_status_is_kept_privately_until_stdin_closes(self):
+        self.start()
+        self.send(b'{"status": {"servers": [{"name": "a"}]}}\n{"status": {"servers": [{"name": ')
+        self.wait_for(lambda: self.read_status() == {"servers": [{"name": "a"}]})
+        self.send(b'"b"}]}}\nnot json\n{"other": 1}\n')
+        self.wait_for(lambda: self.read_status() == {"servers": [{"name": "b"}]})
+        self.assertEqual(self.status.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.status.parent.stat().st_mode & 0o777, 0o700)
+        self.stop()
+        self.assertFalse(self.status.exists())
+        self.assertEqual([p.name for p in self.status.parent.iterdir()], [])
+        # stdout carried the listing alone.
+        self.assertEqual([json.loads(line) for line in self.output.text.getvalue().splitlines()],
+                         [{"servers": []}])
+
+    def test_a_line_over_the_limit_is_dropped_and_the_next_one_kept(self):
+        with mock.patch.object(registry, "STATUS_LIMIT", 64):
+            self.start()
+            self.send(b'{"status": {"x": "' + b"y" * 200)
+            self.send(b'"}}\n{"status": {"kept": true}}\n')
+            self.wait_for(lambda: self.read_status() == {"kept": True})
+            self.stop()
+
+    def test_a_status_written_by_another_watcher_is_left_alone(self):
+        self.start()
+        self.send(b'{"status": {"mine": true}}\n')
+        self.wait_for(lambda: self.read_status() == {"mine": True})
+        replacement = self.status.with_name("replacement")
+        replacement.write_text('{"newer": true}')
+        os.rename(replacement, self.status)
+        self.stop()
+        self.assertEqual(self.read_status(), {"newer": True})
+
+    def test_a_symlinked_status_folder_is_not_written_through(self):
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (self.runtime / "bilskirnir").symlink_to(elsewhere)
+        self.start()
+        self.send(b'{"status": {"leak": true}}\n')
+        time.sleep(0.3)
+        self.stop()
+        self.assertEqual(list(elsewhere.iterdir()), [])
+
+
 class CommandTest(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp()).resolve()
@@ -141,7 +244,8 @@ class CommandTest(unittest.TestCase):
     def run_command(self, *arguments, uid=1001):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            command.main(list(arguments), image=str(self.image), target=str(self.target), uid=uid)
+            command.main(list(arguments), image=str(self.image), target=str(self.target), uid=uid,
+                         status_path=str(self.root / "run/bilskirnir/mcp-status.json"))
         return output.getvalue()
 
     def read(self, name):
@@ -182,6 +286,68 @@ class CommandTest(unittest.TestCase):
         self.assertIn("node mcp.js", shown)
         self.run_command("remove", "x")
         self.assertNotIn("node mcp.js", self.run_command("list"))
+
+    def test_an_address_or_name_the_manager_would_refuse_is_refused_here(self):
+        for arguments in (("add", "x", "--url", "http://example.com:80/mcp"),
+                          ("add", "x", "--url", "http://127.0.0.1/mcp"),
+                          ("add", "x", "--url", "http://127.0.0.1:0/mcp"),
+                          ("add", "x", "--url", "http://127.0.0.1:99999/mcp"),
+                          ("add", "x", "--url", "http://127.0.0.1:1/a b"),
+                          ("add", "x", "--url", "http://127.0.0.1:1/mcp", "--header", "Bad Name: 1"),
+                          ("add", "x", "--env", "1ST=x", "--", "node")):
+            with self.assertRaises(ValueError, msg=arguments):
+                self.run_command(*arguments)
+        self.assertFalse(self.target.exists())
+        for url in ("http://localhost:8931/mcp", "https://[::1]:1", "http://127.0.0.1:${PORT}/mcp"):
+            self.run_command("add", "x", "--url", url)
+            self.assertEqual(self.read("x")["url"], url)
+
+    def test_list_json_says_which_declaration_is_used_and_what_bilskirnir_knows(self):
+        self.image.mkdir()
+        (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
+        (self.image / "unity.json").write_text(json.dumps({"url": "http://127.0.0.1:8080/mcp"}))
+        self.run_command("add", "chrome", "--", "playwright-mcp", "--headless")
+        unknown = json.loads(self.run_command("list", "--json"))
+        self.assertEqual(unknown["watched"], False)
+        self.assertNotIn("endpoints", unknown)
+        self.assertEqual([(s["name"], s["source"], s["active"]) for s in unknown["servers"]],
+                         [("chrome", "image", False), ("unity", "image", True), ("chrome", "container", True)])
+        self.assertEqual(unknown["servers"][2]["spec"]["args"], ["--headless"])
+        self.assertTrue(all("status" not in s for s in unknown["servers"]))
+
+        status = self.root / "run/bilskirnir/mcp-status.json"
+        status.parent.mkdir(parents=True)
+        endpoint = {"name": "desk", "path": "/mcp/desk", "has_token": False, "scopes": ["view"]}
+        status.write_text(json.dumps({"status_at": 7, "endpoints": [endpoint], "servers": [
+            {"name": "chrome", "source": "container", "state": "ready", "tools": [{"name": "click"}],
+             "tools_at": 6, "error": None, "log": ""},
+            {"name": "unity", "source": "image", "state": "error", "error": "refused", "tools": []}]}))
+        known = json.loads(self.run_command("list", "--json"))
+        self.assertEqual((known["watched"], known["status_at"], known["endpoints"]), (True, 7, [endpoint]))
+        by_key = {(s["name"], s["source"]): s for s in known["servers"]}
+        self.assertNotIn("status", by_key[("chrome", "image")])
+        self.assertEqual(by_key[("chrome", "container")]["status"]["tools"], [{"name": "click"}])
+        self.assertEqual(by_key[("unity", "image")]["status"]["error"], "refused")
+        # A status file that is not JSON is as good as none.
+        status.write_text("{broken")
+        self.assertEqual(json.loads(self.run_command("list", "--json"))["watched"], False)
+
+    def test_the_command_reads_the_status_where_the_watcher_writes_it(self):
+        self.assertEqual(os.path.join(registry.STATUS, registry.STATUS_FILE), command.STATUS)
+        self.assertEqual(registry.STATUS_LIMIT, command.STATUS_LIMIT)
+
+    def test_show_prints_the_used_declaration_as_a_template_holds_it(self):
+        self.image.mkdir()
+        (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
+        self.assertEqual(json.loads(self.run_command("show", "chrome")),
+                         {"name": "chrome", "command": "playwright-mcp"})
+        self.run_command("add", "chrome", "--description", "Mine", "--", "node", "x.js")
+        self.assertEqual(json.loads(self.run_command("show", "chrome")),
+                         {"name": "chrome", "description": "Mine", "command": "node", "args": ["x.js"]})
+        # root may read, as with list.
+        self.assertIn("node", self.run_command("show", "chrome", uid=0))
+        with self.assertRaises(FileNotFoundError):
+            self.run_command("show", "missing")
 
 
 if __name__ == "__main__":

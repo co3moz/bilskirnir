@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MCP Servers in the panel
+Comment=Shows this desktop's MCP servers in the panel's tray
+Exec=bilskirnir-mcp-tray
+Icon=bilskirnir-mcp
+Terminal=false
+X-GNOME-Autostart-enabled=true
