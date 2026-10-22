@@ -6,7 +6,7 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files** and **Jobs**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out. When a newer release of Bilskirnir is out, a card above that menu names it and links to its notes; in the WSL package its **Update** button installs it, see [Update from the dashboard](WSL_PACKAGE.md#update-from-the-dashboard).
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files**, **Jobs** and **Settings**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out. When a newer release of Bilskirnir is out, a card above that menu names it and links to its notes; in the WSL package its **Update** button installs it, see [Update from the dashboard](WSL_PACKAGE.md#update-from-the-dashboard).
 
 The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
@@ -225,6 +225,12 @@ The name, internet access and a new CPU or memory limit apply while the containe
 The internet switch attaches or detaches the container's Docker egress network. Its private connection to the manager stays in place, so you can keep using the desktop while internet access is off. This is a Docker network setting, not a general firewall policy for the host or LAN.
 
 Sound and microphone must be enabled both for the installation and for the container. Use the browser toolbar controls to start each channel. Microphone input also needs browser permission. Localhost supports this over HTTP; access from another device requires HTTPS. Leaving the desktop closes the media connections and microphone tracks.
+
+## Settings and updates
+
+**Settings** shows the release this installation runs and the newest one GitHub names, with when the manager last asked. The manager asks when it starts and every six hours; **Check now** asks at once, so a release published a minute ago shows without waiting. When a newer release is out, **Update to** installs it in the WSL package, as the sidebar card does, and **What's new** opens its notes. On another installation the page names the release, and you update it the way you installed it. `UPDATE_CHECK=false` turns the lookup off, and with it the button.
+
+Below that, **Configuration** lists the [installation settings](INSTALLATION.md#settings) the manager runs with, by section, each with what it does. The values are the ones the manager made of its environment when it started: an empty `TEMPLATES_URL`, for example, shows the wiki's list it reads instead. `ADMIN_PASSWORD` and `MCP_TOKEN` only say whether they are set; their values never leave the manager. The page only shows the settings: change one in `.env`, with `bilskirnir settings` in the WSL package, then restart the manager with `bilskirnir restart` or `docker compose up -d`.
 
 ## Read job results
 

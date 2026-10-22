@@ -28,6 +28,8 @@ Edit the exported `.env` before starting the manager. Run these export commands 
 
 The minimal README example keeps settings directly in Compose. The full manifests read them from `.env`. Recreate the manager with `docker compose up -d` after changing its environment; for the full registry manifest, use `docker compose -f compose.ghcr.yml up -d`.
 
+The dashboard's **Settings** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set, and it changes nothing. Of the Compose settings in the second table it shows only `MANAGER_CONTAINER`, since Compose keeps the others to itself.
+
 | Setting | Default | What it changes |
 | --- | --- | --- |
 | `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
@@ -47,7 +49,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
 | `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
 | `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `bilskirnir.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
-| `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts and every six hours. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `bilskirnir update`. `false` turns both off, and the manager makes no request to GitHub. |
+| `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts, every six hours and when **Check now** on the **Settings** page asks. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `bilskirnir update`. `false` turns both off, and the manager makes no request to GitHub. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 

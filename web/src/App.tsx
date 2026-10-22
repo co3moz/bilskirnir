@@ -20,6 +20,7 @@ import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
 import { McpPage } from "@/pages/mcp"
+import { SettingsPage } from "@/pages/settings"
 import { TemplatesPage } from "@/pages/templates"
 import { VolumesPage } from "@/pages/volumes"
 
@@ -37,6 +38,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   mcp: McpPage,
   files: FilesPage,
   jobs: JobsPage,
+  settings: SettingsPage,
 }
 
 function Loading() {

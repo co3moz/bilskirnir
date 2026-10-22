@@ -1,8 +1,8 @@
 //! Newer releases of Bilskirnir, and the update the dashboard asks the WSL package to run.
 //!
 //! Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when it starts and
-//! every six hours after, with the `curl` its image carries for the health check. The dashboard
-//! offers a release that is newer than this manager.
+//! every six hours after, with the `curl` its image carries for the health check, and at once when
+//! the settings page asks. The dashboard offers a release that is newer than this manager.
 //!
 //! Only the WSL package updates from the dashboard, with the same `bilskirnir update` a terminal
 //! runs: it moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the release, brings that release's
@@ -76,18 +76,34 @@ const READ_LIMIT: u64 = 1 << 20;
 
 /// What the last look at GitHub found.
 #[derive(Default)]
-pub(crate) struct Releases(Mutex<Check>);
+pub(crate) struct Releases {
+    last: Mutex<Check>,
+    /// Held while GitHub is asked, so one look runs at a time.
+    asking: tokio::sync::Mutex<()>,
+}
 #[derive(Clone, Default)]
 struct Check {
     /// The newest release seen, kept when a later look fails.
     newest: Option<String>,
     checked_at: Option<u64>,
     error: Option<String>,
+    /// How many looks have ended.
+    looks: u64,
 }
 
 impl Releases {
+    /// Ask GitHub with `ask`, unless a look that ended while this one waited for its turn already
+    /// did: a second click, or the six-hourly look, answers for this one too.
+    pub(crate) async fn check(&self, ask: impl Future<Output = anyhow::Result<String>>) {
+        let before = self.last.lock().unwrap().looks;
+        let _turn = self.asking.lock().await;
+        if self.last.lock().unwrap().looks == before {
+            self.record(ask.await);
+        }
+    }
     fn record(&self, result: anyhow::Result<String>) {
-        let mut check = self.0.lock().unwrap();
+        let mut check = self.last.lock().unwrap();
+        check.looks += 1;
         check.checked_at = Some(now());
         match result {
             Ok(version) => {
@@ -105,7 +121,7 @@ impl Releases {
     }
     /// The newest release when it is newer than this manager.
     fn available(&self) -> Option<String> {
-        let check = self.0.lock().unwrap();
+        let check = self.last.lock().unwrap();
         check.newest.clone().filter(|newest| newer(newest, VERSION))
     }
 }
@@ -117,7 +133,7 @@ pub(crate) fn spawn(app: Arc<App>) {
     }
     tokio::spawn(async move {
         loop {
-            app.releases.record(newest_release().await);
+            app.releases.check(newest_release()).await;
             tokio::time::sleep(CHECK_EVERY).await;
         }
     });
@@ -197,7 +213,7 @@ fn active(job: &Job) -> bool {
 
 /// `GET /api/update`: this release, the newest one and whether the dashboard can update to it.
 pub async fn status(State(app): State<Arc<App>>) -> Result<Json<Value>> {
-    let check = app.releases.0.lock().unwrap().clone();
+    let check = app.releases.last.lock().unwrap().clone();
     let running = app
         .db
         .active_jobs()?
@@ -214,6 +230,19 @@ pub async fn status(State(app): State<Arc<App>>) -> Result<Json<Value>> {
         "installable": app.config.update_check && installable(&app.config.update_dir),
         "job_id": running.map(|job| job.id),
     })))
+}
+
+/// `POST /api/update/check`: ask GitHub now rather than at the next six-hourly look, and answer
+/// as `GET /api/update` does once it has answered.
+pub async fn check(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    if !app.config.update_check {
+        return Err(Error(
+            StatusCode::CONFLICT,
+            "Release checks are turned off with UPDATE_CHECK=false".into(),
+        ));
+    }
+    app.releases.check(newest_release()).await;
+    status(State(app)).await
 }
 
 /// `POST /api/update`: ask the WSL distribution to run `bilskirnir update`; returns a job.

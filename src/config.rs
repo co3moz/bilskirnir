@@ -1,6 +1,7 @@
 use crate::model::LABEL;
 use anyhow::{Result, bail};
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
+use serde_json::{Value, json};
 use std::{env, path::PathBuf};
 
 pub struct Config {
@@ -166,6 +167,54 @@ impl Config {
             .then(|| self.desktop_context.join("seccomp.json"))
     }
 
+    /// The settings of `.env.example` that Compose passes to the manager, in the order the settings
+    /// page lists them, each with the value the manager runs with rather than the text it was
+    /// given: an empty `TEMPLATES_URL` shows the wiki's list, `ALLOWED_HOSTS` includes
+    /// `DESKTOP_HOST`. A secret says only whether it is set; its value never leaves the manager.
+    pub(crate) fn shown(&self) -> Vec<Value> {
+        let value = |name: &str, value: Value| json!({"name": name, "value": value});
+        let secret = |name: &str, set: bool| json!({"name": name, "secret": true, "set": set});
+        let mib = |bytes: u64| json!(bytes / (1024 * 1024));
+        let on = |enabled: bool, mode: &'static str| if enabled { mode } else { "none" };
+        vec![
+            value("AUTH_MODE", json!(on(self.auth, "password"))),
+            value("ADMIN_USERNAME", json!(self.username)),
+            secret("ADMIN_PASSWORD", self.password_hash.is_some()),
+            value("SECURE_COOKIE", json!(self.secure_cookie)),
+            value("ALLOWED_HOSTS", json!(self.allowed_hosts.join(","))),
+            value("MANAGER_CONTAINER", json!(self.manager)),
+            value("MCP_ENABLED", json!(self.mcp_enabled)),
+            value(
+                "MCP_AUTH_MODE",
+                json!(on(self.mcp_token.is_some(), "token")),
+            ),
+            secret(
+                "MCP_TOKEN",
+                self.mcp_token
+                    .as_ref()
+                    .is_some_and(|token| !token.is_empty()),
+            ),
+            value("DESKTOP_IMAGE", json!(self.base_image)),
+            value("DESKTOP_USER_NAMESPACES", json!(self.user_namespaces)),
+            value("WSL_GPU", json!(self.wsl_gpu)),
+            value("NVIDIA_COMPUTE", json!(self.cuda)),
+            value("GPU_ADAPTER", json!(self.adapter)),
+            value("AUDIO_ENABLED", json!(self.audio)),
+            value("MICROPHONE_ENABLED", json!(self.microphone)),
+            value("UPLOAD_MAX_MB", mib(self.upload_limit)),
+            value("IMAGE_ARCHIVE_MAX_MB", mib(self.archive_limit)),
+            value(
+                "TEMPLATES_URL",
+                json!(self.templates_url.as_deref().unwrap_or("none")),
+            ),
+            value(
+                "VOLUME_FILTER",
+                json!(self.volume_filter.as_deref().unwrap_or("none")),
+            ),
+            value("UPDATE_CHECK", json!(self.update_check)),
+        ]
+    }
+
     /// The scheme and host the templates page reads from, which the interface's content security
     /// policy has to allow.
     pub(crate) fn templates_origin(&self) -> Option<&str> {
@@ -270,3 +319,7 @@ pub(crate) fn validate_mcp_token(enabled: bool, token: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;

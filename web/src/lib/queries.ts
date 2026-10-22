@@ -8,6 +8,7 @@ import { fetchTemplateList } from "./templates"
 import { endpointApi } from "./mcp"
 import { creationEnded } from "./pending"
 import type {
+  Configuration,
   ContainerItem,
   DesktopServer,
   EndpointTool,
@@ -71,6 +72,15 @@ export const useSettings = () =>
     queryKey: ["settings"],
     queryFn: () => api<Settings>("settings"),
     staleTime: Infinity,
+  })
+
+/** The installation's settings, which the manager reads once when it starts. */
+export const useConfiguration = () =>
+  useQuery({
+    queryKey: ["configuration"],
+    queryFn: () => api<Configuration>("configuration"),
+    staleTime: Infinity,
+    meta: { quiet: true },
   })
 
 // Lists refresh while a page that shows them is open and visible; the desktop view opts out.
