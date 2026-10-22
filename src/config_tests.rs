@@ -173,7 +173,7 @@ fn a_renamed_variable_keeps_its_meaning_and_startup_says_to_rename_it() {
     let (value, notices) = read(&[("MCP_ENABLED", "true")]);
     assert_eq!(value.unwrap().as_deref(), Some("true"));
     assert!(
-        notices[0].contains("MCP_ENABLED was renamed ROOT_MCP_ENABLED in Bilskirnir 0.7.0"),
+        notices[0].contains("MCP_ENABLED was renamed ROOT_MCP_ENABLED in Bilskirnir 0.6.3"),
         "{notices:?}"
     );
     // As the manifests pass it: the new name falls back to the old one, which is passed too.

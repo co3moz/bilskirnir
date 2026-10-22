@@ -860,7 +860,7 @@ class PortTest(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class McpTest(unittest.TestCase):
-    """`bilskirnir mcp` follows ROOT_MCP_ENABLED, and MCP_ENABLED, its name before 0.7.0, while the new
+    """`bilskirnir mcp` follows ROOT_MCP_ENABLED, and MCP_ENABLED, its name before 0.6.3, while the new
     one is missing, as the manager does."""
 
     def setUp(self):
