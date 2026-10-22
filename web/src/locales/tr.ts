@@ -694,7 +694,7 @@ export const tr: Messages = {
   "settings.updateTo": "{version} sürümüne güncelle",
   "settings.configuration": "Yapılandırma",
   "settings.configurationHint":
-    "Manager'ın açılışta ortamından okuduğu ve şu an kullandığı değerler. Parola ve token'lar hiçbir zaman gösterilmez. Bir ayarı .env dosyasında değiştirin (WSL paketinde bilskirnir settings ile), sonra manager'ı yeniden başlatın.",
+    "Manager'ın açılışta ortamından okuduğu ve şu an kullandığı değerler. Parola ve token'lar hiçbir zaman gösterilmez.",
   "settings.configurationFailed": "Yapılandırma okunamadı",
   "settings.secretSet": "Ayarlı, gizli",
   "settings.notSet": "Ayarlanmamış",
@@ -706,12 +706,49 @@ export const tr: Messages = {
   "settings.section.content": "Şablonlar ve volume'lar",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Diğer",
+  "settings.edit.readOnly":
+    "Bu kurulumda ayarlar .env dosyasında değişir: dosyayı düzenleyin ve manager'ı yeniden oluşturun, örneğin docker compose up -d ile. WSL paketinde bu sayfa çoğunu değiştirebilir.",
+  "settings.edit.editableHint":
+    "Bir ayarı kendi denetimiyle değiştirin, sonra Uygula ve yeniden başlat'ı seçin: WSL paketi ayarı .env dosyasına yazar ve manager'ı yeniden oluşturur. Yalnızca CLI olarak işaretli bir ayar, Bilskirnir terminalinde bilskirnir settings ve ardından bilskirnir restart ile değişir.",
+  "settings.edit.cliOnly": "Yalnızca CLI",
+  "settings.edit.cliOnlyHint":
+    "Bilskirnir terminalinde bilskirnir settings ile değiştirin, sonra bilskirnir restart çalıştırın.",
+  "settings.edit.changed": "Değişti",
+  "settings.edit.reset": "{name} değişikliğini geri al",
+  "settings.edit.mib": "MiB",
+  "settings.edit.changes.one": "{count} ayar değişti",
+  "settings.edit.changes.other": "{count} ayar değişti",
+  "settings.edit.discard": "Vazgeç",
+  "settings.edit.apply": "Uygula ve yeniden başlat",
+  "settings.edit.fix": "Önce işaretli ayarları düzeltin.",
+  "settings.edit.confirmTitle": "Ayarlar uygulanıp manager yeniden başlatılsın mı?",
+  "settings.edit.confirmText":
+    "WSL paketi bu ayarları .env dosyasına yazar, önceki dosyayı .env.previous olarak saklar ve manager'ı yeniden oluşturur. Masaüstleri çalışmaya devam eder; manager geri gelince yeniden oturum açın. Yeni manager yanıt vermezse önceki ayarlar geri gelir.",
+  "settings.edit.jobs.one": "Çalışan {count} iş manager ile birlikte sona erer.",
+  "settings.edit.jobs.other": "Çalışan {count} iş manager ile birlikte sona erer.",
+  "settings.edit.confirmJobs": "Kes ve yeniden başlat",
+  "settings.edit.running": "Ayarlar uygulanıyor",
+  "settings.edit.runningDetail":
+    "Manager yeni ayarlarla yeniden başlıyor; yanıt verince sayfa yeniden yüklenir.",
+  "settings.edit.done": "Manager yeni ayarlarla çalışıyor.",
+  "settings.edit.failed": "Ayar değişikliği başarılı olmadı; manager önceki ayarlarla çalışıyor.",
+  "settings.edit.problem.text":
+    "Tırnak, $, #, ters eğik çizgi, ters tırnak ve baştaki ya da sondaki boşluk olmadan tek satır yazdırılabilir ASCII kullanın.",
+  "settings.edit.problem.number": "{min} ile {max} arasında bir tam sayı girin.",
+  "settings.choice.automatic": "Otomatik",
+  "settings.choice.wiki": "Bilskirnir wiki",
+  "settings.choice.off": "Kapalı",
+  "settings.choice.ownLabel": "Bilskirnir'in kendi etiketi",
+  "settings.choice.everyVolume": "Tüm volume'lar",
+  "settings.choice.custom": "Diğer",
   "settings.about.AUTH_MODE": "password yönetici parolasını sorar; none girişi kapatır.",
   "settings.about.ADMIN_USERNAME": "Yöneticinin kullanıcı adı.",
   "settings.about.ADMIN_PASSWORD": "Yöneticinin parolası.",
   "settings.about.SECURE_COOKIE": "Oturum çerezini yalnızca HTTPS üzerinden gönderir.",
   "settings.about.ALLOWED_HOSTS":
-    "Panelin localhost ve özel adresler dışında yanıt verdiği host adları, DESKTOP_HOST dahil.",
+    "Panelin localhost, özel adresler ve DESKTOP_HOST dışında yanıt verdiği, virgülle ayrılmış host adları.",
+  "settings.about.DESKTOP_HOST":
+    "İsteğe bağlı HTTPS servisinin host adı; panel bu ada da yanıt verir.",
   "settings.about.ROOT_MCP_ENABLED":
     "Her konteynere ulaşan kök /mcp'nin ajanlara yanıt verip vermediği. MCP uç noktaları her durumda yanıt verir.",
   "settings.about.MCP_AUTH_MODE":

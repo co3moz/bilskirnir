@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/locales/en"
+
 import type { ConfigVariable, UpdateStatus } from "./types"
 
 /** The sections of the settings page's configuration, in their order. */
@@ -20,6 +22,7 @@ export const SECTION_OF: Record<string, Section> = {
   ADMIN_PASSWORD: "access",
   SECURE_COOKIE: "access",
   ALLOWED_HOSTS: "access",
+  DESKTOP_HOST: "access",
   ROOT_MCP_ENABLED: "mcp",
   MCP_AUTH_MODE: "mcp",
   MCP_TOKEN: "mcp",
@@ -56,6 +59,120 @@ export function shownValue(
   if (variable.secret) return { kind: "secret", set: variable.set }
   if (variable.value === null || variable.value === "") return { kind: "empty" }
   return { kind: "text", text: String(variable.value) }
+}
+
+/** A choice of a setting with a few meaningful values; `label` is a catalog key, or the value is shown. */
+export type Choice = { value: string; label?: MessageKey }
+
+/** How the Settings page edits a setting the manager marks editable. */
+export type Field =
+  | { kind: "switch" }
+  | { kind: "number"; min: number; max: number }
+  | { kind: "text"; placeholder?: string }
+  /** A few values, and `other` to type one, with `placeholder` in its field. */
+  | { kind: "choice"; choices: Choice[]; placeholder?: string }
+
+/** The editable settings' controls. One a newer manager adds and this page does not know is text. */
+export const FIELDS: Record<string, Field> = {
+  SECURE_COOKIE: { kind: "switch" },
+  ALLOWED_HOSTS: { kind: "text", placeholder: "desktop.lan,nas.lan" },
+  DESKTOP_IMAGE: { kind: "text", placeholder: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04" },
+  DESKTOP_USER_NAMESPACES: { kind: "switch" },
+  WSL_GPU: { kind: "switch" },
+  NVIDIA_COMPUTE: { kind: "switch" },
+  GPU_ADAPTER: {
+    kind: "choice",
+    choices: [
+      { value: "", label: "settings.choice.automatic" },
+      { value: "NVIDIA" },
+      { value: "AMD" },
+      { value: "Intel" },
+    ],
+    placeholder: "GeForce RTX 4090",
+  },
+  AUDIO_ENABLED: { kind: "switch" },
+  MICROPHONE_ENABLED: { kind: "switch" },
+  UPLOAD_MAX_MB: { kind: "number", min: 1, max: 65536 },
+  IMAGE_ARCHIVE_MAX_MB: { kind: "number", min: 1, max: 1048576 },
+  TEMPLATES_URL: {
+    kind: "choice",
+    choices: [
+      { value: "", label: "settings.choice.wiki" },
+      { value: "none", label: "settings.choice.off" },
+    ],
+    placeholder: "https://example.com/templates/index.json",
+  },
+  VOLUME_FILTER: {
+    kind: "choice",
+    choices: [
+      { value: "", label: "settings.choice.ownLabel" },
+      { value: "none", label: "settings.choice.everyVolume" },
+    ],
+    placeholder: "team=desktops",
+  },
+  UPDATE_CHECK: { kind: "switch" },
+}
+
+export const fieldOf = (name: string): Field => FIELDS[name] ?? { kind: "text" }
+
+/** Which of a choice's values a text is, or -1 for a text of the user's own. */
+export const choiceIndex = (field: Extract<Field, { kind: "choice" }>, text: string) =>
+  field.choices.findIndex((choice) => choice.value === text)
+
+/** Whether a switch's text is on, as the manager reads it. */
+export const isOn = (text: string) => text === "true" || text === "1"
+
+/**
+ * The text an editable setting starts from: the one its environment gave, or for a switch, a
+ * number or a text left unset, the value the manager made of it, since the control has to show one.
+ */
+export function initialText(variable: ConfigVariable): string {
+  if (variable.secret) return ""
+  const text = variable.text ?? ""
+  if (text !== "") return text
+  const field = fieldOf(variable.name)
+  if (field.kind === "switch") return variable.value === true ? "true" : "false"
+  if (field.kind === "number" && typeof variable.value === "number") return String(variable.value)
+  // A text field's value reads as its text; a choice's empty text is one of its choices.
+  if (field.kind === "text" && typeof variable.value === "string") return variable.value
+  return text
+}
+
+/**
+ * What is wrong with a text before the manager is asked: the line `.env` keeps as it is, as the
+ * manager and `bilskirnir apply-settings` check it, and a number's range. The manager says the
+ * rest when it checks the change.
+ */
+export function textProblem(
+  name: string,
+  text: string
+): { key: MessageKey; values?: Record<string, string | number> } | null {
+  const field = fieldOf(name)
+  if (field.kind === "number") {
+    const number = Number(text)
+    if (!/^[0-9]+$/.test(text) || number < field.min || number > field.max)
+      return { key: "settings.edit.problem.number", values: { min: field.min, max: field.max } }
+    return null
+  }
+  if (
+    text.length > 2048 ||
+    text.trim() !== text ||
+    !/^[ -~]*$/.test(text) ||
+    /["'`$#\\]/.test(text)
+  )
+    return { key: "settings.edit.problem.text" }
+  return null
+}
+
+/** The changes a draft makes: each setting whose text differs from the one it started from. */
+export function changesOf(variables: ConfigVariable[], draft: Record<string, string>) {
+  const changes: Record<string, string> = {}
+  for (const variable of variables) {
+    if (variable.secret || !variable.editable || !(variable.name in draft)) continue
+    if (draft[variable.name] !== initialText(variable))
+      changes[variable.name] = draft[variable.name]
+  }
+  return changes
 }
 
 /** Where this installation stands against the newest release. */

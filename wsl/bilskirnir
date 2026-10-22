@@ -18,10 +18,17 @@ NEEDS_PACKAGE=1
 # The package records the level of its own files here, such as the firewall watcher and its unit. A
 # package without the file is level 1.
 PACKAGE_LEVEL=/usr/lib/wsl/package-level
-# The units that run an update the dashboard asks for. Every manager image bundles them under
-# /app/install/systemd, and the package installs them as well; see update_units.
+# The units that run an update or a settings change the dashboard asks for. Every manager image
+# bundles them under /app/install/systemd, and the package installs them as well; see update_units.
 UNIT_DIR=/etc/systemd/system
 UPDATE_UNITS=(bilskirnir-update.path bilskirnir-update.service)
+SETTINGS_UNITS=(bilskirnir-settings.path bilskirnir-settings.service)
+# The settings the dashboard's Settings page may change, through apply-settings: EDITABLE in
+# src/config.rs, and the tests hold the two lists together. The rest of .env, such as the password,
+# the agent token and the published port, changes only with 'bilskirnir settings'.
+DASHBOARD_SETTINGS=(SECURE_COOKIE ALLOWED_HOSTS DESKTOP_IMAGE DESKTOP_USER_NAMESPACES WSL_GPU NVIDIA_COMPUTE GPU_ADAPTER AUDIO_ENABLED MICROPHONE_ENABLED UPLOAD_MAX_MB IMAGE_ARCHIVE_MAX_MB TEMPLATES_URL VOLUME_FILTER UPDATE_CHECK)
+# How long apply-settings waits for the manager to answer with the new settings, in seconds.
+SETTINGS_WAIT=90
 
 # Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
@@ -38,6 +45,7 @@ Usage: bilskirnir <command>
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
   settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
+  apply-settings <request>  Apply a settings change from the dashboard; bilskirnir-settings.service runs it as root
 EOF
 }
 compose() {
@@ -242,26 +250,38 @@ update_install_files() {
     done
     put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
-# The dashboard asks for an update by leaving a request in $INSTALL/update, which the manager sees
-# at /update; bilskirnir-update.path notices it and bilskirnir-update.service runs this command's
-# update as root. Like the command, the units come only from releases, since they run as root and
-# would stay after a MANAGER_IMAGE chosen by hand is gone. An update brings them to an installation
-# whose package came before them, and enables them only then or when a release changes them, so a
-# path unit turned off by hand stays off. The manager offers the update once the folder holds
-# 'watched'.
+# The dashboard asks for an update or a settings change by leaving a request in $INSTALL/update,
+# which the manager sees at /update. bilskirnir-update.path notices an update and
+# bilskirnir-update.service runs this command's update as root; bilskirnir-settings.path and
+# bilskirnir-settings.service do the same for apply-settings. Like the command, the units come only
+# from releases, since they run as root and would stay after a MANAGER_IMAGE chosen by hand is gone.
+# An update brings them to an installation whose package came before them, and enables them only
+# then or when a release changes them, so a path unit turned off by hand stays off. The manager
+# offers the update once the folder holds 'watched', and settings changes once it holds
+# 'settings-watched'.
 update_units() {
-    local image=$1 release=${1#"$MANAGER_REPOSITORY":} unit changed=""
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":}
     if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         return 0
     fi
-    for unit in "${UPDATE_UNITS[@]}"; do
+    install_units "$image" watched "updates" "The dashboard can update this installation from now on." \
+        "${UPDATE_UNITS[@]}"
+    install_units "$image" settings-watched "settings changes" "The dashboard can change settings from now on." \
+        "${SETTINGS_UNITS[@]}"
+}
+# One path unit and the service it starts, from the release image, and the file in the folder that
+# tells the manager they are there.
+install_units() {
+    local image=$1 marker=$2 what=$3 done=$4 unit changed=""
+    shift 4
+    for unit in "$@"; do
         if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/systemd/$unit" >"$tmp/$unit" 2>/dev/null ||
             [[ ! -s $tmp/$unit ]]; then
-            echo "$image has no $unit, so updates from the dashboard stay as they are."
+            echo "$image has no $unit, so $what from the dashboard stay as they are."
             return 0
         fi
     done
-    for unit in "${UPDATE_UNITS[@]}"; do
+    for unit in "$@"; do
         if ! cmp -s "$tmp/$unit" "$UNIT_DIR/$unit"; then
             put_file "$UNIT_DIR/$unit" "$tmp/$unit" 0644
             changed=yes
@@ -269,11 +289,133 @@ update_units() {
     done
     if [[ -n $changed ]]; then
         sudo systemctl daemon-reload
-        sudo systemctl enable --now bilskirnir-update.path
+        sudo systemctl enable --now "$1"
         sudo install -d -m 0755 "$INSTALL/update"
-        sudo touch "$INSTALL/update/watched"
-        echo "The dashboard can update this installation from now on."
+        sudo touch "$INSTALL/update/$marker"
+        echo "$done"
     fi
+}
+# Whether a value can stand as KEY=value in .env and come back unchanged: one line of printable
+# ASCII, without the quotes, $, #, backslashes and backquotes that Compose's quoting and
+# interpolation would read otherwise, and without the spaces at either end that it trims. The
+# manager refuses the same values (env_value in src/config.rs); this checks them again, since
+# the request comes from the manager's container.
+dashboard_value() {
+    local LC_ALL=C value=$1 printable='^[ -~]*$'
+    [[ ${#value} -le 2048 && $value =~ $printable && $value != *[\$\#\"\'\`\\]* &&
+        $value != [[:space:]]* && $value != *[[:space:]] ]]
+}
+dashboard_setting() {
+    local name
+    for name in "${DASHBOARD_SETTINGS[@]}"; do
+        if [[ $1 == "$name" ]]; then return 0; fi
+    done
+    return 1
+}
+# Whether the manager answers its health check, asked inside its container, so whatever address
+# Compose publishes it on. A manager that refuses its settings exits, and Docker starts it again.
+manager_answers() {
+    local _
+    for _ in $(seq 1 "$SETTINGS_WAIT"); do
+        if compose exec -T manager curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+# A settings change the dashboard asked for: the request's first line names the dashboard's job,
+# and each line after it is KEY=value for one of DASHBOARD_SETTINGS. Nothing changes unless every
+# line is one; then only those lines of .env change, in place, a missing one is added at the end
+# and the rest of the file, comments and order, stays. The previous file is kept as .env.previous,
+# and is put back when the manager does not answer with the new one.
+apply_settings() {
+    local request=$1 line key value count=0 i
+    local -a keys=() values=()
+    local -A asked=()
+    while IFS= read -r line || [[ -n $line ]]; do
+        count=$((count + 1))
+        if ((count == 1)); then
+            continue
+        fi
+        if ((count > ${#DASHBOARD_SETTINGS[@]} + 1)); then
+            echo "The request asks for more settings than the dashboard can change; nothing was changed." >&2
+            return 1
+        fi
+        key=${line%%=*}
+        value=${line#*=}
+        if [[ $line != *=* ]] || ! dashboard_setting "$key"; then
+            echo "The dashboard cannot change '${key:0:64}'; that changes only with 'bilskirnir settings'. Nothing was changed." >&2
+            return 1
+        fi
+        if [[ -n ${asked[$key]:-} ]]; then
+            echo "The request names $key twice; nothing was changed." >&2
+            return 1
+        fi
+        if ! dashboard_value "$value"; then
+            echo "$key cannot be written to .env as asked: use one line of printable ASCII without quotes, \$, #, backslashes or backquotes. Nothing was changed." >&2
+            return 1
+        fi
+        asked[$key]=1
+        keys+=("$key")
+        values+=("$value")
+    done <"$request"
+    if ((${#keys[@]} == 0)); then
+        echo "The request changes no setting; nothing was changed." >&2
+        return 1
+    fi
+    if systemctl is-active --quiet bilskirnir-update.service; then
+        echo "An update is running, so the settings stay as they are. Change them once it has finished." >&2
+        return 1
+    fi
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    local changes=""
+    echo "The dashboard asks for these settings:"
+    for i in "${!keys[@]}"; do
+        changes+="${keys[i]}=${values[i]}"$'\n'
+        echo "  ${keys[i]}=${values[i]}"
+    done
+    # Values go through the environment, so awk reads them as they are.
+    CHANGES=$changes awk '
+        BEGIN {
+            n = split(ENVIRON["CHANGES"], lines, "\n")
+            for (i = 1; i <= n; i++) {
+                eq = index(lines[i], "=")
+                if (eq < 2) continue
+                key = substr(lines[i], 1, eq - 1)
+                value[key] = substr(lines[i], eq + 1)
+                order[++count] = key
+            }
+        }
+        {
+            eq = index($0, "=")
+            key = substr($0, 1, eq - 1)
+            if (eq > 1 && key in value) {
+                if (!(key in written)) print key "=" value[key]
+                written[key] = 1
+                next
+            }
+            print
+        }
+        END { for (i = 1; i <= count; i++) if (!(order[i] in written)) print order[i] "=" value[order[i]] }
+    ' "$INSTALL/.env" >"$tmp/env"
+    sudo cp -p "$INSTALL/.env" "$INSTALL/.env.previous"
+    put_file "$INSTALL/.env" "$tmp/env"
+    echo "Wrote $(IFS=,; echo "${keys[*]}" | sed 's/,/, /g') to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
+    echo "Recreating the manager with the new settings."
+    if compose up -d --force-recreate manager && manager_answers; then
+        echo "The manager answers with the new settings."
+        return 0
+    fi
+    echo "The manager did not answer within $SETTINGS_WAIT seconds with the new settings, so .env is back as it was."
+    put_file "$INSTALL/.env" "$INSTALL/.env.previous"
+    if compose up -d --force-recreate manager && manager_answers; then
+        echo "The manager answers with the previous settings again."
+    else
+        echo "The manager does not answer with the previous settings either. Run 'bilskirnir logs' and 'bilskirnir doctor'."
+    fi
+    return 1
 }
 case ${1:-help} in
     start)
@@ -451,6 +593,17 @@ EOF
         # and mode; it picks SUDO_EDITOR, VISUAL or EDITOR, and nano when none is set.
         SUDO_EDITOR=${SUDO_EDITOR:-${VISUAL:-${EDITOR:-nano}}} sudo --edit "$INSTALL/.env"
         echo "Run 'bilskirnir restart' to apply the settings."
+        ;;
+    apply-settings)
+        # bilskirnir-settings.service runs this as root with the request the dashboard left; see
+        # src/config/changes.rs.
+        require_settings
+        if [[ $# -ne 2 || ! -f $2 ]]; then
+            echo "Usage: bilskirnir apply-settings <request>, as bilskirnir-settings.service runs it" >&2
+            exit 2
+        fi
+        ensure_docker
+        apply_settings "$2"
         ;;
     help|-h|--help)
         usage

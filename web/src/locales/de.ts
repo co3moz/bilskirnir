@@ -708,7 +708,7 @@ export const de: Messages = {
   "settings.updateTo": "Auf {version} aktualisieren",
   "settings.configuration": "Konfiguration",
   "settings.configurationHint":
-    "Womit der Manager läuft, beim Start aus seiner Umgebung gelesen. Passwörter und Tokens werden nie angezeigt. Ändern Sie eine Einstellung in .env, im WSL-Paket mit bilskirnir settings, und starten Sie den Manager neu.",
+    "Womit der Manager läuft, beim Start aus seiner Umgebung gelesen. Passwörter und Tokens werden nie angezeigt.",
   "settings.configurationFailed": "Die Konfiguration konnte nicht gelesen werden",
   "settings.secretSet": "Gesetzt, verborgen",
   "settings.notSet": "Nicht gesetzt",
@@ -720,13 +720,51 @@ export const de: Messages = {
   "settings.section.content": "Vorlagen und Volumes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Sonstiges",
+  "settings.edit.readOnly":
+    "In dieser Installation ändern sich die Einstellungen in der .env: Bearbeiten Sie sie und erstellen Sie den Manager neu, etwa mit docker compose up -d. Im WSL-Paket ändert diese Seite die meisten davon.",
+  "settings.edit.editableHint":
+    "Ändern Sie eine Einstellung mit ihrem Steuerelement und wählen Sie dann Übernehmen und neu starten: Das WSL-Paket schreibt sie in die .env und erstellt den Manager neu. Eine als Nur CLI markierte Einstellung ändern Sie mit bilskirnir settings in einem Bilskirnir-Terminal, danach mit bilskirnir restart.",
+  "settings.edit.cliOnly": "Nur CLI",
+  "settings.edit.cliOnlyHint":
+    "Ändern Sie sie mit bilskirnir settings in einem Bilskirnir-Terminal und führen Sie dann bilskirnir restart aus.",
+  "settings.edit.changed": "Geändert",
+  "settings.edit.reset": "Änderung an {name} zurücknehmen",
+  "settings.edit.mib": "MiB",
+  "settings.edit.changes.one": "{count} Einstellung geändert",
+  "settings.edit.changes.other": "{count} Einstellungen geändert",
+  "settings.edit.discard": "Verwerfen",
+  "settings.edit.apply": "Übernehmen und neu starten",
+  "settings.edit.fix": "Korrigieren Sie zuerst die markierten Einstellungen.",
+  "settings.edit.confirmTitle": "Einstellungen übernehmen und den Manager neu starten?",
+  "settings.edit.confirmText":
+    "Das WSL-Paket schreibt diese Einstellungen in die .env, behält die vorherige Datei als .env.previous und erstellt den Manager neu. Desktops laufen weiter; melden Sie sich erneut an, sobald der Manager zurück ist. Antwortet der neue Manager nicht, kommen die vorherigen Einstellungen zurück.",
+  "settings.edit.jobs.one": "{count} laufender Auftrag endet mit dem Manager.",
+  "settings.edit.jobs.other": "{count} laufende Aufträge enden mit dem Manager.",
+  "settings.edit.confirmJobs": "Unterbrechen und neu starten",
+  "settings.edit.running": "Einstellungen werden übernommen",
+  "settings.edit.runningDetail":
+    "Der Manager startet mit den neuen Einstellungen neu, und die Seite lädt neu, sobald er antwortet.",
+  "settings.edit.done": "Der Manager läuft mit den neuen Einstellungen.",
+  "settings.edit.failed":
+    "Die Änderung der Einstellungen ist nicht gelungen; der Manager läuft mit den vorherigen Einstellungen.",
+  "settings.edit.problem.text":
+    "Verwenden Sie eine Zeile druckbarer ASCII-Zeichen ohne Anführungszeichen, $, #, Backslashes, Backticks oder Leerzeichen an Anfang und Ende.",
+  "settings.edit.problem.number": "Geben Sie eine ganze Zahl von {min} bis {max} ein.",
+  "settings.choice.automatic": "Automatisch",
+  "settings.choice.wiki": "Bilskirnir-Wiki",
+  "settings.choice.off": "Ausgeschaltet",
+  "settings.choice.ownLabel": "Bilskirnirs eigenes Label",
+  "settings.choice.everyVolume": "Jedes Volume",
+  "settings.choice.custom": "Andere",
   "settings.about.AUTH_MODE":
     "password fragt nach dem Administratorpasswort; none schaltet die Anmeldung aus.",
   "settings.about.ADMIN_USERNAME": "Der Benutzername des Administrators.",
   "settings.about.ADMIN_PASSWORD": "Das Passwort des Administrators.",
   "settings.about.SECURE_COOKIE": "Sendet das Sitzungscookie nur über HTTPS.",
   "settings.about.ALLOWED_HOSTS":
-    "Hostnamen, auf die das Dashboard neben localhost und privaten Adressen antwortet, samt DESKTOP_HOST.",
+    "Hostnamen, auf die das Dashboard neben localhost, privaten Adressen und DESKTOP_HOST antwortet, durch Kommas getrennt.",
+  "settings.about.DESKTOP_HOST":
+    "Der Hostname des optionalen HTTPS-Dienstes, auf den das Dashboard ebenfalls antwortet.",
   "settings.about.ROOT_MCP_ENABLED":
     "Ob das Root-/mcp, das jeden Container erreicht, Agenten antwortet. MCP-Endpunkte antworten in jedem Fall.",
   "settings.about.MCP_AUTH_MODE":

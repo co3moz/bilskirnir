@@ -706,7 +706,7 @@ export const fr: Messages = {
   "settings.updateTo": "Passer à la {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
-    "Les valeurs du manager, lues dans son environnement au démarrage. Les mots de passe et les jetons ne sont jamais affichés. Modifiez un paramètre dans .env, avec bilskirnir settings dans le paquet WSL, puis redémarrez le manager.",
+    "Les valeurs du gestionnaire, lues dans son environnement au démarrage. Les mots de passe et les jetons ne sont jamais affichés.",
   "settings.configurationFailed": "Impossible de lire la configuration",
   "settings.secretSet": "Défini, masqué",
   "settings.notSet": "Non défini",
@@ -718,13 +718,51 @@ export const fr: Messages = {
   "settings.section.content": "Modèles et volumes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Autres",
+  "settings.edit.readOnly":
+    "Sur cette installation, les paramètres se changent dans .env : modifiez-le puis recréez le gestionnaire, par exemple avec docker compose up -d. Dans le paquet WSL, cette page en change la plupart.",
+  "settings.edit.editableHint":
+    "Changez un paramètre avec sa commande, puis choisissez Appliquer et redémarrer : le paquet WSL l'écrit dans .env et recrée le gestionnaire. Un paramètre marqué CLI uniquement se change avec bilskirnir settings dans un terminal Bilskirnir, puis bilskirnir restart.",
+  "settings.edit.cliOnly": "CLI uniquement",
+  "settings.edit.cliOnlyHint":
+    "Changez-le avec bilskirnir settings dans un terminal Bilskirnir, puis lancez bilskirnir restart.",
+  "settings.edit.changed": "Modifié",
+  "settings.edit.reset": "Annuler la modification de {name}",
+  "settings.edit.mib": "Mio",
+  "settings.edit.changes.one": "{count} paramètre modifié",
+  "settings.edit.changes.other": "{count} paramètres modifiés",
+  "settings.edit.discard": "Abandonner",
+  "settings.edit.apply": "Appliquer et redémarrer",
+  "settings.edit.fix": "Corrigez d'abord les paramètres signalés.",
+  "settings.edit.confirmTitle": "Appliquer les paramètres et redémarrer le gestionnaire ?",
+  "settings.edit.confirmText":
+    "Le paquet WSL écrit ces paramètres dans .env, garde le fichier précédent sous .env.previous et recrée le gestionnaire. Les bureaux continuent de tourner ; reconnectez-vous une fois le gestionnaire revenu. Si le nouveau gestionnaire ne répond pas, les paramètres précédents reviennent.",
+  "settings.edit.jobs.one": "{count} tâche en cours se termine avec le gestionnaire.",
+  "settings.edit.jobs.other": "{count} tâches en cours se terminent avec le gestionnaire.",
+  "settings.edit.confirmJobs": "Interrompre et redémarrer",
+  "settings.edit.running": "Application des paramètres",
+  "settings.edit.runningDetail":
+    "Le gestionnaire redémarre avec les nouveaux paramètres, et la page se recharge dès qu'il répond.",
+  "settings.edit.done": "Le gestionnaire tourne avec les nouveaux paramètres.",
+  "settings.edit.failed":
+    "La modification des paramètres n'a pas abouti ; le gestionnaire tourne avec les paramètres précédents.",
+  "settings.edit.problem.text":
+    "Utilisez une seule ligne d'ASCII imprimable, sans guillemets, $, #, barres obliques inverses, accents graves ni espaces au début ou à la fin.",
+  "settings.edit.problem.number": "Saisissez un nombre entier de {min} à {max}.",
+  "settings.choice.automatic": "Automatique",
+  "settings.choice.wiki": "Wiki de Bilskirnir",
+  "settings.choice.off": "Désactivé",
+  "settings.choice.ownLabel": "Le label de Bilskirnir",
+  "settings.choice.everyVolume": "Tous les volumes",
+  "settings.choice.custom": "Autre",
   "settings.about.AUTH_MODE":
     "password demande le mot de passe administrateur ; none désactive la connexion.",
   "settings.about.ADMIN_USERNAME": "Le nom d'utilisateur de l'administrateur.",
   "settings.about.ADMIN_PASSWORD": "Le mot de passe de l'administrateur.",
   "settings.about.SECURE_COOKIE": "N'envoie le cookie de session qu'en HTTPS.",
   "settings.about.ALLOWED_HOSTS":
-    "Noms d'hôte auxquels le tableau de bord répond en plus de localhost et des adresses privées, DESKTOP_HOST compris.",
+    "Noms d'hôte auxquels le tableau de bord répond en plus de localhost, des adresses privées et de DESKTOP_HOST, séparés par des virgules.",
+  "settings.about.DESKTOP_HOST":
+    "Le nom d'hôte du service HTTPS facultatif, auquel le tableau de bord répond aussi.",
   "settings.about.ROOT_MCP_ENABLED":
     "Si le /mcp racine, qui atteint chaque conteneur, répond aux agents. Les points d'accès MCP répondent dans tous les cas.",
   "settings.about.MCP_AUTH_MODE":

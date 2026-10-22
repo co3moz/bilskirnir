@@ -23,6 +23,7 @@ CLI = ROOT / "wsl/bilskirnir"
 REPOSITORY = "ghcr.io/co3moz/bilskirnir"
 FILES = ("compose.yml", "deploy/Caddyfile", ".env.example")
 UNITS = ("bilskirnir-update.path", "bilskirnir-update.service")
+SETTINGS_UNITS = ("bilskirnir-settings.path", "bilskirnir-settings.service")
 
 STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
@@ -319,9 +320,10 @@ class UpdateTest(unittest.TestCase):
         self.assertIn("/app/install/deploy/Caddyfile", result.stderr)
         self.assertIn("docker compose up -d", calls)
 
-    def bundle_units(self):
-        """Puts the units that take the dashboard's update requests into the manager image."""
-        for name in UNITS:
+    def bundle_units(self, names=UNITS + SETTINGS_UNITS):
+        """Puts the units that take the dashboard's update requests and settings changes into the manager
+        image."""
+        for name in names:
             path = self.image / "app/install/systemd" / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f"[Unit]\nDescription={name}\n")
@@ -330,21 +332,34 @@ class UpdateTest(unittest.TestCase):
         self.bundle_units()
         result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
-        for name in UNITS:
+        for name in UNITS + SETTINGS_UNITS:
             self.assertEqual((self.units / name).read_text(), f"[Unit]\nDescription={name}\n")
             self.assertEqual(stat.S_IMODE((self.units / name).stat().st_mode), 0o644)
             self.assertIn(f"docker run --rm --network none --entrypoint cat {REPOSITORY}:0.3.0 /app/install/systemd/{name}", calls)
-        # The manager offers the update once the path unit watches the folder.
+        # The manager offers the update and settings changes once the path units watch the folder.
         self.assertTrue((self.install / "update/watched").is_file())
-        enable = calls.index("systemctl enable --now bilskirnir-update.path")
-        self.assertLess(calls.index("systemctl daemon-reload"), enable)
-        self.assertLess(enable, calls.index("docker compose up -d"))
+        self.assertTrue((self.install / "update/settings-watched").is_file())
+        for path_unit in ("bilskirnir-update.path", "bilskirnir-settings.path"):
+            enable = calls.index(f"systemctl enable --now {path_unit}")
+            self.assertLess(calls.index("systemctl daemon-reload"), enable)
+            self.assertLess(enable, calls.index("docker compose up -d"))
         # The same units again are left as they are, so a path unit turned off by hand stays off.
         self.calls.unlink()
         result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("systemctl daemon-reload", calls)
         self.assertNotIn("systemctl enable --now bilskirnir-update.path", calls)
+        self.assertNotIn("systemctl enable --now bilskirnir-settings.path", calls)
+
+    def test_a_release_with_only_the_update_units_leaves_settings_changes_as_they_are(self):
+        self.bundle_units(UNITS)
+        result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("systemctl enable --now bilskirnir-update.path", calls)
+        self.assertNotIn("systemctl enable --now bilskirnir-settings.path", calls)
+        self.assertIn("settings changes from the dashboard stay as they are", result.stdout)
+        self.assertFalse((self.install / "update/settings-watched").exists())
+        self.assertEqual(sorted(p.name for p in self.units.iterdir()), sorted(UNITS))
 
     def test_the_units_come_only_from_releases(self):
         self.bundle_units()
@@ -508,6 +523,133 @@ class SettingsTest(unittest.TestCase):
                 self.assertIn("bilskirnir restart", result.stdout)
 
 
+# docker, sudo, systemctl and sleep for apply-settings. The manager answers its health check unless
+# .env holds the line in BREAKS, and bilskirnir-update.service is active only with UPDATING set.
+APPLY_STUB = """#!/usr/bin/env bash
+printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
+case "$(basename "$0") $*" in
+    "docker compose exec "*) [[ -n ${BREAKS:-} ]] && grep -qxF "$BREAKS" "$ENV_FILE" && exit 1; exit 0 ;;
+    "systemctl is-active --quiet bilskirnir-update.service") [[ -n ${UPDATING:-} ]] && exit 0; exit 3 ;;
+    "sudo "*) exec "$@" ;;
+esac
+exit 0
+"""
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class ApplySettingsTest(unittest.TestCase):
+    """`bilskirnir apply-settings`, which bilskirnir-settings.service runs as root with the request the
+    dashboard left: which settings it accepts, how it rewrites .env and how it goes back when the
+    manager does not answer with the new settings."""
+
+    ENV = "# Settings\nSECURE_COOKIE=false\nADMIN_PASSWORD='a$ecret#1'\n\n# Limits\nUPLOAD_MAX_MB=1024\nWSL_GPU=true\n"
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        self.env_file = self.install / ".env"
+        self.env_file.write_text(self.ENV)
+        self.env_file.chmod(0o640)
+        script = CLI.read_text()
+        for line, replacement in (
+            ("INSTALL=/opt/bilskirnir", f"INSTALL={self.install}"),
+            ("SETTINGS_WAIT=90", "SETTINGS_WAIT=2"),
+        ):
+            self.assertEqual(script.count(f"\n{line}\n"), 1, line)
+            script = script.replace(f"\n{line}\n", f"\n{replacement}\n")
+        self.cli = self.dir / "bilskirnir"
+        self.cli.write_text(script)
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        for name in ("docker", "sudo", "systemctl", "sleep"):
+            (bin_dir / name).write_text(APPLY_STUB)
+            (bin_dir / name).chmod(0o755)
+        self.calls = self.dir / "calls"
+        self.tmp = self.dir / "tmp"
+        self.tmp.mkdir()
+        self.env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "CALLS": str(self.calls),
+            "ENV_FILE": str(self.env_file),
+            "TMPDIR": str(self.tmp),
+        }
+
+    def apply(self, *lines, **stubs):
+        request = self.dir / "settings-started"
+        request.write_text("".join(f"{line}\n" for line in ("job-id", *lines)))
+        self.calls.unlink(missing_ok=True)
+        result = subprocess.run(["bash", str(self.cli), "apply-settings", str(request)],
+                                env={**self.env, **stubs}, capture_output=True, text=True)
+        calls = self.calls.read_text().splitlines() if self.calls.exists() else []
+        return result, calls
+
+    def test_only_the_lines_asked_for_change_and_the_rest_of_env_stays(self):
+        result, calls = self.apply("SECURE_COOKIE=true", "UPLOAD_MAX_MB=2048", "VOLUME_FILTER=team=desktops",
+                                   "GPU_ADAPTER=GeForce RTX")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.env_file.read_text(),
+                         "# Settings\nSECURE_COOKIE=true\nADMIN_PASSWORD='a$ecret#1'\n\n# Limits\nUPLOAD_MAX_MB=2048\n"
+                         "WSL_GPU=true\nVOLUME_FILTER=team=desktops\nGPU_ADAPTER=GeForce RTX\n")
+        self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o640)
+        # The previous file is kept, with the same mode, since it holds the password too.
+        previous = self.install / ".env.previous"
+        self.assertEqual(previous.read_text(), self.ENV)
+        self.assertEqual(stat.S_IMODE(previous.stat().st_mode), 0o640)
+        self.assertEqual(calls.count("docker compose up -d --force-recreate manager"), 1)
+        self.assertIn("The manager answers with the new settings.", result.stdout)
+        self.assertNotIn("a$ecret", result.stdout)
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_a_setting_the_dashboard_may_not_change_changes_nothing(self):
+        for lines in (
+            ("ADMIN_PASSWORD=new-password",),
+            ("SECURE_COOKIE=true", "MCP_TOKEN=x"),
+            ("ROOT_MCP_ENABLED=true",),
+            ("BIND_ADDRESS=0.0.0.0",),
+            ("MANAGER_IMAGE=ghcr.io/someone/else:1.0.0",),
+            ("SECURE_COOKIE",),
+            ("secure_cookie=true",),
+            ("SECURE_COOKIE=true", "SECURE_COOKIE=false"),
+            (),
+        ):
+            with self.subTest(lines=lines):
+                result, calls = self.apply(*lines)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("nothing was changed", result.stderr.lower())
+                self.assertEqual(self.env_file.read_text(), self.ENV)
+                self.assertFalse((self.install / ".env.previous").exists())
+                self.assertFalse(any(call.startswith("docker compose up") for call in calls))
+
+    def test_a_value_env_would_read_otherwise_changes_nothing(self):
+        for value in ("$HOME", "${ADMIN_PASSWORD}", "a #b", "'quoted'", '"quoted"', "a`id`", "a\\b", " x", "x ",
+                      "tab\there", "carriage\r", "café", "x" * 2049):
+            with self.subTest(value=value):
+                result, calls = self.apply(f"GPU_ADAPTER={value}")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("cannot be written to .env", result.stderr)
+                self.assertEqual(self.env_file.read_text(), self.ENV)
+                self.assertFalse(any(call.startswith("docker compose up") for call in calls))
+
+    def test_the_previous_settings_come_back_when_the_manager_does_not_answer(self):
+        result, calls = self.apply("WSL_GPU=false", "SECURE_COOKIE=true", BREAKS="WSL_GPU=false")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(self.env_file.read_text(), self.ENV)
+        self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o640)
+        self.assertEqual(calls.count("docker compose up -d --force-recreate manager"), 2)
+        self.assertIn(".env is back as it was", result.stdout)
+        self.assertIn("The manager answers with the previous settings again.", result.stdout)
+
+    def test_nothing_changes_while_an_update_runs(self):
+        result, calls = self.apply("SECURE_COOKIE=true", UPDATING="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("An update is running", result.stderr)
+        self.assertEqual(self.env_file.read_text(), self.ENV)
+        self.assertFalse(any(call.startswith("docker compose up") for call in calls))
+
+
 class PackageTest(unittest.TestCase):
     def test_the_package_pins_the_image_the_cli_updates(self):
         # wsl/Dockerfile rewrites this line to the release the package is built for, and the build
@@ -537,18 +679,48 @@ class PackageTest(unittest.TestCase):
             self.assertEqual(source, copy_source(package, f"/opt/bilskirnir/{name}"))
         self.assertIn(f"sha256sum {' '.join(FILES)} > .shipped.sha256", package)
 
-    def test_the_package_and_the_manager_bundle_the_update_units(self):
+    def test_the_package_and_the_manager_bundle_the_update_and_settings_units(self):
         # The package installs them, and an update brings them from /app/install/systemd in the
         # manager image to installations whose package came before them.
         script = CLI.read_text()
         self.assertEqual(tuple(re.search(r"^UPDATE_UNITS=\((.*)\)$", script, re.M).group(1).split()), UNITS)
+        self.assertEqual(tuple(re.search(r"^SETTINGS_UNITS=\((.*)\)$", script, re.M).group(1).split()), SETTINGS_UNITS)
         unit_dir = re.search(r"^UNIT_DIR=(\S+)$", script, re.M).group(1)
         manager = (ROOT / "Dockerfile").read_text()
         package = (ROOT / "wsl/Dockerfile").read_text()
-        for name in UNITS:
+        for name in UNITS + SETTINGS_UNITS:
             self.assertEqual(copy_source(manager, f"/app/install/systemd/{name}"), f"wsl/{name}")
             self.assertEqual(copy_source(package, f"{unit_dir}/{name}"), f"wsl/{name}")
         self.assertRegex(package, r"systemctl enable [^\n]*\bbilskirnir-update\.path\b")
+        self.assertRegex(package, r"systemctl enable [^\n]*\bbilskirnir-settings\.path\b")
+
+    def test_the_settings_units_use_the_names_the_manager_reads(self):
+        script = CLI.read_text()
+        install = re.search(r"^INSTALL=(\S+)$", script, re.M).group(1)
+        folder = f"{install}/update"
+        names = dict(re.findall(r'^pub\(crate\) const (\w+): &str = "([^"]*)";$', (ROOT / "src/config/changes.rs").read_text(), re.M))
+        self.assertIn(f"\nPathExists={folder}/{names['SETTINGS_REQUEST']}\n", (ROOT / "wsl/bilskirnir-settings.path").read_text())
+        service = (ROOT / "wsl/bilskirnir-settings.service").read_text()
+        cli = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
+        self.assertIn(f"ExecStartPre=/bin/mv -f {folder}/{names['SETTINGS_REQUEST']} {folder}/{names['SETTINGS_STARTED']}\n", service)
+        self.assertIn(f"'exec {cli} apply-settings {folder}/{names['SETTINGS_STARTED']} >{folder}/{names['SETTINGS_LOG']} 2>&1'", service)
+        self.assertIn(f"mv -f {folder}/{names['SETTINGS_EXIT']}.new {folder}/{names['SETTINGS_EXIT']}'", service)
+        self.assertIn(f'install_units "$image" {names["SETTINGS_WATCHED"]} ', script)
+        self.assertIn(f"{folder}/{names['SETTINGS_WATCHED']}", (ROOT / "wsl/Dockerfile").read_text())
+
+    def test_the_command_accepts_exactly_the_settings_the_dashboard_edits(self):
+        # EDITABLE in src/config.rs is what the Settings page offers; the command takes only those.
+        config = (ROOT / "src/config.rs").read_text()
+        block = re.search(r"^pub\(crate\) const EDITABLE: &\[&str\] = &\[\n(.*?)^\];$", config, re.M | re.S)
+        self.assertIsNotNone(block)
+        editable = re.findall(r'^    "([A-Z_]+)",$', block.group(1), re.M)
+        accepted = re.search(r"^DASHBOARD_SETTINGS=\((.*)\)$", CLI.read_text(), re.M).group(1).split()
+        self.assertGreater(len(editable), 10)
+        self.assertEqual(accepted, editable)
+        # Every one of them is an installation setting the manager reads from .env.
+        example = (ROOT / ".env.example").read_text()
+        for name in accepted:
+            self.assertIn(f"\n{name}=", example)
 
     def test_the_units_use_the_folder_and_the_names_the_manager_reads(self):
         # compose.ghcr.yml mounts the installation's update folder where src/releases.rs looks, and
@@ -564,7 +736,7 @@ class PackageTest(unittest.TestCase):
         cli = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
         self.assertIn(f"'exec {cli} update >{folder}/{names['LOG']} 2>&1'", service)
         self.assertIn(f"mv -f {folder}/{names['EXIT']}.new {folder}/{names['EXIT']}'", service)
-        self.assertIn(f'"$INSTALL/update/{names["WATCHED"]}"', script)
+        self.assertIn(f'install_units "$image" {names["WATCHED"]} ', script)
         self.assertIn(f"touch {folder}/{names['WATCHED']}", (ROOT / "wsl/Dockerfile").read_text())
 
     def test_the_manager_bundles_the_command_the_package_installs(self):

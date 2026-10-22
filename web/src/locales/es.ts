@@ -699,7 +699,7 @@ export const es: Messages = {
   "settings.updateTo": "Actualizar a la {version}",
   "settings.configuration": "Configuración",
   "settings.configurationHint":
-    "Los valores con los que funciona el manager, leídos de su entorno al arrancar. Las contraseñas y los tokens nunca se muestran. Cambia un ajuste en .env, con bilskirnir settings en el paquete WSL, y reinicia el manager.",
+    "Los valores con los que funciona el gestor, leídos de su entorno al arrancar. Las contraseñas y los tokens nunca se muestran.",
   "settings.configurationFailed": "No se pudo leer la configuración",
   "settings.secretSet": "Definido, oculto",
   "settings.notSet": "Sin definir",
@@ -711,13 +711,51 @@ export const es: Messages = {
   "settings.section.content": "Plantillas y volúmenes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Otros",
+  "settings.edit.readOnly":
+    "En esta instalación los ajustes se cambian en .env: edítalo y vuelve a crear el gestor, por ejemplo con docker compose up -d. En el paquete WSL esta página cambia la mayoría.",
+  "settings.edit.editableHint":
+    "Cambia un ajuste con su control y luego elige Aplicar y reiniciar: el paquete WSL lo escribe en .env y vuelve a crear el gestor. Un ajuste marcado como Solo CLI se cambia con bilskirnir settings en un terminal de Bilskirnir y después bilskirnir restart.",
+  "settings.edit.cliOnly": "Solo CLI",
+  "settings.edit.cliOnlyHint":
+    "Cámbialo con bilskirnir settings en un terminal de Bilskirnir y después ejecuta bilskirnir restart.",
+  "settings.edit.changed": "Cambiado",
+  "settings.edit.reset": "Deshacer el cambio de {name}",
+  "settings.edit.mib": "MiB",
+  "settings.edit.changes.one": "{count} ajuste cambiado",
+  "settings.edit.changes.other": "{count} ajustes cambiados",
+  "settings.edit.discard": "Descartar",
+  "settings.edit.apply": "Aplicar y reiniciar",
+  "settings.edit.fix": "Corrige primero los ajustes marcados.",
+  "settings.edit.confirmTitle": "¿Aplicar los ajustes y reiniciar el gestor?",
+  "settings.edit.confirmText":
+    "El paquete WSL escribe estos ajustes en .env, guarda el archivo anterior como .env.previous y vuelve a crear el gestor. Los escritorios siguen en marcha; vuelve a iniciar sesión cuando el gestor regrese. Si el nuevo gestor no responde, vuelven los ajustes anteriores.",
+  "settings.edit.jobs.one": "{count} tarea en curso termina con el gestor.",
+  "settings.edit.jobs.other": "{count} tareas en curso terminan con el gestor.",
+  "settings.edit.confirmJobs": "Interrumpir y reiniciar",
+  "settings.edit.running": "Aplicando los ajustes",
+  "settings.edit.runningDetail":
+    "El gestor se reinicia con los nuevos ajustes y la página se recarga cuando responde.",
+  "settings.edit.done": "El gestor funciona con los nuevos ajustes.",
+  "settings.edit.failed":
+    "El cambio de ajustes no salió bien; el gestor funciona con los ajustes anteriores.",
+  "settings.edit.problem.text":
+    "Usa una sola línea de ASCII imprimible, sin comillas, $, #, barras invertidas, acentos graves ni espacios al principio o al final.",
+  "settings.edit.problem.number": "Escribe un número entero de {min} a {max}.",
+  "settings.choice.automatic": "Automático",
+  "settings.choice.wiki": "Wiki de Bilskirnir",
+  "settings.choice.off": "Desactivado",
+  "settings.choice.ownLabel": "La etiqueta de Bilskirnir",
+  "settings.choice.everyVolume": "Todos los volúmenes",
+  "settings.choice.custom": "Otro",
   "settings.about.AUTH_MODE":
     "password pide la contraseña del administrador; none desactiva el inicio de sesión.",
   "settings.about.ADMIN_USERNAME": "El nombre de usuario del administrador.",
   "settings.about.ADMIN_PASSWORD": "La contraseña del administrador.",
   "settings.about.SECURE_COOKIE": "Envía la cookie de sesión solo por HTTPS.",
   "settings.about.ALLOWED_HOSTS":
-    "Nombres de host a los que responde el panel además de localhost y las direcciones privadas, DESKTOP_HOST incluido.",
+    "Nombres de host a los que responde el panel además de localhost, las direcciones privadas y DESKTOP_HOST, separados por comas.",
+  "settings.about.DESKTOP_HOST":
+    "El nombre de host del servicio HTTPS opcional, al que el panel también responde.",
   "settings.about.ROOT_MCP_ENABLED":
     "Si el /mcp raíz, que llega a todos los contenedores, responde a los agentes. Los puntos de acceso MCP responden en cualquier caso.",
   "settings.about.MCP_AUTH_MODE":

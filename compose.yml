@@ -34,7 +34,9 @@ services:
       TEMPLATES_URL: ${TEMPLATES_URL:-}
       VOLUME_FILTER: ${VOLUME_FILTER:-}
       UPDATE_CHECK: ${UPDATE_CHECK:-true}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
+      # Apart, so the Settings page edits ALLOWED_HOSTS as .env has it; the manager answers both.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
+      DESKTOP_HOST: ${DESKTOP_HOST:-localhost}
       RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

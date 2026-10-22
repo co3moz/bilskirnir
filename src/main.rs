@@ -25,6 +25,7 @@ mod mcp;
 mod media;
 mod model;
 mod mount_parents;
+mod package_requests;
 mod process;
 mod proxy;
 mod pulls;
@@ -92,7 +93,10 @@ fn router(app: Arc<App>) -> Router {
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
-        .route("/api/configuration", get(api::configuration))
+        .route(
+            "/api/configuration",
+            get(config::changes::configuration).post(config::changes::change),
+        )
         .route("/api/system", get(api::system))
         .route("/api/update", get(releases::status).post(releases::start))
         .route("/api/update/check", post(releases::check))
@@ -387,12 +391,16 @@ async fn main() -> anyhow::Result<()> {
     // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
     db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
-    // An update the WSL distribution runs replaces the manager on its way, and goes on.
+    // An update or a settings change the WSL distribution runs replaces the manager on its way,
+    // and goes on.
     let mut interrupted_builds = Vec::new();
     let mut updates = Vec::new();
+    let mut settings_changes = Vec::new();
     for mut job in db.list::<model::Job>("job")? {
         if releases::resumable(&config.update_dir, &job) {
             updates.push(job);
+        } else if config::changes::resumable(&config.update_dir, &job) {
+            settings_changes.push(job);
         } else if job.status == "queued" || job.status == "running" {
             job.status = "interrupted".into();
             job.finished_at = Some(model::now());
@@ -431,6 +439,9 @@ async fn main() -> anyhow::Result<()> {
     releases::spawn(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
+    }
+    for job in settings_changes {
+        config::changes::resume(app.clone(), job);
     }
     let reconcile = app.clone();
     let cleanup = app.clone();

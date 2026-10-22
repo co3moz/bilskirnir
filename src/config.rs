@@ -1,8 +1,14 @@
+//! The installation's settings: environment variables the manager reads once when it starts, with
+//! `.env.example` as their catalog. The settings of [`EDITABLE`] can also be changed from the
+//! dashboard's Settings page, which in the WSL package writes them into `.env` and recreates the
+//! manager; see [`changes`].
 use crate::model::LABEL;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use serde_json::{Value, json};
-use std::{env, path::PathBuf};
+use std::{cell::RefCell, collections::BTreeMap, env, path::PathBuf};
+
+pub(crate) mod changes;
 
 pub struct Config {
     pub listen: String,
@@ -26,7 +32,11 @@ pub struct Config {
     /// Whether desktops may create user namespaces, which is how Chromium-based browsers and
     /// Electron applications sandbox their processes. See [`Config::seccomp_profile`].
     pub user_namespaces: bool,
+    /// The names `ALLOWED_HOSTS` adds to the hosts the manager answers.
     pub allowed_hosts: Vec<String>,
+    /// The name of the optional HTTPS service, which the manager answers as well. Compose passes
+    /// it on its own, so `ALLOWED_HOSTS` stays what `.env` says.
+    pub desktop_host: Option<String>,
     pub upload_limit: u64,
     /// The largest unpacked image archive an import accepts, in bytes.
     pub archive_limit: u64,
@@ -49,6 +59,10 @@ pub struct Config {
     /// What startup has to say about the settings it was given, such as a renamed variable that
     /// is still set; logged once the manager starts.
     pub notices: Vec<String>,
+    /// The environment the manager read its settings from, without `ADMIN_PASSWORD`, of which it
+    /// keeps only the hash. A change from the dashboard is checked against it, and the editable
+    /// settings' text in it is what the Settings page starts from.
+    pub environment: BTreeMap<String, String>,
 }
 /// A variable a release renamed. An installation keeps its `.env` across upgrades, so the old name
 /// keeps its meaning while the new one is not set, and startup says to rename it.
@@ -63,19 +77,69 @@ pub(crate) const RENAMED: &[Renamed] = &[Renamed {
     new: "ROOT_MCP_ENABLED",
     release: "0.7.0",
 }];
+/// The settings the dashboard's Settings page may change, through the WSL package. The rest, such
+/// as the sign-in, the root MCP and its token, and what only Compose reads, change only in `.env`,
+/// with `bilskirnir settings` in the package. `DASHBOARD_SETTINGS` in `wsl/bilskirnir`, the list
+/// the package accepts, is the same; the tests hold the two together.
+pub(crate) const EDITABLE: &[&str] = &[
+    "SECURE_COOKIE",
+    "ALLOWED_HOSTS",
+    "DESKTOP_IMAGE",
+    "DESKTOP_USER_NAMESPACES",
+    "WSL_GPU",
+    "NVIDIA_COMPUTE",
+    "GPU_ADAPTER",
+    "AUDIO_ENABLED",
+    "MICROPHONE_ENABLED",
+    "UPLOAD_MAX_MB",
+    "IMAGE_ARCHIVE_MAX_MB",
+    "TEMPLATES_URL",
+    "VOLUME_FILTER",
+    "UPDATE_CHECK",
+];
 /// The template list on the project's GitHub wiki.
 pub(crate) const TEMPLATES_URL: &str =
     "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json";
-fn flag(key: &str, default: bool) -> Result<bool> {
-    flag_value(key, env::var(key).ok().as_deref(), default)
+/// What [`Config::parse`] reads the environment for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reading {
+    /// The manager starting.
+    Startup,
+    /// A change from the dashboard, read against the environment the manager started with. Only
+    /// the editable settings change, so the password, which the manager keeps only as a hash, is
+    /// not read again.
+    Change,
 }
 fn flag_value(key: &str, value: Option<&str>, default: bool) -> Result<bool> {
     match value {
         Some("true" | "1") => Ok(true),
         Some("false" | "0") => Ok(false),
         None => Ok(default),
-        _ => bail!("{key}: must be true or false"),
+        _ => bail!("{key} must be true or false"),
     }
+}
+/// A number of MiB within `range`.
+fn mib_value(
+    key: &str,
+    value: Option<&str>,
+    default: u64,
+    range: std::ops::RangeInclusive<u64>,
+) -> Result<u64> {
+    let refused = || {
+        format!(
+            "{key} must be a whole number of MiB between {} and {}",
+            range.start(),
+            range.end()
+        )
+    };
+    let mib = match value {
+        None => default,
+        Some(text) => text.parse::<u64>().with_context(refused)?,
+    };
+    if !range.contains(&mib) {
+        bail!(refused());
+    }
+    Ok(mib)
 }
 /// The value of a renamed setting under either of its names. Empty counts as not set, since
 /// Compose passes the old name empty once `.env` no longer has it.
@@ -105,15 +169,120 @@ pub(crate) fn renamed_value(
         ),
     }
 }
+/// Whether `value` can stand as `KEY=value` in `.env` and come back unchanged: one line of
+/// printable ASCII, without the quotes, `$`, `#`, backslashes and backquotes that Compose's
+/// quoting and interpolation would read otherwise, and without the spaces at either end that it
+/// trims. `bilskirnir apply-settings` checks a value from the dashboard the same way.
+pub(crate) fn env_value(key: &str, value: &str) -> Result<()> {
+    if value.len() > 2048
+        || value.trim() != value
+        || !value
+            .bytes()
+            .all(|b| (b' '..=b'~').contains(&b) && !b"\"'`$#\\".contains(&b))
+    {
+        bail!(
+            "{key} must be one line of at most 2048 printable ASCII characters, without quotes, $, #, backslashes, backquotes or spaces at either end"
+        );
+    }
+    Ok(())
+}
+/// The names of a comma-separated list, as Host headers carry them.
+fn host_names(value: Option<&str>) -> Vec<String> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+/// What is wrong with a settings change from the dashboard: each setting's own problem, found
+/// with the others as they are, and one the changes have only together.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct Problems {
+    pub fields: BTreeMap<String, String>,
+    pub together: Option<String>,
+}
+impl Problems {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.fields.is_empty() && self.together.is_none()
+    }
+}
+impl std::fmt::Display for Problems {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let messages: Vec<&str> = self
+            .fields
+            .values()
+            .chain(&self.together)
+            .map(String::as_str)
+            .collect();
+        f.write_str(&messages.join("; "))
+    }
+}
 impl Config {
     pub fn load() -> Result<Self> {
-        let mode = env::var("AUTH_MODE").unwrap_or_else(|_| "password".into());
+        Self::parse(&|key| env::var(key).ok(), Reading::Startup)
+    }
+
+    /// The configuration the manager would start with once `changes` are in its environment,
+    /// read by the same code as at startup: a change it would refuse then is refused before
+    /// anything restarts.
+    pub(crate) fn with_changes(&self, changes: &BTreeMap<String, String>) -> Result<Self> {
+        let get = |key: &str| changes.get(key).or(self.environment.get(key)).cloned();
+        Self::parse(&get, Reading::Change)
+    }
+
+    /// Check a settings change from the dashboard: only [`EDITABLE`] settings, each a value
+    /// `.env` keeps as it is, which the manager accepts alone and together with the others.
+    pub(crate) fn check_changes(&self, changes: &BTreeMap<String, String>) -> Problems {
+        let mut problems = Problems::default();
+        for (key, value) in changes {
+            let problem = if !EDITABLE.contains(&key.as_str()) {
+                Some(format!(
+                    "{key} changes only in .env, with bilskirnir settings in the WSL package"
+                ))
+            } else if let Err(error) = env_value(key, value) {
+                Some(format!("{error:#}"))
+            } else {
+                let alone = BTreeMap::from([(key.clone(), value.clone())]);
+                self.with_changes(&alone)
+                    .err()
+                    .map(|error| format!("{error:#}"))
+            };
+            if let Some(problem) = problem {
+                problems.fields.insert(key.clone(), problem);
+            }
+        }
+        if problems.is_empty() {
+            problems.together = self
+                .with_changes(changes)
+                .err()
+                .map(|error| format!("{error:#}"));
+        }
+        problems
+    }
+
+    fn parse(get: &dyn Fn(&str) -> Option<String>, reading: Reading) -> Result<Self> {
+        let environment = RefCell::new(BTreeMap::new());
+        // Every value read is kept, so a change can be read against the same environment.
+        let var = |key: &str| {
+            let value = get(key);
+            if let Some(value) = &value
+                && key != "ADMIN_PASSWORD"
+            {
+                environment
+                    .borrow_mut()
+                    .insert(key.to_owned(), value.clone());
+            }
+            value
+        };
+        let flag = |key: &str, default: bool| flag_value(key, var(key).as_deref(), default);
+        let mode = var("AUTH_MODE").unwrap_or_else(|| "password".into());
         if mode != "password" && mode != "none" {
             bail!("AUTH_MODE must be password or none");
         }
         let auth = mode == "password";
-        let password_hash = if auth {
-            let password = env::var("ADMIN_PASSWORD").unwrap_or_default();
+        let password_hash = if auth && reading == Reading::Startup {
+            let password = var("ADMIN_PASSWORD").unwrap_or_default();
             if password.chars().count() < 8 || password.len() > 4096 {
                 bail!(
                     "ADMIN_PASSWORD must have at least 8 characters and at most 4096 bytes (or use AUTH_MODE=none)"
@@ -132,43 +301,38 @@ impl Config {
         };
         let audio = flag("AUDIO_ENABLED", true)?;
         let mut notices = Vec::new();
-        let get = |key: &str| env::var(key).ok();
-        let root_mcp = renamed_value(&get, &RENAMED[0], &mut notices)?;
+        let root_mcp = renamed_value(&var, &RENAMED[0], &mut notices)?;
         let root_mcp_enabled = flag_value("ROOT_MCP_ENABLED", root_mcp.as_deref(), false)?;
         let mcp_token = mcp_token(
             root_mcp_enabled,
-            env::var("MCP_AUTH_MODE").ok().as_deref(),
-            env::var("MCP_TOKEN").unwrap_or_default(),
+            var("MCP_AUTH_MODE").as_deref(),
+            var("MCP_TOKEN").unwrap_or_default(),
         )?;
-        let upload_mb = env::var("UPLOAD_MAX_MB")
-            .unwrap_or_else(|_| "1024".into())
-            .parse::<u64>()?;
-        if !(1..=65536).contains(&upload_mb) {
-            bail!("UPLOAD_MAX_MB must be between 1 and 65536");
-        }
-        let archive_mb = env::var("IMAGE_ARCHIVE_MAX_MB")
-            .unwrap_or_else(|_| "65536".into())
-            .parse::<u64>()?;
-        if !(1..=1_048_576).contains(&archive_mb) {
-            bail!("IMAGE_ARCHIVE_MAX_MB must be between 1 and 1048576");
-        }
-        let cfg = Self {
-            listen: env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into()),
-            data: env::var("DATA_DIR")
-                .unwrap_or_else(|_| "data".into())
+        let upload_mb = mib_value(
+            "UPLOAD_MAX_MB",
+            var("UPLOAD_MAX_MB").as_deref(),
+            1024,
+            1..=65536,
+        )?;
+        let archive_mb = mib_value(
+            "IMAGE_ARCHIVE_MAX_MB",
+            var("IMAGE_ARCHIVE_MAX_MB").as_deref(),
+            65536,
+            1..=1_048_576,
+        )?;
+        let mut cfg = Self {
+            listen: var("LISTEN_ADDR").unwrap_or_else(|| "0.0.0.0:8080".into()),
+            data: var("DATA_DIR").unwrap_or_else(|| "data".into()).into(),
+            web: var("WEB_DIR").unwrap_or_else(|| "web/dist".into()).into(),
+            docker_bin: var("DOCKER_BIN").unwrap_or_else(|| "docker".into()),
+            docker_socket: docker_socket(var("DOCKER_HOST").as_deref()),
+            manager: var("MANAGER_CONTAINER").filter(|s| !s.is_empty()),
+            base_image: var("DESKTOP_IMAGE")
+                .unwrap_or_else(|| crate::catalog::DEFAULT_IMAGE.into()),
+            desktop_context: var("DESKTOP_CONTEXT")
+                .unwrap_or_else(|| "desktop".into())
                 .into(),
-            web: env::var("WEB_DIR")
-                .unwrap_or_else(|_| "web/dist".into())
-                .into(),
-            docker_bin: env::var("DOCKER_BIN").unwrap_or_else(|_| "docker".into()),
-            docker_socket: docker_socket(env::var("DOCKER_HOST").ok().as_deref()),
-            manager: env::var("MANAGER_CONTAINER").ok().filter(|s| !s.is_empty()),
-            base_image: env::var("DESKTOP_IMAGE")
-                .unwrap_or_else(|_| crate::catalog::DEFAULT_IMAGE.into()),
-            desktop_context: env::var("DESKTOP_CONTEXT")
-                .unwrap_or_else(|_| "desktop".into())
-                .into(),
-            username: env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".into()),
+            username: var("ADMIN_USERNAME").unwrap_or_else(|| "admin".into()),
             auth,
             password_hash,
             secure_cookie: flag("SECURE_COOKIE", false)?,
@@ -176,25 +340,24 @@ impl Config {
             microphone: audio && flag("MICROPHONE_ENABLED", true)?,
             wsl_gpu: flag("WSL_GPU", true)?,
             cuda: flag("NVIDIA_COMPUTE", true)?,
-            adapter: env::var("GPU_ADAPTER").unwrap_or_default(),
+            adapter: var("GPU_ADAPTER").unwrap_or_default(),
             user_namespaces: flag("DESKTOP_USER_NAMESPACES", true)?,
-            allowed_hosts: env::var("ALLOWED_HOSTS")
-                .unwrap_or_default()
-                .split(',')
-                .map(|s| s.trim().to_ascii_lowercase())
-                .filter(|s| !s.is_empty())
-                .collect(),
+            allowed_hosts: host_names(var("ALLOWED_HOSTS").as_deref()),
+            desktop_host: host_names(var("DESKTOP_HOST").as_deref())
+                .into_iter()
+                .next(),
             upload_limit: upload_mb * 1024 * 1024,
             archive_limit: archive_mb * 1024 * 1024,
             root_mcp_enabled,
             mcp_token,
-            templates_url: templates_url(env::var("TEMPLATES_URL").ok().as_deref())?,
-            volume_filter: volume_filter(env::var("VOLUME_FILTER").ok().as_deref())?,
+            templates_url: templates_url(var("TEMPLATES_URL").as_deref())?,
+            volume_filter: volume_filter(var("VOLUME_FILTER").as_deref())?,
             update_check: flag("UPDATE_CHECK", true)?,
             update_dir: crate::releases::UPDATE_DIR.into(),
             notices,
+            environment: BTreeMap::new(),
         };
-        super::model::image_ref(&cfg.base_image)?;
+        super::model::image_ref(&cfg.base_image).context("DESKTOP_IMAGE")?;
         if let Some(profile) = cfg.seccomp_profile()
             && !profile.is_file()
         {
@@ -206,6 +369,7 @@ impl Config {
         if cfg.auth && (cfg.username.trim().is_empty() || cfg.username.len() > 256) {
             bail!("ADMIN_USERNAME must not be empty and must be at most 256 bytes");
         }
+        cfg.environment = environment.into_inner();
         Ok(cfg)
     }
 
@@ -224,10 +388,18 @@ impl Config {
 
     /// The settings of `.env.example` that Compose passes to the manager, in the order the settings
     /// page lists them, each with the value the manager runs with rather than the text it was
-    /// given: an empty `TEMPLATES_URL` shows the wiki's list, `ALLOWED_HOSTS` includes
-    /// `DESKTOP_HOST`. A secret says only whether it is set; its value never leaves the manager.
+    /// given: an empty `TEMPLATES_URL` shows the wiki's list. A secret says only whether it is
+    /// set; its value never leaves the manager. An [`EDITABLE`] setting also has the text its
+    /// environment gave, empty when none did, which the Settings page edits.
     pub(crate) fn shown(&self) -> Vec<Value> {
-        let value = |name: &str, value: Value| json!({"name": name, "value": value});
+        let value = |name: &str, value: Value| {
+            let editable = EDITABLE.contains(&name);
+            let mut entry = json!({"name": name, "value": value, "editable": editable});
+            if editable {
+                entry["text"] = json!(self.environment.get(name).cloned().unwrap_or_default());
+            }
+            entry
+        };
         let secret = |name: &str, set: bool| json!({"name": name, "secret": true, "set": set});
         let mib = |bytes: u64| json!(bytes / (1024 * 1024));
         let on = |enabled: bool, mode: &'static str| if enabled { mode } else { "none" };
@@ -237,6 +409,7 @@ impl Config {
             secret("ADMIN_PASSWORD", self.password_hash.is_some()),
             value("SECURE_COOKIE", json!(self.secure_cookie)),
             value("ALLOWED_HOSTS", json!(self.allowed_hosts.join(","))),
+            value("DESKTOP_HOST", json!(self.desktop_host)),
             value("MANAGER_CONTAINER", json!(self.manager)),
             value("ROOT_MCP_ENABLED", json!(self.root_mcp_enabled)),
             value(
@@ -268,6 +441,12 @@ impl Config {
             ),
             value("UPDATE_CHECK", json!(self.update_check)),
         ]
+    }
+
+    /// Whether the manager answers requests for this host name.
+    pub(crate) fn host_allowed(&self, name: &str) -> bool {
+        self.allowed_hosts.iter().any(|host| host == name)
+            || self.desktop_host.as_deref() == Some(name)
     }
 
     /// The scheme and host the templates page reads from, which the interface's content security

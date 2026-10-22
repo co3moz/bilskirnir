@@ -338,14 +338,34 @@ export type UpdateStatus = {
 
 /**
  * One setting of `GET configuration`, named as in `.env`, with the value the manager runs with. A
- * secret comes without its value, which never leaves the manager.
+ * secret comes without its value, which never leaves the manager. A setting the Settings page may
+ * change has `editable` and its `text`, the value as the manager's environment gave it.
  */
 export type ConfigVariable =
-  | { name: string; value: string | number | boolean | null; secret?: undefined }
+  | {
+      name: string
+      value: string | number | boolean | null
+      secret?: undefined
+      editable?: boolean
+      text?: string
+    }
   | { name: string; secret: true; set: boolean }
 
 /** `GET configuration`: the installation's settings, in the order the settings page lists them. */
-export type Configuration = { variables: ConfigVariable[] }
+export type Configuration = {
+  variables: ConfigVariable[]
+  /** Whether the WSL package takes settings changes from this page. */
+  editable?: boolean
+  /** The settings change that is running, which outlives the manager it restarts. */
+  job_id?: string | null
+}
+
+/** `POST configuration` with `dry_run`: what is wrong with a change, before anything restarts. */
+export type ConfigurationCheck = {
+  errors: Record<string, string>
+  error: string | null
+  running_jobs: number
+}
 
 export type SystemInfo = {
   connected: boolean

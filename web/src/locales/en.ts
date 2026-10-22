@@ -717,7 +717,7 @@ export const en = {
   "settings.updateTo": "Update to {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
-    "What the manager runs with, read from its environment when it started. Passwords and tokens are never shown. Change a setting in .env, with bilskirnir settings in the WSL package, then restart the manager.",
+    "What the manager runs with, read from its environment when it started. Passwords and tokens are never shown.",
   "settings.configurationFailed": "The configuration could not be read",
   "settings.secretSet": "Set, hidden",
   "settings.notSet": "Not set",
@@ -729,13 +729,51 @@ export const en = {
   "settings.section.content": "Templates and volumes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Other",
+  "settings.edit.readOnly":
+    "On this installation the settings change in .env: edit it and recreate the manager, such as with docker compose up -d. In the WSL package this page changes most of them.",
+  "settings.edit.editableHint":
+    "Change a setting with its control, then choose Apply and restart: the WSL package writes it to .env and recreates the manager. A setting marked CLI only changes with bilskirnir settings in a Bilskirnir terminal, then bilskirnir restart.",
+  "settings.edit.cliOnly": "CLI only",
+  "settings.edit.cliOnlyHint":
+    "Change it with bilskirnir settings in a Bilskirnir terminal, then run bilskirnir restart.",
+  "settings.edit.changed": "Changed",
+  "settings.edit.reset": "Undo the change to {name}",
+  "settings.edit.mib": "MiB",
+  "settings.edit.changes.one": "{count} setting changed",
+  "settings.edit.changes.other": "{count} settings changed",
+  "settings.edit.discard": "Discard",
+  "settings.edit.apply": "Apply and restart",
+  "settings.edit.fix": "Fix the marked settings first.",
+  "settings.edit.confirmTitle": "Apply the settings and restart the manager?",
+  "settings.edit.confirmText":
+    "The WSL package writes these settings to .env, keeps the previous file as .env.previous and recreates the manager. Desktops keep running; sign in again once the manager is back. If the new manager does not answer, the previous settings come back.",
+  "settings.edit.jobs.one": "{count} running job ends with the manager.",
+  "settings.edit.jobs.other": "{count} running jobs end with the manager.",
+  "settings.edit.confirmJobs": "Interrupt and restart",
+  "settings.edit.running": "Applying the settings",
+  "settings.edit.runningDetail":
+    "The manager restarts with the new settings, and the page reloads once it answers.",
+  "settings.edit.done": "The manager runs with the new settings.",
+  "settings.edit.failed":
+    "The settings change did not succeed; the manager runs with the previous settings.",
+  "settings.edit.problem.text":
+    "Use one line of printable ASCII, without quotes, $, #, backslashes, backquotes or spaces at either end.",
+  "settings.edit.problem.number": "Enter a whole number from {min} to {max}.",
+  "settings.choice.automatic": "Automatic",
+  "settings.choice.wiki": "Bilskirnir wiki",
+  "settings.choice.off": "Turned off",
+  "settings.choice.ownLabel": "Bilskirnir's own label",
+  "settings.choice.everyVolume": "Every volume",
+  "settings.choice.custom": "Other",
   "settings.about.AUTH_MODE":
     "password asks for the administrator's password; none turns sign-in off.",
   "settings.about.ADMIN_USERNAME": "The administrator's user name.",
   "settings.about.ADMIN_PASSWORD": "The administrator's password.",
   "settings.about.SECURE_COOKIE": "Sends the session cookie over HTTPS only.",
   "settings.about.ALLOWED_HOSTS":
-    "Host names the dashboard answers besides localhost and private addresses, DESKTOP_HOST included.",
+    "Host names the dashboard answers besides localhost, private addresses and DESKTOP_HOST, separated by commas.",
+  "settings.about.DESKTOP_HOST":
+    "The host name of the optional HTTPS service, which the dashboard answers as well.",
   "settings.about.ROOT_MCP_ENABLED":
     "Whether the root /mcp, which reaches every container, answers agents. MCP endpoints answer either way.",
   "settings.about.MCP_AUTH_MODE":

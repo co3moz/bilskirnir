@@ -2,6 +2,7 @@
 //! update job follows `bilskirnir update` through the folder the WSL package watches, also once
 //! the update has replaced the manager that started it.
 use super::*;
+use crate::package_requests::active;
 use axum::{body::Body, http::Request};
 use std::path::PathBuf;
 use tower::ServiceExt;
@@ -393,5 +394,5 @@ fn the_package_mounts_this_folder_and_its_units_write_these_names() {
         assert!(service.contains(&written), "{written}");
     }
     assert!(read("wsl/Dockerfile").contains(&format!("touch {folder}/{WATCHED}")));
-    assert!(read("wsl/bilskirnir").contains(&format!("\"$INSTALL/update/{WATCHED}\"")));
+    assert!(read("wsl/bilskirnir").contains(&format!("install_units \"$image\" {WATCHED} ")));
 }
