@@ -99,6 +99,10 @@ Choosing one shows its description, its hints such as read-only or destructive, 
 
 A desktop server runs in a process of its own for the inspector, as the desktop user, and stops when you disconnect or leave the page; agents keep their own connections to it. A server that locks something of its own, such as a browser profile, may not start a second time while an agent uses it.
 
+### When an agent asks for you
+
+Some steps are for a person only, such as a CAPTCHA, a second sign-in factor, a license window or a sign-in screen. An agent that reaches one asks with [`request_human`](MCP.md#ask-a-person-for-help) and waits. The request appears at the top of every dashboard page, with the container's name, what the agent needs, how long ago it asked and, when it came through an endpoint, that endpoint's name, and a notice in the corner says so on whichever page is open. **Open desktop** takes you to that desktop, where the same request sits in a strip under the toolbar. Do what is asked there, then press **Done**, or **Decline** when you will not or cannot, with a short reply for the agent if it helps, such as which account you signed in with. The agent goes on as soon as you answer. The first answer counts, from whichever page or tab gives it, and the request leaves every page. Requests are kept in the manager's memory only: restarting the manager ends them, and an agent that still needs you asks again.
+
 ## Save a container as a snapshot
 
 Use **Snapshot** after installing applications or changing settings in a container. Bilskirnir briefly pauses the container and uses Docker commit to save its filesystem changes as a new image layer.

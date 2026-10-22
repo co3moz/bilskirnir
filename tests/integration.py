@@ -459,7 +459,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 75
+    assert len(mcp("tools/list")["tools"]) == 76
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1310,6 +1310,38 @@ try:
         assert error.code == 404, error.code
     tool("stop_application",{"container_id":env_id,"application_id":http_server})
     print("PASS desktop MCP servers are reached through a scoped endpoint as the desktop user", flush=True)
+    # The dashboard hears of jobs and of agents that need a person on its event stream. An agent
+    # asks and waits, the answer through the HTTP API returns the waiting call, and a call that
+    # runs out of time returns pending with the id that keeps waiting.
+    events = client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/events"), timeout=60)
+    assert events.headers["Content-Type"] == "text/event-stream", events.headers
+    def next_event(kind, matches=lambda event: True):
+        while True:
+            line = events.readline().decode()
+            assert line, "the event stream ended"
+            if line.startswith("data: ") and (event := json.loads(line[6:]))["type"] == kind and matches(event):
+                return event
+    next_event("ready")
+    script = tool("exec_container", {"container_id": env_id, "script": "true"})["structuredContent"]["job_id"]
+    finished = next_event("job", lambda event: event["job"]["id"] == script and event["job"]["finished_at"])
+    assert finished["job"]["status"] == "completed" and finished["job"]["kind"] == "exec", finished
+    asked = {}
+    waiter = threading.Thread(target=lambda: asked.update(tool("request_human", {"container_id": env_id, "message": f"Acceptance {tag}: press Done", "wait_seconds": 60})["structuredContent"]))
+    waiter.start()
+    arrived = next_event("human-request")["request"]
+    assert arrived["container_id"] == env_id and [r["id"] for r in api("human-requests")["items"]] == [arrived["id"]], arrived
+    assert api(f"human-requests/{arrived['id']}/answer", {"answer": "done", "reply": "Pressed"})["status"] == "done"
+    waiter.join(30)
+    assert asked.get("status") == "done" and asked["reply"] == "Pressed" and asked["request_id"] == arrived["id"], asked
+    next_event("human-request-answered", lambda event: event["request"]["id"] == arrived["id"])
+    assert api("human-requests")["items"] == []
+    pending = tool("request_human", {"container_id": env_id, "message": f"Acceptance {tag}: decline", "wait_seconds": 0})["structuredContent"]
+    assert pending["status"] == "pending", pending
+    api(f"human-requests/{pending['request_id']}/answer", {"answer": "decline"})
+    resumed = tool("request_human", {"container_id": env_id, "request_id": pending["request_id"]})["structuredContent"]
+    assert resumed["status"] == "declined" and resumed["reply"] is None, resumed
+    events.close()
+    print("PASS the event stream carries jobs and an agent's request for a person, which the waiting call answers", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"

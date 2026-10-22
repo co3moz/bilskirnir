@@ -17,6 +17,7 @@ mod exec;
 mod files;
 mod folder_archive;
 mod gamepad;
+mod human;
 mod icons;
 mod identity;
 mod image_removal;
@@ -80,6 +81,8 @@ pub struct App {
     releases: releases::Releases,
     /// What the signed-in dashboards hear as it happens, such as a job that ended.
     events: events::Hub,
+    /// Agents' requests for a person, in memory only.
+    human: human::Requests,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -291,6 +294,8 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route("/api/events", get(events::stream))
+        .route("/api/human-requests", get(human::list))
+        .route("/api/human-requests/{id}/answer", post(human::answer))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)
@@ -427,6 +432,7 @@ async fn main() -> anyhow::Result<()> {
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
         events: events::Hub::default(),
+        human: human::Requests::default(),
     });
     usage::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
@@ -472,7 +478,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_graceful_shutdown(async move {
         let _ = tokio::signal::ctrl_c().await;
-        // Event streams never end on their own, and shutdown waits for every response.
+        // Event streams and waits for a person never end on their own, and shutdown waits for
+        // every response.
         closing.events.close();
     })
     .await?;

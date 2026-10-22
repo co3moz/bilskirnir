@@ -103,6 +103,18 @@ export const es: Messages = {
   "events.jobCompleted": "Completado: {action}",
   "events.jobFailed": "Falló: {action}",
   "events.jobInterrupted": "Interrumpido: {action}",
+
+  "human.title": "Agentes que esperan a una persona",
+  "human.asks": "Un agente en {name} necesita a una persona",
+  "human.openDesktop": "Abrir escritorio",
+  "human.done": "Hecho",
+  "human.decline": "Rechazar",
+  "human.replyPlaceholder": "Respuesta (opcional)",
+  "human.replyTo": "Responder al agente de {name}",
+  "human.via": "vía {endpoint}",
+  "human.justNow": "ahora mismo",
+  "human.minutesAgo": "hace {minutes} min",
+  "human.hoursAgo": "hace {hours} h",
   "containers.customDesktop": "Escritorio personalizado",
   "containers.new": "Nuevo contenedor",
   "containers.connect": "Conectar",
@@ -1071,7 +1083,8 @@ export const es: Messages = {
   "mcp.scope.view.description":
     "Capturas de pantalla, ventanas, árbol de accesibilidad, esperas, estado y registros.",
   "mcp.scope.input": "Entrada",
-  "mcp.scope.input.description": "Ratón, teclado, posición de ventanas y mando.",
+  "mcp.scope.input.description":
+    "Ratón, teclado, posición de ventanas, mando y pedir ayuda a una persona.",
   "mcp.scope.applications": "Aplicaciones",
   "mcp.scope.applications.description":
     "Abrir y cerrar aplicaciones, y leer sus registros y métricas.",

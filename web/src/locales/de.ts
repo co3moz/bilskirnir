@@ -105,6 +105,18 @@ export const de: Messages = {
   "events.jobCompleted": "Abgeschlossen: {action}",
   "events.jobFailed": "Fehlgeschlagen: {action}",
   "events.jobInterrupted": "Unterbrochen: {action}",
+
+  "human.title": "Agenten, die auf einen Menschen warten",
+  "human.asks": "Ein Agent in {name} braucht einen Menschen",
+  "human.openDesktop": "Desktop öffnen",
+  "human.done": "Erledigt",
+  "human.decline": "Ablehnen",
+  "human.replyPlaceholder": "Antwort (optional)",
+  "human.replyTo": "Antwort an den Agenten in {name}",
+  "human.via": "über {endpoint}",
+  "human.justNow": "gerade eben",
+  "human.minutesAgo": "vor {minutes} Min.",
+  "human.hoursAgo": "vor {hours} Std.",
   "containers.customDesktop": "Eigener Desktop",
   "containers.new": "Neuer Container",
   "containers.connect": "Verbinden",
@@ -1083,7 +1095,8 @@ export const de: Messages = {
   "mcp.scope.view.description":
     "Bildschirmfotos, Fenster, Barrierefreiheitsbaum, Wartebedingungen, Status und Protokolle.",
   "mcp.scope.input": "Eingabe",
-  "mcp.scope.input.description": "Maus, Tastatur, Fensterplatzierung und Gamepad.",
+  "mcp.scope.input.description":
+    "Maus, Tastatur, Fensterplatzierung, Gamepad und die Bitte um menschliche Hilfe.",
   "mcp.scope.applications": "Anwendungen",
   "mcp.scope.applications.description":
     "Anwendungen starten und beenden, ihre Protokolle und Messwerte lesen.",

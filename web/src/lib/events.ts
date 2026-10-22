@@ -1,4 +1,4 @@
-import type { DownloadProgress, Job } from "./types"
+import type { DownloadProgress, HumanRequest, Job } from "./types"
 
 /**
  * The manager's event stream, `/api/events`: what happens as it happens, so the dashboard hears
@@ -17,9 +17,18 @@ export type ServerEvent =
   | { type: "resync" }
   | { type: "job"; job: JobEvent }
   | { type: "job-progress"; id: string; progress: DownloadProgress | null }
+  /** An agent asks for a person, or someone answered it. */
+  | { type: "human-request" | "human-request-answered"; request: HumanRequest }
 
 /** Every event type the dashboard handles, which `docs/API.md` describes. */
-export const EVENT_TYPES = ["ready", "resync", "job", "job-progress"] as const
+export const EVENT_TYPES = [
+  "ready",
+  "resync",
+  "job",
+  "job-progress",
+  "human-request",
+  "human-request-answered",
+] as const
 
 /** An event's data, or `null` for one this page does not know, such as from a newer manager. */
 export function parseEvent(data: string): ServerEvent | null {

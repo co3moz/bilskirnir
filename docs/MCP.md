@@ -78,7 +78,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 75 tools:
+The server currently exposes 76 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -88,6 +88,7 @@ The server currently exposes 75 tools:
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
+| A person's help | `request_human` |
 | Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot`, `delete_image` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
@@ -230,6 +231,20 @@ Requests allow 1 to 100 actions, up to 10,000 typed characters, single waits or 
 
 `save_screenshot` takes the same options under `capture` and writes the JPEG inside the desktop at `path`, an absolute file path in the desktop home, a writable mounted volume or a compose folder, as the desktop user and under the upload destination rules. It returns the file's `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`. An existing file needs `replace=true`. `screenshot` stays a read-only tool; the image it returns reaches the agent, not necessarily the person.
 
+## Ask a person for help
+
+Some steps are for a person only: a CAPTCHA, a second sign-in factor, a license or consent window, a sign-in screen. Instead of trying to get past one, an agent calls `request_human` with `container_id` and a `message` saying what is needed and where, and waits:
+
+```json
+{"container_id": "CONTAINER_ID", "message": "Solve the CAPTCHA on the sign-in page in Chrome, then press Done."}
+```
+
+The dashboard shows the request on every page, with the container's name, the message, how long ago it came and **Open desktop**, and as a strip above that container's desktop view, with a toast when it arrives. Whoever is there answers **Done** or **Decline**, with an optional reply, and the call returns at once with `status` `done` or `declined`, the `reply` and the `request_id`. Take a screenshot before going on: the answer says what the person did, not what the screen shows now.
+
+MCP clients give up on a call that runs too long, often after a minute, so one call waits at most `wait_seconds`: 45 by default, up to 300, or 0 to return at once. Without an answer by then it returns `status` `pending` with the `request_id`; call `request_human` again with that `request_id` instead of `message` to keep waiting, as often as needed. Asking again with the same `message` while the request is pending joins it rather than asking twice, which helps an agent whose call was cut off before it learned the id. A client that gives up on a call does not withdraw the request: it stays on the dashboard until someone answers, and an answer can be read with its `request_id` for an hour. While a call waits, a client that sent a `progressToken` gets a progress notification every 10 seconds, which keeps a call open in clients that reset their timeout on progress.
+
+Requests live in the manager's memory, at most 64 waiting at once. A manager restart ends them, and waiting on one afterwards fails with an error that says so; ask again if a person is still needed. On an [MCP endpoint](#mcp-endpoints-for-one-agent) the tool comes with the `input` scope and asks for the endpoint's containers only, and the dashboard names the endpoint beside the request. The [HTTP API](API.md#requests-for-a-person) lists and answers requests too.
+
 ## Hand files to the user
 
 Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the same link with a folder's path downloads that folder as a `.tar.gz`. The MCP token does not authorize it, and an agent that fetches a file for itself uses `create_transfer` instead. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
@@ -320,7 +335,7 @@ A server is never published on a port and never reached over the desktop's netwo
 | Scope | Tools, bound to that container |
 | --- | --- |
 | `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `wait_for_condition` |
-| `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input` |
+| `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input`, and `request_human`, which changes nothing in the container but asks a person to take over its screen |
 | `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
 | `files_read` | `list_files`, `read_file`, `download_file` |
 | `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file` |

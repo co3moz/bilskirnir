@@ -1,5 +1,6 @@
 //! `GET /api/events`: what the manager tells a signed-in dashboard as it happens, so a page learns
-//! that a job was queued, started or ended without polling for it. Every event is one JSON object
+//! that a job was queued, started or ended, or that an agent asks for a person, without polling
+//! for it. Every event is one JSON object
 //! with a `type`, sent as the data of an unnamed server-sent event. Nothing is replayed: a page
 //! reads its lists when it connects, and after any gap in the stream it reads them again.
 use crate::{App, auth, model::Job};
@@ -107,6 +108,10 @@ impl Hub {
     /// End every stream, as the manager shuts down.
     pub(crate) fn close(&self) {
         self.closing.cancel();
+    }
+    /// Resolves once the manager shuts down, which also ends every wait for a person.
+    pub(crate) async fn closed(&self) {
+        self.closing.cancelled().await;
     }
 }
 

@@ -14,9 +14,11 @@ import {
   type ServerEvent,
 } from "./events"
 import { jobName, jobTarget } from "./format"
+import { HUMAN_REQUESTS, newRequests, withRequest } from "./human"
 import { t } from "./i18n"
 import { queryClient } from "./queries"
-import type { ContainerItem, ImageItem, Job, Session } from "./types"
+import { navigate, parseRoute } from "./route"
+import type { ContainerItem, HumanRequest, ImageItem, Job, Session } from "./types"
 
 /** Lists to read again, gathered for a moment so a burst of events reads each once. */
 let stale = new Set<string>()
@@ -74,6 +76,27 @@ function announce(
   else toast.error(t("events.jobFailed", { action }), options)
 }
 
+/** Requests for a person already told about. */
+const asked = new Set<string>()
+
+/** Tell that an agent asks for a person, unless that desktop is open here with its strip. */
+function announceRequest(request: HumanRequest) {
+  if (asked.has(request.id)) return
+  if (asked.size > 500) asked.clear()
+  asked.add(request.id)
+  const route = parseRoute(location.hash)
+  if (route.page === "desktop" && route.id === request.container_id) return
+  toast.warning(t("human.asks", { name: request.container_name }), {
+    id: `human-${request.id}`,
+    description: request.message,
+    duration: 15_000,
+    action: {
+      label: t("human.openDesktop"),
+      onClick: () => navigate({ page: "desktop", id: request.container_id }),
+    },
+  })
+}
+
 function handle(event: ServerEvent) {
   if (event.type === "job") {
     const { job } = event
@@ -93,6 +116,11 @@ function handle(event: ServerEvent) {
       ["jobs", event.id],
       (job) => job && { ...job, progress: event.progress }
     )
+  } else if (event.type === "human-request" || event.type === "human-request-answered") {
+    const { request } = event
+    queryClient.setQueryData<HumanRequest[]>(HUMAN_REQUESTS, (list) => withRequest(list, request))
+    if (event.type === "human-request") announceRequest(request)
+    else toast.dismiss(`human-${request.id}`)
   }
 }
 
@@ -106,32 +134,43 @@ async function sessionHolds() {
   return true
 }
 
+/** The lists the stream keeps current, which poll slowly while it is up. */
+const streamed = ["jobs", HUMAN_REQUESTS[0]]
+
 /**
  * Listen to the manager's event stream while signed in: lists are read again when a job changes,
- * and a toast tells when one ends. After a gap the page reads everything again, and the jobs that
- * ended meanwhile are told then, as are those the job list finds ended while the stream was down.
+ * and a toast tells when one ends or an agent asks for a person. After a gap the page reads
+ * everything again, and what happened meanwhile is told then, as is what the lists find while the
+ * stream is down and they poll.
  */
 export function useServerEvents() {
   React.useEffect(() => {
     let jobs: Job[] | undefined
+    let requests: HumanRequest[] | undefined
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
       if (event.type !== "updated" || event.action.type !== "success") return
       const key = event.query.queryKey
-      if (key.length !== 1 || key[0] !== "jobs") return
-      const read = event.query.state.data as Job[] | undefined
-      if (jobs && read) endedJobs(jobs, read).forEach(announce)
-      jobs = read
+      if (key.length !== 1) return
+      if (key[0] === "jobs") {
+        const read = event.query.state.data as Job[] | undefined
+        if (jobs && read) endedJobs(jobs, read).forEach(announce)
+        jobs = read
+      } else if (key[0] === HUMAN_REQUESTS[0]) {
+        const read = event.query.state.data as HumanRequest[] | undefined
+        if (requests && read) newRequests(requests, read).forEach(announceRequest)
+        requests = read
+      }
     })
     const stop = keepStream({
       open: openEventSource,
       onEvent: handle,
       // Events between the first read of the lists and the stream are not lost; after a gap,
       // nothing the page shows can be trusted.
-      onReady: (resumed) => (resumed ? void queryClient.invalidateQueries() : refresh(["jobs"])),
+      onReady: (resumed) => (resumed ? void queryClient.invalidateQueries() : refresh(streamed)),
       // Polling follows the stream: a list read now takes the pace that suits it.
       onLive: (live) => {
         setStreamLive(live)
-        refresh(["jobs"])
+        refresh(streamed)
       },
       check: sessionHolds,
     })

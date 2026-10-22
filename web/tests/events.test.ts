@@ -229,7 +229,7 @@ describe("keeping the stream", () => {
 })
 
 test("every event the page knows is one the manager sends and the API guide describes", () => {
-  const sources = ["../../src/events.rs"]
+  const sources = ["../../src/events.rs", "../../src/human.rs"]
     .map((path) => readFileSync(new URL(path, import.meta.url), "utf8"))
     .join("\n")
   const guide = readFileSync(new URL("../../docs/API.md", import.meta.url), "utf8")

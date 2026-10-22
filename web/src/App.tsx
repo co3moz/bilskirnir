@@ -4,6 +4,7 @@ import { toast } from "sonner"
 
 import { AppSidebar, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
+import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -91,6 +92,7 @@ function Shell({ page }: { page: Page }) {
             </Button>
           )}
         </SiteHeader>
+        <HumanRequestsBanner />
         <Content />
       </SidebarInset>
     </SidebarProvider>

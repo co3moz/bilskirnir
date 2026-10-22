@@ -1395,6 +1395,69 @@ fn a_tool_list_an_endpoint_cannot_carry_is_refused() {
     assert!(error.contains("larger than 1 MiB"), "{error}");
 }
 
+#[tokio::test]
+async fn request_human_comes_with_input_and_asks_only_for_the_endpoints_container() {
+    let app = mcp_app();
+    for (id, name) in [("c1", "Chrome dev"), ("c2", "Unity")] {
+        app.db.put(CONTAINERS, id, &container(id, name)).unwrap();
+    }
+    let viewer = endpoint("viewer", vec![grant("c1", "chrome-dev", &[Scope::View])]);
+    assert!(!names(&app, &viewer).contains(&"request_human".to_owned()));
+    let driver = endpoint(
+        "chrome-dev",
+        vec![grant("c1", "chrome-dev", &[Scope::Input])],
+    );
+    let entry = catalog(&app, &driver)
+        .into_iter()
+        .find(|entry| entry.tool.name == "request_human")
+        .expect("input offers request_human");
+    assert!(
+        !entry.tool.input_schema["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("container_id")
+    );
+    let annotations = entry.tool.annotations.unwrap();
+    assert_eq!(annotations.read_only_hint, Some(false));
+    assert_eq!(annotations.destructive_hint, Some(false));
+    app.db.put(ENDPOINTS, "chrome-dev", &driver).unwrap();
+    let session = open_session(&app, "/mcp/chrome-dev", ADMIN).await;
+    let ask = |arguments: Value| {
+        call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            Some(ADMIN),
+            Some(&session),
+            json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"request_human","arguments":arguments}}),
+        )
+    };
+    let (_, _, body) = ask(json!({"message": "Solve the CAPTCHA", "wait_seconds": 0})).await;
+    let asked = &body["result"]["structuredContent"];
+    assert_eq!(asked["status"], "pending", "{body}");
+    let pending = app.human.pending();
+    assert_eq!(pending[0].container_id, "c1");
+    assert_eq!(pending[0].endpoint.as_deref(), Some("chrome-dev"));
+    let (_, _, body) = ask(json!({"request_id": asked["request_id"], "wait_seconds": 0})).await;
+    assert_eq!(
+        body["result"]["structuredContent"]["status"], "pending",
+        "{body}"
+    );
+    // Another container's request is not this endpoint's to wait on, nor its container_id.
+    let other = app
+        .human
+        .ask(
+            &app.container("c2").unwrap(),
+            "Accept the license",
+            None,
+            &app.events,
+        )
+        .unwrap();
+    let (_, _, body) = ask(json!({"request_id": other.id, "wait_seconds": 0})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    let (_, _, body) = ask(json!({"container_id": "c2", "message": "Elsewhere"})).await;
+    assert!(body["error"].is_object(), "{body}");
+}
+
 #[test]
 fn a_relayed_result_carries_the_result_type_a_newer_client_requires() {
     // A server of the 2025 revisions answers without resultType; a 2026-07-28 client refuses a

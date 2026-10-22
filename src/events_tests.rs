@@ -11,7 +11,14 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 /// Every `type` the stream sends, which `docs/API.md` must describe.
-const TYPES: [&str; 4] = ["ready", "resync", "job", "job-progress"];
+const TYPES: [&str; 6] = [
+    "ready",
+    "resync",
+    "job",
+    "job-progress",
+    "human-request",
+    "human-request-answered",
+];
 
 async fn open(app: &Arc<App>, cookie: Option<&str>) -> Response {
     let mut request = Request::builder()
