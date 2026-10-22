@@ -43,6 +43,8 @@ COPY --chmod=0755 wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
 COPY --chmod=0644 wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
 COPY --chmod=0644 wsl/bilskirnir-update.path /etc/systemd/system/bilskirnir-update.path
 COPY --chmod=0644 wsl/bilskirnir-update.service /etc/systemd/system/bilskirnir-update.service
+COPY --chmod=0644 wsl/bilskirnir-settings.path /etc/systemd/system/bilskirnir-settings.path
+COPY --chmod=0644 wsl/bilskirnir-settings.service /etc/systemd/system/bilskirnir-settings.service
 COPY --chmod=0755 wsl/bilskirnir /usr/local/bin/bilskirnir
 COPY --chmod=0644 wsl/bilskirnir-completion.bash /usr/share/bash-completion/completions/bilskirnir
 # b8r is a short name for the command, with the same completion. Both are links by name, so the
@@ -63,11 +65,12 @@ RUN test -n "$BILSKIRNIR_VERSION" \
     && cd /opt/bilskirnir && sha256sum compose.yml deploy/Caddyfile .env.example > .shipped.sha256
 # The package level counts changes to the package's own files that the bilskirnir command relies on.
 # An update installs the command of a newer release only when its NEEDS_PACKAGE is at most this level,
-# so a change here that the command starts to rely on raises both. The update units rely on the
-# command, not the other way round, and an update installs them where they are missing. 'watched'
-# tells the manager that the path unit takes its update requests.
+# so a change here that the command starts to rely on raises both. The update and settings units
+# rely on the command, not the other way round, and an update installs them where they are
+# missing. 'watched' and 'settings-watched' tell the manager that the path units take its update
+# requests and its settings changes.
 RUN dockerd --validate --config-file /etc/docker/daemon.json \
-    && systemctl enable bilskirnir-firewall.service bilskirnir-update.path \
-    && touch /opt/bilskirnir/update/watched \
+    && systemctl enable bilskirnir-firewall.service bilskirnir-update.path bilskirnir-settings.path \
+    && touch /opt/bilskirnir/update/watched /opt/bilskirnir/update/settings-watched \
     && printf '1\n' > /usr/lib/wsl/package-level \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id

@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import { api, onUnauthorized } from "./api"
 import { closeDialog } from "./dialogs"
+import { streamLive } from "./events"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
 import { endpointApi } from "./mcp"
@@ -26,6 +27,12 @@ import type {
 
 const LIST_INTERVAL = 8000
 const JOB_INTERVAL = 2000
+/** How often a list the event stream keeps current is read anyway while the stream is up. */
+const STREAMED_INTERVAL = 60_000
+
+/** The pace of a list the event stream covers: slow while it is up, as before while it is down. */
+export const streamedInterval = (poll: boolean) =>
+  poll ? (streamLive() ? STREAMED_INTERVAL : LIST_INTERVAL) : false
 
 let signedOut = false
 // While an update replaces the manager, requests fail until the page reloads; see lib/update.ts.
@@ -112,7 +119,8 @@ export const useUpdate = () =>
 
 /**
  * The latest jobs. When one that makes a container or an image ends, the lists are read again
- * before the jobs are, so what it made takes the place of its pending entry without a gap.
+ * before the jobs are, so what it made takes the place of its pending entry without a gap. The
+ * event stream says when a job changes, so they are polled slowly while it is up.
  */
 export const useJobs = (poll = true) =>
   useQuery({
@@ -128,7 +136,7 @@ export const useJobs = (poll = true) =>
         )
       return jobs
     },
-    refetchInterval: poll ? LIST_INTERVAL : false,
+    refetchInterval: () => streamedInterval(poll),
   })
 
 /** One job with its log, followed until it finishes. */

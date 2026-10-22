@@ -14,7 +14,10 @@ services:
       AUTH_MODE: ${AUTH_MODE:-password}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      MCP_ENABLED: ${MCP_ENABLED:-false}
+      # MCP_ENABLED, its name before 0.7.0, still applies while ROOT_MCP_ENABLED is not set, and is
+      # passed on so the manager can say to rename it.
+      ROOT_MCP_ENABLED: ${ROOT_MCP_ENABLED:-${MCP_ENABLED:-false}}
+      MCP_ENABLED: ${MCP_ENABLED:-}
       MCP_TOKEN: ${MCP_TOKEN:-}
       MCP_AUTH_MODE: ${MCP_AUTH_MODE:-token}
       SECURE_COOKIE: ${SECURE_COOKIE:-false}
@@ -24,13 +27,24 @@ services:
       GPU_ADAPTER: ${GPU_ADAPTER:-}
       AUDIO_ENABLED: ${AUDIO_ENABLED:-true}
       MICROPHONE_ENABLED: ${MICROPHONE_ENABLED:-true}
+      INTERNET_ENABLED: ${INTERNET_ENABLED:-true}
+      SUDO_ENABLED: ${SUDO_ENABLED:-true}
+      GAMEPAD_ENABLED: ${GAMEPAD_ENABLED:-true}
+      GPU_DEFAULT: ${GPU_DEFAULT:-true}
+      INTERNET_DEFAULT: ${INTERNET_DEFAULT:-true}
+      SUDO_DEFAULT: ${SUDO_DEFAULT:-true}
+      AUDIO_DEFAULT: ${AUDIO_DEFAULT:-false}
+      MICROPHONE_DEFAULT: ${MICROPHONE_DEFAULT:-false}
+      GAMEPAD_DEFAULT: ${GAMEPAD_DEFAULT:-false}
       DESKTOP_USER_NAMESPACES: ${DESKTOP_USER_NAMESPACES:-true}
       UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-1024}
       IMAGE_ARCHIVE_MAX_MB: ${IMAGE_ARCHIVE_MAX_MB:-65536}
       TEMPLATES_URL: ${TEMPLATES_URL:-}
       VOLUME_FILTER: ${VOLUME_FILTER:-}
       UPDATE_CHECK: ${UPDATE_CHECK:-true}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost},${DESKTOP_HOST:-localhost}
+      # Apart, so the Settings page edits ALLOWED_HOSTS as .env has it; the manager answers both.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
+      DESKTOP_HOST: ${DESKTOP_HOST:-localhost}
       RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

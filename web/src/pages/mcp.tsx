@@ -87,7 +87,6 @@ const InspectContext = React.createContext<(target: InspectTarget) => void>(() =
 
 function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
   const inspect = React.useContext(InspectContext)
-  const enabled = useSettings().data?.mcp_enabled !== false
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -103,7 +102,6 @@ function EndpointMenu({ endpoint }: { endpoint: McpEndpoint }) {
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem
           tone="success"
-          disabled={!enabled}
           onSelect={() => inspect({ kind: "endpoint", name: endpoint.name })}
         >
           <RiPlayLine />
@@ -641,7 +639,7 @@ export function McpPage() {
     servers.data ?? [],
     endpoints.data ?? [],
     list,
-    settings?.mcp_enabled !== false
+    settings?.root_mcp_enabled !== false
   )
   // An inspector ends with the page, and the one before when another is opened.
   React.useEffect(() => () => client?.close(), [client])
@@ -667,12 +665,12 @@ export function McpPage() {
     <InspectContext.Provider value={inspect}>
       <PageBody>
         <DockerAlert />
-        {settings?.mcp_enabled === false && (
+        {settings?.root_mcp_enabled === false && (
           <div className="px-4 lg:px-6">
             <Alert>
               <RiInformationLine />
-              <AlertTitle>{t("mcp.off")}</AlertTitle>
-              <AlertDescription>{t("mcp.offHint")}</AlertDescription>
+              <AlertTitle>{t("mcp.rootOff")}</AlertTitle>
+              <AlertDescription>{t("mcp.rootOffHint")}</AlertDescription>
             </Alert>
           </div>
         )}
@@ -700,6 +698,7 @@ export function McpPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={settings?.root_mcp_enabled === false}
                   onClick={() => openDialog({ kind: "mcp-connect" })}
                 >
                   <RiShareForwardLine data-icon="inline-start" />

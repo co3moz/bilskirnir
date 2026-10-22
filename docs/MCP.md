@@ -8,14 +8,18 @@ The server uses the [official Rust MCP SDK](https://github.com/modelcontextproto
 
 ## Enable agent access
 
-MCP is off by default. Generate a separate random token, for example with `openssl rand -hex 32`, and set these values in the manager's Compose environment:
+The root MCP server at `/mcp`, which reaches every container, is off by default. Generate a separate random token, for example with `openssl rand -hex 32`, and set these values in the manager's Compose environment:
 
 ```yaml
-MCP_ENABLED: "true"
+ROOT_MCP_ENABLED: "true"
 MCP_TOKEN: "your-random-token"
 ```
 
-With the full installation manifests, set `MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable MCP, how agents authenticate and whether other devices may reach the endpoint; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
+With the full installation manifests, set `ROOT_MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable root agent access, how agents authenticate and whether other devices may reach the endpoint; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled root server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
+
+The setting was called `MCP_ENABLED` before 0.7.0. An `.env` that still has the old name keeps working while `ROOT_MCP_ENABLED` is missing, and the manager logs that it should be renamed; it refuses to start when the two names disagree. `bilskirnir update` renames it in the WSL package.
+
+[MCP endpoints](#mcp-endpoints-for-one-agent) made on the dashboard, or by an agent on `/mcp`, are not affected by this setting: each answers with its own token, so an agent can be given chosen containers while `/mcp` stays off.
 
 Configure your MCP client with:
 
@@ -50,7 +54,7 @@ For clients that use an `mcpServers` configuration:
 
 Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
-MCP must still be enabled. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent): give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`. Without `-e MCP_TOKEN` it sends the manager's own token, which opens every endpoint too; the dashboard's settings for Claude Desktop use that form, so no token is written into them.
+The root `/mcp` must be on (`ROOT_MCP_ENABLED`) for the bridge's default address. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent), which answers while `/mcp` is off too: give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`. Without `-e MCP_TOKEN` it sends the manager's own token, which opens every endpoint too; the dashboard's settings for Claude Desktop use that form, so no token is written into them.
 
 ### Broken responses from localhost on Windows
 
@@ -67,7 +71,7 @@ curl -si -X POST http://127.0.0.1:8080/mcp
 ## A useful first workflow
 
 1. Call `get_settings` and `list_images` to see the available images and defaults.
-2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
+2. Call `create_container` with a name and an image: a catalog image's `reference` or a saved image's `image_id`. A feature it leaves out, such as `gpu` or `internet`, gets the installation's default, which `get_settings` reports in `defaults`; one the installation switched off, such as `internet_enabled: false`, is refused. A catalog image that is not downloaded yet is pulled first, which can take several minutes; `pull_image` fetches it ahead of time.
 3. Poll `get_job` using the returned `job_id`. Once it completes, use the result's `container_id`.
 4. Call `exec_container` to install applications or prepare files. Use `root=true` explicitly when package installation needs root. For a common application or toolchain, such as Node.js, [build the image from a template](#build-from-a-template) first and create the container from that image instead.
 5. Call `launch_application` to start a graphical program, then `act_and_observe` or `screenshot` and `desktop_input` to use it. Inspect the returned screenshot before the next step.
@@ -78,7 +82,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 75 tools:
+The server currently exposes 76 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -88,6 +92,7 @@ The server currently exposes 75 tools:
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
+| A person's help | `request_human` |
 | Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot`, `delete_image` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
@@ -230,6 +235,20 @@ Requests allow 1 to 100 actions, up to 10,000 typed characters, single waits or 
 
 `save_screenshot` takes the same options under `capture` and writes the JPEG inside the desktop at `path`, an absolute file path in the desktop home, a writable mounted volume or a compose folder, as the desktop user and under the upload destination rules. It returns the file's `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`. An existing file needs `replace=true`. `screenshot` stays a read-only tool; the image it returns reaches the agent, not necessarily the person.
 
+## Ask a person for help
+
+Some steps are for a person only: a CAPTCHA, a second sign-in factor, a license or consent window, a sign-in screen. Instead of trying to get past one, an agent calls `request_human` with `container_id` and a `message` saying what is needed and where, and waits:
+
+```json
+{"container_id": "CONTAINER_ID", "message": "Solve the CAPTCHA on the sign-in page in Chrome, then press Done."}
+```
+
+The dashboard shows the request on every page, with the container's name, the message, how long ago it came and **Open desktop**, and as a strip above that container's desktop view, with a toast when it arrives. Whoever is there answers **Done** or **Decline**, with an optional reply, and the call returns at once with `status` `done` or `declined`, the `reply` and the `request_id`. Take a screenshot before going on: the answer says what the person did, not what the screen shows now.
+
+MCP clients give up on a call that runs too long, often after a minute, so one call waits at most `wait_seconds`: 45 by default, up to 300, or 0 to return at once. Without an answer by then it returns `status` `pending` with the `request_id`; call `request_human` again with that `request_id` instead of `message` to keep waiting, as often as needed. Asking again with the same `message` while the request is pending joins it rather than asking twice, which helps an agent whose call was cut off before it learned the id. A client that gives up on a call does not withdraw the request: it stays on the dashboard until someone answers, and an answer can be read with its `request_id` for an hour. While a call waits, a client that sent a `progressToken` gets a progress notification every 10 seconds, which keeps a call open in clients that reset their timeout on progress.
+
+Requests live in the manager's memory, at most 64 waiting at once. A manager restart ends them, and waiting on one afterwards fails with an error that says so; ask again if a person is still needed. On an [MCP endpoint](#mcp-endpoints-for-one-agent) the tool comes with the `input` scope and asks for the endpoint's containers only, and the dashboard names the endpoint beside the request. The [HTTP API](API.md#requests-for-a-person) lists and answers requests too.
+
 ## Hand files to the user
 
 Tool results reach the agent, not necessarily the person reading the conversation: many clients never show an image returned by a tool, and relaying a file as base64 through the model is expensive and bounded. The results of `save_screenshot`, `download_file` and `export_artifacts` therefore include `download_url`, a link such as `/api/containers/ID/files/download?path=/home/desktop/Downloads/clock.jpg`. It is relative to the manager's address, the same host and port that serves `/mcp`, so it is valid wherever the manager is reachable: from a browser on the same machine, over the LAN with the HTTPS address, or from another operating system. The link opens in the dashboard session and streams the file with the limits of the HTTP download route; the same link with a folder's path downloads that folder as a `.tar.gz`. The MCP token does not authorize it, and an agent that fetches a file for itself uses `create_transfer` instead. Share the link, or the saved path, instead of looking for `docker`, `wsl` or a host shell: the server instructions tell agents that containers are reachable only through the tools and the HTTP API, because the client may run on a different machine than the manager.
@@ -320,7 +339,7 @@ A server is never published on a port and never reached over the desktop's netwo
 | Scope | Tools, bound to that container |
 | --- | --- |
 | `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `wait_for_condition` |
-| `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input` |
+| `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input`, and `request_human`, which changes nothing in the container but asks a person to take over its screen |
 | `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
 | `files_read` | `list_files`, `read_file`, `download_file` |
 | `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file` |
@@ -336,7 +355,7 @@ Tools keep their names and lose `container_id`: an endpoint of one container is 
 
 Every new container gets an endpoint of its own unless `create_container` is given `"mcp_endpoint": false`: named after the container, with every scope but `commands`, all its desktop servers and no token yet. Deleting the container deletes it. Other endpoints are made with `create_mcp_endpoint`, or on the dashboard's MCP page, and outlive their containers: a deleted container only leaves their grants.
 
-An endpoint opens with its own bearer token or the administrator's MCP token. `create_mcp_endpoint` and `create_mcp_endpoint_token` return the token once; the manager keeps only its hash, and a new token ends the old one and its sessions. The endpoint's token opens nothing else: not `/mcp`, not the HTTP API, not the desktop ports. A request without a token that opens the endpoint, or the administrator's, is answered `401` whether or not the name exists, so endpoint names, which follow the containers' names, cannot be listed from the LAN; `404` for an unknown name is told to the administrator's token. The endpoints follow `MCP_ENABLED` and the Host and Origin checks of `/mcp`, and with `MCP_AUTH_MODE=none` they need no token either. A client connects to an endpoint as to `/mcp`:
+An endpoint opens with its own bearer token or the administrator's MCP token. `create_mcp_endpoint` and `create_mcp_endpoint_token` return the token once; the manager keeps only its hash, and a new token ends the old one and its sessions. The endpoint's token opens nothing else: not `/mcp`, not the HTTP API, not the desktop ports. A request without a token that opens the endpoint, or the administrator's, is answered `401` whether or not the name exists, so endpoint names, which follow the containers' names, cannot be listed from the LAN; `404` for an unknown name is told to the administrator's token. The endpoints answer whether or not the root `/mcp` is on (`ROOT_MCP_ENABLED`), with the Host and Origin checks of `/mcp`. The administrator's `MCP_TOKEN`, when one is set, opens them while `/mcp` is off too, and with `MCP_AUTH_MODE=none` they need no token at all while `/mcp` is on. With `/mcp` off, `MCP_AUTH_MODE=none` opens nothing: an endpoint then needs its own token. A client connects to an endpoint as to `/mcp`:
 
 ```bash
 claude mcp add --transport http chrome-dev http://localhost:8080/mcp/chrome-dev --header "Authorization: Bearer ENDPOINT_TOKEN"

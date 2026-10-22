@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "cn"
 
+import { HumanRequestStrip } from "@/components/human-requests"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -275,6 +276,7 @@ export function DesktopPage({ id }: { id: string }) {
           />
         </div>
       </header>
+      <HumanRequestStrip container={id} />
       <div
         {...drop.props}
         className={cn(

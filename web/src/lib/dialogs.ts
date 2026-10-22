@@ -56,6 +56,9 @@ export function openDialog(dialog: Dialog) {
   emit()
 }
 
+/** The dialog open now, if any. */
+export const openedDialog = () => (state.open ? state.dialog : null)
+
 export function closeDialog() {
   if (!state.open) return
   state = { ...state, open: false }

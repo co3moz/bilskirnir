@@ -196,7 +196,10 @@ impl App {
             label(name)
         ));
         job.trim_log();
-        self.db.put("job", id, &job)
+        self.db.put("job", id, &job)?;
+        // Lists name a job's current stage.
+        self.events.job(&job, None);
+        Ok(())
     }
 
     /// Log whole lines of a build's output, starting the stage a line begins before the line.

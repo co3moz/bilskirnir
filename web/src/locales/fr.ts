@@ -102,6 +102,22 @@ export const fr: Messages = {
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
   "jobs.viewContainers": "Voir les conteneurs",
+
+  "events.jobCompleted": "Terminé : {action}",
+  "events.jobFailed": "Échec : {action}",
+  "events.jobInterrupted": "Interrompu : {action}",
+
+  "human.title": "Agents qui attendent une personne",
+  "human.asks": "Un agent dans {name} a besoin d'une personne",
+  "human.openDesktop": "Ouvrir le bureau",
+  "human.done": "Terminé",
+  "human.decline": "Refuser",
+  "human.replyPlaceholder": "Réponse (facultative)",
+  "human.replyTo": "Répondre à l'agent de {name}",
+  "human.via": "via {endpoint}",
+  "human.justNow": "à l'instant",
+  "human.minutesAgo": "il y a {minutes} min",
+  "human.hoursAgo": "il y a {hours} h",
   "containers.customDesktop": "Bureau personnalisé",
   "containers.new": "Nouveau conteneur",
   "containers.connect": "Connecter",
@@ -786,33 +802,88 @@ export const fr: Messages = {
   "settings.updateTo": "Passer à la {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
-    "Les valeurs du manager, lues dans son environnement au démarrage. Les mots de passe et les jetons ne sont jamais affichés. Modifiez un paramètre dans .env, avec bilskirnir settings dans le paquet WSL, puis redémarrez le manager.",
+    "Les valeurs du gestionnaire, lues dans son environnement au démarrage. Les mots de passe et les jetons ne sont jamais affichés.",
   "settings.configurationFailed": "Impossible de lire la configuration",
   "settings.secretSet": "Défini, masqué",
   "settings.notSet": "Non défini",
   "settings.section.access": "Connexion et accès",
   "settings.section.mcp": "Accès des agents (MCP)",
   "settings.section.desktops": "Bureaux",
+  "settings.section.features": "Fonctions des conteneurs",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Limites",
   "settings.section.content": "Modèles et volumes",
   "settings.section.manager": "Manager",
   "settings.section.misc": "Autres",
+  "settings.edit.readOnly":
+    "Sur cette installation, les paramètres se changent dans .env : modifiez-le puis recréez le gestionnaire, par exemple avec docker compose up -d. Dans le paquet WSL, cette page en change la plupart.",
+  "settings.edit.editableHint":
+    "Changez un paramètre avec sa commande, puis choisissez Appliquer et redémarrer : le paquet WSL l'écrit dans .env et recrée le gestionnaire. Un paramètre marqué CLI uniquement se change avec bilskirnir settings dans un terminal Bilskirnir, puis bilskirnir restart.",
+  "settings.edit.cliOnly": "CLI uniquement",
+  "settings.edit.cliOnlyHint":
+    "Changez-le avec bilskirnir settings dans un terminal Bilskirnir, puis lancez bilskirnir restart.",
+  "settings.edit.changed": "Modifié",
+  "settings.edit.reset": "Annuler la modification de {name}",
+  "settings.edit.mib": "Mio",
+  "settings.edit.changes.one": "{count} paramètre modifié",
+  "settings.edit.changes.other": "{count} paramètres modifiés",
+  "settings.edit.discard": "Abandonner",
+  "settings.edit.apply": "Appliquer et redémarrer",
+  "settings.edit.fix": "Corrigez d'abord les paramètres signalés.",
+  "settings.edit.confirmTitle": "Appliquer les paramètres et redémarrer le gestionnaire ?",
+  "settings.edit.confirmText":
+    "Le paquet WSL écrit ces paramètres dans .env, garde le fichier précédent sous .env.previous et recrée le gestionnaire. Les bureaux continuent de tourner ; reconnectez-vous une fois le gestionnaire revenu. Si le nouveau gestionnaire ne répond pas, les paramètres précédents reviennent.",
+  "settings.edit.jobs.one": "{count} tâche en cours se termine avec le gestionnaire.",
+  "settings.edit.jobs.other": "{count} tâches en cours se terminent avec le gestionnaire.",
+  "settings.edit.confirmJobs": "Interrompre et redémarrer",
+  "settings.edit.running": "Application des paramètres",
+  "settings.edit.runningDetail":
+    "Le gestionnaire redémarre avec les nouveaux paramètres, et la page se recharge dès qu'il répond.",
+  "settings.edit.done": "Le gestionnaire tourne avec les nouveaux paramètres.",
+  "settings.edit.failed":
+    "La modification des paramètres n'a pas abouti ; le gestionnaire tourne avec les paramètres précédents.",
+  "settings.edit.problem.text":
+    "Utilisez une seule ligne d'ASCII imprimable, sans guillemets, $, #, barres obliques inverses, accents graves ni espaces au début ou à la fin.",
+  "settings.edit.problem.number": "Saisissez un nombre entier de {min} à {max}.",
+  "settings.choice.automatic": "Automatique",
+  "settings.choice.wiki": "Wiki de Bilskirnir",
+  "settings.choice.off": "Désactivé",
+  "settings.choice.ownLabel": "Le label de Bilskirnir",
+  "settings.choice.everyVolume": "Tous les volumes",
+  "settings.choice.custom": "Autre",
   "settings.about.AUTH_MODE":
     "password demande le mot de passe administrateur ; none désactive la connexion.",
   "settings.about.ADMIN_USERNAME": "Le nom d'utilisateur de l'administrateur.",
   "settings.about.ADMIN_PASSWORD": "Le mot de passe de l'administrateur.",
   "settings.about.SECURE_COOKIE": "N'envoie le cookie de session qu'en HTTPS.",
   "settings.about.ALLOWED_HOSTS":
-    "Noms d'hôte auxquels le tableau de bord répond en plus de localhost et des adresses privées, DESKTOP_HOST compris.",
-  "settings.about.MCP_ENABLED": "Si /mcp et les points de terminaison MCP répondent aux agents.",
-  "settings.about.MCP_AUTH_MODE": "token exige MCP_TOKEN sur /mcp ; none le laisse ouvert.",
-  "settings.about.MCP_TOKEN": "Le jeton bearer qu'exige /mcp.",
+    "Noms d'hôte auxquels le tableau de bord répond en plus de localhost, des adresses privées et de DESKTOP_HOST, séparés par des virgules.",
+  "settings.about.DESKTOP_HOST":
+    "Le nom d'hôte du service HTTPS facultatif, auquel le tableau de bord répond aussi.",
+  "settings.about.ROOT_MCP_ENABLED":
+    "Si le /mcp racine, qui atteint chaque conteneur, répond aux agents. Les points d'accès MCP répondent dans tous les cas.",
+  "settings.about.MCP_AUTH_MODE":
+    "token exige un jeton sur /mcp et les points d'accès MCP ; none laisse les deux ouverts.",
+  "settings.about.MCP_TOKEN":
+    "Le jeton bearer de l'administrateur : /mcp l'exige, et il ouvre chaque point d'accès MCP.",
   "settings.about.DESKTOP_IMAGE": "L'image que le formulaire de création choisit d'abord.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Permet aux navigateurs et aux applications Electron des bureaux de lancer leur sandbox.",
   "settings.about.AUDIO_ENABLED": "Le son du bureau dans le navigateur.",
   "settings.about.MICROPHONE_ENABLED": "Le micro du navigateur dans les bureaux ; requiert le son.",
+  "settings.about.INTERNET_ENABLED": "Si les conteneurs peuvent avoir accès à Internet.",
+  "settings.about.SUDO_ENABLED": "Si les conteneurs peuvent donner sudo à l'utilisateur du bureau.",
+  "settings.about.GAMEPAD_ENABLED": "Si les conteneurs peuvent avoir la manette virtuelle.",
+  "settings.about.GPU_DEFAULT": "Si un nouveau conteneur a accès au GPU, sauf demande contraire.",
+  "settings.about.INTERNET_DEFAULT":
+    "Si un nouveau conteneur a accès à Internet, sauf demande contraire.",
+  "settings.about.SUDO_DEFAULT":
+    "Si un nouveau conteneur donne sudo à l'utilisateur du bureau, sauf demande contraire.",
+  "settings.about.AUDIO_DEFAULT": "Si un nouveau conteneur a le son, sauf demande contraire.",
+  "settings.about.MICROPHONE_DEFAULT":
+    "Si un nouveau conteneur avec le son a le microphone, sauf demande contraire.",
+  "settings.about.GAMEPAD_DEFAULT":
+    "Si un nouveau conteneur a la manette virtuelle, sauf demande contraire.",
   "settings.about.WSL_GPU": "Accélération graphique par le GPU de WSL.",
   "settings.about.NVIDIA_COMPUTE": "CUDA via le NVIDIA Container Toolkit.",
   "settings.about.GPU_ADAPTER":
@@ -1086,9 +1157,9 @@ export const fr: Messages = {
   "import.docker.reference": "Référence de l'image",
   "import.archive.tab": "Fichier d'archive",
   "import.docker.tab": "Image Docker",
-  "mcp.off": "MCP est désactivé",
-  "mcp.offHint":
-    "Les points d'accès ne répondent aux agents que si MCP est activé pour cette installation (MCP_ENABLED). Vous pouvez tout de même les préparer ici.",
+  "mcp.rootOff": "Le /mcp racine est désactivé",
+  "mcp.rootOffHint":
+    "Les points d'accès ci-dessous répondent aux agents avec leurs propres jetons dans tous les cas. Le /mcp racine, qui atteint chaque conteneur, suit ROOT_MCP_ENABLED dans le .env de l'installation.",
   "mcp.view.endpoints": "Points d'accès",
   "mcp.view.servers": "Serveurs du bureau",
   "mcp.view.inspector": "Inspecteur",
@@ -1155,7 +1226,8 @@ export const fr: Messages = {
   "mcp.scope.view.description":
     "Captures d'écran, fenêtres, arbre d'accessibilité, attentes, état et journaux.",
   "mcp.scope.input": "Saisie",
-  "mcp.scope.input.description": "Souris, clavier, placement des fenêtres et manette.",
+  "mcp.scope.input.description":
+    "Souris, clavier, placement des fenêtres, manette et appel à l'aide d'une personne.",
   "mcp.scope.applications": "Applications",
   "mcp.scope.applications.description":
     "Lancer et arrêter des applications, lire leurs journaux et leurs mesures.",
@@ -1356,7 +1428,7 @@ export const fr: Messages = {
   "inspector.target.placeholder": "Choisir un serveur…",
   "inspector.target.bilskirnir": "Bilskirnir",
   "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
-  "inspector.target.mcpOff": "MCP est désactivé",
+  "inspector.target.rootOff": "/mcp racine désactivé",
   "inspector.target.stopped": "conteneur arrêté",
   "inspector.status.connecting": "Démarrage du serveur…",
   "inspector.status.initializing": "Connexion…",

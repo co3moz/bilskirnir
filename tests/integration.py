@@ -238,7 +238,7 @@ def job(response):
 
 
 def start_manager():
-    docker("run", "-d", "--name", manager, "--label", "bilskirnir.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "MCP_ENABLED=true", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
+    docker("run", "-d", "--name", manager, "--label", "bilskirnir.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "ROOT_MCP_ENABLED=true", "-e", "GPU_DEFAULT=false", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
     return int(docker("port", manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
 
 
@@ -464,7 +464,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
-    assert len(mcp("tools/list")["tools"]) == 75
+    assert len(mcp("tools/list")["tools"]) == 76
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -752,6 +752,11 @@ try:
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     # The templates page reads the wiki's list in the browser, so the policy allows that host.
     assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
+    # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
+    # the defaults; the others keep what the create form chose before them.
+    settings = api("settings")
+    assert settings["defaults"] == {"gpu": False, "internet": True, "sudo": True, "audio": False, "microphone": False, "gamepad": False}, settings
+    assert settings["root_mcp_enabled"] and settings["internet_enabled"] and settings["sudo_enabled"] and settings["gamepad_enabled"], settings
     with client.open(f"http://127.0.0.1:{port}/", timeout=30) as response:
         policy = response.headers["Content-Security-Policy"]
     assert "connect-src 'self' https://raw.githubusercontent.com;" in policy, policy
@@ -1315,6 +1320,38 @@ try:
         assert error.code == 404, error.code
     tool("stop_application",{"container_id":env_id,"application_id":http_server})
     print("PASS desktop MCP servers are reached through a scoped endpoint as the desktop user", flush=True)
+    # The dashboard hears of jobs and of agents that need a person on its event stream. An agent
+    # asks and waits, the answer through the HTTP API returns the waiting call, and a call that
+    # runs out of time returns pending with the id that keeps waiting.
+    events = client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/events"), timeout=60)
+    assert events.headers["Content-Type"] == "text/event-stream", events.headers
+    def next_event(kind, matches=lambda event: True):
+        while True:
+            line = events.readline().decode()
+            assert line, "the event stream ended"
+            if line.startswith("data: ") and (event := json.loads(line[6:]))["type"] == kind and matches(event):
+                return event
+    next_event("ready")
+    script = tool("exec_container", {"container_id": env_id, "script": "true"})["structuredContent"]["job_id"]
+    finished = next_event("job", lambda event: event["job"]["id"] == script and event["job"]["finished_at"])
+    assert finished["job"]["status"] == "completed" and finished["job"]["kind"] == "exec", finished
+    asked = {}
+    waiter = threading.Thread(target=lambda: asked.update(tool("request_human", {"container_id": env_id, "message": f"Acceptance {tag}: press Done", "wait_seconds": 60})["structuredContent"]))
+    waiter.start()
+    arrived = next_event("human-request")["request"]
+    assert arrived["container_id"] == env_id and [r["id"] for r in api("human-requests")["items"]] == [arrived["id"]], arrived
+    assert api(f"human-requests/{arrived['id']}/answer", {"answer": "done", "reply": "Pressed"})["status"] == "done"
+    waiter.join(30)
+    assert asked.get("status") == "done" and asked["reply"] == "Pressed" and asked["request_id"] == arrived["id"], asked
+    next_event("human-request-answered", lambda event: event["request"]["id"] == arrived["id"])
+    assert api("human-requests")["items"] == []
+    pending = tool("request_human", {"container_id": env_id, "message": f"Acceptance {tag}: decline", "wait_seconds": 0})["structuredContent"]
+    assert pending["status"] == "pending", pending
+    api(f"human-requests/{pending['request_id']}/answer", {"answer": "decline"})
+    resumed = tool("request_human", {"container_id": env_id, "request_id": pending["request_id"]})["structuredContent"]
+    assert resumed["status"] == "declined" and resumed["reply"] is None, resumed
+    events.close()
+    print("PASS the event stream carries jobs and an agent's request for a person, which the waiting call answers", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"

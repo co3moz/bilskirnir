@@ -174,8 +174,10 @@ test("the picker offers what can be opened, and says why the rest cannot", () =>
   assert.equal(first[0].key, "server:c1:alpha")
   assert.deepEqual(first[0].target, { kind: "server", container: "c1", name: "alpha" })
 
+  // With the root /mcp off, only it is unavailable: an endpoint answers either way.
   const off = targetGroups([], [{ name: "a", path: "/mcp/a" } as McpEndpoint], [], false)
-  assert.ok(off[0].choices[0].unavailable && off[1].choices[0].unavailable)
+  assert.ok(off[0].choices[0].unavailable)
+  assert.equal(off[1].choices[0].unavailable, undefined)
   assert.equal(targetKey({ kind: "endpoint", name: "a" }), "endpoint:a")
 })
 

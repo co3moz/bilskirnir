@@ -88,7 +88,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
     # around some values. The secrets in the same file stay inside the distribution.
     function Get-Settings {
         $settings = @{}
-        $lines = & wsl.exe -d $Distro -- sh -c "grep -E '^(PORT|BIND_ADDRESS|AUTH_MODE|MCP_ENABLED|MCP_AUTH_MODE)=' /opt/bilskirnir/.env 2>/dev/null"
+        $lines = & wsl.exe -d $Distro -- sh -c "grep -E '^(PORT|BIND_ADDRESS|AUTH_MODE|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' /opt/bilskirnir/.env 2>/dev/null"
         foreach ($line in $lines) {
             if (($line -replace "`0", "") -match '^([A-Z_]+)=(.*)$') { $settings[$Matches[1]] = $Matches[2].Trim('"', "'", " ") }
         }
@@ -317,8 +317,16 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         if ($settings["AUTH_MODE"] -eq "none") {
             Write-Warning "The dashboard has no password (AUTH_MODE=none), so any device that reaches it controls every container."
         }
-        if ($settings["MCP_ENABLED"] -eq "true" -and $settings["MCP_AUTH_MODE"] -eq "none") {
-            Write-Warning "Agents need no token (MCP_AUTH_MODE=none), so any device that reaches the agent endpoint controls every container."
+        # ROOT_MCP_ENABLED was called MCP_ENABLED before 0.7.0, and the manager still reads the old name
+        # while the new one is missing. MCP endpoints made on the dashboard answer either way.
+        $rootMcp = $settings["ROOT_MCP_ENABLED"]
+        if (-not $rootMcp) { $rootMcp = $settings["MCP_ENABLED"] }
+        if ($settings["MCP_AUTH_MODE"] -eq "none") {
+            if ($rootMcp -eq "true") {
+                Write-Warning "Agents need no token (MCP_AUTH_MODE=none), so any device that reaches the agent endpoint controls every container."
+            } else {
+                Write-Warning "MCP endpoints need no token (MCP_AUTH_MODE=none), so any device that reaches one controls the containers it grants."
+            }
         }
         $mode = Get-NetworkingMode
         $address = ""
