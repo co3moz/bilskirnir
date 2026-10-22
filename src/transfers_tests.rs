@@ -569,3 +569,52 @@ async fn a_link_moves_a_file_in_and_out_without_a_session() {
     assert_eq!(body, b"hello");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[tokio::test]
+async fn a_used_link_is_recorded_for_the_caller_that_issued_it() {
+    let app = mcp_app();
+    container(&app);
+    let issuer = activity::Caller {
+        endpoint: None,
+        credential: activity::Credential::McpToken,
+        client: Some("agent 1.0".into()),
+    };
+    // As create_transfer issues it, inside the tool call of its caller.
+    let token = activity::as_caller(issuer, async {
+        app.transfers.issue(download("relative"), Instant::now())
+    })
+    .await
+    .unwrap();
+    let (status, _, body) = send(
+        &app,
+        request("GET", &format!("{ROUTE}{token}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    // The route's answer passes through the log unchanged.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let message = error(&body);
+    let rows = activity::recorded(&app, 1).await;
+    let row = &rows[0];
+    assert_eq!(
+        (row.source.as_str(), row.tool.as_str()),
+        ("transfer", "container_download")
+    );
+    assert_eq!(
+        (row.credential.as_str(), row.client.as_deref()),
+        ("link", Some("agent 1.0"))
+    );
+    assert_eq!(row.endpoint, None);
+    assert_eq!(
+        (row.container_id.as_deref(), row.container_name.as_deref()),
+        (Some("e"), Some("Work"))
+    );
+    assert_eq!((row.kind.as_str(), row.outcome.as_str()), ("read", "error"));
+    assert_eq!(row.error.as_deref(), Some(message.as_str()));
+    assert_eq!(
+        row.arguments,
+        json!({"container_id": "e", "path": "relative"})
+    );
+    assert!(!serde_json::to_string(row).unwrap().contains(&token));
+}

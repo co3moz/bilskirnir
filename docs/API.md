@@ -132,6 +132,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, and agents' requests for a person, while the session lasts. |
 | GET | `/api/human-requests` | The [requests for a person](#requests-for-a-person) that wait for an answer, oldest first, in `items`. |
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
+| GET | `/api/activity` | The [agent activity](#agent-activity) log: MCP tool calls and used transfer links, newest first, with filters and a cursor. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
 
 The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/containers/{id}/audio/{direction}`, where direction is `output` or `input`. They use the browser session and require a matching Origin. VNC uses the binary subprotocol. Most automation clients can use screenshots and `/input` instead of implementing a VNC viewer.
@@ -518,7 +519,7 @@ The request runs the route the link stands for, with that route's limits, locks,
 curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
 ```
 
-The token replaces the cookie and the `X-Bilskirnir-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing.
+The token replaces the cookie and the `X-Bilskirnir-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing. A link that is used is recorded in the [agent activity](#agent-activity) log under the caller whose `create_transfer` issued it.
 
 ## Desktop MCP servers and endpoints
 
@@ -567,6 +568,45 @@ Every later frame from the browser is one JSON-RPC message, or a batch, on one l
 | `closed` | The `reason` the server stopped, after which the socket closes |
 
 At most eight inspectors are open at once. A line of output longer than 16 MiB ends the server, as it ends an endpoint's connection.
+
+## Agent activity
+
+`GET /api/activity` lists what agents did, newest first: every `tools/call` on `/mcp` and on the [MCP endpoints](#desktop-mcp-servers-and-endpoints), and every [transfer link](#transfer-links) that is used. [The MCP guide](MCP.md#agent-activity) says what is recorded and what is masked. The answer is `{"items": [...], "next": 1234, "kept": 10000}`: pass `next` back as `before` for the following page, until it is `null`. `kept` is how many calls the manager keeps. Every query parameter is optional:
+
+| Parameter | Lists |
+| --- | --- |
+| `container` | Calls on the container with this ID, also after it was deleted. |
+| `endpoint` | Calls on the endpoint of this name. |
+| `caller` | `administrator` for calls on `/mcp`, `endpoint` for calls on any endpoint. |
+| `tool` | Calls of a tool, or of a desktop server, whose name contains this text in any case. |
+| `kind` | `read`, `change` or `destructive`, several separated by commas. |
+| `outcome` | `ok`, `error` or `refused`, several separated by commas. |
+| `before` | Calls older than this ID, the `next` of the page before. |
+| `limit` | At most this many calls, 1 to 200; 50 by default. |
+
+A value no call could have, such as `kind=delete`, answers 400. A call is listed as:
+
+```json
+{"id": 1234, "at": 1760900000000, "endpoint": "chrome-dev", "credential": "endpoint_token",
+ "client": "claude-code 2.1.0", "source": "tool", "tool": "write_file", "server": null,
+ "container_id": "...", "container_name": "Chrome dev", "kind": "destructive",
+ "arguments": {"path": "/home/desktop/notes.txt", "data": {"$masked": "string", "length": 1200}},
+ "summary": "/home/desktop/notes.txt", "outcome": "ok", "error": null, "duration_ms": 180, "job_id": null}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `at`, `duration_ms` | When the call began, in Unix milliseconds, and how long it took to answer. A download through a transfer link streams on after its answer began. |
+| `endpoint` | The endpoint's name, `null` for `/mcp`. |
+| `credential` | `endpoint_token`, `mcp_token`, `none` with `MCP_AUTH_MODE=none`, `inspector` for the dashboard's [MCP inspector](#the-mcp-inspector), or `link` for a transfer link, which names the caller whose tool call issued it. |
+| `client` | The name and version the MCP client gives itself: a session's client, or any request of the `2026-07-28` revision. `null` for a client of an older revision on `/mcp`, which keeps no session. |
+| `source`, `tool`, `server` | `tool` for a Bilskirnir tool; `server` for a desktop server's tool, with `tool` its own name and `server` the server's; `transfer` for a link, with `tool` its operation. |
+| `container_id`, `container_name` | The container the call worked on, with its name when the call began. |
+| `kind` | `read`, `change` or `destructive`, from the tool's annotations. |
+| `arguments` | The arguments as [masked](MCP.md#agent-activity): a value kept only by its size is `{"$masked": "string", "length": 12}`, `{"$masked": "array", "items": 2}`, `{"$masked": "object", "keys": 3}`, `{"$masked": "number"}` or `{"$masked": "boolean"}`; a text cut short is `{"$truncated": "the start", "length": 9000}`; `"$more"` counts the arguments past the first 64. |
+| `summary` | The arguments that say most about the call, on one line, such as a script's first line or a path. |
+| `outcome`, `error` | `ok`; `error` when the tool reported one, with the start of its text in `error`; `refused` when no tool ran, such as for an unknown tool or arguments its schema does not take. |
+| `job_id` | The job the call started, for [`/api/jobs/{job_id}`](#endpoints). |
 
 ## Desktop ports
 

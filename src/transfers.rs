@@ -13,9 +13,10 @@
 //! administrator credential into curl commands and shell history, where a leak reaches every
 //! route for as long as the token is configured. A leaked link is good for one request of one
 //! operation, for minutes. Links are issued only over MCP, so with MCP disabled the route
-//! answers nothing.
+//! answers nothing. A link that is used is recorded in the agent activity log, under the caller
+//! whose tool call issued it.
 use crate::{
-    App, apps, archives,
+    App, activity, apps, archives,
     auth::{self, Session},
     error::{Error, Result},
     files,
@@ -28,7 +29,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -60,7 +61,7 @@ pub(crate) const OPERATIONS: [&str; 9] = [
 ///
 /// Each variant runs one existing handler. A route added later becomes transferable with a
 /// variant here, its name in [`OPERATIONS`] and its arms in [`run`] and [`Operation::check`].
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Operation {
     /// `POST /api/containers/{id}/files`: into the desktop home, a writable volume or a compose folder.
@@ -127,6 +128,27 @@ impl Operation {
         }
     }
 
+    /// The arguments the link was issued with, for the agent activity log.
+    fn arguments(&self) -> serde_json::Map<String, Value> {
+        let mut arguments = match serde_json::to_value(self) {
+            Ok(Value::Object(arguments)) => arguments,
+            _ => Default::default(),
+        };
+        arguments.remove("operation");
+        arguments
+    }
+
+    /// How much the operation changes: a download reads, an upload adds and one that replaces a
+    /// file destroys what was there.
+    fn kind(&self) -> activity::Kind {
+        match self {
+            Self::ContainerUpload { replace: true, .. }
+            | Self::VolumeUpload { replace: true, .. } => activity::Kind::Destructive,
+            _ if self.sends() => activity::Kind::Change,
+            _ => activity::Kind::Read,
+        }
+    }
+
     /// Refuse arguments the request would refuse, as far as that is known without Docker, so no
     /// link is issued that cannot work. The request checks everything again.
     fn check(&self, app: &App) -> Result<()> {
@@ -174,6 +196,8 @@ impl Operation {
 struct Link {
     operation: Operation,
     expires: Instant,
+    /// Whose tool call issued it, so the agent activity log names who used it.
+    issuer: Option<activity::Caller>,
 }
 
 /// The links issued and not used yet, in memory only: a restart ends them all.
@@ -203,16 +227,28 @@ impl Links {
             Link {
                 operation,
                 expires: now + LIFETIME,
+                issuer: activity::current_caller(),
             },
         );
         Ok(token)
     }
 
-    /// The operation a link authorizes. It is removed whether or not it has expired, so the
-    /// first request that presents the token spends it.
+    /// The operation a link authorizes, as [`Links::take_issued`] spends it.
+    #[cfg(test)]
     pub(crate) fn take(&self, token: &str, now: Instant) -> Option<Operation> {
+        self.take_issued(token, now).map(|(operation, _)| operation)
+    }
+
+    /// The operation a link authorizes, with the caller whose tool call issued it. The link is
+    /// removed whether or not it has expired, so the first request that presents the token spends
+    /// it.
+    fn take_issued(
+        &self,
+        token: &str,
+        now: Instant,
+    ) -> Option<(Operation, Option<activity::Caller>)> {
         let link = self.0.lock().unwrap().remove(token)?;
-        (link.expires > now).then_some(link.operation)
+        (link.expires > now).then_some((link.operation, link.issuer))
     }
 }
 
@@ -258,7 +294,7 @@ pub async fn transfer(
         )
         .into_response();
     }
-    let Some(operation) = app.transfers.take(&token, Instant::now()) else {
+    let Some((operation, issuer)) = app.transfers.take_issued(&token, Instant::now()) else {
         return Error(
             StatusCode::NOT_FOUND,
             "This transfer link is unknown, used or expired. Ask create_transfer for a new one."
@@ -266,10 +302,19 @@ pub async fn transfer(
         )
         .into_response();
     };
-    match run(app, operation, method, &headers, query, body).await {
+    // A link that is used is an agent's action, recorded as its tool calls are.
+    let call = activity::Call::transfer(
+        &app,
+        issuer,
+        operation.name(),
+        operation.arguments(),
+        operation.kind(),
+    );
+    let response = match run(app.clone(), operation, method, &headers, query, body).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
-    }
+    };
+    call.finish_transfer(&app, response).await
 }
 
 async fn run(

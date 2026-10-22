@@ -363,6 +363,32 @@ claude mcp add --transport http chrome-dev http://localhost:8080/mcp/chrome-dev 
 
 The share button beside an endpoint's URL on the dashboard shows the same for the other common clients. The token is shown only when it is created, so the dialog asks for it and fills it in; it stays in the page.
 
+## Agent activity
+
+The manager records every tool call an agent makes, on `/mcp` and on every endpoint, and every transfer link that is used. The dashboard's **Activity** page shows them, and `GET /api/activity` lists them, as [the API guide](API.md#agent-activity) describes. A call is recorded when it answers, with:
+
+- the time it began and how long it took;
+- the caller: `/mcp` or the endpoint, the credential it showed (the endpoint's token, the MCP token, none with `MCP_AUTH_MODE=none`, the dashboard's inspector, or a transfer link, which names the caller whose `create_transfer` issued it), and the name and version its client gives itself;
+- the tool, and for a desktop server's tool the server;
+- the container it worked on, with the name it had then;
+- its arguments, masked as below, and a one-line summary of them;
+- how it ended: a result, an error the tool reported with the first 300 characters of its text, or a refusal before any tool ran, such as an unknown tool or an argument its schema does not take; and the job it started.
+
+A result is never kept beyond that error text, so a token a tool returns, such as `create_mcp_endpoint_token`'s, never reaches the log. Each call also writes one line to the manager's own log (`docker compose logs manager`, or `bilskirnir logs` in the WSL package) with its caller, tool, container, kind, outcome and duration, and none of its arguments.
+
+A call's kind comes from its tool's annotations: `read` for `readOnlyHint`, `change` for a tool that says it is not destructive, and `destructive` otherwise, as MCP assumes of a tool that says nothing. Bilskirnir marks the mouse, keyboard and window tools destructive, since input can change or delete an application's data, so a session of clicks and keys shows as destructive calls. A desktop server's annotations come from inside the desktop: they can mark its tool destructive but never a read, so a server cannot pass its calls off as reads.
+
+What is kept of the arguments:
+
+- Every Bilskirnir tool has a list of the arguments whose values are kept: paths, names, IDs, options and limits, a text cut at 256 characters. `exec_container`'s `script`, the first thing to look at, is kept up to its first 4,096 characters, as is `build_image`'s.
+- Every other argument is kept as its type and size only. That covers what `write_file` writes; the base64 of `upload_file`, `inject_audio` and an image icon; compose values in `create_container` and the composes of `build_image` and `set_image_compose`; the arguments, environment and headers of `register_mcp_server` and the environment of `launch_application`; text typed with `desktop_input` or `act_and_observe`, and every key of a single character they press, since a password can be typed a key at a time; and what `terminal_input` types, since a terminal is where a password prompt waits. An argument a later release adds is kept the same way until its tool's list names it.
+- A desktop server's tool is opaque to Bilskirnir, so its arguments keep their names and sizes and never their values, whatever the tool is called.
+- An error text loses every masked value it quotes before it is kept.
+
+The newest 10,000 calls are kept in the manager's database, so they survive a restart, and older ones are removed as new ones arrive. Recording never fails or holds up a call: the row is written after the call has answered, and one that cannot be written is logged and lost.
+
+Not recorded are other MCP messages, such as `tools/list`; requests through a container's [proxied ports](#reach-a-server-inside-the-desktop), which carry a service's own traffic rather than single actions, so audit a server reached that way by its own means; a transfer link that is unknown, spent or expired, since nothing ran; the dashboard's own HTTP requests, which a person makes; and the desktop servers the MCP inspector starts in a process of its own. The inspector's calls to `/mcp` and to an endpoint go through the same handlers and are recorded with `inspector` as their credential, apart from any agent's.
+
 ## Reach a server inside the desktop
 
 For an MCP server, prefer a declaration and an endpoint, described above: they need no port and work with servers that listen on `127.0.0.1` only. A program in the desktop may serve its own API: an MCP server of the Unity editor, a test runner endpoint, a debug server. Its ports are not published, but the manager forwards HTTP and WebSocket requests to the ports a container's `ports` setting lists, at `/api/containers/CONTAINER_ID/ports/PORT/` followed by the service's own path. Set `ports` with `create_container` or `update_container`, such as `"ports": [8090]`; it is empty by default, and a change applies without restarting the desktop. The server must listen on the desktop's network, such as on `0.0.0.0`, not on `127.0.0.1` only, which the manager cannot reach.

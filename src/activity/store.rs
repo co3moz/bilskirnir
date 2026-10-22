@@ -1,0 +1,245 @@
+//! The activity table in the manager's SQLite: one row a call, the newest [`KEPT`] kept, and the
+//! filtered, newest-first pages `GET /api/activity` reads.
+use super::Entry;
+use crate::{
+    db::Db,
+    error::{Error, Result},
+};
+use axum::http::StatusCode;
+use rusqlite::{Connection, Row, params, params_from_iter, types::Value as Sql};
+use serde::Deserialize;
+
+/// How many calls are kept, newest first.
+pub(super) const KEPT: usize = 10_000;
+/// Rows beyond [`KEPT`] are removed every this many calls, not on every one.
+const PRUNE_EVERY: i64 = 64;
+/// The calls a page holds by default, and at most.
+const PAGE: usize = 50;
+const PAGE_LIMIT: usize = 200;
+
+/// Make the table when the database opens, and drop what is beyond [`KEPT`].
+pub(crate) fn create_table(conn: &Connection) -> rusqlite::Result<()> {
+    // AUTOINCREMENT: an ID is never given again after older rows are pruned, so a page's cursor
+    // keeps its place.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS activity(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at INTEGER NOT NULL,
+            endpoint TEXT,
+            credential TEXT NOT NULL,
+            client TEXT,
+            source TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            server TEXT,
+            container_id TEXT,
+            container_name TEXT,
+            kind TEXT NOT NULL,
+            arguments TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            error TEXT,
+            duration_ms INTEGER NOT NULL,
+            job_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS activity_container ON activity(container_id, id);
+        CREATE INDEX IF NOT EXISTS activity_endpoint ON activity(endpoint, id);",
+    )?;
+    prune(conn, KEPT)?;
+    Ok(())
+}
+
+/// Write a call, and every [`PRUNE_EVERY`] calls drop what is beyond [`KEPT`].
+pub(super) fn insert(db: &Db, entry: &Entry) -> anyhow::Result<i64> {
+    let conn = db.connection();
+    conn.execute(
+        "INSERT INTO activity(at, endpoint, credential, client, source, tool, server, container_id,
+            container_name, kind, arguments, summary, outcome, error, duration_ms, job_id)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        params![
+            i64::try_from(entry.at).unwrap_or(i64::MAX),
+            entry.endpoint,
+            entry.credential,
+            entry.client,
+            entry.source,
+            entry.tool,
+            entry.server,
+            entry.container_id,
+            entry.container_name,
+            entry.kind,
+            entry.arguments.to_string(),
+            entry.summary,
+            entry.outcome,
+            entry.error,
+            i64::try_from(entry.duration_ms).unwrap_or(i64::MAX),
+            entry.job_id,
+        ],
+    )?;
+    let id = conn.last_insert_rowid();
+    if id % PRUNE_EVERY == 0 {
+        prune(&conn, KEPT)?;
+    }
+    Ok(id)
+}
+
+/// Remove every call but the newest `keep`.
+pub(super) fn prune(conn: &Connection, keep: usize) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM activity WHERE id <= (SELECT id FROM activity ORDER BY id DESC LIMIT 1 OFFSET ?1)",
+        params![i64::try_from(keep).unwrap_or(i64::MAX)],
+    )
+}
+
+/// Which calls a page lists: each filter given narrows it, and `before` continues from the last
+/// ID of the page before.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Filter {
+    /// A container's ID.
+    pub container: Option<String>,
+    /// An endpoint's name.
+    pub endpoint: Option<String>,
+    /// `administrator` for `/mcp`, `endpoint` for every endpoint.
+    pub caller: Option<String>,
+    /// Part of a tool's or a desktop server's name, in any case.
+    pub tool: Option<String>,
+    /// `read`, `change` or `destructive`, several separated by commas.
+    pub kind: Option<String>,
+    /// `ok`, `error` or `refused`, several separated by commas.
+    pub outcome: Option<String>,
+    pub before: Option<i64>,
+    pub limit: Option<usize>,
+}
+
+const KINDS: [&str; 3] = ["read", "change", "destructive"];
+const OUTCOMES: [&str; 3] = ["ok", "error", "refused"];
+
+impl Filter {
+    /// Refuse a value no row could have, so a typo does not read as an empty log.
+    pub fn check(&self) -> Result<()> {
+        let refuse = |message: String| Err(Error(StatusCode::BAD_REQUEST, message));
+        if let Some(caller) = &self.caller
+            && !["administrator", "endpoint"].contains(&caller.as_str())
+        {
+            return refuse("caller is administrator or endpoint".into());
+        }
+        for (name, list, allowed) in [
+            ("kind", &self.kind, &KINDS),
+            ("outcome", &self.outcome, &OUTCOMES),
+        ] {
+            if let Some(unknown) = values(list).into_iter().find(|v| !allowed.contains(v)) {
+                return refuse(format!(
+                    "{name} takes {}, not {unknown}",
+                    allowed.join(", ")
+                ));
+            }
+        }
+        if self
+            .limit
+            .is_some_and(|limit| limit == 0 || limit > PAGE_LIMIT)
+        {
+            return refuse(format!("limit is 1 to {PAGE_LIMIT}"));
+        }
+        Ok(())
+    }
+    pub fn limit(&self) -> usize {
+        self.limit.unwrap_or(PAGE)
+    }
+}
+
+/// The comma-separated values of a filter, without empty ones.
+fn values(list: &Option<String>) -> Vec<&str> {
+    list.as_deref()
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+/// A page of calls, newest first.
+pub(super) fn query(db: &Db, filter: &Filter) -> anyhow::Result<Vec<Entry>> {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut bound: Vec<Sql> = Vec::new();
+    for (column, value) in [
+        ("container_id", &filter.container),
+        ("endpoint", &filter.endpoint),
+    ] {
+        if let Some(value) = value.as_deref().filter(|value| !value.is_empty()) {
+            clauses.push(format!("{column} = ?"));
+            bound.push(Sql::Text(value.into()));
+        }
+    }
+    match filter.caller.as_deref() {
+        Some("administrator") => clauses.push("endpoint IS NULL".into()),
+        Some("endpoint") => clauses.push("endpoint IS NOT NULL".into()),
+        _ => {}
+    }
+    if let Some(tool) = filter
+        .tool
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        clauses.push(
+            "(instr(lower(tool), lower(?)) > 0 OR instr(lower(coalesce(server, '')), lower(?)) > 0)"
+                .into(),
+        );
+        bound.push(Sql::Text(tool.into()));
+        bound.push(Sql::Text(tool.into()));
+    }
+    for (column, list) in [("kind", &filter.kind), ("outcome", &filter.outcome)] {
+        let list = values(list);
+        if !list.is_empty() {
+            clauses.push(format!(
+                "{column} IN ({})",
+                vec!["?"; list.len()].join(", ")
+            ));
+            bound.extend(list.into_iter().map(|value| Sql::Text(value.into())));
+        }
+    }
+    if let Some(before) = filter.before {
+        clauses.push("id < ?".into());
+        bound.push(Sql::Integer(before));
+    }
+    let condition = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", clauses.join(" AND "))
+    };
+    bound.push(Sql::Integer(i64::try_from(filter.limit()).unwrap_or(50)));
+    let conn = db.connection();
+    let mut statement = conn.prepare(&format!(
+        "SELECT id, at, endpoint, credential, client, source, tool, server, container_id,
+            container_name, kind, arguments, summary, outcome, error, duration_ms, job_id
+         FROM activity {condition} ORDER BY id DESC LIMIT ?"
+    ))?;
+    let rows = statement.query_map(params_from_iter(bound), entry)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+fn entry(row: &Row) -> rusqlite::Result<Entry> {
+    let arguments: String = row.get(11)?;
+    Ok(Entry {
+        id: row.get(0)?,
+        at: u64::try_from(row.get::<_, i64>(1)?).unwrap_or_default(),
+        endpoint: row.get(2)?,
+        credential: row.get(3)?,
+        client: row.get(4)?,
+        source: row.get(5)?,
+        tool: row.get(6)?,
+        server: row.get(7)?,
+        container_id: row.get(8)?,
+        container_name: row.get(9)?,
+        kind: row.get(10)?,
+        arguments: serde_json::from_str(&arguments).unwrap_or_default(),
+        summary: row.get(12)?,
+        outcome: row.get(13)?,
+        error: row.get(14)?,
+        duration_ms: u64::try_from(row.get::<_, i64>(15)?).unwrap_or_default(),
+        job_id: row.get(16)?,
+    })
+}
+
+#[cfg(test)]
+#[path = "store_tests.rs"]
+mod tests;

@@ -1516,3 +1516,97 @@ fn a_relayed_result_carries_the_result_type_a_newer_client_requires() {
         serde_json::from_value(json!({"resultType":"complete","content":[]})).unwrap();
     assert_eq!(relayed(newer.clone()), newer);
 }
+
+#[tokio::test]
+async fn an_endpoints_calls_are_recorded_with_the_endpoint_and_a_servers_arguments_by_size() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "chrome", &["browser_navigate"]);
+    let Json(created) = create_endpoint(
+        State(app.clone()),
+        Json(
+            serde_json::from_value(json!({"name":"chrome-dev","grants":[{"container_id":"c1","scopes":["view"],"servers":"all"}]}))
+                .unwrap(),
+        ),
+    )
+    .await
+    .unwrap();
+    let token = created["token"].as_str().unwrap().to_owned();
+    let session = open_session(&app, "/mcp/chrome-dev", &token).await;
+    let tool_call = |id: u64, name: &str, arguments: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":arguments}});
+    for message in [
+        tool_call(2, "get_usage", json!({})),
+        tool_call(
+            3,
+            "chrome__browser_navigate",
+            json!({"url": "https://example.com/?key=secret-value-123"}),
+        ),
+        tool_call(4, "delete_container", json!({})),
+    ] {
+        call(
+            app.clone(),
+            "/mcp/chrome-dev",
+            Some(&token),
+            Some(&session),
+            message,
+        )
+        .await;
+    }
+    // The administrator's token opens the endpoint too, and says so.
+    let admin = open_session(&app, "/mcp/chrome-dev", ADMIN).await;
+    call(
+        app.clone(),
+        "/mcp/chrome-dev",
+        Some(ADMIN),
+        Some(&admin),
+        tool_call(5, "list_windows", json!({})),
+    )
+    .await;
+    let rows = crate::activity::recorded(&app, 4).await;
+    let row = |tool: &str| {
+        rows.iter()
+            .find(|row| row.tool == tool)
+            .unwrap_or_else(|| panic!("{tool}: {rows:?}"))
+    };
+
+    let usage = row("get_usage");
+    assert_eq!(usage.endpoint.as_deref(), Some("chrome-dev"));
+    assert_eq!(usage.credential, "endpoint_token");
+    // The endpoint binds its one container, which the call does not name.
+    assert_eq!(usage.container_id.as_deref(), Some("c1"));
+    assert_eq!(usage.container_name.as_deref(), Some("Chrome dev"));
+    assert_eq!(
+        (usage.source.as_str(), usage.kind.as_str()),
+        ("tool", "read")
+    );
+
+    // A server's tool by its own name, its arguments as their size whatever it says of itself.
+    let navigate = row("browser_navigate");
+    assert_eq!(navigate.source, "server");
+    assert_eq!(navigate.server.as_deref(), Some("chrome"));
+    assert_eq!(navigate.container_id.as_deref(), Some("c1"));
+    assert_eq!(
+        navigate.kind, "change",
+        "a server's read-only claim is not trusted"
+    );
+    assert_eq!(
+        navigate.arguments,
+        json!({"url": {"$masked": "string", "length": 41}})
+    );
+    assert!(
+        !serde_json::to_string(navigate)
+            .unwrap()
+            .contains("secret-value-123")
+    );
+
+    // A tool outside the endpoint's scopes is refused, and shown as what it would have been.
+    let refused = row("delete_container");
+    assert_eq!(
+        (refused.outcome.as_str(), refused.kind.as_str()),
+        ("refused", "destructive")
+    );
+
+    assert_eq!(row("list_windows").credential, "mcp_token");
+}

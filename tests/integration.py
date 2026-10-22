@@ -1294,6 +1294,19 @@ try:
         assert "Unknown tool" in reply["error"]["message"], reply
     assert tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["desktop_input"]}]}, allow_error=True)["isError"]
     print("PASS an endpoint leaves single container and server tools out by name", flush=True)
+    # The agent activity log names the endpoint, its token and the container of every call, keeps
+    # a desktop server's arguments as their size only and records a refused tool as refused.
+    def endpoint_calls():
+        items = api("activity?endpoint=acceptance-mcp&limit=200")["items"]
+        return items if any(i["outcome"] == "refused" for i in items) else None
+    calls = wait_for(endpoint_calls, 15)
+    served = [c for c in calls if c["source"] == "server" and c["server"] == "echo" and c["tool"] == "echo"]
+    assert served and all(c["credential"] == "endpoint_token" and c["container_id"] == env_id for c in served), calls
+    assert all(c["arguments"]["text"].get("$masked") == "string" for c in served) and '"over http"' not in json.dumps(calls), served
+    assert any(c["tool"] == "screenshot" and c["kind"] == "read" and c["outcome"] == "ok" for c in calls), calls
+    assert any(c["tool"] == "save_screenshot" and c["outcome"] == "refused" for c in calls), calls
+    assert all(c["endpoint"] == "acceptance-mcp" for c in api("activity?container=" + env_id + "&caller=endpoint")["items"])
+    print("PASS the agent activity log records an endpoint's calls with masked server arguments", flush=True)
     try:
         mcp("tools/list", token=scoped); raise AssertionError("an endpoint token opened the administrator's channel")
     except urllib.error.HTTPError as error:

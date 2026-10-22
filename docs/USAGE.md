@@ -6,7 +6,7 @@ A container is an Ubuntu desktop that Bilskirnir runs in Docker. An image is the
 
 ## Find your way around
 
-The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files**, **Jobs** and **Settings**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out. When a newer release of Bilskirnir is out, a card above that menu names it and links to its notes; in the WSL package its **Update** button installs it, see [Update from the dashboard](WSL_PACKAGE.md#update-from-the-dashboard).
+The sidebar leads to **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files**, **Jobs**, **Activity** and **Settings**, lists the running containers for a quick connect and holds **New container** with a hammer button for **Build image**. On a phone it opens from the button at the top left. The menu at the bottom of the sidebar switches between the dark, light and system theme, chooses the language and signs out. When a newer release of Bilskirnir is out, a card above that menu names it and links to its notes; in the WSL package its **Update** button installs it, see [Update from the dashboard](WSL_PACKAGE.md#update-from-the-dashboard).
 
 The dashboard speaks English, German, French, Spanish and Turkish. It follows the browser's language, or English when the browser prefers another one; a language picked in that menu, or on the sign-in page, is kept in this browser. Messages from the manager itself, such as job logs and errors, stay in English.
 
@@ -102,6 +102,12 @@ A desktop server runs in a process of its own for the inspector, as the desktop 
 ### When an agent asks for you
 
 Some steps are for a person only, such as a CAPTCHA, a second sign-in factor, a license window or a sign-in screen. An agent that reaches one asks with [`request_human`](MCP.md#ask-a-person-for-help) and waits. The request appears at the top of every dashboard page, with the container's name, what the agent needs, how long ago it asked and, when it came through an endpoint, that endpoint's name, and a notice in the corner says so on whichever page is open. **Open desktop** takes you to that desktop, where the same request sits in a strip under the toolbar. Do what is asked there, then press **Done**, or **Decline** when you will not or cannot, with a short reply for the agent if it helps, such as which account you signed in with. The agent goes on as soon as you answer. The first answer counts, from whichever page or tab gives it, and the request leaves every page. Requests are kept in the manager's memory only: restarting the manager ends them, and an agent that still needs you asks again.
+
+## See what agents did
+
+**Activity** lists every tool call agents made over MCP, and every transfer link they used, newest first and grouped by day: when it happened (point at the time for the exact moment), who called, the tool, the container, the arguments that say most about it, such as a script's first line or a path, how it ended and how long it took. The caller is **Bilskirnir MCP** for `/mcp` or the endpoint's name, with a mark when the call came from the inspector above, which is you rather than an agent, or through a transfer link. A destructive call has a red mark, a change a pink one and a read a grey one, each with its word, and a failed or refused call a red badge. Filter by container, by caller or by part of a tool's name, or show only errors or only destructive calls; the list follows new calls as they come. Select a call to see all its arguments, its error and the job it started.
+
+What an agent typed, wrote into a file or passed as a secret or a token shows only as its size, as [the MCP guide](MCP.md#agent-activity) describes; `exec_container`'s script is kept. A container's details panel shows its latest calls, and **Agent activity** in an endpoint's menu on the **MCP** page opens the list for that endpoint. The newest 10,000 calls are kept.
 
 ## Save a container as a snapshot
 
