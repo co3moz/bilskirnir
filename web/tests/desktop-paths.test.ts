@@ -6,6 +6,7 @@ import {
   defaultFolder,
   desktopFolder,
   listingProblem,
+  placeGroups,
   quickFolders,
   recentFolders,
   rememberFolder,
@@ -132,6 +133,47 @@ test("the browser lists each writable place once, then what was used last", () =
     ]
   )
   assert.equal(folders[4].label, "Unity project")
+})
+
+test("the folders of a compose of several steps go under their steps by their own labels", () => {
+  // Pinned::setup in src/compose.rs begins each label with its step's name and " · ".
+  const steps = (...names: string[]) =>
+    names.map((name, index) => ({ id: `s${index}`, name, status: "completed" as const }))
+  const merged = {
+    ...container(),
+    setup: {
+      ...container().setup!,
+      steps: steps("Unity development", "Unity development · Extras", "Chrome"),
+      places: [
+        { label: "Unity development · Workspace volume", path: "/home/desktop/workspace" },
+        { label: "Unity development · License volume", path: "/home/desktop/.config/unity3d" },
+        { label: "Unity development · Extras · Samples", path: "/srv/samples" },
+        { label: "Chrome · Browser profile volume", path: "/home/desktop/.config/chrome-agent" },
+      ],
+    },
+  }
+  const groups = placeGroups(quickFolders(merged, ["/home/desktop/Pictures"]))
+  assert.deepEqual(
+    groups.map((group) => [group.kind, group.step, group.places.map((place) => place.label)]),
+    [
+      ["home", undefined, ["Home", "Desktop", "Documents", "Downloads"]],
+      ["compose", "Unity development", ["Workspace volume", "License volume"]],
+      ["compose", "Unity development · Extras", ["Samples"]],
+      ["compose", "Chrome", ["Browser profile volume"]],
+      ["recent", undefined, ["/home/desktop/Pictures"]],
+    ]
+  )
+  // A compose of one step names no steps, so its labels stay whole under one heading.
+  const single = {
+    ...container(),
+    setup: {
+      ...container().setup!,
+      places: [{ label: "Unity development · Workspace volume", path: "/srv/workspace" }],
+    },
+  }
+  const [, compose] = placeGroups(quickFolders(single))
+  assert.equal(compose.step, undefined)
+  assert.equal(compose.places[0].label, "Unity development · Workspace volume")
 })
 
 test("a new upload starts in the folder used last, else Downloads, else the home", () => {

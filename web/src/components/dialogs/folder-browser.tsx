@@ -28,6 +28,7 @@ import {
   folderMissing,
   HOME,
   listingProblem,
+  placeGroups,
   quickFolders,
   uploadProblem,
   type QuickFolder,
@@ -65,8 +66,6 @@ const kindIcons: Record<Exclude<QuickFolder["kind"], "home">, React.ReactNode> =
   volume: <RiDatabase2Line aria-hidden />,
   recent: <RiHistoryLine aria-hidden />,
 }
-
-const GROUPS: QuickFolder["kind"][] = ["home", "compose", "volume", "recent"]
 
 type Purpose =
   | { onChoose: (path: string) => void; onDownload?: undefined }
@@ -185,39 +184,36 @@ export function FolderBrowser({
           aria-label={t("folders.places")}
           className="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-col sm:overflow-visible sm:p-0"
         >
-          {GROUPS.map((kind) => {
-            const group = places.filter((place) => place.kind === kind)
-            if (!group.length) return null
-            return (
-              <div
-                key={kind}
-                className="flex shrink-0 gap-1 sm:flex-col sm:gap-0.5 sm:pt-3 sm:first:pt-0"
+          {placeGroups(places).map((group) => (
+            <div
+              key={group.places[0].path}
+              className="flex shrink-0 gap-1 sm:flex-col sm:gap-0.5 sm:pt-3 sm:first:pt-0"
+            >
+              <span
+                title={group.step}
+                className="hidden truncate px-2 pb-0.5 text-xs text-muted-foreground sm:block"
               >
-                <span className="hidden px-2 pb-0.5 text-xs text-muted-foreground sm:block">
-                  {t(`folders.group.${kind}`)}
-                </span>
-                {group.map((place) => (
-                  <Button
-                    key={place.path}
-                    type="button"
-                    variant={place.path === path ? "secondary" : "ghost"}
-                    size="sm"
-                    aria-current={place.path === path ? "location" : undefined}
-                    title={place.path}
-                    onClick={() => open(place.path)}
-                    className="max-w-56 justify-start sm:max-w-none"
-                  >
-                    {place.kind === "home" ? homeIcons[place.path] : kindIcons[place.kind]}
-                    <span
-                      className={cn("truncate", place.kind === "recent" && "font-mono text-xs")}
-                    >
-                      {place.label}
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            )
-          })}
+                {group.step ?? t(`folders.group.${group.kind}`)}
+              </span>
+              {group.places.map((place) => (
+                <Button
+                  key={place.path}
+                  type="button"
+                  variant={place.path === path ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-current={place.path === path ? "location" : undefined}
+                  title={place.path}
+                  onClick={() => open(place.path)}
+                  className="max-w-56 justify-start sm:max-w-none"
+                >
+                  {place.kind === "home" ? homeIcons[place.path] : kindIcons[place.kind]}
+                  <span className={cn("truncate", place.kind === "recent" && "font-mono text-xs")}>
+                    {place.label}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          ))}
         </nav>
         <div className="flex min-w-0 flex-col gap-2">
           <nav

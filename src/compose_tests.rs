@@ -963,6 +963,7 @@ fn each_step_receives_only_its_own_values_and_the_record_shows_them_by_step() {
     let setup = pinned.setup("img");
     assert_eq!(setup.secrets, ["chrome.TOKEN"]);
     assert_eq!(setup.parameters["vscode.VERSION"], "1.142.0");
+    // The dashboard lists a place under its step by this prefix (web/src/lib/desktop-paths.ts).
     assert_eq!(
         setup.places,
         [Place {

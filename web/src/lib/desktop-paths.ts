@@ -86,6 +86,23 @@ export type QuickFolder = {
   path: string
   label: string
   kind: "home" | "compose" | "volume" | "recent"
+  /** The step of a compose of several that names the folder. */
+  step?: string
+}
+
+/**
+ * A compose place's own label and its step. In a compose of several steps the manager begins
+ * each label with the step's name and ` · ` (`Pinned::setup` in `src/compose.rs`), which would
+ * leave every place of a step looking the same once the list cuts the label short.
+ */
+function stepPlace(container: Folders, place: Place) {
+  const step = (container.setup?.steps ?? [])
+    .map((step) => step.name)
+    .filter((name) => place.label.startsWith(`${name} · `))
+    .sort((a, b) => b.length - a.length)[0]
+  return step === undefined
+    ? { path: place.path, label: place.label }
+    : { path: place.path, label: place.label.slice(step.length + 3), step }
 }
 
 /**
@@ -101,8 +118,7 @@ export function quickFolders(container: Folders, recent: string[] = []): QuickFo
       kind: "home" as const,
     })),
     ...composePlaces(container).map((place) => ({
-      path: place.path,
-      label: place.label,
+      ...stepPlace(container, place),
       kind: "compose" as const,
     })),
     ...containerMounts(container)
@@ -115,6 +131,25 @@ export function quickFolders(container: Folders, recent: string[] = []): QuickFo
     (folder) =>
       !seen.has(folder.path) && seen.add(folder.path) && !uploadProblem(container, folder.path)
   )
+}
+
+export type PlaceGroup = { kind: QuickFolder["kind"]; step?: string; places: QuickFolder[] }
+
+const KINDS: QuickFolder["kind"][] = ["home", "compose", "volume", "recent"]
+
+/**
+ * The places under their headings, a kind each, except that the folders of a compose of
+ * several steps go under their steps' names.
+ */
+export function placeGroups(places: QuickFolder[]): PlaceGroup[] {
+  const groups: PlaceGroup[] = []
+  for (const kind of KINDS)
+    for (const place of places.filter((place) => place.kind === kind)) {
+      const last = groups.at(-1)
+      if (last?.kind === kind && last.step === place.step) last.places.push(place)
+      else groups.push({ kind, step: place.step, places: [place] })
+    }
+  return groups
 }
 
 /** Where a new upload goes: the folder used last, Downloads, or the home. */
