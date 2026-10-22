@@ -104,6 +104,22 @@ export const en = {
   "jobs.downloadProgress": "Image download progress",
   "jobs.viewContainers": "View containers",
 
+  "events.jobCompleted": "{action} completed",
+  "events.jobFailed": "{action} failed",
+  "events.jobInterrupted": "{action} interrupted",
+
+  "human.title": "Agents waiting for a person",
+  "human.asks": "An agent in {name} needs a person",
+  "human.openDesktop": "Open desktop",
+  "human.done": "Done",
+  "human.decline": "Decline",
+  "human.replyPlaceholder": "Reply (optional)",
+  "human.replyTo": "Reply to the agent in {name}",
+  "human.via": "via {endpoint}",
+  "human.justNow": "just now",
+  "human.minutesAgo": "{minutes} min ago",
+  "human.hoursAgo": "{hours} h ago",
+
   "containers.customDesktop": "Custom desktop",
   "containers.new": "New container",
   "containers.connect": "Connect",
@@ -1143,7 +1159,8 @@ export const en = {
   "mcp.scope.view.description":
     "Screenshots, windows, the accessibility tree, waits, status and logs.",
   "mcp.scope.input": "Input",
-  "mcp.scope.input.description": "Mouse, keyboard, window placement and the gamepad.",
+  "mcp.scope.input.description":
+    "Mouse, keyboard, window placement, the gamepad and asking a person for help.",
   "mcp.scope.applications": "Applications",
   "mcp.scope.applications.description":
     "Launch and stop applications, and read their logs and metrics.",

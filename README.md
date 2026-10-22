@@ -10,7 +10,7 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 75 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees and a virtual gamepad.
+- **Built-in MCP agent integration** with 76 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
 - **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Bilskirnir's tools and those servers' tools, with a token of their own.
 - **GPU acceleration** for Linux graphics applications.
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.

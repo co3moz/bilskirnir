@@ -73,12 +73,15 @@ impl Scope {
                 "inspect_ui",
                 "wait_for_condition",
             ],
+            // Asking a person for help changes nothing in the container, and the agents that
+            // need it are those that drive its screen.
             Scope::Input => &[
                 "desktop_input",
                 "act_and_observe",
                 "focus_window",
                 "set_window_geometry",
                 "gamepad_input",
+                "request_human",
             ],
             Scope::Applications => &[
                 "launch_application",

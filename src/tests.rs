@@ -63,6 +63,8 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         layers: layers::Cache::default(),
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
+        events: events::Hub::default(),
+        human: human::Requests::default(),
     })
 }
 fn spec() -> model::ContainerSpec {
@@ -370,7 +372,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 75);
+    assert_eq!(tools.len(), 76);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);

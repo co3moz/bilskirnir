@@ -101,6 +101,7 @@ where
         stages: Vec::new(),
     };
     app.db.put("job", &id, &job)?;
+    app.events.job(&job, None);
     let lock = exclusive.then(|| app.resource_lock(&resource));
     let (done, outcome) = tokio::sync::oneshot::channel();
     let task_id = id.clone();
@@ -121,6 +122,7 @@ where
             tracing::error!("{e}");
             return;
         }
+        app.events.job(&job, None);
         let result =
             std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
                 .catch_unwind()
@@ -170,6 +172,8 @@ pub(crate) fn finish(
     if let Err(e) = app.db.put("job", id, &job) {
         tracing::error!("Could not save job result: {e}");
     }
+    app.events
+        .job(&job, reported.as_ref().err().map(String::as_str));
     if let Err(e) = app.db.prune_jobs(KEPT_JOBS) {
         tracing::debug!("Job history: {e:#}");
     }

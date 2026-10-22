@@ -129,6 +129,9 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
+| GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, and agents' requests for a person, while the session lasts. |
+| GET | `/api/human-requests` | The [requests for a person](#requests-for-a-person) that wait for an answer, oldest first, in `items`. |
+| POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
 | GET | `/healthz` | Basic manager health; does not require sign-in. |
 
 The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/containers/{id}/audio/{direction}`, where direction is `output` or `input`. They use the browser session and require a matching Origin. VNC uses the binary subprotocol. Most automation clients can use screenshots and `/input` instead of implementing a VNC viewer.
@@ -675,6 +678,46 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 `gpu.state` is `sampling`, `idle` while no GPU container runs, `unavailable` with a `reason`, or `disabled` when the installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false). Each of `gpu.devices` has `index`, `name`, `memory_total` and samples of `t`, `utilization` (percent) and `memory` (bytes); a figure the driver does not report is `null`. These are the whole GPU's figures, which `scope: "host"` says: WSL gives Linux a paravirtual GPU whose driver reports neither processes nor containers, and Windows applications count too. They come from `nvidia-smi`, so only NVIDIA GPUs report them. While a GPU container runs, the manager runs it in a helper container from its own image that gets the GPU device, no network, no capabilities and a read-only root, and ends with the manager.
 
 `GET /api/containers/{id}/usage` returns the same header with one container's fields and samples, and no GPU. Its `samples` stay empty until the container has run since the manager started. A deleted container's ID is still answered while its samples are in the window, and returns 404 once they have aged out.
+
+## Event stream
+
+`GET /api/events` tells a signed-in client what happens as it happens, so it does not have to poll for it. It is a [server-sent event](https://html.spec.whatwg.org/multipage/server-sent-events.html) stream that a browser reads with `EventSource`, which sends the session cookie, and that curl follows with `--no-buffer`:
+
+```bash
+curl --no-buffer --cookie bilskirnir.cookies http://localhost:8080/api/events
+```
+
+Every event is unnamed, and its data is one JSON object whose `type` says what it is:
+
+| `type` | Fields | Sent when |
+| --- | --- | --- |
+| `ready` | | The stream opened; always the first event. |
+| `job` | `job`: `id`, `kind`, `resource`, `name`, `status`, `created_at`, `finished_at` and `error` | A job was queued, started, began a [stage](#create-a-container-and-follow-the-job) or ended. `status` is as `GET /api/jobs/{job_id}` reports it; `error` is the first line of a failed job's error, at most 300 characters, and `null` otherwise. The job's log and result stay on its route. |
+| `job-progress` | `id`, `progress` | A running job measured its `progress` again, as its route reports it: at most once a second for each job, and `null` when the measured step ended. |
+| `human-request` | `request` | An agent asked for a person; `request` is as [`GET /api/human-requests`](#requests-for-a-person) lists it. |
+| `human-request-answered` | `request` | Someone answered a request for a person, on any page or through the API; `request` has its `status`, `reply` and `answered_at`. |
+| `resync` | | The client fell more than 256 events behind and missed some; read again what it shows. |
+
+Nothing is replayed: a client reads the lists it shows when it connects and again after any gap, such as a lost connection or a `resync`, since the events of that gap are gone. A comment line every 15 seconds keeps an idle stream open through proxies. The stream ends when its session signs out or expires, and when the manager stops; reconnect with a growing delay, and sign in again when the reconnection answers `401`. The dashboard keeps one stream for each open page, closes it a minute after the page goes to the background and reconnects when it comes back. Container states that Docker changes, such as a desktop that exits, are not events; the lists still poll for those.
+
+A proxy in front of the manager must pass the stream on as it arrives. The bundled Caddy configuration does, since Caddy flushes `text/event-stream` responses at once, and the manager sends `X-Accel-Buffering: no` for nginx.
+
+## Requests for a person
+
+An agent that reaches something only a person may do in its desktop, such as a CAPTCHA, a second sign-in factor, a license window or a sign-in screen, asks with the MCP tool [`request_human`](MCP.md#ask-a-person-for-help) and waits. `GET /api/human-requests` lists the requests still waiting, oldest first:
+
+```json
+{"items": [{
+  "id": "5f0c...", "container_id": "a1b2...", "container_name": "Chrome dev",
+  "message": "Solve the CAPTCHA on the sign-in page in Chrome",
+  "endpoint": "chrome-dev", "status": "pending", "reply": null,
+  "created_at": 1792689876, "answered_at": null
+}]}
+```
+
+`container_name` is the container's name when the agent asked, kept if the container is deleted meanwhile, and `endpoint` the [MCP endpoint](#desktop-mcp-servers-and-endpoints) it asked through, `null` for `/mcp`. `POST /api/human-requests/{id}/answer` with `{"answer": "done"}`, or `{"answer": "decline", "reply": "No phone at hand"}`, answers it: `status` becomes `done` or `declined`, a `reply` of at most 1,000 characters goes to the agent, and the waiting call returns at once. The first answer counts; a second one gets `409`. Each new request and each answer is also an [event](#event-stream).
+
+Requests live in the manager's memory, at most 64 waiting at once, and an answered one can be read by its agent for an hour. A manager restart ends them all: a waiting call then fails with an error saying so, and the agent has to ask again.
 
 ## Updates
 

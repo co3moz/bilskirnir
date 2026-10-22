@@ -100,6 +100,22 @@ export const fr: Messages = {
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
   "jobs.viewContainers": "Voir les conteneurs",
+
+  "events.jobCompleted": "Terminé : {action}",
+  "events.jobFailed": "Échec : {action}",
+  "events.jobInterrupted": "Interrompu : {action}",
+
+  "human.title": "Agents qui attendent une personne",
+  "human.asks": "Un agent dans {name} a besoin d'une personne",
+  "human.openDesktop": "Ouvrir le bureau",
+  "human.done": "Terminé",
+  "human.decline": "Refuser",
+  "human.replyPlaceholder": "Réponse (facultative)",
+  "human.replyTo": "Répondre à l'agent de {name}",
+  "human.via": "via {endpoint}",
+  "human.justNow": "à l'instant",
+  "human.minutesAgo": "il y a {minutes} min",
+  "human.hoursAgo": "il y a {hours} h",
   "containers.customDesktop": "Bureau personnalisé",
   "containers.new": "Nouveau conteneur",
   "containers.connect": "Connecter",
@@ -1130,7 +1146,8 @@ export const fr: Messages = {
   "mcp.scope.view.description":
     "Captures d'écran, fenêtres, arbre d'accessibilité, attentes, état et journaux.",
   "mcp.scope.input": "Saisie",
-  "mcp.scope.input.description": "Souris, clavier, placement des fenêtres et manette.",
+  "mcp.scope.input.description":
+    "Souris, clavier, placement des fenêtres, manette et appel à l'aide d'une personne.",
   "mcp.scope.applications": "Applications",
   "mcp.scope.applications.description":
     "Lancer et arrêter des applications, lire leurs journaux et leurs mesures.",

@@ -384,6 +384,21 @@ export type SystemInfo = {
 
 export type Session = { auth_enabled: boolean; authenticated: boolean }
 
+/** An agent's request for a person at its desktop, such as for a CAPTCHA or a sign-in. */
+export type HumanRequest = {
+  id: string
+  container_id: string
+  /** The container's name when the agent asked. */
+  container_name: string
+  message: string
+  /** The MCP endpoint the agent asked through; `null` for `/mcp`. */
+  endpoint: string | null
+  status: "pending" | "done" | "declined"
+  reply: string | null
+  created_at: number
+  answered_at: number | null
+}
+
 export type JobStarted = { job_id: string }
 
 export type SettingsPreview = { container_id: string; live: string[]; restart: string[] }

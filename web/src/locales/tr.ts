@@ -98,6 +98,22 @@ export const tr: Messages = {
   "jobs.archiveProgress": "Arşiv ilerlemesi",
   "jobs.downloadProgress": "İmaj indirme ilerlemesi",
   "jobs.viewContainers": "Konteynerleri görüntüle",
+
+  "events.jobCompleted": "{action} tamamlandı",
+  "events.jobFailed": "{action} başarısız oldu",
+  "events.jobInterrupted": "{action} yarıda kesildi",
+
+  "human.title": "İnsan bekleyen ajanlar",
+  "human.asks": "{name} içindeki bir ajan bir insana ihtiyaç duyuyor",
+  "human.openDesktop": "Masaüstünü aç",
+  "human.done": "Tamam",
+  "human.decline": "Reddet",
+  "human.replyPlaceholder": "Yanıt (isteğe bağlı)",
+  "human.replyTo": "{name} içindeki ajana yanıt",
+  "human.via": "{endpoint} üzerinden",
+  "human.justNow": "az önce",
+  "human.minutesAgo": "{minutes} dk önce",
+  "human.hoursAgo": "{hours} sa önce",
   "containers.customDesktop": "Özel masaüstü",
   "containers.new": "Yeni konteyner",
   "containers.connect": "Bağlan",
@@ -1112,7 +1128,8 @@ export const tr: Messages = {
   "mcp.scope.view.description":
     "Ekran görüntüleri, pencereler, erişilebilirlik ağacı, beklemeler, durum ve günlükler.",
   "mcp.scope.input": "Girdi",
-  "mcp.scope.input.description": "Fare, klavye, pencere yerleşimi ve oyun kumandası.",
+  "mcp.scope.input.description":
+    "Fare, klavye, pencere yerleşimi, oyun kumandası ve bir insandan yardım istemek.",
   "mcp.scope.applications": "Uygulamalar",
   "mcp.scope.applications.description":
     "Uygulamaları başlatma ve durdurma, günlüklerini ve ölçümlerini okuma.",
