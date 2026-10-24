@@ -49,6 +49,11 @@ COPY bilskirnir-mcp-tray.py /usr/local/bin/bilskirnir-mcp-tray
 COPY mcp-tray/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY mcp-tray/icons/ /usr/local/share/icons/hicolor/
 COPY mcp-tray/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+# NVIDIA's EGL library for GPU desktops on a Linux host. The NVIDIA Container Toolkit's hook adds
+# the library without this file, and glvnd skips the entry where the library is missing, as in WSL.
+# The final stages copy it after their packages, so a change here keeps those layers cached.
+RUN printf '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}\n' \
+    > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp \
         /usr/local/bin/bilskirnir-mcp-tray \
     && chmod -R u=rwX,go=rX /usr/local/share/icons/hicolor \
@@ -68,6 +73,7 @@ COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
 COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvnd/egl_vendor.d/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
@@ -92,6 +98,7 @@ COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
 COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvnd/egl_vendor.d/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gnome-container.session /usr/share/gnome-session/sessions/bilskirnir-ubuntu.session
 ENV DESKTOP_SESSION=gnome

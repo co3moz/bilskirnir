@@ -151,6 +151,9 @@ export function SpecFields({
     gamepad: settings?.gamepad_enabled ?? true,
   }
   const blocked = FLAGS.filter((flag) => !enabled[flag] && !spec?.[flag])
+  // The settings allow a GPU, but the host has none of the ones they allow.
+  const noGpu = blocked.includes("gpu") && !!settings?.gpu?.unused.length
+  const turnedOff = noGpu ? blocked.filter((flag) => flag !== "gpu") : blocked
   const set = (patch: Partial<SpecDraft>) => onChange({ ...draft, ...patch })
   const toggle = (flag: Flag, value: boolean) => {
     const patch: Partial<SpecDraft> = { [flag]: value }
@@ -195,7 +198,13 @@ export function SpecFields({
         </div>
         {blocked.length > 0 && (
           <FieldDescription id={`${id}-blocked`} className="text-xs">
-            {t("spec.turnedOffList", { features: formatList(blocked.map(flagLabel)) })}
+            {[
+              turnedOff.length > 0 &&
+                t("spec.turnedOffList", { features: formatList(turnedOff.map(flagLabel)) }),
+              noGpu && t("spec.gpuUnavailable"),
+            ]
+              .filter(Boolean)
+              .join(" ")}
           </FieldDescription>
         )}
       </FieldSet>

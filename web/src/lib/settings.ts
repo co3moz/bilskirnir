@@ -1,6 +1,6 @@
 import type { MessageKey } from "@/locales/en"
 
-import type { ConfigVariable, ContainerSpec, Settings, UpdateStatus } from "./types"
+import type { ConfigVariable, ContainerSpec, GpuReport, Settings, UpdateStatus } from "./types"
 
 /** The sections of the settings page's configuration, in their order. */
 export const SECTIONS = [
@@ -42,6 +42,7 @@ export const SECTION_OF: Record<string, Section> = {
   GAMEPAD_DEFAULT: "features",
   WSL_GPU: "gpu",
   NVIDIA_COMPUTE: "gpu",
+  DRI_GPU: "gpu",
   GPU_ADAPTER: "gpu",
   UPLOAD_MAX_MB: "limits",
   IMAGE_ARCHIVE_MAX_MB: "limits",
@@ -229,5 +230,20 @@ export function featureDraft(
     // The microphone travels over the audio connection.
     microphone: spec.microphone ?? (audio && (defaults?.microphone ?? false)),
     gamepad: spec.gamepad ?? defaults?.gamepad ?? false,
+  }
+}
+
+/**
+ * What the Settings page says about the host's GPU: the routes GPU desktops get, and the routes
+ * their settings allow that are worth a word. With no route that is every one of them, which says
+ * why desktops have no GPU; otherwise only an NVIDIA GPU that Docker cannot give them. A route the
+ * host simply lacks, such as `/dev/dri` in WSL, is what the default settings expect.
+ */
+export function gpuNotes(report: GpuReport) {
+  return {
+    routes: report.routes,
+    unused: report.routes.length
+      ? report.unused.filter((entry) => entry.reason === "no_toolkit")
+      : report.unused,
   }
 }

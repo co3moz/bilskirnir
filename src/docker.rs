@@ -126,12 +126,21 @@ impl App {
         if spec.microphone && !self.config.microphone {
             bail!("Microphone is disabled for this installation");
         }
-        if spec.gpu && !self.config.wsl_gpu && !self.config.cuda {
-            bail!(
-                "GPU access is disabled for this installation (WSL_GPU and NVIDIA_COMPUTE are false); use the container without GPU"
-            );
+        if spec.gpu
+            && let Some(refusal) = crate::gpu::refusal(&self.config)
+        {
+            bail!(refusal);
         }
         Ok(())
+    }
+    /// A Docker error from creating or starting a GPU desktop, with the setting behind the
+    /// device it names.
+    pub(crate) fn gpu_error(&self, env: &Container, error: anyhow::Error) -> anyhow::Error {
+        if env.spec.gpu {
+            crate::gpu::explain(error, &crate::gpu::routes(&self.config).used)
+        } else {
+            error
+        }
     }
     pub async fn create_container(
         &self,
@@ -321,6 +330,12 @@ impl App {
     async fn provision_and(&self, env: &Container, manager: &str, start: bool) -> Result<()> {
         // Validate all existing resources before creating or starting anything.
         env.spec.validate()?;
+        // A GPU desktop without a GPU exits at its renderer check and restarts forever.
+        if env.spec.gpu
+            && let Some(refusal) = crate::gpu::refusal(&self.config)
+        {
+            bail!(refusal);
+        }
         let manager_info = self.inspect("container", manager).await?;
         let mounts = env.mounts();
         crate::volumes::refuse_manager_volumes(&manager_info, &mounts)?;
@@ -387,12 +402,16 @@ impl App {
                 // Also a container an earlier attempt created without its machine ID.
                 self.write_machine_id(env).await?;
                 self.hand_over_mount_parents(env).await?;
-                self.docker(&["start", container_id]).await?;
+                self.docker(&["start", container_id])
+                    .await
+                    .map_err(|error| self.gpu_error(env, error))?;
             }
             return Ok(());
         }
         let args = self.container_args(env);
-        self.docker_args(&args).await?;
+        self.docker_args(&args)
+            .await
+            .map_err(|error| self.gpu_error(env, error))?;
         self.write_machine_id(env).await?;
         self.hand_over_mount_parents(env).await?;
         if env.spec.internet {
@@ -400,7 +419,9 @@ impl App {
                 .await?;
         }
         if start {
-            self.docker(&["start", &env.container]).await?;
+            self.docker(&["start", &env.container])
+                .await
+                .map_err(|error| self.gpu_error(env, error))?;
         }
         Ok(())
     }
@@ -472,17 +493,9 @@ impl App {
             ]);
         }
         if env.spec.gpu {
-            if self.config.cuda {
-                args.extend(["--gpus".into(), "all".into()]);
-            }
-            if self.config.wsl_gpu {
-                args.extend([
-                    "--device".into(),
-                    "/dev/dxg".into(),
-                    "--mount".into(),
-                    "type=bind,src=/usr/lib/wsl,dst=/usr/lib/wsl,readonly".into(),
-                ]);
-            }
+            args.extend(crate::gpu::docker_args(
+                &crate::gpu::routes(&self.config).used,
+            ));
         }
         if env.spec.gamepad {
             // The virtual controller is created by a root helper inside the desktop; input

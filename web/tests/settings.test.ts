@@ -7,6 +7,7 @@ import {
   changesOf,
   choiceIndex,
   featureDraft,
+  gpuNotes,
   FIELDS,
   initialText,
   releaseState,
@@ -15,7 +16,7 @@ import {
   shownValue,
   textProblem,
 } from "../src/lib/settings"
-import type { ConfigVariable, Settings } from "../src/lib/types"
+import type { ConfigVariable, GpuReport, Settings } from "../src/lib/types"
 
 test("every setting the page knows is still an installation setting and says what it does", () => {
   const example = readFileSync(new URL("../../.env.example", import.meta.url), "utf8")
@@ -188,4 +189,32 @@ test("a new container starts from the installation's defaults, and a manager wit
     microphone: false,
     gamepad: false,
   })
+})
+
+test("the GPU card names every missing route only when desktops get no GPU", () => {
+  const unused: GpuReport["unused"] = [
+    { route: "wsl", setting: "WSL_GPU", reason: "no_wsl_gpu" },
+    { route: "dri", setting: "DRI_GPU", reason: "no_render_device" },
+  ]
+  // A Linux host without GPUs says why each setting found nothing.
+  assert.deepEqual(gpuNotes({ routes: [], unused, found: null }), { routes: [], unused })
+  // WSL without render devices is what the defaults expect, and goes unsaid.
+  assert.deepEqual(gpuNotes({ routes: ["nvidia", "wsl"], unused: unused.slice(1), found: null }), {
+    routes: ["nvidia", "wsl"],
+    unused: [],
+  })
+  // An NVIDIA GPU Docker cannot pass is worth a word beside a route that works.
+  const toolkit = { route: "nvidia", setting: "NVIDIA_COMPUTE", reason: "no_toolkit" } as const
+  assert.deepEqual(gpuNotes({ routes: ["dri"], unused: [toolkit], found: null }).unused, [toolkit])
+  for (const reason of [
+    "no_wsl_gpu",
+    "no_nvidia_gpu",
+    "no_toolkit",
+    "no_render_device",
+    "beside_wsl",
+    "unseen",
+  ])
+    assert.ok(`settings.gpu.reason.${reason}` in en, reason)
+  for (const route of ["wsl", "nvidia", "dri"])
+    assert.ok(`settings.gpu.route.${route}` in en, route)
 })
