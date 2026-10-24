@@ -930,7 +930,8 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         .collect();
     assert!(tools.contains(&"screenshot") && tools.contains(&"chrome__browser_navigate"));
     assert!(!tools.contains(&"delete_container") && !tools.contains(&"desktop_input"));
-    // A tool outside the endpoint's scopes is unknown here, whatever /mcp offers.
+    // A tool outside the endpoint's scopes is unknown here, whatever /mcp offers. The refusal
+    // sends the agent back to tools/list, since a tool may have gone with a desktop server.
     let (_, _, body) = call(
         app.clone(),
         "/mcp/chrome-dev",
@@ -939,11 +940,9 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"delete_container","arguments":{"container_id":"c1"}}}),
     )
     .await;
+    let message = body["error"]["message"].as_str().unwrap();
     assert!(
-        body["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("Unknown tool"),
+        message.contains("Unknown tool") && message.contains("list the tools again"),
         "{body}"
     );
     // The container is the endpoint's own: an argument naming another is refused.
