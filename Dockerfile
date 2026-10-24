@@ -18,9 +18,11 @@ COPY Cargo.toml Cargo.lock ./
 COPY src src
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef AS backend
+FROM chef AS cooked
 COPY --from=planner /build/recipe.json recipe.json
 RUN cargo chef cook --release --locked --recipe-path recipe.json
+
+FROM cooked AS backend
 COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY desktop/profiles.json desktop/profiles.json
@@ -30,6 +32,21 @@ ARG BILSKIRNIR_RELEASE
 # Only the binary is left in this layer, so the build cache keeps one copy of the compiled
 # dependencies, the one above, instead of one with every commit.
 RUN cargo build --release --locked && mv target/release/bilskirnir /bilskirnir && rm -rf target
+
+# The list of the Dependencies page, from this build's lockfiles, installed interface packages,
+# Dockerfiles, Compose manifests and workflows, so it cannot fall behind them. It fails when a
+# package that ships names no license. `cargo metadata` reads the crates the cooked stage holds and
+# needs only the binary's entry point; the interface stage is mounted, not copied.
+FROM cooked AS dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY src/main.rs src/main.rs
+COPY Dockerfile compose.yml compose.ghcr.yml ./
+COPY desktop/Dockerfile desktop/Dockerfile
+COPY wsl/Dockerfile wsl/Dockerfile
+COPY .github/workflows .github/workflows
+COPY scripts/dependencies.py scripts/dependencies.py
+RUN --mount=type=bind,from=ui,source=/build/web,target=/build/web \
+    python3 scripts/dependencies.py --strict --output /dependencies.json
 
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
@@ -50,6 +67,7 @@ COPY wsl/bilskirnir-update.service /app/install/systemd/bilskirnir-update.servic
 COPY wsl/bilskirnir-settings.path /app/install/systemd/bilskirnir-settings.path
 COPY wsl/bilskirnir-settings.service /app/install/systemd/bilskirnir-settings.service
 COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
+COPY --from=dependencies /dependencies.json /usr/share/doc/bilskirnir/dependencies.json
 ENV DATA_DIR=/data WEB_DIR=/app/web DESKTOP_CONTEXT=/app/desktop LISTEN_ADDR=0.0.0.0:8080
 WORKDIR /app
 EXPOSE 8080

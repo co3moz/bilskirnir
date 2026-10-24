@@ -10,6 +10,7 @@ mod catalog;
 mod compose;
 mod config;
 mod db;
+mod dependencies;
 mod desktop_input;
 mod desktop_mcp;
 mod docker;
@@ -19,6 +20,7 @@ mod exec;
 mod files;
 mod folder_archive;
 mod gamepad;
+mod gpu;
 mod human;
 mod icons;
 mod identity;
@@ -311,6 +313,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/human-requests", get(human::list))
         .route("/api/human-requests/{id}/answer", post(human::answer))
         .route("/api/activity", get(activity::list))
+        .route("/api/dependencies", get(dependencies::list))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)
@@ -396,10 +399,12 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "bilskirnir=info,tower_http=info".into()),
         )
         .init();
-    let config = config::Config::load()?;
+    let mut config = config::Config::load()?;
     for notice in &config.notices {
         tracing::warn!("{notice}");
     }
+    config.gpu_host = gpu::Host::detect(&config).await;
+    gpu::log_routes(&config);
     if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
             "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"

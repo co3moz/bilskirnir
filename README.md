@@ -2,7 +2,7 @@
 
 ![Bilskirnir dashboard with Ubuntu desktop previews](docs/screenshots/bilskirnir.png)
 
-Bilskirnir gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker on WSL2 with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
+Bilskirnir gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker, on WSL2 or on a Linux host, with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
 
 The same desktops open in your browser, so you can work in them yourself, save a prepared one as an image and start new containers from it.
 
@@ -12,7 +12,7 @@ The name is a nod to Thor.
 
 - **Built-in MCP agent integration** with 76 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
 - **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Bilskirnir's tools and those servers' tools, with a token of their own.
-- **GPU acceleration** for Linux graphics applications.
+- **GPU acceleration** for Linux graphics applications, verified in WSL2 with an NVIDIA GPU. On a Linux host, NVIDIA GPUs through the NVIDIA Container Toolkit and AMD and Intel GPUs (experimental) are supported but not verified yet; see [GPU on a Linux host](docs/INSTALLATION.md#gpu-on-a-linux-host).
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.
 - **Snapshots and images**: save a container once and start new ones from it, or build an image from a script.
@@ -66,9 +66,9 @@ The WSL package is the recommended installation. Bilskirnir itself needs only an
 
 Run the commands below on that host, as a user who can use Docker.
 
-GPU acceleration currently goes through WSL's GPU support: it needs a host where `/dev/dxg` and `/usr/lib/wsl` exist, and CUDA also needs NVIDIA Container Toolkit configured for Docker Engine. The example enables both for an NVIDIA GPU. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. On a host without WSL GPU support, or to run without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; containers then use software rendering and the GPU option is unavailable when creating one.
+GPU containers get the host's GPU through each route the host has, which the manager looks for when it starts: the WSL GPU (`/dev/dxg` and `/usr/lib/wsl`) in a WSL2 distribution, an NVIDIA GPU through the NVIDIA Container Toolkit on a Linux host, and the `/dev/dri` render devices of AMD and Intel GPUs on a Linux host (experimental). `WSL_GPU`, `NVIDIA_COMPUTE` and `DRI_GPU` allow one route each and are on by default, so the example suits any of these hosts. With an NVIDIA GPU on a Linux host, install the NVIDIA Container Toolkit and register it with Docker first, see [GPU on a Linux host](docs/INSTALLATION.md#gpu-on-a-linux-host). Where the host has none of these, containers use software rendering and the GPU option is unavailable when creating one; set all three to `"false"` to turn GPU access off yourself. Only the WSL route has been verified on hardware so far.
 
-Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU under WSL:
+Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU:
 
 ```yaml
 name: bilskirnir
@@ -88,9 +88,10 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: "replace-with-your-password"
       DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-      # GPU access for containers created in the UI. Without WSL GPU support, set both to "false".
+      # GPU routes for containers created in the UI; each is used where the host has it.
       WSL_GPU: "true"
-      NVIDIA_COMPUTE: "true" # Set false for AMD/Intel or without CUDA support.
+      NVIDIA_COMPUTE: "true" # The NVIDIA Container Toolkit: CUDA, and OpenGL outside WSL.
+      DRI_GPU: "true" # AMD/Intel render devices outside WSL (experimental).
       GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
       AUDIO_ENABLED: "true"
       MICROPHONE_ENABLED: "true"

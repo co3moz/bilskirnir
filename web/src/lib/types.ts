@@ -296,16 +296,35 @@ export type Job = {
   stages?: JobStage[]
 }
 
+/** How a GPU desktop reaches the host's GPU: WSL_GPU, NVIDIA_COMPUTE or DRI_GPU. */
+export type GpuRoute = "wsl" | "nvidia" | "dri"
+
+/** Why a route its setting allows is not used. */
+export type GpuMissing =
+  "no_wsl_gpu" | "no_nvidia_gpu" | "no_toolkit" | "no_render_device" | "beside_wsl" | "unseen"
+
+export type GpuReport = {
+  /** The routes GPU desktops get. */
+  routes: GpuRoute[]
+  /** The routes their settings allow that GPU desktops do not get, and why. */
+  unused: { route: GpuRoute; setting: string; reason: GpuMissing }[]
+  /** What the host showed when the manager started, or `null` where the manager cannot see it. */
+  found: { wsl: boolean; nvidia: boolean; toolkit: boolean | null; render: string[] } | null
+}
+
 export type Settings = {
   /** The manager's release, such as `0.4.0`. */
   version: string
   base_image: string
   audio_enabled: boolean
   microphone_enabled: boolean
+  /** Whether GPU desktops get a GPU: a route the settings allow that the host has. */
   gpu_enabled: boolean
   wsl_gpu: boolean
   nvidia_compute: boolean
+  dri_gpu?: boolean
   gpu_adapter?: string | null
+  gpu?: GpuReport
   upload_limit_bytes: number
   /** The largest unpacked image archive an import accepts. */
   archive_limit_bytes: number

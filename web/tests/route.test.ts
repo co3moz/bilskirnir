@@ -14,6 +14,7 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
     "files",
     "jobs",
     "activity",
+    "dependencies",
     "settings",
   ] as const)
     assert.deepEqual(parseRoute(href({ page })), { page })

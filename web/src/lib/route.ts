@@ -10,6 +10,7 @@ export type Page =
   | "files"
   | "jobs"
   | "activity"
+  | "dependencies"
   | "settings"
 export type Route =
   | { page: Exclude<Page, "files" | "activity"> }
@@ -32,6 +33,7 @@ const pages: Page[] = [
   "files",
   "jobs",
   "activity",
+  "dependencies",
   "settings",
 ]
 

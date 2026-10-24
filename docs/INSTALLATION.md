@@ -40,15 +40,16 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 | `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.6.3: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `bilskirnir update` renames it. |
 | `MCP_TOKEN` | Empty | The administrator's bearer token, required when `ROOT_MCP_ENABLED=true` in `token` mode; 1 to 256 visible ASCII characters without spaces. It opens every MCP endpoint too, also while `/mcp` is off. Wrap it in single quotes when it contains `$` or `#`. |
 | `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token, on `/mcp` and on every MCP endpoint, whether or not `/mcp` is on. Anyone who can reach the manager's address can then control every container that `/mcp` or an endpoint reaches, so keep it on localhost. |
-| `WSL_GPU` | `true` | Makes WSL graphics access available to GPU-enabled containers. Turn it off on a host without WSL GPU support. When this and `NVIDIA_COMPUTE` are both off, the GPU option is unavailable. |
-| `NVIDIA_COMPUTE` | `true` | Requests CUDA through NVIDIA Container Toolkit; turn it off without that runtime. |
-| `GPU_ADAPTER` | Empty | Selects a Mesa adapter by name; empty leaves selection to Mesa. |
+| `WSL_GPU` | `true` | Gives GPU containers the WSL GPU (`/dev/dxg` and `/usr/lib/wsl`) where the host has it. See [GPU on a Linux host](#gpu-on-a-linux-host) for how the routes are chosen. |
+| `NVIDIA_COMPUTE` | `true` | Gives GPU containers an NVIDIA GPU through the NVIDIA Container Toolkit: CUDA, and outside WSL OpenGL too. |
+| `DRI_GPU` | `true` | Experimental. Gives GPU containers the render devices under `/dev/dri` of AMD and Intel GPUs, for Mesa's own drivers, on a host outside WSL. The Settings page shows it but does not change it, since the WSL package never uses it. |
+| `GPU_ADAPTER` | Empty | The GPU to render on: in WSL a Mesa D3D12 adapter by vendor or part of its model name, with `/dev/dri` the `AMD` or `Intel` card. Empty leaves the choice to Mesa. |
 | `AUDIO_ENABLED` | `true` | Allows containers to use browser sound. |
 | `MICROPHONE_ENABLED` | `true` | Allows microphone input when audio is also enabled. |
 | `INTERNET_ENABLED` | `true` | Allows containers internet access. `false` refuses it for new containers, in setting changes and on the internet switch. |
 | `SUDO_ENABLED` | `true` | Allows containers to give the desktop user `sudo`. `false` refuses it for new containers and in setting changes. |
 | `GAMEPAD_ENABLED` | `true` | Allows the virtual gamepad. `false` refuses it for new containers and in setting changes, and the manager passes no gamepad input. |
-| `GPU_DEFAULT` | `true` | Whether a new container gets GPU access unless it asks otherwise, where `WSL_GPU` or `NVIDIA_COMPUTE` allows it. |
+| `GPU_DEFAULT` | `true` | Whether a new container gets GPU access unless it asks otherwise, where the host has a GPU that `WSL_GPU`, `NVIDIA_COMPUTE` or `DRI_GPU` allows. |
 | `INTERNET_DEFAULT` | `true` | Whether a new container gets internet access unless it asks otherwise. |
 | `SUDO_DEFAULT` | `true` | Whether a new container gives the desktop user `sudo` unless it asks otherwise. |
 | `AUDIO_DEFAULT` | `false` | Whether a new container gets sound unless it asks otherwise. |
@@ -78,11 +79,21 @@ The full manifests also accept these Compose settings:
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
 
-The container features of the create form have a switch and a default each. GPU access is on while `WSL_GPU` or `NVIDIA_COMPUTE` is, which choose how a container gets it, so it has no switch of its own. The defaults are what the form starts with and what a request to `POST /api/containers` or the MCP `create_container` gets when it leaves a feature out; one the installation switched off is never a default, and the microphone is one only with sound. Before 0.6.3 such a request got no GPU access while the form chose it; `GPU_DEFAULT=true` gives requests what the form gives, so set it to `false` to keep the old answer. A switched-off feature is refused when a container is created or a setting change turns it on, and the form shows its chip turned off. A container that already has it keeps it in its settings, also when a reset or a settings change creates it again, as audio always worked: the manager only refuses what it carries itself while the feature is off, the audio and microphone channels and gamepad input. Turn internet or `sudo` off in such a container's settings to take it away. Image builds keep their own internet setting, since templates install packages.
+The container features of the create form have a switch and a default each. GPU access is on while the host has a GPU that `WSL_GPU`, `NVIDIA_COMPUTE` or `DRI_GPU` allows, which choose how a container gets it, so it has no switch of its own. The defaults are what the form starts with and what a request to `POST /api/containers` or the MCP `create_container` gets when it leaves a feature out; one the installation switched off is never a default, and the microphone is one only with sound. Before 0.6.3 such a request got no GPU access while the form chose it; `GPU_DEFAULT=true` gives requests what the form gives, so set it to `false` to keep the old answer. A switched-off feature is refused when a container is created or a setting change turns it on, and the form shows its chip turned off. A container that already has it keeps it in its settings, also when a reset or a settings change creates it again, as audio always worked: the manager only refuses what it carries itself while the feature is off, the audio and microphone channels and gamepad input. Turn internet or `sudo` off in such a container's settings to take it away. GPU access is the exception: while the host has no GPU for desktops, a reset, a retry or a settings change that creates a GPU container again is refused with the settings named, since its desktop would stop at the renderer check; turn GPU off in its settings to go on using it. Image builds keep their own internet setting, since templates install packages.
 
 Containers created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 
 Agent access uses a separate token rather than the dashboard session, unless `MCP_AUTH_MODE=none` turns it off. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
+
+### GPU on a Linux host
+
+When it starts, the manager reads its host's `/sys`, which a container shares with the host, to see which GPUs desktops can have, and logs the routes GPU containers get. The Settings page shows the same in its **GPU** section, and `GET /api/settings` reports it in `gpu`. The manager sees the host only while it talks to a local Docker daemon; with a remote `DOCKER_HOST`, `WSL_GPU` and `NVIDIA_COMPUTE` apply as written and `/dev/dri` is never passed. Each route its setting allows is used where the host has it:
+
+- **WSL GPU** (`WSL_GPU`): a WSL2 distribution's `/dev/dxg`, on which Mesa's D3D12 driver renders. There `NVIDIA_COMPUTE` adds CUDA beside it.
+- **NVIDIA on a Linux host** (`NVIDIA_COMPUTE`): an NVIDIA GPU that NVIDIA's own driver runs, while Docker lists the NVIDIA Container Toolkit, as its `nvidia` runtime or an `nvidia.com/gpu` CDI device. Install the driver and the [toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), then register it with `sudo nvidia-ctk runtime configure --runtime=docker` and restart Docker. GPU containers get the GPU with the toolkit's `graphics` capability, and the desktop image names NVIDIA's EGL library to glvnd, so OpenGL renders on NVIDIA's driver. Docker 29.2 and later hand `--gpus` to the toolkit's CDI devices where they exist, which carry the graphics libraries in any case.
+- **AMD and Intel on a Linux host** (`DRI_GPU`, experimental): the render devices under `/dev/dri` of a GPU that NVIDIA's driver does not run. The desktop user joins groups with the devices' group IDs, and Mesa's own drivers render. `GPU_ADAPTER=AMD` or `Intel` picks that vendor's card on a host with both. Usage charts read `nvidia-smi`, so these GPUs have none.
+
+A host without any of them gives desktops no GPU: new containers start without it, and a request for it is refused with each setting and what the host lacks. Only the WSL route has been verified on hardware, with an NVIDIA RTX 4080 in WSL2. The NVIDIA and `/dev/dri` routes on a Linux host follow the documented behavior of the toolkit, Mesa and VirtualGL but have not been run on such a host yet; the [development guide](DEVELOPMENT.md#gpu-on-a-linux-host) lists what to check there.
 
 ## Access from another device
 
@@ -171,7 +182,7 @@ docker compose logs --tail=100 manager
 
 Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A registry error happens before startup; check that the host can reach GHCR.
 
-If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, confirm the WSL device and libraries are available and that CUDA is configured if `NVIDIA_COMPUTE=true`. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
+If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, the job log names the setting behind a device Docker refused, and a desktop that stops at its renderer check names the one to check in **Logs**; [GPU on a Linux host](#gpu-on-a-linux-host) explains each route. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
 
 If file uploads report a permission error, check that the chosen volume is writable by UID/GID 1001:1001. Raising the upload size limit will not fix destination permissions.
 

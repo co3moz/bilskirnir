@@ -35,7 +35,12 @@ pub struct Config {
     pub defaults: Features,
     pub wsl_gpu: bool,
     pub cuda: bool,
+    /// Whether desktops may get the render devices under `/dev/dri` where the host has some.
+    pub dri_gpu: bool,
     pub adapter: String,
+    /// The GPU devices the Docker host showed when the manager started. Not a setting: the GPU
+    /// settings allow the routes, and these decide which of them desktops get; see [`crate::gpu`].
+    pub gpu_host: crate::gpu::Host,
     /// Whether desktops may create user namespaces, which is how Chromium-based browsers and
     /// Electron applications sandbox their processes. See [`Config::seccomp_profile`].
     pub user_namespaces: bool,
@@ -380,7 +385,9 @@ impl Config {
             },
             wsl_gpu: flag("WSL_GPU", true)?,
             cuda: flag("NVIDIA_COMPUTE", true)?,
+            dri_gpu: flag("DRI_GPU", true)?,
             adapter: var("GPU_ADAPTER").unwrap_or_default(),
+            gpu_host: crate::gpu::Host::default(),
             user_namespaces: flag("DESKTOP_USER_NAMESPACES", true)?,
             allowed_hosts: host_names(var("ALLOWED_HOSTS").as_deref()),
             desktop_host: host_names(var("DESKTOP_HOST").as_deref())
@@ -466,6 +473,7 @@ impl Config {
             value("DESKTOP_USER_NAMESPACES", json!(self.user_namespaces)),
             value("WSL_GPU", json!(self.wsl_gpu)),
             value("NVIDIA_COMPUTE", json!(self.cuda)),
+            value("DRI_GPU", json!(self.dri_gpu)),
             value("GPU_ADAPTER", json!(self.adapter)),
             value("AUDIO_ENABLED", json!(self.audio)),
             value("MICROPHONE_ENABLED", json!(self.microphone)),
@@ -492,9 +500,9 @@ impl Config {
         ]
     }
 
-    /// Whether desktops may have GPU access: through the WSL GPU, CUDA or both.
+    /// Whether desktops can have GPU access: a route the settings allow that the host has.
     pub(crate) fn gpu_enabled(&self) -> bool {
-        self.wsl_gpu || self.cuda
+        !crate::gpu::routes(self).used.is_empty()
     }
 
     /// The features a new container starts with: the installation's defaults, but never one it

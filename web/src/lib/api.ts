@@ -8,6 +8,16 @@ export function onUnauthorized(handler: () => void) {
 }
 export const sessionExpired = () => unauthorized()
 
+/** A request the manager answered with an error, and the HTTP status it answered with. */
+export class ApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 export async function api<T = unknown>(
   path: string,
   body?: unknown,
@@ -26,7 +36,7 @@ export async function api<T = unknown>(
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
-    throw new Error(data.error || t("api.failed", { status: response.status }))
+    throw new ApiError(data.error || t("api.failed", { status: response.status }), response.status)
   }
   return (response.status === 204 ? null : await response.json()) as T
 }

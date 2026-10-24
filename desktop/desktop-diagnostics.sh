@@ -6,10 +6,16 @@ printf '=== Desktop / OpenGL ===\n'
 glxinfo -B 2>&1 || true
 printf '\n=== GPU / VirtualGL EGL ===\n'
 if [[ ${DESKTOP_GPU:-false} == true ]]; then gpu-run glxinfo -B 2>&1 || true; else echo 'GPU disabled'; fi
+printf '\n=== GPU devices ===\n'
+ls -l /dev/dxg /dev/nvidiactl /dev/dri 2>&1 || true
+printf '\n=== EGL devices ===\n'
+/opt/VirtualGL/bin/eglinfo -e 2>&1 || true
 printf '\n=== Vulkan ===\n'
 timeout 10 env -u DISPLAY vulkaninfo --summary 2>&1 || true
 printf '\n=== CUDA ===\n'
-if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi 2>&1; else echo 'NVIDIA runtime not present'; fi
+if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi 2>&1
+elif command -v nvidia-smi >/dev/null; then nvidia-smi 2>&1
+else echo 'NVIDIA runtime not present'; fi
 printf '\n=== Audio ===\n'
 pactl info 2>&1 || true
 

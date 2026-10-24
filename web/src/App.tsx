@@ -17,6 +17,7 @@ import { href, useRoute, type Page } from "@/lib/route"
 import { useServerEvents } from "@/lib/server-events"
 import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
+import { DependenciesPage } from "@/pages/dependencies"
 import { FilesPage } from "@/pages/files"
 import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
@@ -42,6 +43,7 @@ const pages: Record<Page, () => React.ReactNode> = {
   files: FilesPage,
   jobs: JobsPage,
   activity: ActivityPage,
+  dependencies: DependenciesPage,
   settings: SettingsPage,
 }
 

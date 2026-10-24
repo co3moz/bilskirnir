@@ -20,7 +20,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.wsl_gpu || app.config.cuda,"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"gpu_adapter":app.config.adapter,"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled,"internet_enabled":app.config.internet,"sudo_enabled":app.config.sudo,"gamepad_enabled":app.config.gamepad,"defaults":app.config.feature_defaults()}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.gpu_enabled(),"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"dri_gpu":app.config.dri_gpu,"gpu_adapter":app.config.adapter,"gpu":crate::gpu::report(&app.config),"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled,"internet_enabled":app.config.internet,"sudo_enabled":app.config.sudo,"gamepad_enabled":app.config.gamepad,"defaults":app.config.feature_defaults()}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -262,7 +262,8 @@ pub async fn action(
                 &body.action,
                 info["Id"].as_str().context("Missing container ID")?,
             ])
-            .await?;
+            .await
+            .map_err(|error| app.gpu_error(&env, error))?;
             Ok(json!({"container_id":id}))
         },
     )

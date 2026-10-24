@@ -76,6 +76,10 @@ jobs:
           cargo fmt --check
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
+      # The list of the Dependencies page, made as the manager image's build makes it, so a lockfile,
+      # Dockerfile or workflow it cannot read, or a shipped package without a license, fails here.
+      - name: Check the dependency list
+        run: python3 scripts/dependencies.py --strict --output "$RUNNER_TEMP/dependencies.json"
       - name: Validate installation manifests
         run: |
           docker compose --env-file .env.example --profile images config --quiet

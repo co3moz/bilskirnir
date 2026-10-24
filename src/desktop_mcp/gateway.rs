@@ -263,7 +263,13 @@ impl EndpointMcp {
         let entry = catalog(&self.app, &endpoint)
             .into_iter()
             .find(|entry| entry.tool.name == request.name)
-            .ok_or_else(|| ErrorData::invalid_params("Unknown tool on this endpoint", None))?;
+            .ok_or_else(|| {
+                // The tool may have gone with a desktop server, after the client listed the tools.
+                ErrorData::invalid_params(
+                    "Unknown tool on this endpoint. Its tools change when a desktop server is added, removed or changes its own, so list the tools again",
+                    None,
+                )
+            })?;
         let args = Value::Object(request.arguments.unwrap_or_default());
         super::audit::describe(&self.app, &entry, &args, call);
         // A container tool's schema is Bilskirnir's own, so its arguments are checked here as
