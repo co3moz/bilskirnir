@@ -10,6 +10,7 @@ mod catalog;
 mod compose;
 mod config;
 mod db;
+mod dependencies;
 mod desktop_input;
 mod desktop_mcp;
 mod docker;
@@ -312,6 +313,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/human-requests", get(human::list))
         .route("/api/human-requests/{id}/answer", post(human::answer))
         .route("/api/activity", get(activity::list))
+        .route("/api/dependencies", get(dependencies::list))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)
