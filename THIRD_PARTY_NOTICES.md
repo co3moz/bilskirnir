@@ -12,4 +12,6 @@ Bilskirnir uses the components below to provide its browser desktop, GPU renderi
 | [VirtualGL](https://github.com/VirtualGL/virtualgl) 3.1.5 | Upstream licenses. The Debian package installs its license files under `/opt/VirtualGL`. |
 | TigerVNC, XFCE, GNOME, Mesa, PulseAudio and other Ubuntu packages | Each package retains its own license. The desktop images include package documentation under `/usr/share/doc`. |
 | Rust dependencies | Each dependency retains its own license. `Cargo.lock` records the exact versions used. |
+
+The dashboard's **Dependencies** page lists every interface package, crate, image, system package, tool and workflow action a release is built from, with the license each package names; the manager image's build makes that list and refuses to finish when a package that ships names none.
 | [Rust MCP SDK (rmcp)](https://github.com/modelcontextprotocol/rust-sdk) 3.5.1 | Apache-2.0. Provides the embedded MCP protocol and HTTP transport. |
