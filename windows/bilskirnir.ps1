@@ -8,6 +8,9 @@
 # only that function stays behind in the PowerShell window. Keep the file ASCII, since Windows
 # PowerShell reads a script without a byte order mark in the ANSI code page, and never call 'exit',
 # which would close the window that ran it.
+#
+# Copyright (C) 2026 Bilskirnir contributors. Bilskirnir is free software under the GNU General Public
+# License, version 3 or later, and comes with no warranty: https://github.com/co3moz/bilskirnir/blob/master/LICENSE
 function Invoke-Bilskirnir {
     param(
         [Parameter(Position = 0)][string]$Command = "",
