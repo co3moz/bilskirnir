@@ -128,7 +128,8 @@ pub(crate) struct GpuSeries {
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum GpuState {
-    /// The installation gives desktops no GPU (`WSL_GPU` and `NVIDIA_COMPUTE` are false).
+    /// The installation gives desktops no GPU: its GPU settings are off, or the host has none of
+    /// the GPUs they allow.
     Disabled,
     /// No GPU desktop is running, so nothing is sampled.
     #[default]

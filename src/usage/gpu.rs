@@ -67,16 +67,18 @@ pub(crate) enum Route {
     Toolkit,
 }
 
-/// The routes this installation gives desktops, in the order they are tried.
+/// The routes GPU desktops get that `nvidia-smi` can read, in the order they are tried. The
+/// render devices of `/dev/dri` have no such tool.
 pub(crate) fn routes(config: &Config) -> Vec<Route> {
-    let mut routes = Vec::new();
-    if config.wsl_gpu {
-        routes.push(Route::Wsl);
-    }
-    if config.cuda {
-        routes.push(Route::Toolkit);
-    }
-    routes
+    let used = crate::gpu::routes(config).used;
+    [
+        (crate::gpu::Route::Wsl, Route::Wsl),
+        (crate::gpu::Route::Nvidia, Route::Toolkit),
+    ]
+    .into_iter()
+    .filter(|(route, _)| used.contains(route))
+    .map(|(_, sampled)| sampled)
+    .collect()
 }
 
 fn program(route: Route) -> &'static str {
@@ -113,15 +115,10 @@ pub(crate) fn helper_args(route: Route, image: &str, name: &str) -> Vec<String> 
     .into();
     match route {
         Route::Wsl => args.extend(
-            [
-                "--device",
-                "/dev/dxg",
-                "--mount",
-                "type=bind,src=/usr/lib/wsl,dst=/usr/lib/wsl,readonly",
-                "--env",
-                "LD_LIBRARY_PATH=/usr/lib/wsl/lib",
-            ]
-            .map(str::to_owned),
+            crate::gpu::WSL_DEVICE
+                .into_iter()
+                .chain(["--env", "LD_LIBRARY_PATH=/usr/lib/wsl/lib"])
+                .map(str::to_owned),
         ),
         Route::Toolkit => args.extend(["--gpus".into(), "all".into()]),
     }
@@ -165,7 +162,9 @@ impl App {
 
 /// Sample until the sampler is stopped, trying each route in turn; returns why none works.
 pub(crate) async fn sample(app: Arc<App>) -> String {
-    let mut reason = String::from("The installation gives desktops no GPU");
+    let mut reason = String::from(
+        "nvidia-smi reads NVIDIA GPUs only, and desktops get the render devices under /dev/dri",
+    );
     for route in routes(&app.config) {
         let result = async {
             let command = app.gpu_command(route).await?;

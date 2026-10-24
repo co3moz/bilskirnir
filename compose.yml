@@ -25,6 +25,7 @@ services:
       DESKTOP_IMAGE: ${DESKTOP_IMAGE:-ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04}
       WSL_GPU: ${WSL_GPU:-true}
       NVIDIA_COMPUTE: ${NVIDIA_COMPUTE:-true}
+      DRI_GPU: ${DRI_GPU:-true}
       GPU_ADAPTER: ${GPU_ADAPTER:-}
       AUDIO_ENABLED: ${AUDIO_ENABLED:-true}
       MICROPHONE_ENABLED: ${MICROPHONE_ENABLED:-true}

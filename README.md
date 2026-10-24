@@ -66,9 +66,9 @@ The WSL package is the recommended installation. Bilskirnir itself needs only an
 
 Run the commands below on that host, as a user who can use Docker.
 
-GPU acceleration currently goes through WSL's GPU support: it needs a host where `/dev/dxg` and `/usr/lib/wsl` exist, and CUDA also needs NVIDIA Container Toolkit configured for Docker Engine. The example enables both for an NVIDIA GPU. For AMD/Intel, set `NVIDIA_COMPUTE` to `"false"` and change `GPU_ADAPTER`. On a host without WSL GPU support, or to run without a GPU, set both `WSL_GPU` and `NVIDIA_COMPUTE` to `"false"`; containers then use software rendering and the GPU option is unavailable when creating one.
+GPU containers get the host's GPU through each route the host has, which the manager looks for when it starts: the WSL GPU (`/dev/dxg` and `/usr/lib/wsl`) in a WSL2 distribution, an NVIDIA GPU through the NVIDIA Container Toolkit on a Linux host, and the `/dev/dri` render devices of AMD and Intel GPUs on a Linux host (experimental). `WSL_GPU`, `NVIDIA_COMPUTE` and `DRI_GPU` allow one route each and are on by default, so the example suits any of these hosts. With an NVIDIA GPU on a Linux host, install the NVIDIA Container Toolkit and register it with Docker first, see [GPU on a Linux host](docs/INSTALLATION.md#gpu-on-a-linux-host). Where the host has none of these, containers use software rendering and the GPU option is unavailable when creating one; set all three to `"false"` to turn GPU access off yourself. Only the WSL route has been verified on hardware so far.
 
-Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU under WSL:
+Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU:
 
 ```yaml
 name: bilskirnir
@@ -88,9 +88,10 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: "replace-with-your-password"
       DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-      # GPU access for containers created in the UI. Without WSL GPU support, set both to "false".
+      # GPU routes for containers created in the UI; each is used where the host has it.
       WSL_GPU: "true"
-      NVIDIA_COMPUTE: "true" # Set false for AMD/Intel or without CUDA support.
+      NVIDIA_COMPUTE: "true" # The NVIDIA Container Toolkit: CUDA, and OpenGL outside WSL.
+      DRI_GPU: "true" # AMD/Intel render devices outside WSL (experimental).
       GPU_ADAPTER: NVIDIA # Use AMD / Intel for other adapters.
       AUDIO_ENABLED: "true"
       MICROPHONE_ENABLED: "true"

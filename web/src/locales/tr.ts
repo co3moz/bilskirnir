@@ -947,10 +947,27 @@ export const tr: Messages = {
     "Sesli yeni bir konteynerin, aksi istenmedikçe mikrofon alıp almayacağı.",
   "settings.about.GAMEPAD_DEFAULT":
     "Yeni bir konteynerin, aksi istenmedikçe sanal gamepad alıp almayacağı.",
-  "settings.about.WSL_GPU": "WSL GPU'su üzerinden grafik hızlandırma.",
-  "settings.about.NVIDIA_COMPUTE": "NVIDIA Container Toolkit ile CUDA.",
+  "settings.about.WSL_GPU": "Host'ta varsa WSL GPU'su üzerinden grafik hızlandırma.",
+  "settings.about.NVIDIA_COMPUTE":
+    "NVIDIA Container Toolkit ile NVIDIA GPU'su: CUDA, WSL dışında OpenGL de.",
+  "settings.about.DRI_GPU":
+    "WSL dışında AMD ve Intel GPU'ları, /dev/dri altındaki render aygıtlarıyla (deneysel).",
   "settings.about.GPU_ADAPTER":
-    "Üreticiye ya da modele göre Mesa D3D12 adaptörü; boşsa biri seçilir.",
+    "Render yapılacak GPU, üreticiye ya da WSL'de model adının bir kısmına göre; boşsa biri seçilir.",
+  "settings.gpu.uses": "GPU'lu masaüstleri {routes} alır.",
+  "settings.gpu.none": "GPU'lu masaüstleri bu host'ta GPU almaz.",
+  "settings.gpu.route.wsl": "WSL GPU'sunu",
+  "settings.gpu.route.nvidia": "Container Toolkit ile NVIDIA GPU'sunu",
+  "settings.gpu.route.dri": "/dev/dri altındaki render aygıtlarını",
+  "settings.gpu.unused": "{setting} açık, ama {reason}.",
+  "settings.gpu.reason.no_wsl_gpu": "bu host'ta WSL GPU'su yok (/dev/dxg)",
+  "settings.gpu.reason.no_nvidia_gpu":
+    "bu host'ta NVIDIA sürücüsüyle çalışan bir NVIDIA GPU'su yok",
+  "settings.gpu.reason.no_toolkit":
+    "Docker'da NVIDIA Container Toolkit yok (nvidia-ctk runtime configure --runtime=docker)",
+  "settings.gpu.reason.no_render_device": "bu host'ta /dev/dri altında render aygıtı yok",
+  "settings.gpu.reason.beside_wsl": "onun yerine WSL GPU'su kullanılıyor",
+  "settings.gpu.reason.unseen": "manager Docker host'unun aygıtlarını göremiyor",
   "settings.about.UPLOAD_MAX_MB": "Tek yüklemenin alabileceği en büyük dosya, MiB.",
   "settings.about.IMAGE_ARCHIVE_MAX_MB":
     "İçe aktarmanın açacağı en büyük imaj ya da volume arşivi, MiB.",
@@ -1026,7 +1043,7 @@ export const tr: Messages = {
   "usage.unavailable": "Kullanım okunamıyor",
   "usage.gpu": "Ana makine GPU'su",
   "usage.gpuHint":
-    "GPU'nun tamamı, Windows uygulamaları dahil; WSL bir konteynerin payını bildirmez.",
+    "GPU'nun tamamı, host'taki diğer programlar dahil; bir konteynerin payı değildir.",
   "usage.gpuMemory": "{used} / {total} bellek",
   "usage.gpu.idle": "GPU'lu bir konteyner çalışırken ölçülür.",
   "usage.gpu.unavailable": "GPU okunamıyor: {reason}",
@@ -1078,6 +1095,7 @@ export const tr: Messages = {
   "spec.memoryLimit": "Bellek sınırı (MB)",
   "spec.features": "Özellikler",
   "spec.turnedOffList": "Bu kurulumda kapalı: {features}.",
+  "spec.gpuUnavailable": "Bu host'ta masaüstleri için GPU yok; nedenini Ayarlar sayfası söyler.",
   "spec.advanced": "Gelişmiş ayarlar",
   "spec.mounts.one": "{count} volume",
   "spec.mounts.other": "{count} volume",

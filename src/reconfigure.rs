@@ -167,6 +167,14 @@ impl App {
         enabled.gamepad &= !env.spec.gamepad;
         self.installation_allows(&enabled)?;
         let changes = classify(&env.spec, &spec);
+        // A change that creates the container again gives it the host's GPU again, as a reset
+        // does, and a GPU desktop without one stops at its renderer check.
+        if spec.gpu
+            && !changes.restart.is_empty()
+            && let Some(refusal) = crate::gpu::refusal(&self.config)
+        {
+            bail!(refusal);
+        }
         Ok((spec, changes))
     }
 
@@ -336,7 +344,9 @@ impl App {
         self.db.put(CONTAINERS, &env.id, &env)?;
         self.begin_stage(job_id, "create")?;
         let replaced = async {
-            self.docker_args(&self.container_args(&env)).await?;
+            self.docker_args(&self.container_args(&env))
+                .await
+                .map_err(|error| self.gpu_error(&env, error))?;
             self.write_machine_id(&env).await?;
             self.hand_over_mount_parents(&env).await?;
             if env.spec.internet {
@@ -344,7 +354,9 @@ impl App {
                     .await?;
             }
             if running {
-                self.docker(&["start", &env.container]).await?;
+                self.docker(&["start", &env.container])
+                    .await
+                    .map_err(|error| self.gpu_error(&env, error))?;
             }
             anyhow::Ok(())
         }

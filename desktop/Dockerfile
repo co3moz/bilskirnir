@@ -13,6 +13,10 @@ RUN curl -fL --retry 3 "https://github.com/VirtualGL/virtualgl/releases/download
 RUN useradd --create-home --shell /bin/bash --uid 1001 desktop \
     && mkdir -p /shared /workspace && chown desktop:desktop /shared /workspace \
     && mkdir -p /usr/local/share/applications
+# NVIDIA's EGL library for GPU desktops on a Linux host. The NVIDIA Container Toolkit's hook adds
+# the library without this file, and glvnd skips the entry where the library is missing, as in WSL.
+RUN printf '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}\n' \
+    > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 LABEL bilskirnir.desktop=true
 ENV LANG=en_US.UTF-8 DISPLAY=:0 DESKTOP_RESOLUTION=1920x1080 \
     DESKTOP_AUDIO=false DESKTOP_MICROPHONE=false DESKTOP_GPU=false DESKTOP_SUDO=true \

@@ -155,7 +155,7 @@ struct GpuSampler {
 
 impl GpuSampler {
     fn update(&mut self, app: &Arc<App>, wanted: bool) {
-        if gpu::routes(&app.config).is_empty() {
+        if !app.config.gpu_enabled() {
             app.usage.set_gpu(GpuState::Disabled, None);
             return;
         }

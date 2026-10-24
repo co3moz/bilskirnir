@@ -447,6 +447,23 @@ def recorded(spec, interfaces=1):
     return {"hostname": spec["hostname"], "machine_ids": [spec["machine_id"]] * 2, "macs": [spec["mac_address"]] * interfaces}
 
 
+gpu_routes = []
+
+
+def gpu_renderer(diagnostics):
+    """The renderer `gpu-run` reports in a container's diagnostics, which is the host GPU of the
+    routes the manager found: Mesa's D3D12 driver in WSL, NVIDIA's own driver through the toolkit
+    on a Linux host, or one of Mesa's hardware drivers on /dev/dri."""
+    section = diagnostics.split("=== GPU / VirtualGL EGL ===", 1)[1].split("\n=== ", 1)[0]
+    renderer = next(line for line in section.splitlines() if "OpenGL renderer string" in line)
+    assert not any(soft in renderer for soft in ("llvmpipe", "softpipe", "Software Rasterizer")), section
+    if "wsl" in gpu_routes:
+        assert "D3D12 (NVIDIA" in renderer, section
+    elif "nvidia" in gpu_routes:
+        assert "NVIDIA" in renderer, section
+    return renderer
+
+
 try:
     port = start_manager()
     login()
@@ -757,6 +774,15 @@ try:
     settings = api("settings")
     assert settings["defaults"] == {"gpu": False, "internet": True, "sudo": True, "audio": False, "microphone": False, "gamepad": False}, settings
     assert settings["root_mcp_enabled"] and settings["internet_enabled"] and settings["sudo_enabled"] and settings["gamepad_enabled"], settings
+    # The manager looked at its host's /sys: WSL gets the WSL GPU and CUDA beside it, a Linux
+    # host its NVIDIA GPU through the toolkit or its render devices; WSL_GPU stays on in both.
+    gpu_routes = settings["gpu"]["routes"]
+    assert settings["gpu_enabled"] and settings["gpu"]["found"] is not None, settings["gpu"]
+    if settings["gpu"]["found"]["wsl"]:
+        assert gpu_routes == ["nvidia", "wsl"], settings["gpu"]
+    else:
+        assert "wsl" not in gpu_routes and {"route": "wsl", "setting": "WSL_GPU", "reason": "no_wsl_gpu"} in settings["gpu"]["unused"], settings["gpu"]
+    print(f"PASS GPU routes found on this host: {gpu_routes}", flush=True)
     with client.open(f"http://127.0.0.1:{port}/", timeout=30) as response:
         policy = response.headers["Content-Security-Policy"]
     assert "connect-src 'self' https://raw.githubusercontent.com;" in policy, policy
@@ -1449,7 +1475,7 @@ try:
     print("PASS binary/empty uploads, any home folder, new folders, desktop ownership, volume persistence, overwrite protection, symlinks and revoked transfer cleanup",flush=True)
     assert docker("exec", container, "cat", "/opt/script-built") == b"script-built"
     diag = api(f"containers/{env_id}/diagnostics")["output"]
-    assert "D3D12 (NVIDIA" in diag, diag
+    gpu_renderer(diag)
     assert "Default Source: browser-microphone" in diag, diag
     # A program laid out like a Chromium build turns VirtualGL's Chrome workaround on for itself,
     # also when the panel starts it; other programs, and those a browser starts, keep the default.
@@ -1696,7 +1722,7 @@ try:
     shell_env = docker("exec","--user","desktop",gnome_container,"sh","-c","tr '\\0' '\\n' < /proc/$(pgrep -x gnome-shell)/environ")
     assert any(line.startswith(b"LD_PRELOAD=") and b"/chromium-gpu.so" in line for line in shell_env.splitlines()), shell_env
     assert api(f"containers/{gnome_id}/screenshot",raw=True).startswith(b"\xff\xd8")
-    assert "D3D12 (NVIDIA" in api(f"containers/{gnome_id}/diagnostics")["output"]
+    gpu_renderer(api(f"containers/{gnome_id}/diagnostics")["output"])
     gnome_snapshot=job(api(f"containers/{gnome_id}/snapshot",{"name":"GNOME snapshot"}))
     assert gnome_snapshot["desktop"]["session"] == "gnome"
     assert gnome_snapshot["parent_image_id"] == gnome["image_id"]
