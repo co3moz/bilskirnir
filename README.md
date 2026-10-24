@@ -126,4 +126,10 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 - [Interface design](docs/DESIGN.md): visual choices and guidance for interface changes.
 - [Verification notes](docs/BUG_HUNT.md): the October 2026 bug audits, what they checked and what they did not prove.
 
-Bilskirnir is written in Rust with a plain JavaScript frontend and is released under the [MIT license](LICENSE). Its bundled components keep their [own licenses](THIRD_PARTY_NOTICES.md).
+## License
+
+Copyright (C) 2026 Bilskirnir contributors
+
+Bilskirnir is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`GPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Releases up to and including 0.6.3 were published under the MIT license, which still applies to them. Bilskirnir is written in Rust with a React and TypeScript frontend; its bundled components keep their [own licenses](THIRD_PARTY_NOTICES.md), each one that GPL-3.0-or-later can carry, and the interface build refuses a package under any other.

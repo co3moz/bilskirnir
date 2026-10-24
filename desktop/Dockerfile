@@ -49,11 +49,13 @@ COPY bilskirnir-mcp-tray.py /usr/local/bin/bilskirnir-mcp-tray
 COPY mcp-tray/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY mcp-tray/icons/ /usr/local/share/icons/hicolor/
 COPY mcp-tray/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+# What the Bilskirnir programs above are licensed under, beside every Ubuntu package's copyright.
+COPY copyright /usr/share/doc/bilskirnir/copyright
 RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp \
         /usr/local/bin/bilskirnir-mcp-tray \
     && chmod -R u=rwX,go=rX /usr/local/share/icons/hicolor \
     && chmod 644 /usr/local/share/applications/bilskirnir-mcp.desktop \
-        /etc/xdg/autostart/bilskirnir-mcp-tray.desktop
+        /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /usr/share/doc/bilskirnir/copyright
 
 FROM common AS xfce-packages
 # librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon
@@ -68,6 +70,7 @@ COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
 COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/doc/bilskirnir/ /usr/share/doc/bilskirnir/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
@@ -92,6 +95,7 @@ COPY --from=scripts /usr/local/bin/ /usr/local/bin/
 COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
 COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/doc/bilskirnir/ /usr/share/doc/bilskirnir/
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
 COPY gnome-container.session /usr/share/gnome-session/sessions/bilskirnir-ubuntu.session
 ENV DESKTOP_SESSION=gnome
