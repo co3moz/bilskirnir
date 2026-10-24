@@ -2,6 +2,7 @@ import { QueryCache, QueryClient, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { api, onUnauthorized } from "./api"
+import type { DependencyList } from "./dependencies"
 import { closeDialog } from "./dialogs"
 import { streamLive } from "./events"
 import { jobActive } from "./format"
@@ -86,6 +87,15 @@ export const useConfiguration = () =>
   useQuery({
     queryKey: ["configuration"],
     queryFn: () => api<Configuration>("configuration"),
+    staleTime: Infinity,
+    meta: { quiet: true },
+  })
+
+/** What this manager was built from, which only a new manager changes. */
+export const useDependencies = () =>
+  useQuery({
+    queryKey: ["dependencies"],
+    queryFn: () => api<DependencyList>("dependencies"),
     staleTime: Infinity,
     meta: { quiet: true },
   })

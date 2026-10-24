@@ -7,6 +7,7 @@ import {
   RiStackLine,
   RiDashboardLine,
   RiListCheck3,
+  RiNodeTree,
   RiComputerLine,
   RiPlugLine,
   RiPulseLine,
@@ -43,6 +44,7 @@ const navMain = [
   { page: "files", icon: <RiFolderOpenLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
   { page: "activity", icon: <RiPulseLine /> },
+  { page: "dependencies", icon: <RiNodeTree /> },
   { page: "settings", icon: <RiSettings3Line /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
