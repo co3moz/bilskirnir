@@ -954,9 +954,28 @@ export const es: Messages = {
     "Si un contenedor nuevo con sonido tiene micrófono, salvo que pida otra cosa.",
   "settings.about.GAMEPAD_DEFAULT":
     "Si un contenedor nuevo tiene el mando virtual, salvo que pida otra cosa.",
-  "settings.about.WSL_GPU": "Aceleración gráfica mediante la GPU de WSL.",
-  "settings.about.NVIDIA_COMPUTE": "CUDA mediante NVIDIA Container Toolkit.",
-  "settings.about.GPU_ADAPTER": "El adaptador Mesa D3D12 por fabricante o modelo; vacío elige uno.",
+  "settings.about.WSL_GPU": "Aceleración gráfica mediante la GPU de WSL, donde el host la tiene.",
+  "settings.about.NVIDIA_COMPUTE":
+    "La GPU NVIDIA mediante NVIDIA Container Toolkit: CUDA y, fuera de WSL, también OpenGL.",
+  "settings.about.DRI_GPU":
+    "GPU AMD e Intel fuera de WSL mediante sus dispositivos de renderizado en /dev/dri (experimental).",
+  "settings.about.GPU_ADAPTER":
+    "La GPU en la que renderizar por fabricante, o en WSL por parte del nombre del modelo; vacío elige una.",
+  "settings.gpu.uses": "Los escritorios con GPU reciben {routes}.",
+  "settings.gpu.none": "Los escritorios con GPU no reciben ninguna GPU en este host.",
+  "settings.gpu.route.wsl": "la GPU de WSL",
+  "settings.gpu.route.nvidia": "la GPU NVIDIA mediante Container Toolkit",
+  "settings.gpu.route.dri": "los dispositivos de renderizado de /dev/dri",
+  "settings.gpu.unused": "{setting} está activado, pero {reason}.",
+  "settings.gpu.reason.no_wsl_gpu": "este host no tiene GPU de WSL (/dev/dxg)",
+  "settings.gpu.reason.no_nvidia_gpu":
+    "este host no tiene una GPU NVIDIA con el controlador de NVIDIA",
+  "settings.gpu.reason.no_toolkit":
+    "Docker no tiene NVIDIA Container Toolkit (nvidia-ctk runtime configure --runtime=docker)",
+  "settings.gpu.reason.no_render_device":
+    "este host no tiene ningún dispositivo de renderizado en /dev/dri",
+  "settings.gpu.reason.beside_wsl": "se usa la GPU de WSL en su lugar",
+  "settings.gpu.reason.unseen": "el gestor no ve los dispositivos del host de Docker",
   "settings.about.UPLOAD_MAX_MB": "El archivo más grande que acepta una subida, en MiB.",
   "settings.about.IMAGE_ARCHIVE_MAX_MB":
     "El archivo de imagen o volumen más grande que descomprime una importación, en MiB.",
@@ -1034,7 +1053,7 @@ export const es: Messages = {
   "usage.unavailable": "No se puede leer el uso",
   "usage.gpu": "GPU del host",
   "usage.gpuHint":
-    "La GPU completa, incluidas las aplicaciones de Windows; WSL no indica la parte de cada contenedor.",
+    "La GPU completa, incluidos los demás programas del host; no es la parte de un contenedor.",
   "usage.gpuMemory": "{used} de {total} de memoria",
   "usage.gpu.idle": "Se mide mientras se ejecuta un contenedor con GPU.",
   "usage.gpu.unavailable": "No se puede leer la GPU: {reason}",
@@ -1086,6 +1105,8 @@ export const es: Messages = {
   "spec.memoryLimit": "Límite de memoria (MB)",
   "spec.features": "Funciones",
   "spec.turnedOffList": "Desactivado en esta instalación: {features}.",
+  "spec.gpuUnavailable":
+    "Este host no tiene GPU para los escritorios; la página de ajustes indica el motivo.",
   "spec.advanced": "Configuración avanzada",
   "spec.mounts.one": "{count} volumen",
   "spec.mounts.other": "{count} volúmenes",

@@ -37,12 +37,13 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
-import { has, plural, t } from "@/lib/i18n"
-import { queryClient, useConfiguration } from "@/lib/queries"
+import { formatList, has, plural, t } from "@/lib/i18n"
+import { queryClient, useConfiguration, useSettings } from "@/lib/queries"
 import {
   changesOf,
   choiceIndex,
   fieldOf,
+  gpuNotes,
   initialText,
   isOn,
   sections,
@@ -93,6 +94,29 @@ function Value({ variable }: { variable: ConfigVariable }) {
   if (shown.kind === "empty")
     return <span className="text-muted-foreground">{t("settings.notSet")}</span>
   return <span className="font-mono text-xs break-all">{shown.text}</span>
+}
+
+/** What GPU desktops get on this host, and why not a GPU their settings allow. */
+function GpuStatus() {
+  const report = useSettings().data?.gpu
+  if (!report) return null
+  const { routes, unused } = gpuNotes(report)
+  return (
+    <div className="flex flex-col gap-1 pb-2 text-xs">
+      <p className={routes.length ? "" : "font-medium text-warning"}>
+        {routes.length
+          ? t("settings.gpu.uses", {
+              routes: formatList(routes.map((route) => t(`settings.gpu.route.${route}`))),
+            })
+          : t("settings.gpu.none")}
+      </p>
+      {unused.map(({ setting, reason }) => (
+        <p key={setting} className="text-muted-foreground">
+          {t("settings.gpu.unused", { setting, reason: t(`settings.gpu.reason.${reason}`) })}
+        </p>
+      ))}
+    </div>
+  )
 }
 
 /** Marks a setting that changes only in `.env`, with the command that does it. */
@@ -498,6 +522,7 @@ export function ConfigurationEditor() {
               <CardTitle className="text-sm">{t(`settings.section.${section}`)}</CardTitle>
             </CardHeader>
             <CardContent className="@container/settings">
+              {section === "gpu" && <GpuStatus />}
               <dl className="flex flex-col divide-y">
                 {variables.map((variable) => {
                   const canEdit = editable && !variable.secret && !!variable.editable

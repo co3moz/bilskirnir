@@ -47,15 +47,25 @@ case ${DESKTOP_SESSION:-xfce} in
     *) echo "Unknown DESKTOP_SESSION: ${DESKTOP_SESSION}" >&2; exit 1 ;;
 esac
 if [[ ${DESKTOP_GPU:-false} == true ]]; then
+    # What to check, by the devices the manager's GPU settings gave this container.
+    if [[ -e /dev/dxg ]]; then
+        check='Check WSL_GPU: /dev/dxg, the WSL libraries under /usr/lib/wsl and GPU_ADAPTER.'
+    elif [[ -e /dev/nvidiactl ]]; then
+        check='Check NVIDIA_COMPUTE: the NVIDIA Container Toolkit has to add its graphics libraries, such as libEGL_nvidia.'
+    elif [[ -e /dev/dri ]]; then
+        check='Check DRI_GPU: the render devices under /dev/dri, their permissions and GPU_ADAPTER.'
+    else
+        check='The container has no GPU device. Check WSL_GPU, NVIDIA_COMPUTE and DRI_GPU.'
+    fi
     # Record the renderer check even when it fails: a restarting container cannot run diagnostics.
     if ! gpu-run glxinfo -B > /run/desktop/gpu-info 2>&1; then
         cat /run/desktop/gpu-info
-        echo 'GPU requested, but OpenGL initialization failed. Check /dev/dxg, WSL libraries and GPU_ADAPTER.' >&2
+        echo "GPU requested, but OpenGL initialization failed. $check" >&2
         exit 1
     fi
     cat /run/desktop/gpu-info
     if grep -Eqi 'OpenGL renderer string:.*(llvmpipe|softpipe|Software Rasterizer)' /run/desktop/gpu-info; then
-        echo 'GPU requested, but renderer is software. Check /dev/dxg, WSL libraries and GPU_ADAPTER.' >&2
+        echo "GPU requested, but renderer is software. $check" >&2
         exit 1
     fi
     # Applications launched from the selected session inherit VirtualGL.

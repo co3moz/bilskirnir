@@ -967,9 +967,26 @@ export const en = {
     "Whether a new container with sound gets the microphone unless it asks otherwise.",
   "settings.about.GAMEPAD_DEFAULT":
     "Whether a new container gets the virtual gamepad unless it asks otherwise.",
-  "settings.about.WSL_GPU": "Graphics acceleration through the WSL GPU.",
-  "settings.about.NVIDIA_COMPUTE": "CUDA through the NVIDIA Container Toolkit.",
-  "settings.about.GPU_ADAPTER": "The Mesa D3D12 adapter by vendor or model; empty picks one.",
+  "settings.about.WSL_GPU": "Graphics acceleration through the WSL GPU, where the host has one.",
+  "settings.about.NVIDIA_COMPUTE":
+    "The NVIDIA GPU through the NVIDIA Container Toolkit: CUDA, and OpenGL outside WSL.",
+  "settings.about.DRI_GPU":
+    "AMD and Intel GPUs outside WSL through their render devices under /dev/dri (experimental).",
+  "settings.about.GPU_ADAPTER":
+    "The GPU to render on by vendor, or in WSL by part of its model name; empty picks one.",
+  "settings.gpu.uses": "GPU desktops get {routes}.",
+  "settings.gpu.none": "GPU desktops get no GPU on this host.",
+  "settings.gpu.route.wsl": "the WSL GPU",
+  "settings.gpu.route.nvidia": "the NVIDIA GPU through the Container Toolkit",
+  "settings.gpu.route.dri": "the render devices under /dev/dri",
+  "settings.gpu.unused": "{setting} is on, but {reason}.",
+  "settings.gpu.reason.no_wsl_gpu": "this host has no WSL GPU (/dev/dxg)",
+  "settings.gpu.reason.no_nvidia_gpu": "this host has no NVIDIA GPU with NVIDIA's driver",
+  "settings.gpu.reason.no_toolkit":
+    "Docker has no NVIDIA Container Toolkit (nvidia-ctk runtime configure --runtime=docker)",
+  "settings.gpu.reason.no_render_device": "this host has no render device under /dev/dri",
+  "settings.gpu.reason.beside_wsl": "the WSL GPU is used instead",
+  "settings.gpu.reason.unseen": "the manager cannot see the Docker host's devices",
   "settings.about.UPLOAD_MAX_MB": "The largest file one upload takes, in MiB.",
   "settings.about.IMAGE_ARCHIVE_MAX_MB":
     "The largest image or volume archive an import unpacks, in MiB.",
@@ -1047,7 +1064,7 @@ export const en = {
   "usage.unavailable": "Usage cannot be read",
   "usage.gpu": "Host GPU",
   "usage.gpuHint":
-    "The whole GPU, Windows applications included; WSL does not report a container's share.",
+    "The whole GPU, the host's other programs included; it is not one container's share.",
   "usage.gpuMemory": "{used} of {total} memory",
   "usage.gpu.idle": "Sampled while a GPU container runs.",
   "usage.gpu.unavailable": "The GPU cannot be read: {reason}",
@@ -1101,6 +1118,7 @@ export const en = {
   "spec.memoryLimit": "Memory limit (MB)",
   "spec.features": "Features",
   "spec.turnedOffList": "Turned off for this installation: {features}.",
+  "spec.gpuUnavailable": "This host has no GPU for desktops; the Settings page says why.",
   "spec.advanced": "Advanced settings",
   "spec.mounts.one": "{count} volume",
   "spec.mounts.other": "{count} volumes",

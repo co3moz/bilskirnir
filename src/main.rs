@@ -19,6 +19,7 @@ mod exec;
 mod files;
 mod folder_archive;
 mod gamepad;
+mod gpu;
 mod human;
 mod icons;
 mod identity;
@@ -396,10 +397,12 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "bilskirnir=info,tower_http=info".into()),
         )
         .init();
-    let config = config::Config::load()?;
+    let mut config = config::Config::load()?;
     for notice in &config.notices {
         tracing::warn!("{notice}");
     }
+    config.gpu_host = gpu::Host::detect(&config).await;
+    gpu::log_routes(&config);
     if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
             "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"
