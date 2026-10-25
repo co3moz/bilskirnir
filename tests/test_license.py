@@ -25,6 +25,25 @@ def stages(dockerfile):
     return found
 
 
+def workflow_steps(workflow):
+    """Each step of a workflow that has an `id`, by that id, with its text."""
+    found = {}
+    for block in re.split(r"(?m)^ *- (?=name:|uses:)", read(workflow))[1:]:
+        step = re.search(r"(?m)^ *id: (\S+)$", block)
+        if step:
+            found[step.group(1)] = block
+    return found
+
+
+def labels(step):
+    """A step's `labels` input: the lines of its block, or the one value it passes on."""
+    block = re.search(r"(?m)^( *)labels: \|\n((?:\1 +\S.*\n)+)", step)
+    if block:
+        return [line.strip() for line in block.group(2).splitlines()]
+    value = re.search(r"(?m)^ *labels: (.+)$", step)
+    return [value.group(1).strip()] if value else []
+
+
 class LicenseTest(unittest.TestCase):
     def test_the_license_file_is_the_gplv3(self):
         text = read("LICENSE")
@@ -36,6 +55,18 @@ class LicenseTest(unittest.TestCase):
         self.assertRegex(read("core/manager/Cargo.toml"), rf'(?m)^license = "{re.escape(SPDX)}"$')
         self.assertEqual(json.loads(read("core/web/package.json"))["license"], SPDX)
         self.assertIn(f'org.opencontainers.image.licenses="{SPDX}"', read("core/manager/Dockerfile"))
+
+    def test_every_published_image_is_labeled_with_the_license(self):
+        # docker/metadata-action adds the license GitHub detects, `GPL-3.0`, and the labels it
+        # hands the build override the Dockerfile's, so each image's own step names the license.
+        steps = workflow_steps(".github/workflows/publish.yml")
+        builds = {name: step for name, step in steps.items() if "uses: docker/build-push-action@" in step}
+        self.assertTrue(builds)
+        for build, step in builds.items():
+            meta = re.fullmatch(r"\$\{\{ steps\.(\S+)\.outputs\.labels \}\}", " ".join(labels(step)))
+            self.assertIsNotNone(meta, build)
+            self.assertIn("uses: docker/metadata-action@", steps[meta.group(1)], build)
+            self.assertIn(f"org.opencontainers.image.licenses={SPDX}", labels(steps[meta.group(1)]), build)
 
     def test_every_notice_names_version_3_or_later(self):
         for path in ("README.md", "images/desktop/copyright"):

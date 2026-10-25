@@ -141,9 +141,12 @@ jobs:
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          # The action labels the license GitHub detects, `GPL-3.0`, which drops "or later" and
+          # overrides the Dockerfile's label, so each image names its license here.
           labels: |
             org.opencontainers.image.title=Bilskirnir
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
       - name: Build and publish
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -225,6 +228,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Ubuntu 24.04 · Lightweight XFCE
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
       # Each build reads the cache of both images, so a scope the cache evicted still finds `common`
       # in the other one and both images keep the same layers for it.
       - name: Build and publish XFCE
@@ -272,6 +276,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Ubuntu 24.04 · GNOME
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
       - name: Build and publish GNOME
         id: gnome
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
