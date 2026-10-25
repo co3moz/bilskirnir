@@ -1,0 +1,615 @@
+#!/usr/bin/env bash
+# Manage the Bilskirnir installation inside the WSL distribution.
+set -euo pipefail
+INSTALL=/opt/bilskirnir
+# The manager the package installs, and where its releases are listed.
+MANAGER_REPOSITORY=ghcr.io/co3moz/bilskirnir
+RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
+# The installation files every manager image bundles under /app/install. The package and each update
+# record their checksums in .shipped.sha256, which tells an update whether a file was edited by hand.
+INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
+# Every manager image bundles this command as well, and an update installs it from a newer release; see
+# update_cli. The package build and that update fill in the release the command came with, and
+# NEEDS_PACKAGE is the lowest package level it works on. An older command reads both lines from a newer
+# one before it installs it, so they keep this form.
+CLI=/usr/local/bin/bilskirnir
+CLI_VERSION=
+NEEDS_PACKAGE=1
+# The package records the level of its own files here, such as the firewall watcher and its unit. A
+# package without the file is level 1.
+PACKAGE_LEVEL=/usr/lib/wsl/package-level
+# The units that run an update or a settings change the dashboard asks for. Every manager image
+# bundles them under /app/install/systemd, and the package installs them as well; see update_units.
+UNIT_DIR=/etc/systemd/system
+UPDATE_UNITS=(bilskirnir-update.path bilskirnir-update.service)
+SETTINGS_UNITS=(bilskirnir-settings.path bilskirnir-settings.service)
+# The settings the dashboard's Settings page may change, through apply-settings: EDITABLE in
+# core/manager/src/config.rs, and the tests hold the two lists together. The rest of .env, such as
+# the password, the agent token and the published port, changes only with 'bilskirnir settings'.
+DASHBOARD_SETTINGS=(SECURE_COOKIE ALLOWED_HOSTS DESKTOP_IMAGE DESKTOP_USER_NAMESPACES WSL_GPU NVIDIA_COMPUTE GPU_ADAPTER AUDIO_ENABLED MICROPHONE_ENABLED INTERNET_ENABLED SUDO_ENABLED GAMEPAD_ENABLED GPU_DEFAULT INTERNET_DEFAULT SUDO_DEFAULT AUDIO_DEFAULT MICROPHONE_DEFAULT GAMEPAD_DEFAULT UPLOAD_MAX_MB IMAGE_ARCHIVE_MAX_MB TEMPLATES_URL VOLUME_FILTER UPDATE_CHECK)
+# How long apply-settings waits for the manager to answer with the new settings, in seconds.
+SETTINGS_WAIT=90
+
+# Tab completion offers the first word of each indented line, so every command is listed here.
+usage() {
+    cat <<'EOF'
+Usage: bilskirnir <command>
+
+  start     Start Docker if needed, download the manager if missing and start it
+  stop      Stop the manager (desktop containers stop with the distribution)
+  restart   Recreate the manager with the current settings
+  status    Show the manager state and the dashboard address
+  logs      Show the manager's recent log output
+  update    Move the manager, its compose.yml and this command to the newest release, pull downloaded desktop images, recreate the manager
+  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
+  open      Open the dashboard in the Windows browser
+  mcp       Show the agent (MCP) endpoint, its token and client configuration
+  settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
+  apply-settings <request>  Apply a settings change from the dashboard; bilskirnir-settings.service runs it as root
+EOF
+}
+compose() {
+    (cd "$INSTALL" && docker compose "$@")
+}
+require_settings() {
+    if [[ ! -f $INSTALL/.env ]]; then
+        echo "Settings are missing. Open a new Bilskirnir terminal to run the first-start setup." >&2
+        exit 1
+    fi
+}
+ensure_docker() {
+    if ! systemctl is-active --quiet docker; then
+        sudo systemctl start docker
+    fi
+    for _ in $(seq 1 30); do
+        if docker info >/dev/null 2>&1; then return 0; fi
+        sleep 1
+    done
+    echo "Docker did not become ready. Run 'bilskirnir doctor'." >&2
+    exit 1
+}
+# The port the dashboard answers on is a setting, so the command follows .env, not the shell.
+port() {
+    local value=
+    if [[ -f $INSTALL/.env ]]; then value=$(setting PORT); fi
+    echo "${value:-8080}"
+}
+address() {
+    echo "http://localhost:$(port)"
+}
+# Who reaches the dashboard follows the address Compose publishes the port on, 127.0.0.1 unless set.
+access() {
+    local bind=
+    if [[ -f $INSTALL/.env ]]; then bind=$(setting BIND_ADDRESS); fi
+    bind=${bind:-127.0.0.1}
+    if [[ $bind == 127.* || $bind == localhost ]]; then
+        echo "this computer only ($bind:$(port))"
+    else
+        echo "other devices too ($bind:$(port))"
+    fi
+}
+# One setting from .env, without the quotes the first start puts around some values.
+setting() {
+    local value
+    value=$(sed -n "s/^$1=//p" "$INSTALL/.env" | tail -n1)
+    if [[ $value =~ ^\'(.*)\'$ || $value =~ ^\"(.*)\"$ ]]; then value=${BASH_REMATCH[1]}; fi
+    printf '%s\n' "$value"
+}
+# .env belongs to root, so it changes through sudo; sed keeps its owner and mode. The values set
+# here are image references, which hold no character that sed or the shell treats specially.
+set_setting() {
+    if grep -q "^$1=" "$INSTALL/.env"; then
+        sudo sed -i "s|^$1=.*|$1=$2|" "$INSTALL/.env"
+    else
+        printf '%s=%s\n' "$1" "$2" | sudo tee -a "$INSTALL/.env" >/dev/null
+    fi
+}
+# Settings a release renamed, as OLD=NEW. The manager reads an old name while the new one is
+# missing and says to rename it; an update renames it in .env, or drops it when the new name is
+# there already, since that one applies.
+RENAMED_SETTINGS=(MCP_ENABLED=ROOT_MCP_ENABLED)
+rename_settings() {
+    local pair old new
+    for pair in "${RENAMED_SETTINGS[@]}"; do
+        old=${pair%%=*} new=${pair#*=}
+        if ! grep -q "^$old=" "$INSTALL/.env"; then
+            continue
+        fi
+        if grep -q "^$new=" "$INSTALL/.env"; then
+            sudo sed -i "/^$old=/d" "$INSTALL/.env"
+            echo "Removed $old from .env; $new applies."
+        else
+            sudo sed -i "s/^$old=/$new=/" "$INSTALL/.env"
+            echo "Renamed $old to $new in .env."
+        fi
+    done
+}
+# Prints the version of the newest published release, without the v of its tag.
+newest_release() {
+    local version
+    version=$(curl -fsS --max-time 20 "$RELEASES" | grep -o '"tag_name": *"v[^"]*"' | head -n1 |
+        sed 's/.*"v\([^"]*\)"$/\1/') || true
+    if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Could not find the newest release at $RELEASES; nothing was updated." >&2
+        return 1
+    fi
+    echo "$version"
+}
+# Desktop profiles download on first use, so refresh only the ones this host already has. A release
+# manager, labelled with its version, downloads the desktop images published with it and tags them
+# as the catalog reference; any other manager downloads the reference itself. This does the same.
+update_profiles() {
+    local catalog release ref source source_was_here
+    if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
+        ! release=$(docker inspect --format '{{index .Config.Labels "bilskirnir.release"}}' "$(compose ps -q manager)"); then
+        echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
+        return 1
+    fi
+    for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
+        if ! docker image inspect "$ref" >/dev/null 2>&1; then
+            continue
+        fi
+        if [[ $release =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
+            source=${ref%:*}:$release
+            # As in the manager, a release tag that was here before stays.
+            source_was_here=""
+            if docker image inspect "$source" >/dev/null 2>&1; then source_was_here=yes; fi
+            docker pull "$source"
+            docker tag "$source" "$ref"
+            if [[ -z $source_was_here ]]; then docker image rm "$source" >/dev/null || true; fi
+        else
+            docker pull "$ref"
+        fi
+    done
+}
+checksum() {
+    sha256sum <"$1" | cut -c1-64
+}
+# Installation files belong to root, so they change through sudo: written beside the old file and
+# renamed over it, so a failed write leaves the old one whole and a running command keeps reading the
+# file it started from. A file keeps its owner, and its mode unless a third argument names one.
+put_file() {
+    local target=$1 mode=(-m "${3:-0644}")
+    if [[ -e $target ]]; then
+        mode=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
+    fi
+    sudo install -D "${mode[@]}" "$2" "$target.new"
+    sudo mv -f "$target.new" "$target"
+}
+# The command comes only from releases, like the package's own, and never from a MANAGER_IMAGE chosen
+# by hand. That manager already runs with the Docker socket, but as a container the next change of
+# MANAGER_IMAGE replaces, while a command it installed would stay and keep running with sudo. A release
+# replaces the command when it is newer than this one, never older, and only when this package has the
+# level of files the new command needs. The new command then runs the whole update again, so the rest
+# of it follows the new release's rules. Each replacement records a newer release, which the new
+# command finds equal to its own, so the update ends.
+update_cli() {
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":} new=$tmp/bilskirnir needs level
+    if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "MANAGER_IMAGE is not a release, so the bilskirnir command stays as it is."
+        return 0
+    fi
+    if [[ $CLI_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ &&
+        $(printf '%s\n' "$release" "$CLI_VERSION" | sort -V | tail -n1) == "$CLI_VERSION" ]]; then
+        return 0
+    fi
+    if ! docker run --rm --network none --entrypoint cat "$image" /app/install/bilskirnir >"$new" 2>/dev/null ||
+        [[ ! -s $new ]]; then
+        echo "$image has no bilskirnir command; this one stays as it is." >&2
+        return 0
+    fi
+    needs=$(sed -n 's/^NEEDS_PACKAGE=\([0-9][0-9]*\)$/\1/p' "$new" | head -n1)
+    sed -i "s|^CLI_VERSION=.*|CLI_VERSION=$release|" "$new"
+    if [[ -z $needs ]] || ! grep -qFx "CLI_VERSION=$release" "$new" || ! bash -n "$new" 2>/dev/null; then
+        echo "The bilskirnir command in $image is incomplete; this one stays as it is." >&2
+        return 0
+    fi
+    level=$(cat "$PACKAGE_LEVEL" 2>/dev/null || true)
+    if ! [[ $level =~ ^[0-9]+$ ]]; then level=1; fi
+    if ((10#$needs > 10#$level)); then
+        echo "The bilskirnir command of $release needs a newer WSL package (level $needs, this one has $level), so this one stays as it is."
+        return 0
+    fi
+    put_file "$CLI" "$new" 0755
+    echo "The bilskirnir command moves from ${CLI_VERSION:-an earlier version} to $release; the update continues with it."
+    # exec skips the EXIT trap.
+    rm -rf "$tmp"
+    exec "$CLI" update
+}
+# Settings added in a release reach the manager only through the environment list in its compose.yml,
+# so an update brings the installation files of the manager it runs. A file still as it was installed
+# is replaced. One edited by hand stays when the release brings the same file again; otherwise it is
+# saved as <file>.bak first. .env holds the settings and is never one of them.
+update_install_files() {
+    local image=$1 file new current shipped
+    for file in "${INSTALL_FILES[@]}"; do
+        mkdir -p "$tmp/$(dirname "$file")"
+        if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/$file" >"$tmp/$file" ||
+            [[ ! -s $tmp/$file ]]; then
+            echo "$image has no /app/install/$file; the installation files stay as they are." >&2
+            return 0
+        fi
+    done
+    # Like the package, the example names the manager this installation runs.
+    sed -i "s|^MANAGER_IMAGE=.*|MANAGER_IMAGE=$image|" "$tmp/.env.example"
+    (cd "$tmp" && sha256sum "${INSTALL_FILES[@]}") >"$tmp/.shipped.sha256"
+    for file in "${INSTALL_FILES[@]}"; do
+        new=$(checksum "$tmp/$file")
+        current=""
+        if [[ -e $INSTALL/$file ]]; then current=$(checksum "$INSTALL/$file"); fi
+        shipped=$(awk -v file="$file" '$2 == file { print $1 }' "$INSTALL/.shipped.sha256" 2>/dev/null || true)
+        if [[ $current == "$new" ]]; then
+            continue
+        elif [[ -n $current && $current != "$shipped" ]]; then
+            if [[ $new == "$shipped" ]]; then continue; fi
+            sudo cp -p "$INSTALL/$file" "$INSTALL/$file.bak"
+            echo "$file had changes of your own; they are saved in $INSTALL/$file.bak. Carry over what you still need."
+        fi
+        put_file "$INSTALL/$file" "$tmp/$file"
+        echo "Updated $file."
+    done
+    put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
+}
+# The dashboard asks for an update or a settings change by leaving a request in $INSTALL/update,
+# which the manager sees at /update. bilskirnir-update.path notices an update and
+# bilskirnir-update.service runs this command's update as root; bilskirnir-settings.path and
+# bilskirnir-settings.service do the same for apply-settings. Like the command, the units come only
+# from releases, since they run as root and would stay after a MANAGER_IMAGE chosen by hand is gone.
+# An update brings them to an installation whose package came before them, and enables them only
+# then or when a release changes them, so a path unit turned off by hand stays off. The manager
+# offers the update once the folder holds 'watched', and settings changes once it holds
+# 'settings-watched'.
+update_units() {
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":}
+    if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    fi
+    install_units "$image" watched "updates" "The dashboard can update this installation from now on." \
+        "${UPDATE_UNITS[@]}"
+    install_units "$image" settings-watched "settings changes" "The dashboard can change settings from now on." \
+        "${SETTINGS_UNITS[@]}"
+}
+# One path unit and the service it starts, from the release image, and the file in the folder that
+# tells the manager they are there.
+install_units() {
+    local image=$1 marker=$2 what=$3 done=$4 unit changed=""
+    shift 4
+    for unit in "$@"; do
+        if ! docker run --rm --network none --entrypoint cat "$image" "/app/install/systemd/$unit" >"$tmp/$unit" 2>/dev/null ||
+            [[ ! -s $tmp/$unit ]]; then
+            echo "$image has no $unit, so $what from the dashboard stay as they are."
+            return 0
+        fi
+    done
+    for unit in "$@"; do
+        if ! cmp -s "$tmp/$unit" "$UNIT_DIR/$unit"; then
+            put_file "$UNIT_DIR/$unit" "$tmp/$unit" 0644
+            changed=yes
+        fi
+    done
+    if [[ -n $changed ]]; then
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now "$1"
+        sudo install -d -m 0755 "$INSTALL/update"
+        sudo touch "$INSTALL/update/$marker"
+        echo "$done"
+    fi
+}
+# Whether a value can stand as KEY=value in .env and come back unchanged: one line of printable
+# ASCII, without the quotes, $, #, backslashes and backquotes that Compose's quoting and
+# interpolation would read otherwise, and without the spaces at either end that it trims. The
+# manager refuses the same values (env_value in core/manager/src/config.rs); this checks them
+# again, since the request comes from the manager's container.
+dashboard_value() {
+    local LC_ALL=C value=$1 printable='^[ -~]*$'
+    [[ ${#value} -le 2048 && $value =~ $printable && $value != *[\$\#\"\'\`\\]* &&
+        $value != [[:space:]]* && $value != *[[:space:]] ]]
+}
+dashboard_setting() {
+    local name
+    for name in "${DASHBOARD_SETTINGS[@]}"; do
+        if [[ $1 == "$name" ]]; then return 0; fi
+    done
+    return 1
+}
+# Whether the manager answers its health check, asked inside its container, so whatever address
+# Compose publishes it on. A manager that refuses its settings exits, and Docker starts it again.
+manager_answers() {
+    local _
+    for _ in $(seq 1 "$SETTINGS_WAIT"); do
+        if compose exec -T manager curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+# A settings change the dashboard asked for: the request's first line names the dashboard's job,
+# and each line after it is KEY=value for one of DASHBOARD_SETTINGS. Nothing changes unless every
+# line is one; then only those lines of .env change, in place, a missing one is added at the end
+# and the rest of the file, comments and order, stays. The previous file is kept as .env.previous,
+# and is put back when the manager does not answer with the new one.
+apply_settings() {
+    local request=$1 line key value count=0 i
+    local -a keys=() values=()
+    local -A asked=()
+    while IFS= read -r line || [[ -n $line ]]; do
+        count=$((count + 1))
+        if ((count == 1)); then
+            continue
+        fi
+        if ((count > ${#DASHBOARD_SETTINGS[@]} + 1)); then
+            echo "The request asks for more settings than the dashboard can change; nothing was changed." >&2
+            return 1
+        fi
+        key=${line%%=*}
+        value=${line#*=}
+        if [[ $line != *=* ]] || ! dashboard_setting "$key"; then
+            echo "The dashboard cannot change '${key:0:64}'; that changes only with 'bilskirnir settings'. Nothing was changed." >&2
+            return 1
+        fi
+        if [[ -n ${asked[$key]:-} ]]; then
+            echo "The request names $key twice; nothing was changed." >&2
+            return 1
+        fi
+        if ! dashboard_value "$value"; then
+            echo "$key cannot be written to .env as asked: use one line of printable ASCII without quotes, \$, #, backslashes or backquotes. Nothing was changed." >&2
+            return 1
+        fi
+        asked[$key]=1
+        keys+=("$key")
+        values+=("$value")
+    done <"$request"
+    if ((${#keys[@]} == 0)); then
+        echo "The request changes no setting; nothing was changed." >&2
+        return 1
+    fi
+    if systemctl is-active --quiet bilskirnir-update.service; then
+        echo "An update is running, so the settings stay as they are. Change them once it has finished." >&2
+        return 1
+    fi
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    local changes=""
+    echo "The dashboard asks for these settings:"
+    for i in "${!keys[@]}"; do
+        changes+="${keys[i]}=${values[i]}"$'\n'
+        echo "  ${keys[i]}=${values[i]}"
+    done
+    # Values go through the environment, so awk reads them as they are.
+    CHANGES=$changes awk '
+        BEGIN {
+            n = split(ENVIRON["CHANGES"], lines, "\n")
+            for (i = 1; i <= n; i++) {
+                eq = index(lines[i], "=")
+                if (eq < 2) continue
+                key = substr(lines[i], 1, eq - 1)
+                value[key] = substr(lines[i], eq + 1)
+                order[++count] = key
+            }
+        }
+        {
+            eq = index($0, "=")
+            key = substr($0, 1, eq - 1)
+            if (eq > 1 && key in value) {
+                if (!(key in written)) print key "=" value[key]
+                written[key] = 1
+                next
+            }
+            print
+        }
+        END { for (i = 1; i <= count; i++) if (!(order[i] in written)) print order[i] "=" value[order[i]] }
+    ' "$INSTALL/.env" >"$tmp/env"
+    sudo cp -p "$INSTALL/.env" "$INSTALL/.env.previous"
+    put_file "$INSTALL/.env" "$tmp/env"
+    echo "Wrote $(IFS=,; echo "${keys[*]}" | sed 's/,/, /g') to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
+    echo "Recreating the manager with the new settings."
+    if compose up -d --force-recreate manager && manager_answers; then
+        echo "The manager answers with the new settings."
+        return 0
+    fi
+    echo "The manager did not answer within $SETTINGS_WAIT seconds with the new settings, so .env is back as it was."
+    put_file "$INSTALL/.env" "$INSTALL/.env.previous"
+    if compose up -d --force-recreate manager && manager_answers; then
+        echo "The manager answers with the previous settings again."
+    else
+        echo "The manager does not answer with the previous settings either. Run 'bilskirnir logs' and 'bilskirnir doctor'."
+    fi
+    return 1
+}
+case ${1:-help} in
+    start)
+        require_settings
+        ensure_docker
+        compose up -d
+        echo "Bilskirnir is starting at $(address)"
+        ;;
+    stop)
+        compose stop
+        ;;
+    restart)
+        require_settings
+        ensure_docker
+        compose up -d --force-recreate manager
+        ;;
+    status)
+        if docker info >/dev/null 2>&1; then
+            compose ps
+            if curl -fsS "http://127.0.0.1:$(port)/healthz" >/dev/null 2>&1; then
+                echo "Dashboard: $(address), reachable from $(access)"
+            else
+                echo "The manager is not answering yet."
+            fi
+        else
+            echo "Docker is not running. Use 'bilskirnir start'."
+        fi
+        ;;
+    logs)
+        compose logs --tail=100 manager
+        ;;
+    update)
+        require_settings
+        ensure_docker
+        # The package pins the manager to the release it belongs to, and only an update moves that pin,
+        # to the newest release and never back. Any other MANAGER_IMAGE, such as latest or a digest, was
+        # chosen by hand and is pulled again as it is.
+        current=$(setting MANAGER_IMAGE)
+        image=$current
+        pinned=${current#"$MANAGER_REPOSITORY":}
+        if [[ -z $current || ($pinned != "$current" && $pinned =~ ^[0-9]+\.[0-9]+\.[0-9]+$) ]]; then
+            version=$(newest_release)
+            if [[ -n $current && $(printf '%s\n' "$version" "$pinned" | sort -V | tail -n1) == "$pinned" ]]; then
+                echo "The manager stays on $pinned; the newest release is $version."
+            else
+                image=$MANAGER_REPOSITORY:$version
+            fi
+        fi
+        # The installation files and the command come from the manager about to run, so it is pulled
+        # first, and the pin moves only once its image is here.
+        docker pull "$image"
+        if [[ $image != "$current" ]]; then
+            set_setting MANAGER_IMAGE "$image"
+            echo "The manager moves from ${pinned:-latest} to $version."
+        fi
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        update_cli "$image"
+        update_install_files "$image"
+        update_units "$image"
+        rename_settings
+        compose pull
+        compose up -d
+        update_profiles
+        ;;
+    doctor)
+        echo "systemd:   $(systemctl is-system-running 2>/dev/null || true)"
+        echo "docker:    $(systemctl is-active docker 2>/dev/null || true)"
+        if docker info --format 'engine {{.ServerVersion}}, live-restore {{.LiveRestoreEnabled}}, runtimes: {{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null; then :; else echo "docker info failed"; fi
+        # WSL distributions share one network namespace, so another one can clear Docker's rules.
+        if systemctl is-enabled --quiet nftables 2>/dev/null; then
+            echo "nftables:  enabled; it flushes the firewall of every WSL distribution when it starts or stops. Run 'sudo systemctl mask nftables'."
+        fi
+        if missing=$(sudo -n /usr/lib/wsl/firewall-watch.sh --check 2>/dev/null); then
+            echo "firewall:  Docker's rules are in place ($(systemctl is-active bilskirnir-firewall 2>/dev/null || true) watcher)"
+        elif [[ -n $missing ]]; then
+            echo "firewall:  no rules for $(awk '{print $1}' <<<"$missing" | paste -sd, -); another WSL distribution removed them. 'sudo systemctl restart docker' restores them."
+        else
+            echo "firewall:  not checked (needs sudo and a running Docker)"
+        fi
+        # Memory and processors are set for every WSL distribution together in .wslconfig on Windows,
+        # while the disk limit belongs to this distribution's virtual disk. MemTotal sits a little below
+        # the configured size, so the memory check allows for that and memory=8GB passes.
+        awk '/^MemTotal:/ { mem = $2 } /^SwapTotal:/ { swap = $2 } END {
+            printf "memory:    %.1f GiB, swap %.1f GiB", mem / 1048576, swap / 1048576
+            if (mem < 7.5 * 1048576) printf "; below 8 GB, raise memory= in %%UserProfile%%\\.wslconfig and run wsl --shutdown"
+            print ""
+        }' /proc/meminfo
+        echo "CPUs:      $(nproc)"
+        df -Pk / | awk -v distro="${WSL_DISTRO_NAME:-Bilskirnir}" 'NR == 2 {
+            printf "disk:      %.0f GiB free of %.0f GiB", $4 / 1048576, $2 / 1048576
+            if ($4 < 10 * 1048576) printf "; below 10 GB, enlarge it from Windows with wsl --manage %s --resize <size>", distro
+            print ""
+        }'
+        if [[ -e /dev/dxg ]]; then echo "WSL GPU:   /dev/dxg present"; else echo "WSL GPU:   /dev/dxg missing (install a WSL-capable GPU driver on Windows)"; fi
+        if compgen -G "/usr/lib/wsl/lib/libcuda.so*" >/dev/null; then echo "CUDA:      libcuda found in /usr/lib/wsl/lib"; else echo "CUDA:      libcuda not found; NVIDIA_COMPUTE should stay false"; fi
+        if [[ -x /usr/lib/wsl/lib/nvidia-smi ]]; then /usr/lib/wsl/lib/nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || true; fi
+        # Under NAT networking Windows forwards only its own localhost into WSL, whatever the bind address.
+        reach=$(access)
+        networking=$(wslinfo --networking-mode 2>/dev/null || true)
+        printf 'access:    reachable from %s, WSL networking %s' "$reach" "${networking:-unknown}"
+        if [[ $reach == other* && $networking == nat ]]; then printf '; other devices need mirrored networking or a port proxy on Windows'; fi
+        echo
+        if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
+        # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
+        if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
+        ;;
+    open)
+        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi
+        ;;
+    mcp)
+        require_settings
+        # Called MCP_ENABLED before 0.7.0; the manager still reads that name while the new one is missing.
+        enabled=$(setting ROOT_MCP_ENABLED)
+        if [[ -z $enabled ]]; then enabled=$(setting MCP_ENABLED); fi
+        mode=$(sed -n 's/^MCP_AUTH_MODE=//p' "$INSTALL/.env" | tail -n1)
+        token=$(sed -n 's/^MCP_TOKEN=//p' "$INSTALL/.env" | tail -n1)
+        # The first start single-quotes the token so Compose keeps $ and # literal; older files have none.
+        if [[ $token =~ ^\'(.*)\'$ || $token =~ ^\"(.*)\"$ ]]; then token=${BASH_REMATCH[1]}; fi
+        if [[ $enabled != true || ($mode != none && -z $token) ]]; then
+            echo "Root agent access (/mcp) is off. MCP endpoints made on the dashboard's MCP page work without it, each with its own token, and its Connect shows their client settings." >&2
+            echo "To turn on /mcp, which reaches every desktop, set ROOT_MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
+            exit 1
+        fi
+        distro=${WSL_DISTRO_NAME:-Bilskirnir}
+        claude_shell=""
+        if [[ $mode == none ]]; then
+            echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
+            header="" claude_header=""
+            footer="Require a token by setting MCP_AUTH_MODE=token and MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+        else
+            echo "Agent access (MCP) is enabled. The token grants administrator access to every desktop."
+            header=$'\n'"  Header:  Authorization: Bearer $token"
+            if [[ $token =~ ^[A-Za-z0-9._~+/=-]+$ ]]; then
+                claude_header=" --header \"Authorization: Bearer $token\""
+            else
+                # cmd or PowerShell would expand $ % ` " inside double quotes; PowerShell single quotes keep
+                # everything literal but a single quote, which is doubled.
+                quote="'"
+                claude_shell=" (PowerShell)"
+                claude_header=" --header 'Authorization: Bearer ${token//$quote/$quote$quote}'"
+            fi
+            footer="Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+        fi
+        others=""
+        if [[ $(access) == other* ]]; then
+            others=$'\n'"  Other devices use this computer's network address in place of localhost."
+        fi
+        cat <<EOF
+
+Streamable HTTP
+  URL:     $(address)/mcp$header$others
+
+Claude Code on Windows$claude_shell:
+  claude mcp add --transport http bilskirnir $(address)/mcp$claude_header
+
+stdio bridge (no token in the client; it runs inside the manager container):
+  {
+    "mcpServers": {
+      "bilskirnir": {
+        "command": "wsl.exe",
+        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+      }
+    }
+  }
+
+$footer
+EOF
+        ;;
+    settings)
+        require_settings
+        # .env belongs to root and the docker group may only read it, so the editor cannot save it
+        # directly. sudoedit opens a copy in the user's editor and writes it back with the file's owner
+        # and mode; it picks SUDO_EDITOR, VISUAL or EDITOR, and nano when none is set.
+        SUDO_EDITOR=${SUDO_EDITOR:-${VISUAL:-${EDITOR:-nano}}} sudo --edit "$INSTALL/.env"
+        echo "Run 'bilskirnir restart' to apply the settings."
+        ;;
+    apply-settings)
+        # bilskirnir-settings.service runs this as root with the request the dashboard left; see
+        # core/manager/src/config/changes.rs.
+        require_settings
+        if [[ $# -ne 2 || ! -f $2 ]]; then
+            echo "Usage: bilskirnir apply-settings <request>, as bilskirnir-settings.service runs it" >&2
+            exit 2
+        fi
+        ensure_docker
+        apply_settings "$2"
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

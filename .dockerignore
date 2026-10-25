@@ -1,8 +1,9 @@
 target
-web/node_modules
-web/dist
+core/web/node_modules
+core/web/dist
+images/desktop/tests
+**/__pycache__
 data
 .git
 .env
 *.sqlite*
-

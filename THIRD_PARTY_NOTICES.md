@@ -13,7 +13,7 @@ Bilskirnir uses the components below to provide its browser desktop, GPU renderi
 | TigerVNC, XFCE, GNOME, Mesa, PulseAudio and other Ubuntu packages | Each package retains its own license. The desktop images include package documentation under `/usr/share/doc`. |
 | Rust dependencies | Each dependency retains its own license. `Cargo.lock` records the exact versions used. |
 | [Docker CLI and Buildx](https://github.com/docker/cli) | Apache-2.0, Copyright Docker, Inc. The manager image copies the `docker` and `docker-buildx` binaries from the `docker:28-cli` image. |
-| [Moby](https://github.com/moby/moby) seccomp profile | Apache-2.0. `desktop/seccomp.json` is Docker's default seccomp profile with one rule added, so browser sandboxes can create user namespaces. |
+| [Moby](https://github.com/moby/moby) seccomp profile | Apache-2.0. `images/desktop/seccomp.json` is Docker's default seccomp profile with one rule added, so browser sandboxes can create user namespaces. |
 | [Rust MCP SDK (rmcp)](https://github.com/modelcontextprotocol/rust-sdk) 3.5.1 | Apache-2.0. Provides the embedded MCP protocol and HTTP transport. |
 
 The dashboard's **Dependencies** page lists every interface package, crate, image, system package, tool and workflow action a release is built from, with the license each package names; the manager image's build makes that list and refuses to finish when a package that ships names none.

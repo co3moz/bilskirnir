@@ -838,12 +838,12 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 
 ## Dependencies
 
-`GET /api/dependencies` returns the list the dashboard's **Dependencies** page shows, which `scripts/dependencies.py` writes while the manager image builds, so it is the list of that build: `{"format": 1, "version": "...", "dependencies": [...]}`, with `version` the release built. A manager built outside the image, such as with `cargo run`, answers `404`. Each dependency has `group`, `name`, `version` (`null` for a system package the image takes at the version its distribution has) and, where known, `license`, `description` and `url`, and:
+`GET /api/dependencies` returns the list the dashboard's **Dependencies** page shows, which `core/manager/dependencies.py` writes while the manager image builds, so it is the list of that build: `{"format": 1, "version": "...", "dependencies": [...]}`, with `version` the release built. A manager built outside the image, such as with `cargo run`, answers `404`. Each dependency has `group`, `name`, `version` (`null` for a system package the image takes at the version its distribution has) and, where known, `license`, `description` and `url`, and:
 
 | Group | Fields |
 | --- | --- |
-| `ui` | The interface's packages from `web/bun.lock` for linux/amd64, with the license their installed `package.json` names. `scope` is `runtime` for what the interface's own dependencies reach, `development` for what only the build tools do, and `direct` whether `web/package.json` names it. |
-| `backend` | The manager's crates from `cargo metadata` for `x86_64-unknown-linux-gnu`. `scope` is `runtime` for what is compiled into the binary, `build` for what only build scripts and procedural macros use, `development` for what only tests do, and `direct` whether `Cargo.toml` names it. |
+| `ui` | The interface's packages from `core/web/bun.lock` for linux/amd64, with the license their installed `package.json` names. `scope` is `runtime` for what the interface's own dependencies reach, `development` for what only the build tools do, and `direct` whether `core/web/package.json` names it. |
+| `backend` | The manager's crates from `cargo metadata` for `x86_64-unknown-linux-gnu`. `scope` is `runtime` for what is compiled into the binary, `build` for what only build scripts and procedural macros use, `development` for what only tests do, and `direct` whether `core/manager/Cargo.toml` names it. |
 | `infrastructure` | What the Dockerfiles, Compose manifests and workflows use. `kind` is `image`, `package` (an APT package, with `source`, the image of the stage that installs it), `tool`, `download` (a GitHub release), `action` (with `pin`, the commit it is pinned to) or `runner`, and `used_in` lists where: `manager`, `desktop`, `wsl`, `compose` or `ci`. |
 
 ## Limits and results
