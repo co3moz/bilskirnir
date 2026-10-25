@@ -2,7 +2,9 @@ name: bilskirnir
 
 services:
   manager:
-    build: .
+    build:
+      context: .
+      dockerfile: core/manager/Dockerfile
     image: bilskirnir/manager:local
     container_name: ${MANAGER_CONTAINER:-bilskirnir-manager}
     restart: unless-stopped
@@ -57,7 +59,7 @@ services:
   desktop:
     profiles: [images]
     build:
-      context: desktop
+      context: images/desktop
       target: xfce
     image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
     entrypoint: ["/bin/true"]
@@ -65,7 +67,7 @@ services:
   desktop-gnome:
     profiles: [images]
     build:
-      context: desktop
+      context: images/desktop
       target: gnome
     image: ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
     entrypoint: ["/bin/true"]

@@ -10,7 +10,7 @@ A user should be able to see which containers are running, open one, and underst
 
 Use familiar names: **Dashboard**, **Containers**, **Images**, **Templates**, **Volumes**, **MCP**, **Files**, **Jobs**, **Activity**, **Dependencies** and **Settings**. Add explanatory text only when it helps someone make a decision or understand a result. A snapshot dialog should explain what is saved; a header does not need to explain that the app is a local workspace manager.
 
-Write visible copy in English in `web/src/locales/en.ts`, and give the same key a translation in every other catalog there; see [Translate the interface](DEVELOPMENT.md#translate-the-interface). Write each language as natural interface text of its own rather than word for word, keep placeholders where the sentence needs them, and keep labels short enough for a button in every language. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
+Write visible copy in English in `core/web/src/locales/en.ts`, and give the same key a translation in every other catalog there; see [Translate the interface](DEVELOPMENT.md#translate-the-interface). Write each language as natural interface text of its own rather than word for word, keep placeholders where the sentence needs them, and keep labels short enough for a button in every language. Errors should say what failed and, when possible, what the user can do next. Successful jobs should describe the outcome rather than display an unexplained ID; a job names the container or image it worked on.
 
 ## Layout
 
@@ -27,7 +27,7 @@ Pages live in the URL fragment (`#/images`, `#/desktop/<id>`) so they survive a 
 
 ## Color
 
-Colors are the shadcn theme variables in `web/src/index.css`, with a light and a dark set. Use the variables and their Tailwind utilities (`bg-card`, `text-muted-foreground`, `text-primary`) rather than introducing slightly different colors for each component. Dark is the default; the account menu offers light and system as well.
+Colors are the shadcn theme variables in `core/web/src/index.css`, with a light and a dark set. Use the variables and their Tailwind utilities (`bg-card`, `text-muted-foreground`, `text-primary`) rather than introducing slightly different colors for each component. Dark is the default; the account menu offers light and system as well.
 
 | Variable | Dark | Light | Use |
 | --- | --- | --- | --- |
@@ -69,16 +69,16 @@ The radius is 10 px (`--radius: 0.625rem`); the components derive smaller and la
 
 ## Components
 
-Components come from shadcn/ui (Radix base, Maia style) in `web/src/components/ui/` and are project code once added. Prefer an existing component to new markup, and new variants to one-off classes. Icons come from Remix Icon (`@remixicon/react`), the preset's icon library: use the `Line` icons, and a `Fill` icon only where the filled shape carries the meaning, as the success state does.
+Components come from shadcn/ui (Radix base, Maia style) in `core/web/src/components/ui/` and are project code once added. Prefer an existing component to new markup, and new variants to one-off classes. Icons come from Remix Icon (`@remixicon/react`), the preset's icon library: use the `Line` icons, and a `Fill` icon only where the filled shape carries the meaning, as the success state does.
 
 - **Summary cards** show a number, a badge and two lines of context. Use honest numbers from the API; there is no trend data, so do not invent trends.
-- **Tables** use `web/src/components/data-table.tsx`: the block's view tabs (a select on narrow pages), the columns menu, row selection where bulk actions exist, sorting on columns where order matters, and pagination that stays on its page while the list refreshes.
+- **Tables** use `core/web/src/components/data-table.tsx`: the block's view tabs (a select on narrow pages), the columns menu, row selection where bulk actions exist, sorting on columns where order matters, and pagination that stays on its page while the list refreshes.
 - **Detail drawers** open from a table row, from the right, or from the bottom on a phone, as the block's row viewer does. The container drawer holds the preview, the configuration and every action; the job drawer follows the log while the job runs; the image drawer explains the image's size with three figures and its history steps, grouped by the image they came from, each with a thin bar against the largest step: violet for the image's own steps, grey for inherited ones, with the group heading saying which is which.
 - **Container cards** show the desktop preview, name, state, desktop, resources and actions. Preserve the full screenshot instead of cropping away parts of the desktop. Hover can strengthen the border but should not move the card.
 - **Image rows** use violet icons, a cloud for catalog images, and an indented tree for parent relationships; the source and a status badge sit beside the name. A saved image's own icon replaces the violet one at 36 px, and selecting either opens the icon dialog. Image selects show the icon too. The size column shows Docker's figure and, for an image that shares layers, the part that is its own; a downloaded image's name opens the image drawer.
 - **Template cards** show the template's icon at 56 px, its name, tags and description, an **Installed** badge once an image was built from it, and **Install**, which opens **Build image** filled in so the script is read before anything runs. A template that needs a newer release shows that instead of **Install**, and list entries that cannot be offered are listed below the cards with the reason. **Merge and install** turns the cards into choices: a checkbox beside the name, the whole card selectable, a primary ring and a **Step N** badge on each chosen card instead of **Install**, and **Cancel** and **Merge** in the heading, the second enabled from two choices. A list with environments shows two sections, each under a small heading with its icon, **Applications** and then **Environments** with a line saying an environment is merged with an application; search, tags and choosing for a merge span both, and a section the filter leaves empty is left out. A list of one kind has no section headings.
 - **Steps and parts** of a compose or build merged from templates are accordion sections inside a rounded border: the build form's parts with their order number, move and leave-out buttons, the compose editor's steps, and the create form's values by step, which start open so no required value is hidden. A compose or build of one step looks as it did before steps.
-- **Dialogs** open one at a time through `web/src/lib/dialogs.ts`. Explain consequences beside the relevant control: whether a file will be replaced, what a snapshot excludes, why a script runs as root, or which setting restarts the desktop. Destructive confirmations use an alert dialog with a destructive button.
+- **Dialogs** open one at a time through `core/web/src/lib/dialogs.ts`. Explain consequences beside the relevant control: whether a file will be replaced, what a snapshot excludes, why a script runs as root, or which setting restarts the desktop. Destructive confirmations use an alert dialog with a destructive button.
 - **Toasts** report outcomes the user did not wait for: the end of a job heard on the event stream names the action and what it worked on, and a failure adds the first line of its error; each offers **View log**. A job whose log is open, or one the page that started it shows anyway, such as a script or a download, gets none. An agent's request for a person is a warning toast with **Open desktop**, except on that desktop's own view, where its strip shows it.
 - **Backup and restore** on the **Settings** page is one card below the release card, with what a backup carries beside choosing a backup to restore, one above the other on a narrow page. Ticking the secret values shows a destructive alert next to the choice. A chosen backup opens an alert dialog that names what the restore creates, what it lacks and, in a destructive alert that disables **Restore**, anything already here under the same name; the upload's progress then stays on the card while the dashboard shows other pages.
 - **File uploads** use a dashed drop target and a compact queue with progress and explicit **Uploaded**, **Failed** or **Cancelled** results. Keep completed outcomes visible and make retry available for unfinished files. Do not offer read-only destinations.
@@ -93,10 +93,10 @@ Keep keyboard focus visible, give icon buttons accessible names and keep the Rad
 
 ## Files to change
 
-- `web/src/index.css` holds the theme variables, fonts and the few global rules.
-- `web/src/components/` holds the layout pieces adapted from `dashboard-01` (`app-sidebar.tsx`, `site-header.tsx`, `section-cards.tsx`, `chart-area-interactive.tsx`, `data-table.tsx`) and Bilskirnir's own components; `ui/` holds the shadcn components.
-- `web/src/pages/` holds one file per page, `web/src/components/dialogs/` the dialogs and drawers.
-- `web/public/mark.svg` is the product mark and favicon: the hammer pendant in flat neutral colors, with one band across the head and the gem. Its dark body and light edge read on both themes; keep it that simple so it survives 16 px.
+- `core/web/src/index.css` holds the theme variables, fonts and the few global rules.
+- `core/web/src/components/` holds the layout pieces adapted from `dashboard-01` (`app-sidebar.tsx`, `site-header.tsx`, `section-cards.tsx`, `chart-area-interactive.tsx`, `data-table.tsx`) and Bilskirnir's own components; `ui/` holds the shadcn components.
+- `core/web/src/pages/` holds one file per page, `core/web/src/components/dialogs/` the dialogs and drawers.
+- `core/web/public/mark.svg` is the product mark and favicon: the hammer pendant in flat neutral colors, with one band across the head and the gem. Its dark body and light edge read on both themes; keep it that simple so it survives 16 px.
 - `components.json` records the shadcn preset (style, base color, icon library), so components added later with the shadcn CLI match the rest.
 
 Verify interface changes in the live browser, in both themes and at a narrow width, before updating screenshots.

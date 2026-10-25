@@ -22,58 +22,60 @@ When a catalog image is missing, its row under **Images** offers a download butt
 
 ## Find the code
 
+The projects sit in three folders: `core/` holds the manager (`core/manager`, Rust with the Python helpers it runs in containers under `helpers/`), the dashboard (`core/web`) and the MCP stdio bridge (`core/bridge`); `images/desktop` builds the desktop images; `packaging/` holds the WSL distribution (`packaging/wsl`) and its Windows launcher (`packaging/windows`). The Cargo workspace, the Compose manifests, `.env.example`, `deploy/`, `docs/` and the acceptance suite in `tests/` stay at the root. Each project keeps its Python tests in a `tests/` folder of its own.
+
 | Area | Files |
 | --- | --- |
-| HTTP API, settings and authentication | `src/main.rs`, `src/api.rs`, `src/config.rs`, `src/auth.rs` |
-| Docker lifecycle and jobs | `src/docker.rs`, `src/jobs.rs`, `src/process.rs` |
-| Catalog image downloads and their progress | `src/pulls.rs` |
-| Settings page changes through the WSL package | `src/config/changes.rs`, `src/package_requests.rs`, `web/src/components/configuration-editor.tsx`, `web/src/lib/settings.ts`, `wsl/bilskirnir-settings.path`, `wsl/bilskirnir-settings.service` |
-| Settings changes after creation | `src/reconfigure.rs` |
-| Composes and their setup runs | `src/compose.rs`, `src/setup_runner.py`, `tests/test_setup_runner.py`, `web/src/lib/compose.ts`, `web/src/components/dialogs/compose-dialog.tsx` |
-| Metadata and image catalog | `src/db.rs`, `src/model.rs`, `src/catalog.rs`, `desktop/profiles.json` |
-| VNC, audio and microphone proxies | `src/media.rs`, `src/audio_output.py` |
-| MCP server, command execution and desktop input | `src/mcp.rs`, `src/exec.rs`, `src/desktop_input.rs` |
-| Background applications, windows, screenshots and waits | `src/apps.rs`, `src/app_runner.py`, `src/app_control.py`, `src/windows.rs`, `src/capture.rs`, `src/waits.rs` |
-| Recordings and artifact export | `src/recordings.rs`, `src/recorder.py`, `src/export_artifacts.py` |
-| Audio capture and injection | `src/audio.rs`, `src/audio_tools.py` |
-| Interactive terminals | `src/terminal.rs`, `src/terminal_runner.py`, `src/terminal_control.py` |
-| Virtual gamepad | `src/gamepad.rs`, `src/gamepad_daemon.py`, `src/gamepad_control.py` |
-| Accessibility inspection and file download | `src/inspect_ui.py` (in `src/windows.rs`), `src/download_file.py` (in `src/files.rs`) |
-| Stdio bridge for local agent clients | `scripts/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
-| File read/write/list/move/delete API | `src/files.rs`, `src/read_file.py`, `src/upload_file.py`, `src/file_ops.py` |
-| Browser uploads and container delivery | `src/uploads.rs`, `src/upload_file.py`, `web/src/lib/uploads.ts` |
-| Folder downloads as `.tar.gz` | `src/folder_archive.rs`, `src/archive_folder.py`, `web/src/components/dialogs/download-dialog.tsx`, `tests/test_archive_folder.py` |
-| Volume files through a helper container | `src/volumes.rs`, `src/volumes/`, `src/volume_claim.py`, `web/src/components/dialogs/volume-browser.tsx`, `web/src/lib/volume-files.ts` |
-| Dashboard layout, pages and dialogs | `web/src/App.tsx`, `web/src/pages/`, `web/src/components/`, `web/src/components/dialogs/` |
-| shadcn/ui components and theme | `web/src/components/ui/`, `web/src/index.css`, `web/components.json` |
-| API client, queries and pure helpers | `web/src/lib/` (`api.ts`, `queries.ts`, `format.ts`, `route.ts`) |
-| Languages of the interface | `web/src/lib/i18n.ts`, `web/src/locales/`, `web/src/components/language-menu.tsx`, `web/tests/i18n.test.ts` |
-| Remote desktop, audio and microphone | `web/src/pages/desktop.tsx`, `web/src/lib/media.ts`, `web/public/audio-worklet.js` |
-| Desktop images and startup | `desktop/Dockerfile`, `desktop/desktop-*.sh`, `desktop/gpu-run.sh`, `desktop/chromium-gpu.c` |
-| Dependency list of the Dependencies page | `scripts/dependencies.py`, `tests/test_dependencies.py`, `src/dependencies.rs`, `web/src/lib/dependencies.ts`, `web/src/pages/dependencies.tsx` |
-| Builds, tests and publishing | `scripts/`, `tests/`, `web/tests/`, `.github/workflows/publish.yml` |
-| WSL distribution package | `wsl/`, `scripts/build-wsl.sh`, `windows/bilskirnir.ps1` |
+| HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs` |
+| Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
+| Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
+| Settings page changes through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/bilskirnir-settings.path`, `packaging/wsl/bilskirnir-settings.service` |
+| Settings changes after creation | `core/manager/src/reconfigure.rs` |
+| Composes and their setup runs | `core/manager/src/compose.rs`, `core/manager/helpers/setup_runner.py`, `core/manager/tests/test_setup_runner.py`, `core/web/src/lib/compose.ts`, `core/web/src/components/dialogs/compose-dialog.tsx` |
+| Metadata and image catalog | `core/manager/src/db.rs`, `core/manager/src/model.rs`, `core/manager/src/catalog.rs`, `images/desktop/profiles.json` |
+| VNC, audio and microphone proxies | `core/manager/src/media.rs`, `core/manager/helpers/audio_output.py` |
+| MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs` |
+| Background applications, windows, screenshots and waits | `core/manager/src/apps.rs`, `core/manager/helpers/app_runner.py`, `core/manager/helpers/app_control.py`, `core/manager/src/windows.rs`, `core/manager/src/capture.rs`, `core/manager/src/waits.rs` |
+| Recordings and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/export_artifacts.py` |
+| Audio capture and injection | `core/manager/src/audio.rs`, `core/manager/helpers/audio_tools.py` |
+| Interactive terminals | `core/manager/src/terminal.rs`, `core/manager/helpers/terminal_runner.py`, `core/manager/helpers/terminal_control.py` |
+| Virtual gamepad | `core/manager/src/gamepad.rs`, `core/manager/helpers/gamepad_daemon.py`, `core/manager/helpers/gamepad_control.py` |
+| Accessibility inspection and file download | `core/manager/helpers/inspect_ui.py` (in `core/manager/src/windows.rs`), `core/manager/helpers/download_file.py` (in `core/manager/src/files.rs`) |
+| Stdio bridge for local agent clients | `core/bridge/mcp_bridge.py`, `core/bridge/tests/test_mcp_bridge.py` |
+| File read/write/list/move/delete API | `core/manager/src/files.rs`, `core/manager/helpers/read_file.py`, `core/manager/helpers/upload_file.py`, `core/manager/helpers/file_ops.py` |
+| Browser uploads and container delivery | `core/manager/src/uploads.rs`, `core/manager/helpers/upload_file.py`, `core/web/src/lib/uploads.ts` |
+| Folder downloads as `.tar.gz` | `core/manager/src/folder_archive.rs`, `core/manager/helpers/archive_folder.py`, `core/web/src/components/dialogs/download-dialog.tsx`, `core/manager/tests/test_archive_folder.py` |
+| Volume files through a helper container | `core/manager/src/volumes.rs`, `core/manager/src/volumes/`, `core/manager/helpers/volume_claim.py`, `core/web/src/components/dialogs/volume-browser.tsx`, `core/web/src/lib/volume-files.ts` |
+| Dashboard layout, pages and dialogs | `core/web/src/App.tsx`, `core/web/src/pages/`, `core/web/src/components/`, `core/web/src/components/dialogs/` |
+| shadcn/ui components and theme | `core/web/src/components/ui/`, `core/web/src/index.css`, `core/web/components.json` |
+| API client, queries and pure helpers | `core/web/src/lib/` (`api.ts`, `queries.ts`, `format.ts`, `route.ts`) |
+| Languages of the interface | `core/web/src/lib/i18n.ts`, `core/web/src/locales/`, `core/web/src/components/language-menu.tsx`, `core/web/tests/i18n.test.ts` |
+| Remote desktop, audio and microphone | `core/web/src/pages/desktop.tsx`, `core/web/src/lib/media.ts`, `core/web/public/audio-worklet.js` |
+| Desktop images and startup | `images/desktop/Dockerfile`, `images/desktop/desktop-*.sh`, `images/desktop/gpu-run.sh`, `images/desktop/chromium-gpu.c` |
+| Dependency list of the Dependencies page | `core/manager/dependencies.py`, `core/manager/tests/test_dependencies.py`, `core/manager/src/dependencies.rs`, `core/web/src/lib/dependencies.ts`, `core/web/src/pages/dependencies.tsx` |
+| Builds, tests and publishing | `core/manager/Dockerfile`, `tests/`, each project's `tests/`, `core/web/tests/`, `.github/workflows/publish.yml` |
+| WSL distribution package | `packaging/wsl/`, `packaging/wsl/build.sh`, `packaging/windows/bilskirnir.ps1` |
 
-`web/dist/` is generated by the frontend build and is not committed. The root Dockerfile builds the frontend in the `oven/bun` image and the Rust binary, then packages them with the desktop build context and installation files. The Rust dependencies are compiled in a layer of their own through `cargo-chef`, so a source change or a version bump reuses them from the build cache; only a `Cargo.lock` change, a dependency change in `Cargo.toml` or a new `rust:1-bookworm` image compiles them again.
+`core/web/dist/` is generated by the frontend build and is not committed. The manager's Dockerfile, `core/manager/Dockerfile`, builds from the repository root: the frontend in the `oven/bun` image and the Rust binary, then it packages them with the desktop build context and installation files. The Rust dependencies are compiled in a layer of their own through `cargo-chef`, so a source change or a version bump reuses them from the build cache; only a `Cargo.lock` change, a dependency change in `core/manager/Cargo.toml` or a new `rust:1-bookworm` image compiles them again.
 
-The `dependencies` stage writes the list of the dashboard's **Dependencies** page with `scripts/dependencies.py`: the interface's packages from `web/bun.lock` with the licenses of the installed ones, the crates from `cargo metadata`, and the images, APT packages, tools, release downloads and workflow actions the Dockerfiles, Compose manifests and workflows name. It runs on the stage that compiled the dependencies, with the interface's build mounted, and the image keeps the result at `/usr/share/doc/bilskirnir/dependencies.json`, which `GET /api/dependencies` serves. With `--strict` it fails when a package that ships in the interface or the manager names no license. The `checks` job runs it the same way, so a lockfile, Dockerfile or workflow it cannot read fails a pull request before an image builds. A new Dockerfile goes into `DOCKERFILES` in the script, which `tests/test_dependencies.py` holds to the Dockerfiles in the repository, and a new place or kind gets its label in every catalog. To look at the list without building the image, run it from the repository root once `web/node_modules` is installed:
+The `dependencies` stage writes the list of the dashboard's **Dependencies** page with `core/manager/dependencies.py`: the interface's packages from `core/web/bun.lock` with the licenses of the installed ones, the crates from `cargo metadata`, and the images, APT packages, tools, release downloads and workflow actions the Dockerfiles, Compose manifests and workflows name. It runs on the stage that compiled the dependencies, with the interface's build mounted, and the image keeps the result at `/usr/share/doc/bilskirnir/dependencies.json`, which `GET /api/dependencies` serves. With `--strict` it fails when a package that ships in the interface or the manager names no license. The `checks` job runs it the same way, so a lockfile, Dockerfile or workflow it cannot read fails a pull request before an image builds. A new Dockerfile goes into `DOCKERFILES` in the script, which `core/manager/tests/test_dependencies.py` holds to the Dockerfiles in the repository, and a new place or kind gets its label in every catalog. To look at the list without building the image, run it from the repository root once `core/web/node_modules` is installed:
 
 ```bash
-python3 scripts/dependencies.py --strict --output dependencies.json
+python3 core/manager/dependencies.py --strict --output dependencies.json
 ```
 
 ## Work on the interface
 
-The Vite project lives in `web/`: `web/index.html`, the React sources under `web/src`, static files under `web/public`, which are served as they are, the unit tests under `web/tests` and the toolchain beside them (`package.json`, `vite.config.ts`, the TypeScript projects, ESLint and Prettier). Every `bun` command below runs in `web/`. Pages live in the URL fragment (`#/images`, `#/desktop/<id>`), so the manager serves one `index.html` for all of them. Vite names the files under `web/dist/assets/` after their content, and the manager lets browsers keep those for a year; `index.html` and the other files are revalidated on every load, so an upgraded manager never serves a page that points at assets it no longer has.
+The Vite project lives in `core/web/`: `core/web/index.html`, the React sources under `core/web/src`, static files under `core/web/public`, which are served as they are, the unit tests under `core/web/tests` and the toolchain beside them (`package.json`, `vite.config.ts`, the TypeScript projects, ESLint and Prettier). Every `bun` command below runs in `core/web/`. Pages live in the URL fragment (`#/images`, `#/desktop/<id>`), so the manager serves one `index.html` for all of them. Vite names the files under `core/web/dist/assets/` after their content, and the manager lets browsers keep those for a year; `index.html` and the other files are revalidated on every load, so an upgraded manager never serves a page that points at assets it no longer has.
 
-The build writes the license of every package in the bundle to `third-party-licenses.txt`, taking the text from `web/licenses/<SPDX>.txt` for a package that ships no license file, and stops when a package's license is not one Bilskirnir's GPL-3.0-or-later can carry, as listed in `GPL_COMPATIBLE` in `web/src/lib/licenses.ts`. That is why `@remixicon/react` stays at 4.8.0: later releases moved to the Remix Icon License, whose restrictions the GPL does not allow. Choose another release or another package rather than widening the list; a license goes into it only once it is known to be GPL-3.0 compatible.
+The build writes the license of every package in the bundle to `third-party-licenses.txt`, taking the text from `core/web/licenses/<SPDX>.txt` for a package that ships no license file, and stops when a package's license is not one Bilskirnir's GPL-3.0-or-later can carry, as listed in `GPL_COMPATIBLE` in `core/web/src/lib/licenses.ts`. That is why `@remixicon/react` stays at 4.8.0: later releases moved to the Remix Icon License, whose restrictions the GPL does not allow. Choose another release or another package rather than widening the list; a license goes into it only once it is known to be GPL-3.0 compatible.
 
-The layout follows the shadcn `dashboard-01` block: an inset sidebar, a site header, summary cards, an interactive chart and data tables with a detail drawer. Add a shadcn component with `bunx shadcn@latest add <component>`; it reads `web/components.json` and writes to `web/src/components/ui/`, which is project code from then on. The CLI also tends to add the `shadcn` package, an `@import "shadcn/tailwind.css"` line and `web/src/lib/utils.ts`; drop them, since that stylesheet is vendored as `web/src/shadcn.css` and components import `cn` from the `cn` package. See [DESIGN.md](DESIGN.md) before changing colors or layout.
+The layout follows the shadcn `dashboard-01` block: an inset sidebar, a site header, summary cards, an interactive chart and data tables with a detail drawer. Add a shadcn component with `bunx shadcn@latest add <component>`; it reads `core/web/components.json` and writes to `core/web/src/components/ui/`, which is project code from then on. The CLI also tends to add the `shadcn` package, an `@import "shadcn/tailwind.css"` line and `core/web/src/lib/utils.ts`; drop them, since that stylesheet is vendored as `core/web/src/shadcn.css` and components import `cn` from the `cn` package. See [DESIGN.md](DESIGN.md) before changing colors or layout.
 
 To work on the interface with hot reload, start a manager (for example with Compose, as above), then run the Vite server, which proxies `/api` including the WebSockets:
 
 ```bash
-cd web
+cd core/web
 bun install
 bun run dev
 ```
@@ -82,7 +84,7 @@ Open `http://localhost:5173`. Set `BILSKIRNIR_URL` when the manager does not lis
 
 ### Translate the interface
 
-Every visible string in `web/src` goes through `t()` from `web/src/lib/i18n.ts` with a key from `web/src/locales/en.ts`, the English catalog that the other languages follow: `de.ts`, `fr.ts`, `es.ts` and `tr.ts`. A key names where its text appears, `{name}` marks a value the code fills in, and a pair of keys ending in `.one` and `.other` holds the plural forms that `plural()` picks with the language's own rules. `rich()` fills placeholders with elements, such as a path in `<code>`, so each language keeps its own word order around them. Dates, numbers and lists follow the language through `formatDate`, `formatNumber` and `formatList`.
+Every visible string in `core/web/src` goes through `t()` from `core/web/src/lib/i18n.ts` with a key from `core/web/src/locales/en.ts`, the English catalog that the other languages follow: `de.ts`, `fr.ts`, `es.ts` and `tr.ts`. A key names where its text appears, `{name}` marks a value the code fills in, and a pair of keys ending in `.one` and `.other` holds the plural forms that `plural()` picks with the language's own rules. `rich()` fills placeholders with elements, such as a path in `<code>`, so each language keeps its own word order around them. Dates, numbers and lists follow the language through `formatDate`, `formatNumber` and `formatList`.
 
 To add or change text, edit `en.ts` and give every other catalog the same key in the same change. The catalogs are typed against `en.ts`, so a missing or misspelled key fails `bun run build`, and `tests/i18n.test.ts` fails when a translation drops a placeholder, a plural form is missing its pair or a message uses a long dash. Call `t()` while rendering or handling an event, never at module scope: a change of language renders the interface again, which only reaches text looked up then.
 
@@ -92,7 +94,7 @@ The language is the browser's first one that has a catalog, English otherwise, u
 
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
 
-Containers are created with `--security-opt seccomp=desktop/seccomp.json` unless `DESKTOP_USER_NAMESPACES=false`. The file is Docker's default profile from `github.com/moby/profiles/seccomp` v0.2.4, the version Docker Engine 29.9 vendors, with one rule appended that allows `clone` and `unshare`, so browser and Electron sandboxes can create user namespaces. To follow a newer Docker release, copy its `vendor/github.com/moby/profiles/seccomp/default.json` and append that rule again; the Rust tests check that the rule is present and that calls Docker reserves for `CAP_SYS_ADMIN` stay refused. Docker fixes the profile when it creates a container, so existing containers pick up a change only when they are recreated.
+Containers are created with `--security-opt seccomp=images/desktop/seccomp.json` unless `DESKTOP_USER_NAMESPACES=false`. The file is Docker's default profile from `github.com/moby/profiles/seccomp` v0.2.4, the version Docker Engine 29.9 vendors, with one rule appended that allows `clone` and `unshare`, so browser and Electron sandboxes can create user namespaces. To follow a newer Docker release, copy its `vendor/github.com/moby/profiles/seccomp/default.json` and append that rule again; the Rust tests check that the rule is present and that calls Docker reserves for `CAP_SYS_ADMIN` stay refused. Docker fixes the profile when it creates a container, so existing containers pick up a change only when they are recreated.
 
 The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement; keys and buttons held within a request are released when it ends, and relative movement is emulated from the position reported by `xdotool`. Scripts run from an unlinked temporary file with stdin closed. Background applications are supervised by `app_runner.py` inside the desktop, which keeps a bounded log under `/tmp`; `app_control.py` reports, reads and stops them. Window tools use `xdotool` and `wmctrl`, and `desktop-screenshot` accepts a maximum width, a region and a window ID. Accessibility inspection uses `python3-pyatspi` and the session's AT-SPI bus. Terminals run bash on a pseudo-terminal supervised by `terminal_runner.py`. Containers created with `gamepad=true` get `/dev/uinput` and a device cgroup rule for input devices; `gamepad_daemon.py` runs as root inside the desktop only, creates the virtual controller and its `/dev/input` nodes, and never touches the host.
 
@@ -104,13 +106,13 @@ The database records immutable image IDs so later tag changes do not change an e
 
 Standard Docker CLI operations have a 120-second timeout; image builds and commits have a one-hour timeout, and a compose setup step its own `timeout_seconds` plus two minutes, at least an hour. Job logs retain their last 256 KiB, and the job list returns the latest 100 entries without loading their full logs.
 
-Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Destinations must remain within the desktop home, writable mounted volumes or the folders the container's compose names, and never under a read-only mount; `web/src/lib/desktop-paths.ts` mirrors that rule for the upload dialog. The receiver rejects symlink traversal and writes completed files atomically. Preserve these constraints when changing the upload path.
+Uploads stream through bounded staging before delivery as UID/GID 1001:1001. Destinations must remain within the desktop home, writable mounted volumes or the folders the container's compose names, and never under a read-only mount; `core/web/src/lib/desktop-paths.ts` mirrors that rule for the upload dialog. The receiver rejects symlink traversal and writes completed files atomically. Preserve these constraints when changing the upload path.
 
 A volume's files are reached through a helper container started from the manager's own image with the volume at `/volume`, the same Python helpers as a running desktop, `--network none`, `--read-only`, `--cap-drop ALL` and `no-new-privileges`. Reads run as 1001:1001 on a read-only mount. Writes start as root with only `CHOWN`, `SETUID` and `SETGID` so `volume_claim.py` can give an empty, root-owned volume to the desktop user, then switch to 1001:1001 before running anything. A volume archive is written by tar as root on a read-only mount with only `DAC_READ_SEARCH` added, and an import creates a new volume and unpacks into it as 1001:1001 after the manager has gunzipped the upload against `IMAGE_ARCHIVE_MAX_MB`. Keep the Docker socket and host paths out of the helper, and keep the manager's own volumes refused.
 
 ## Add a catalog image
 
-Add an entry to `desktop/profiles.json` with an ID, display name, image reference, session, description, `build_target` and `build_service`; every field is required. The file keeps its name because the WSL package's `bilskirnir update` reads it from the manager. Then add the matching Dockerfile stage, startup session and desktop metadata labels; the `bilskirnir.profile` label carries the catalog ID.
+Add an entry to `images/desktop/profiles.json` with an ID, display name, image reference, session, description, `build_target` and `build_service`; every field is required. The file keeps its name because the WSL package's `bilskirnir update` reads it from the manager. Then add the matching Dockerfile stage, startup session and desktop metadata labels; the `bilskirnir.profile` label carries the catalog ID.
 
 Update Compose and the publishing workflow if the new image needs its own build service or published image. Rebuild the manager so its catalog includes the image. Keep image references aligned across the catalog, configuration defaults and installation files.
 
@@ -198,17 +200,17 @@ A template exported from a merged image has `parts` and `template_ids`, and can 
 
 ## Check a change
 
-For the frontend, with Bun 1.4 or later, in `web/`:
+For the frontend, with Bun 1.4 or later, in `core/web/`:
 
 ```bash
-cd web
+cd core/web
 bun install --frozen-lockfile
 bun run lint
 bun run test
 bun run build
 ```
 
-`lint` runs ESLint and checks Prettier formatting (`bun run format` fixes it), `test` type-checks and runs the unit tests in `web/tests/*.test.ts` with Bun's test runner, and `build` type-checks the application and writes `web/dist/`.
+`lint` runs ESLint and checks Prettier formatting (`bun run format` fixes it), `test` type-checks and runs the unit tests in `core/web/tests/*.test.ts` with Bun's test runner, and `build` type-checks the application and writes `core/web/dist/`.
 
 For the backend:
 
@@ -218,10 +220,10 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 ```
 
-Check the bundled stdio bridge, the helpers and the dependency list generator with Python's standard library test runner:
+Check the Python code, the bundled stdio bridge, the manager's helpers and dependency list generator, the desktop tray, and the WSL package's command and first start, with Python's standard library test runner. `tests/unit.py` runs the `tests/` folder at the root and the one of every project:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 tests/unit.py
 ```
 
 Validate both installation manifests:
@@ -265,15 +267,15 @@ The **Publish containers** workflow checks frontend and backend code, makes the 
 
 Both registries get the same image under the same tags. Docker Hub has no nested repositories, so a desktop image's name there starts with the repository's. The image catalog, the Compose manifests and the WSL package keep naming GHCR; Docker Hub is a second place to pull the same images from. Every publication also gets a `sha-<full-commit>` tag. A release tag such as `v1.2.3` publishes `1.2.3` and `1.2` for all three images without moving the `master` tags. Its manager is built with `BILSKIRNIR_RELEASE=1.2.3`: it downloads the `1.2.3` desktop images and tags them as their catalog references, and carries the version in its `bilskirnir.release` label, which `bilskirnir update` reads. Other builds leave it empty and download the catalog references. Publishing is allowed from `master` or `v*` tags; manual runs follow the same restriction. A pull request to `master` runs only the checks, and a newer commit on it cancels the run of the older one. Documentation-only changes trigger neither image builds nor pull request checks.
 
-The workflow publishes to GHCR with `GITHUB_TOKEN` and its package write access, and to Docker Hub as the `co3moz` account (`DOCKER_HUB_USER` in the workflow) with the `DOCKER_HUB_TOKEN` repository secret, a Docker Hub personal access token with read and write access. Without that secret the publishing jobs stop at their Docker Hub sign-in, before they push to either registry. It uses BuildKit caches in the GitHub Actions cache and actions pinned to commit SHAs, and reads each published manifest back by digest from both registries to check access. The two desktop images build one after the other on the same builder, so they publish the same layers for the `common` stage of `desktop/Dockerfile` and a host downloads and stores that part once; the job fails when those layers differ. The `checks` job keeps its compiled Rust dependencies with `Swatinem/rust-cache`, saved only from `master` and read by tags and pull requests. Hosted CI has no GPU, so it verifies neither the WSL GPU nor a Linux host's.
+The workflow publishes to GHCR with `GITHUB_TOKEN` and its package write access, and to Docker Hub as the `co3moz` account (`DOCKER_HUB_USER` in the workflow) with the `DOCKER_HUB_TOKEN` repository secret, a Docker Hub personal access token with read and write access. Without that secret the publishing jobs stop at their Docker Hub sign-in, before they push to either registry. It uses BuildKit caches in the GitHub Actions cache and actions pinned to commit SHAs, and reads each published manifest back by digest from both registries to check access. The two desktop images build one after the other on the same builder, so they publish the same layers for the `common` stage of `images/desktop/Dockerfile` and a host downloads and stores that part once; the job fails when those layers differ. The `checks` job keeps its compiled Rust dependencies with `Swatinem/rust-cache`, saved only from `master` and read by tags and pull requests. Hosted CI has no GPU, so it verifies neither the WSL GPU nor a Linux host's.
 
 ## Build the WSL distribution package
 
-`scripts/build-wsl.sh dist/bilskirnir.wsl` builds `wsl/Dockerfile` (Ubuntu 24.04, Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the installation files), exports the container filesystem and compresses it. Test a package with `wsl --install --from-file dist\bilskirnir.wsl --name Bilskirnir-test`, run the first-start setup, then `wsl --unregister Bilskirnir-test`. Release tags attach the package and `windows/bilskirnir.ps1`, the Windows helper the README installs with, to the GitHub release. Keep the files under `wsl/` in sync with `compose.ghcr.yml` and `.env.example`, which the Dockerfile copies.
+`packaging/wsl/build.sh dist/bilskirnir.wsl` builds `packaging/wsl/Dockerfile` (Ubuntu 24.04, Docker Engine, Compose, Buildx, the NVIDIA Container Toolkit and the installation files), exports the container filesystem and compresses it. Test a package with `wsl --install --from-file dist\bilskirnir.wsl --name Bilskirnir-test`, run the first-start setup, then `wsl --unregister Bilskirnir-test`. Release tags attach the package and `packaging/windows/bilskirnir.ps1`, the Windows helper the README installs with, to the GitHub release. Keep the files under `packaging/wsl/` in sync with `compose.ghcr.yml` and `.env.example`, which the Dockerfile copies.
 
-The package pins `MANAGER_IMAGE` to the version in `Cargo.toml`, or to `BILSKIRNIR_VERSION` when it is set, so a package built before its tag is published cannot download its manager yet; set `BILSKIRNIR_VERSION` to a published release to test a first start that downloads. The `checks` job refuses a `v*` tag that differs from the version in `Cargo.toml`, and the package job waits until all three images of the tag are published.
+The package pins `MANAGER_IMAGE` to the version in `core/manager/Cargo.toml`, or to `BILSKIRNIR_VERSION` when it is set, so a package built before its tag is published cannot download its manager yet; set `BILSKIRNIR_VERSION` to a published release to test a first start that downloads. The `checks` job refuses a `v*` tag that differs from the version in `core/manager/Cargo.toml`, and the package job waits until all three images of the tag are published.
 
-The manager image bundles `wsl/bilskirnir` under `/app/install`, and `bilskirnir update` installs it from a newer release, so a change to the command reaches installed distributions with the next release. The command already installed decides from two lines of the new one, `CLI_VERSION=`, which the package build and the update fill in, and `NEEDS_PACKAGE=`, so both keep their form. `wsl/Dockerfile` records the level of the package's own files in `/usr/lib/wsl/package-level`. When the command starts relying on a package file that older packages lack or have in another form, raise that level and `NEEDS_PACKAGE` together; installations from older packages then keep their command until they install a newer package, so prefer a command that copes with the older files.
+The manager image bundles `packaging/wsl/bilskirnir` under `/app/install`, and `bilskirnir update` installs it from a newer release, so a change to the command reaches installed distributions with the next release. The command already installed decides from two lines of the new one, `CLI_VERSION=`, which the package build and the update fill in, and `NEEDS_PACKAGE=`, so both keep their form. `packaging/wsl/Dockerfile` records the level of the package's own files in `/usr/lib/wsl/package-level`. When the command starts relying on a package file that older packages lack or have in another form, raise that level and `NEEDS_PACKAGE` together; installations from older packages then keep their command until they install a newer package, so prefer a command that copes with the older files.
 
 ## Keep older installations working
 

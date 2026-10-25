@@ -33,21 +33,21 @@ class LicenseTest(unittest.TestCase):
         self.assertIn("END OF TERMS AND CONDITIONS", text)
 
     def test_every_license_field_names_the_same_license(self):
-        self.assertRegex(read("Cargo.toml"), rf'(?m)^license = "{re.escape(SPDX)}"$')
-        self.assertEqual(json.loads(read("web/package.json"))["license"], SPDX)
-        self.assertIn(f'org.opencontainers.image.licenses="{SPDX}"', read("Dockerfile"))
+        self.assertRegex(read("core/manager/Cargo.toml"), rf'(?m)^license = "{re.escape(SPDX)}"$')
+        self.assertEqual(json.loads(read("core/web/package.json"))["license"], SPDX)
+        self.assertIn(f'org.opencontainers.image.licenses="{SPDX}"', read("core/manager/Dockerfile"))
 
     def test_every_notice_names_version_3_or_later(self):
-        for path in ("README.md", "desktop/copyright"):
+        for path in ("README.md", "images/desktop/copyright"):
             self.assertIn(OR_LATER, " ".join(read(path).split()), path)
         self.assertIn("version 3 or later", read("THIRD_PARTY_NOTICES.md"))
         # The launcher is attached to releases on its own, away from the repository's LICENSE.
-        self.assertIn("GNU General Public\n# License, version 3 or later", read("windows/bilskirnir.ps1").replace("\r\n", "\n"))
+        self.assertIn("GNU General Public\n# License, version 3 or later", read("packaging/windows/bilskirnir.ps1").replace("\r\n", "\n"))
 
     def test_every_image_and_package_carries_the_notice(self):
-        self.assertIn("COPY LICENSE /usr/share/doc/bilskirnir/LICENSE", read("Dockerfile"))
-        self.assertIn("COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE", read("wsl/Dockerfile"))
-        desktop = stages("desktop/Dockerfile")
+        self.assertIn("COPY LICENSE /usr/share/doc/bilskirnir/LICENSE", read("core/manager/Dockerfile"))
+        self.assertIn("COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE", read("packaging/wsl/Dockerfile"))
+        desktop = stages("images/desktop/Dockerfile")
         self.assertIn("COPY copyright /usr/share/doc/bilskirnir/copyright", desktop["scripts"])
         for image in ("xfce", "gnome"):
             self.assertIn("COPY --from=scripts /usr/share/doc/bilskirnir/ /usr/share/doc/bilskirnir/", desktop[image], image)

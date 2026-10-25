@@ -6,18 +6,14 @@ on:
     tags: ['v*']
     paths: &code
       - '.github/workflows/publish.yml'
-      - 'Dockerfile'
       - '.dockerignore'
       - 'compose*.yml'
       - '.env.example'
       - 'Cargo.*'
-      - 'src/**'
-      - 'web/**'
-      - 'desktop/**'
-      - 'scripts/**'
+      - 'core/**'
+      - 'images/**'
+      - 'packaging/**'
       - 'deploy/**'
-      - 'wsl/**'
-      - 'windows/**'
       - 'tests/**'
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'
@@ -53,7 +49,7 @@ jobs:
         with:
           bun-version: 1.4.3
       - name: Check frontend
-        working-directory: web
+        working-directory: core/web
         run: |
           bun install --frozen-lockfile
           bun run lint
@@ -69,8 +65,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
-      - name: Check MCP bridge
-        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Check Python tests
+        run: python3 tests/unit.py
       - name: Check backend
         run: |
           cargo fmt --check
@@ -79,20 +75,21 @@ jobs:
       # The list of the Dependencies page, made as the manager image's build makes it, so a lockfile,
       # Dockerfile or workflow it cannot read, or a shipped package without a license, fails here.
       - name: Check the dependency list
-        run: python3 scripts/dependencies.py --strict --output "$RUNNER_TEMP/dependencies.json"
+        run: python3 core/manager/dependencies.py --strict --output "$RUNNER_TEMP/dependencies.json"
       - name: Validate installation manifests
         run: |
           docker compose --env-file .env.example --profile images config --quiet
           docker compose -f compose.ghcr.yml --env-file .env.example --profile https config --quiet
-      # The tag names the published images and Cargo.toml the version the WSL package installs.
+      # The tag names the published images and core/manager/Cargo.toml the version the WSL package
+      # installs.
       - name: Check the release version
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(awk -F'"' '/^version = /{ print $2; exit }' Cargo.toml)
+          version=$(awk -F'"' '/^version = /{ print $2; exit }' core/manager/Cargo.toml)
           if [[ "v$version" != "$TAG" ]]; then
-            echo "::error::Tag $TAG does not match version $version in Cargo.toml"
+            echo "::error::Tag $TAG does not match version $version in core/manager/Cargo.toml"
             exit 1
           fi
 
@@ -152,7 +149,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: Dockerfile
+          file: core/manager/Dockerfile
           platforms: linux/amd64
           build-args: BILSKIRNIR_RELEASE=${{ steps.names.outputs.release }}
           push: true
@@ -175,8 +172,9 @@ jobs:
           printf '### %s\n\n```text\n%s\n```\n' 'Bilskirnir' "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
   # Both desktop images build in one job on one builder, so the second takes the `common` stage of
-  # desktop/Dockerfile from the first and the two publish the same layers for it, which a host then
-  # downloads and stores once. Built in separate jobs, each image installed `common` on its own.
+  # images/desktop/Dockerfile from the first and the two publish the same layers for it, which a
+  # host then downloads and stores once. Built in separate jobs, each image installed `common` on
+  # its own.
   publish-desktops:
     needs: checks
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
@@ -233,8 +231,8 @@ jobs:
         id: xfce
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: desktop
-          file: desktop/Dockerfile
+          context: images/desktop
+          file: images/desktop/Dockerfile
           target: xfce
           platforms: linux/amd64
           push: true
@@ -278,8 +276,8 @@ jobs:
         id: gnome
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: desktop
-          file: desktop/Dockerfile
+          context: images/desktop
+          file: images/desktop/Dockerfile
           target: gnome
           platforms: linux/amd64
           push: true
@@ -349,11 +347,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the WSL distribution package
-        run: scripts/build-wsl.sh dist/bilskirnir.wsl
+        run: packaging/wsl/build.sh dist/bilskirnir.wsl
       # The PowerShell helper goes with it: it installs and starts the package and opens it to other devices.
       - name: Attach the package and the PowerShell helper to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Bilskirnir $GITHUB_REF_NAME"
-          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl windows/bilskirnir.ps1 --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl packaging/windows/bilskirnir.ps1 --clobber
