@@ -50,7 +50,7 @@ RUN --mount=type=bind,from=ui,source=/build/web,target=/build/web \
 
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
-LABEL org.opencontainers.image.title="Bilskirnir" org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.title="Bilskirnir" org.opencontainers.image.licenses="GPL-3.0-or-later"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
