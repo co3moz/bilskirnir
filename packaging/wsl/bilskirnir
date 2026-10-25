@@ -529,7 +529,7 @@ case ${1:-help} in
         ;;
     mcp)
         require_settings
-        # Called MCP_ENABLED before 0.7.0; the manager still reads that name while the new one is missing.
+        # Called MCP_ENABLED before 0.6.3; the manager still reads that name while the new one is missing.
         enabled=$(setting ROOT_MCP_ENABLED)
         if [[ -z $enabled ]]; then enabled=$(setting MCP_ENABLED); fi
         mode=$(sed -n 's/^MCP_AUTH_MODE=//p' "$INSTALL/.env" | tail -n1)
