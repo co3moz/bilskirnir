@@ -849,6 +849,7 @@ export const es: Messages = {
   "filesPage.notRunning": "{name} no está en ejecución",
   "filesPage.notRunningHint": "Sus archivos se pueden explorar mientras está en ejecución.",
   "nav.mcpGuide": "Guía de MCP",
+  "nav.version": "v{version}",
   "nav.running": "Contenedores en ejecución",
   "nav.noneRunning": "No hay ningún contenedor en ejecución.",
   "nav.more": "{count} más",

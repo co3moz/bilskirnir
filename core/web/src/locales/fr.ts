@@ -857,6 +857,7 @@ export const fr: Messages = {
   "filesPage.notRunning": "{name} n'est pas démarré",
   "filesPage.notRunningHint": "Ses fichiers se parcourent pendant qu'il tourne.",
   "nav.mcpGuide": "Guide MCP",
+  "nav.version": "v{version}",
   "nav.running": "Conteneurs actifs",
   "nav.noneRunning": "Aucun conteneur en cours d'exécution.",
   "nav.more": "{count} de plus",

@@ -845,6 +845,7 @@ export const tr: Messages = {
   "filesPage.notRunning": "{name} çalışmıyor",
   "filesPage.notRunningHint": "Dosyalarında yalnızca çalışırken gezinilebilir.",
   "nav.mcpGuide": "MCP rehberi",
+  "nav.version": "v{version}",
   "nav.running": "Çalışan konteynerler",
   "nav.noneRunning": "Çalışan konteyner yok.",
   "nav.more": "{count} tane daha",

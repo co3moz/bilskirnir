@@ -860,6 +860,7 @@ export const en = {
   "filesPage.notRunning": "{name} is not running",
   "filesPage.notRunningHint": "Its files can be browsed while it runs.",
   "nav.mcpGuide": "MCP guide",
+  "nav.version": "v{version}",
   "nav.running": "Running containers",
   "nav.noneRunning": "No container is running.",
   "nav.more": "{count} more",
