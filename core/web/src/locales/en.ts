@@ -101,6 +101,7 @@ export const en = {
   "jobs.viewLog": "View log",
   "jobs.loading": "Loading jobs…",
   "jobs.noneInView": "No jobs in this view.",
+  "jobs.none": "No jobs yet.",
   "jobs.log": "Job log",
   "jobs.archiveProgress": "Archive progress",
   "jobs.downloadProgress": "Image download progress",
@@ -909,6 +910,10 @@ export const en = {
   "settings.version": "Version",
   "settings.versionHint": "Bilskirnir looks for a new release when it starts and every six hours.",
   "settings.release": "Bilskirnir {version}",
+  "settings.more": "More",
+  "settings.jobsHint": "The manager's latest 100 operations, each with its log.",
+  "settings.dependenciesHint":
+    "Every package, crate and image this release is built from, with its license.",
   "settings.state.current": "Up to date",
   "settings.state.available": "Update available",
   "settings.state.updating": "Updating",

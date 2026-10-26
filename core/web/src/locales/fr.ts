@@ -98,6 +98,7 @@ export const fr: Messages = {
   "jobs.viewLog": "Voir le journal",
   "jobs.loading": "Chargement des tâches…",
   "jobs.noneInView": "Aucune tâche dans cette vue.",
+  "jobs.none": "Aucune tâche pour l'instant.",
   "jobs.log": "Journal de la tâche",
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
@@ -902,6 +903,10 @@ export const fr: Messages = {
   "settings.versionHint":
     "Bilskirnir cherche une nouvelle version au démarrage puis toutes les six heures.",
   "settings.release": "Bilskirnir {version}",
+  "settings.more": "Plus",
+  "settings.jobsHint": "Les 100 dernières opérations du gestionnaire, chacune avec son journal.",
+  "settings.dependenciesHint":
+    "Chaque paquet, crate et image dont cette version est construite, avec sa licence.",
   "settings.state.current": "À jour",
   "settings.state.available": "Mise à jour disponible",
   "settings.state.updating": "Mise à jour en cours",

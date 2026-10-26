@@ -97,6 +97,7 @@ export const es: Messages = {
   "jobs.viewLog": "Ver registro",
   "jobs.loading": "Cargando tareas…",
   "jobs.noneInView": "No hay tareas en esta vista.",
+  "jobs.none": "Todavía no hay tareas.",
   "jobs.log": "Registro de la tarea",
   "jobs.archiveProgress": "Progreso del archivo comprimido",
   "jobs.downloadProgress": "Progreso de descarga de la imagen",
@@ -893,6 +894,10 @@ export const es: Messages = {
   "settings.version": "Versión",
   "settings.versionHint": "Bilskirnir busca una versión nueva al arrancar y cada seis horas.",
   "settings.release": "Bilskirnir {version}",
+  "settings.more": "Más",
+  "settings.jobsHint": "Las últimas 100 operaciones del gestor, cada una con su registro.",
+  "settings.dependenciesHint":
+    "Cada paquete, crate e imagen con los que se construye esta versión, con su licencia.",
   "settings.state.current": "Al día",
   "settings.state.available": "Actualización disponible",
   "settings.state.updating": "Actualizando",

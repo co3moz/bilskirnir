@@ -99,6 +99,7 @@ export const de: Messages = {
   "jobs.viewLog": "Protokoll anzeigen",
   "jobs.loading": "Aufträge werden geladen…",
   "jobs.noneInView": "Keine Aufträge in dieser Ansicht.",
+  "jobs.none": "Noch keine Aufträge.",
   "jobs.log": "Auftragsprotokoll",
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
@@ -903,6 +904,10 @@ export const de: Messages = {
   "settings.versionHint":
     "Bilskirnir sucht beim Start und alle sechs Stunden nach einer neuen Version.",
   "settings.release": "Bilskirnir {version}",
+  "settings.more": "Weiteres",
+  "settings.jobsHint": "Die letzten 100 Vorgänge des Managers, jeder mit seinem Protokoll.",
+  "settings.dependenciesHint":
+    "Jedes Paket, jedes Crate und jedes Image, aus dem diese Version gebaut ist, mit seiner Lizenz.",
   "settings.state.current": "Aktuell",
   "settings.state.available": "Update verfügbar",
   "settings.state.updating": "Wird aktualisiert",

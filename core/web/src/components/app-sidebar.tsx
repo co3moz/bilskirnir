@@ -6,8 +6,6 @@ import {
   RiFolderOpenLine,
   RiStackLine,
   RiDashboardLine,
-  RiListCheck3,
-  RiNodeTree,
   RiComputerLine,
   RiPlugLine,
   RiPulseLine,
@@ -35,6 +33,11 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
+/** Pages Settings leads to rather than the sidebar; the sidebar marks Settings while one is open. */
+const underSettings: Page[] = ["jobs", "dependencies"]
+export const parentPage = (page: Page): Page | undefined =>
+  underSettings.includes(page) ? "settings" : undefined
+
 const navMain = [
   { page: "dashboard", icon: <RiDashboardLine /> },
   { page: "containers", icon: <RiComputerLine /> },
@@ -43,9 +46,7 @@ const navMain = [
   { page: "volumes", icon: <RiDatabase2Line /> },
   { page: "mcp", icon: <RiPlugLine /> },
   { page: "files", icon: <RiFolderOpenLine /> },
-  { page: "jobs", icon: <RiListCheck3 /> },
   { page: "activity", icon: <RiPulseLine /> },
-  { page: "dependencies", icon: <RiNodeTree /> },
   { page: "settings", icon: <RiSettings3Line /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
 
@@ -86,7 +87,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          active={page}
+          active={parentPage(page) ?? page}
           items={navMain.map((item) => ({ ...item, title: pageTitle(item.page) }))}
         />
         <NavContainers />

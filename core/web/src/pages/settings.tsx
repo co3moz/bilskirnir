@@ -1,7 +1,15 @@
 import * as React from "react"
-import { RiArrowUpCircleLine, RiExternalLinkLine, RiRefreshLine } from "@remixicon/react"
+import {
+  RiArrowRightSLine,
+  RiArrowUpCircleLine,
+  RiExternalLinkLine,
+  RiListCheck3,
+  RiNodeTree,
+  RiRefreshLine,
+} from "@remixicon/react"
 import { toast } from "sonner"
 
+import { pageTitle } from "@/components/app-sidebar"
 import { BackupCard } from "@/components/backup-card"
 import { ConfigurationEditor } from "@/components/configuration-editor"
 import { PageBody, SectionHeading } from "@/components/page"
@@ -21,9 +29,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { api } from "@/lib/api"
 import { openDialog } from "@/lib/dialogs"
-import { shortDate } from "@/lib/format"
-import { t } from "@/lib/i18n"
-import { queryClient, useUpdate } from "@/lib/queries"
+import { jobActive, shortDate } from "@/lib/format"
+import { plural, t } from "@/lib/i18n"
+import { queryClient, useJobs, useUpdate } from "@/lib/queries"
+import { href, type Page } from "@/lib/route"
 import { releaseState } from "@/lib/settings"
 import type { UpdateStatus } from "@/lib/types"
 
@@ -162,6 +171,65 @@ function VersionCard() {
   )
 }
 
+function PageLink({
+  page,
+  icon,
+  description,
+  badge,
+}: {
+  page: Page
+  icon: React.ReactNode
+  description: string
+  badge?: string
+}) {
+  return (
+    <a
+      href={href({ page })}
+      className="flex items-center gap-3 rounded-2xl bg-card p-4 text-sm ring-1 ring-foreground/10 outline-none hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground [&_svg]:size-4.5">
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-2 font-medium">
+          {pageTitle(page)}
+          {badge && (
+            <Badge variant="outline" className="px-1.5 font-normal text-muted-foreground">
+              {badge}
+            </Badge>
+          )}
+        </span>
+        <span className="text-muted-foreground">{description}</span>
+      </span>
+      <RiArrowRightSLine className="size-4 shrink-0 text-muted-foreground" />
+    </a>
+  )
+}
+
+/** The pages that live under Settings rather than in the sidebar. */
+function PageLinks() {
+  const active = useJobs().data?.filter(jobActive).length ?? 0
+  return (
+    <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2">
+      <PageLink
+        page="jobs"
+        icon={<RiListCheck3 />}
+        description={t("settings.jobsHint")}
+        badge={
+          active
+            ? plural(active, { one: "jobs.inProgress.one", other: "jobs.inProgress.other" })
+            : undefined
+        }
+      />
+      <PageLink
+        page="dependencies"
+        icon={<RiNodeTree />}
+        description={t("settings.dependenciesHint")}
+      />
+    </div>
+  )
+}
+
 export function SettingsPage() {
   return (
     <PageBody>
@@ -169,6 +237,8 @@ export function SettingsPage() {
       <div className="px-4 lg:px-6">
         <VersionCard />
       </div>
+      <SectionHeading title={t("settings.more")} />
+      <PageLinks />
       <SectionHeading title={t("backup.title")} description={t("backup.description")} />
       <div className="px-4 lg:px-6">
         <BackupCard />

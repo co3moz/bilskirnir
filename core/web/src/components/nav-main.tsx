@@ -5,16 +5,13 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { openDialog } from "@/lib/dialogs"
-import { jobActive } from "@/lib/format"
-import { plural, t } from "@/lib/i18n"
-import { useJobs } from "@/lib/queries"
+import { t } from "@/lib/i18n"
 import { href, type Page } from "@/lib/route"
 
 export function NavMain({
@@ -25,8 +22,6 @@ export function NavMain({
   active: Page
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
-  const jobs = useJobs()
-  const pending = jobs.data?.filter(jobActive).length ?? 0
   // The mobile sidebar is a sheet over the page; following a link should reveal the page.
   const close = () => isMobile && setOpenMobile(false)
 
@@ -74,16 +69,6 @@ export function NavMain({
                   <span>{item.title}</span>
                 </a>
               </SidebarMenuButton>
-              {item.page === "jobs" && pending > 0 && (
-                <SidebarMenuBadge
-                  aria-label={plural(pending, {
-                    one: "jobs.inProgress.one",
-                    other: "jobs.inProgress.other",
-                  })}
-                >
-                  {pending}
-                </SidebarMenuBadge>
-              )}
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
