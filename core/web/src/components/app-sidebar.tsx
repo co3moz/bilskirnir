@@ -7,12 +7,14 @@ import {
   RiStackLine,
   RiDashboardLine,
   RiComputerLine,
+  RiListCheck3,
   RiPlugLine,
   RiPulseLine,
   RiBookletLine,
   RiSettings3Line,
 } from "@remixicon/react"
 
+import { ActiveJobsBadge } from "@/components/jobs-menu"
 import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -33,12 +35,14 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
-/** Pages Settings leads to rather than the sidebar; the sidebar marks Settings while one is open. */
+/** Pages that belong to Management, which the sidebar keeps open while one of them is. */
 const underSettings: Page[] = ["jobs", "dependencies"]
 export const parentPage = (page: Page): Page | undefined =>
   underSettings.includes(page) ? "settings" : undefined
 
-const navMain = [
+type NavPage = { page: Page; icon: React.ReactNode; badge?: React.ReactNode }
+
+const navMain: (NavPage & { children?: NavPage[] })[] = [
   { page: "dashboard", icon: <RiDashboardLine /> },
   { page: "containers", icon: <RiComputerLine /> },
   { page: "images", icon: <RiStackLine /> },
@@ -47,8 +51,13 @@ const navMain = [
   { page: "mcp", icon: <RiPlugLine /> },
   { page: "files", icon: <RiFolderOpenLine /> },
   { page: "activity", icon: <RiPulseLine /> },
-  { page: "settings", icon: <RiSettings3Line /> },
-] satisfies { page: Page; icon: React.ReactNode }[]
+  {
+    page: "settings",
+    icon: <RiSettings3Line />,
+    children: [{ page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> }],
+  },
+]
+const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
 
 const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = () => [
@@ -87,8 +96,12 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          active={parentPage(page) ?? page}
-          items={navMain.map((item) => ({ ...item, title: pageTitle(item.page) }))}
+          active={page}
+          section={parentPage(page) ?? page}
+          items={navMain.map((item) => ({
+            ...titled(item),
+            children: item.children?.map(titled),
+          }))}
         />
         <NavContainers />
         <NavSecondary items={navSecondary()} className="mt-auto" />

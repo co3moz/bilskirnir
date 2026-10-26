@@ -847,7 +847,7 @@ export const de: Messages = {
   "nav.documentation": "Dokumentation",
   "nav.mcp": "MCP",
   "nav.files": "Dateien",
-  "nav.settings": "Einstellungen",
+  "nav.settings": "Verwaltung",
   "filesPage.title": "Container-Dateien",
   "filesPage.description":
     "Durchsuche die Dateien eines laufenden Containers als Desktop-Benutzer und öffne eine Textdatei, um sie zu lesen oder zu ändern.",
@@ -904,10 +904,9 @@ export const de: Messages = {
   "settings.versionHint":
     "Bilskirnir sucht beim Start und alle sechs Stunden nach einer neuen Version.",
   "settings.release": "Bilskirnir {version}",
-  "settings.more": "Weiteres",
-  "settings.jobsHint": "Die letzten 100 Vorgänge des Managers, jeder mit seinem Protokoll.",
-  "settings.dependenciesHint":
-    "Jedes Paket, jedes Crate und jedes Image, aus dem diese Version gebaut ist, mit seiner Lizenz.",
+  "settings.notice":
+    "Bilskirnir ist aus Open-Source-Paketen gebaut, jedes unter seiner eigenen Lizenz.",
+  "settings.noticeLink": "Abhängigkeiten und Lizenzen",
   "settings.state.current": "Aktuell",
   "settings.state.available": "Update verfügbar",
   "settings.state.updating": "Wird aktualisiert",
@@ -1160,7 +1159,7 @@ export const de: Messages = {
   "spec.features": "Funktionen",
   "spec.turnedOffList": "Für diese Installation deaktiviert: {features}.",
   "spec.gpuUnavailable":
-    "Dieser Host hat keine GPU für Desktops; die Einstellungsseite nennt den Grund.",
+    "Dieser Host hat keine GPU für Desktops; die Verwaltungsseite nennt den Grund.",
   "spec.advanced": "Erweiterte Einstellungen",
   "spec.mounts.one": "{count} Volume",
   "spec.mounts.other": "{count} Volumes",

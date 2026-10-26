@@ -838,7 +838,7 @@ export const es: Messages = {
   "nav.documentation": "Documentación",
   "nav.mcp": "MCP",
   "nav.files": "Archivos",
-  "nav.settings": "Ajustes",
+  "nav.settings": "Administración",
   "filesPage.title": "Archivos de los contenedores",
   "filesPage.description":
     "Explora los archivos de un contenedor en ejecución como el usuario del escritorio y abre un archivo de texto para leerlo o cambiarlo.",
@@ -894,10 +894,9 @@ export const es: Messages = {
   "settings.version": "Versión",
   "settings.versionHint": "Bilskirnir busca una versión nueva al arrancar y cada seis horas.",
   "settings.release": "Bilskirnir {version}",
-  "settings.more": "Más",
-  "settings.jobsHint": "Las últimas 100 operaciones del gestor, cada una con su registro.",
-  "settings.dependenciesHint":
-    "Cada paquete, crate e imagen con los que se construye esta versión, con su licencia.",
+  "settings.notice":
+    "Bilskirnir se construye con paquetes de código abierto, cada uno con su propia licencia.",
+  "settings.noticeLink": "Dependencias y licencias",
   "settings.state.current": "Al día",
   "settings.state.available": "Actualización disponible",
   "settings.state.updating": "Actualizando",
@@ -1151,7 +1150,7 @@ export const es: Messages = {
   "spec.features": "Funciones",
   "spec.turnedOffList": "Desactivado en esta instalación: {features}.",
   "spec.gpuUnavailable":
-    "Este host no tiene GPU para los escritorios; la página de ajustes indica el motivo.",
+    "Este host no tiene GPU para los escritorios; la página de administración indica el motivo.",
   "spec.advanced": "Configuración avanzada",
   "spec.mounts.one": "{count} volumen",
   "spec.mounts.other": "{count} volúmenes",

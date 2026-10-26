@@ -68,6 +68,30 @@ function JobItem({ job, target }: { job: Job; target: string }) {
   )
 }
 
+/** The number of jobs in progress, round for one digit; nothing while none run. */
+function CountBadge({ count }: { count: number }) {
+  if (!count) return null
+  return (
+    <Badge aria-hidden className="h-5 min-w-5 px-1 tabular-nums">
+      {count}
+    </Badge>
+  )
+}
+
+/** The jobs in progress beside the Jobs item of the sidebar, in words for screen readers. */
+export function ActiveJobsBadge() {
+  const count = useJobs().data?.filter(jobActive).length ?? 0
+  if (!count) return null
+  return (
+    <span className="ml-auto flex">
+      <CountBadge count={count} />
+      <span className="sr-only">
+        {plural(count, { one: "jobs.inProgress.one", other: "jobs.inProgress.other" })}
+      </span>
+    </span>
+  )
+}
+
 /**
  * The jobs at the top right of every page: the number in progress on the button, the latest jobs
  * in its menu with their logs a click away, and the whole list on the jobs page.
@@ -101,11 +125,7 @@ export function JobsMenu({ labelFrom = "sm" }: { labelFrom?: keyof typeof labels
             >
               <RiListCheck3 />
               <span className={labels[labelFrom].label}>{t("nav.jobs")}</span>
-              {active > 0 && (
-                <Badge aria-hidden className="h-5 min-w-5 px-1 tabular-nums">
-                  {active}
-                </Badge>
-              )}
+              <CountBadge count={active} />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
