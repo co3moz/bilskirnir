@@ -36,7 +36,7 @@ import { href, type Page } from "@/lib/route"
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
 /** Pages that belong to Management, which the sidebar keeps open while one of them is. */
-const underSettings: Page[] = ["jobs", "dependencies"]
+const underSettings: Page[] = ["jobs", "activity", "dependencies"]
 export const parentPage = (page: Page): Page | undefined =>
   underSettings.includes(page) ? "settings" : undefined
 
@@ -50,11 +50,13 @@ const navMain: (NavPage & { children?: NavPage[] })[] = [
   { page: "volumes", icon: <RiDatabase2Line /> },
   { page: "mcp", icon: <RiPlugLine /> },
   { page: "files", icon: <RiFolderOpenLine /> },
-  { page: "activity", icon: <RiPulseLine /> },
   {
     page: "settings",
     icon: <RiSettings3Line />,
-    children: [{ page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> }],
+    children: [
+      { page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> },
+      { page: "activity", icon: <RiPulseLine /> },
+    ],
   },
 ]
 const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
