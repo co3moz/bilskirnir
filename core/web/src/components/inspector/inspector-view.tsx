@@ -8,6 +8,7 @@ import {
 } from "@remixicon/react"
 import { cn } from "cn"
 
+import { ConceptIcon } from "@/components/concept"
 import { StatusBadge } from "@/components/status-badge"
 import {
   Accordion,
@@ -115,7 +116,12 @@ export function InspectorView({
               <SelectContent>
                 {groups.map((group) => (
                   <SelectGroup key={group.label}>
-                    <SelectLabel>{group.label}</SelectLabel>
+                    <SelectLabel className="flex items-center gap-2">
+                      {group.concept && (
+                        <ConceptIcon concept={group.concept} className="size-3.5" />
+                      )}
+                      {group.label}
+                    </SelectLabel>
                     {group.choices.map((option) => (
                       <SelectItem
                         key={option.key}
@@ -123,6 +129,7 @@ export function InspectorView({
                         disabled={!!option.unavailable}
                         className="font-mono text-xs"
                       >
+                        {option.target.kind !== "administrator" && <ConceptIcon concept="mcp" />}
                         {option.label}
                         {option.unavailable && (
                           <span className="font-sans text-muted-foreground">

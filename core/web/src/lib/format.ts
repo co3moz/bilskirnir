@@ -316,8 +316,17 @@ export function currentStage(job: Pick<Job, "status" | "stages">) {
   return stage && stageLabel(stage.name)
 }
 
-/** An image a form can choose; `icon` is the URL of a saved image's icon. */
-export type ImageChoice = { value: string; label: string; disabled: boolean; icon?: string }
+/**
+ * An image a form can choose; `catalog` marks one from the image catalog and `icon` is the URL of
+ * a saved image's icon.
+ */
+export type ImageChoice = {
+  value: string
+  label: string
+  disabled: boolean
+  catalog: boolean
+  icon?: string
+}
 
 type Choosable = Pick<
   ImageItem,
@@ -341,12 +350,14 @@ export function imageChoices(
           ? image.name
           : `${image.name} · ${t("images.downloadsFirst")}`,
       disabled: !image.available && !!image.error,
+      catalog: true,
     })
   if (defaultImage && !choices.has(defaultImage))
     choices.set(defaultImage, {
       value: defaultImage,
       label: defaultImage,
       disabled: false,
+      catalog: false,
     })
   for (const image of images) {
     if (image.kind === "catalog" || !image.image_id) continue
@@ -355,11 +366,12 @@ export function imageChoices(
       value: image.image_id,
       label: image.desktop ? `${image.name} · ${image.desktop.title}` : image.name,
       disabled: image.available === false,
+      catalog: false,
       ...(icon ? { icon } : {}),
     })
   }
   if (selected && !choices.has(selected))
-    choices.set(selected, { value: selected, label: selected, disabled: false })
+    choices.set(selected, { value: selected, label: selected, disabled: false, catalog: false })
   return [...choices.values()]
 }
 

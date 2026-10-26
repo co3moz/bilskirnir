@@ -157,6 +157,11 @@ test("the picker offers what can be opened, and says why the rest cannot", () =>
     groups.map((group) => group.label),
     ["Bilskirnir", "Endpoints", "Desktop c1", "Desktop c2"]
   )
+  // A container's servers sit under its icon and color, the endpoints under MCP's.
+  assert.deepEqual(
+    groups.map((group) => group.concept),
+    [undefined, "mcp", "container", "container"]
+  )
   assert.deepEqual(
     groups[1].choices.map((choice) => choice.label),
     ["/mcp/a", "/mcp/b"]

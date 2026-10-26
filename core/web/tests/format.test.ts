@@ -119,6 +119,11 @@ test("image choices distinguish GNOME, XFCE and unavailable images", () => {
   )
   assert.deepEqual([choices[2].disabled, choices[2].label], [true, "Ubuntu · Other"])
   assert.equal(choices[3].label, "My game · Ubuntu · GNOME")
+  // The select marks catalog images with a cloud and saved ones with the image icon.
+  assert.deepEqual(
+    choices.map((choice) => choice.catalog),
+    [true, true, true, false]
+  )
 })
 
 test("catalog images are images: listed, started and nested like the others", () => {

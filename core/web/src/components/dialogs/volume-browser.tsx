@@ -1,3 +1,4 @@
+import { ConceptIcon } from "@/components/concept"
 import { FileExplorer } from "@/components/file-explorer"
 import {
   Dialog,
@@ -17,6 +18,7 @@ export function VolumeBrowser({ name, open, onOpenChange }: DialogProps & { name
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
+            <ConceptIcon concept="volume" className="size-4 shrink-0" />
             {rich("files.title", { volume: <code className="font-mono">{name}</code> })}
           </DialogTitle>
           <DialogDescription>{t("files.description")}</DialogDescription>

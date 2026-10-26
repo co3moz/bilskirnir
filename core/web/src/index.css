@@ -43,7 +43,11 @@
   --color-background: var(--background);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --color-violet: var(--violet);
+  --color-concept-container: var(--concept-container);
+  --color-concept-image: var(--concept-image);
+  --color-concept-template: var(--concept-template);
+  --color-concept-volume: var(--concept-volume);
+  --color-concept-mcp: var(--concept-mcp);
   --color-info: var(--info);
   --color-transfer: var(--transfer);
   --color-edit: var(--edit);
@@ -95,7 +99,14 @@
   --chart-5: oklch(0.269 0 0);
   --success: #1d7f60;
   --warning: #96660f;
-  --violet: #6152c4;
+  /* What a thing is, beside its icon wherever it is named (lib/concepts.ts). Each at least 4.5:1
+     on a card, a menu and the sidebar, and apart from each other and the state colors; the
+     concepts test holds both. */
+  --concept-container: #136eb9;
+  --concept-image: #6152c4;
+  --concept-template: #a148ab;
+  --concept-volume: #196a84;
+  --concept-mcp: #4a690c;
   /* Menu actions, beside the state colors above: looking at something, moving files, changing
      settings. Each at least 4.5:1 on a menu. */
   --info: #1d5fbf;
@@ -140,7 +151,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* The Asgard interior: dark neutral metal; color is kept for states and images. */
+/* The Asgard interior: dark neutral metal; color is kept for states and what things are. */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -167,7 +178,11 @@
   --chart-5: oklch(0.269 0 0);
   --success: #a9dfcd;
   --warning: #e3c88f;
-  --violet: #aaa0ed;
+  --concept-container: #66adeb;
+  --concept-image: #aaa0ed;
+  --concept-template: #e2a2e8;
+  --concept-volume: #70d6f7;
+  --concept-mcp: #a3c73a;
   --info: #7cb7ff;
   --transfer: #7fd4e6;
   --edit: #f49ac1;

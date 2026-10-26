@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
-import { AppSidebar, pageTitle } from "@/components/app-sidebar"
+import { AppSidebar, pageIcon, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
 import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
@@ -87,7 +87,7 @@ function Shell({ page }: { page: Page }) {
     >
       <AppSidebar variant="inset" page={page} />
       <SidebarInset>
-        <SiteHeader title={pageTitle(page)}>
+        <SiteHeader title={pageTitle(page)} icon={pageIcon(page)}>
           {page === "containers" && (
             <Button size="sm" onClick={() => openDialog({ kind: "create" })}>
               <RiAddLine data-icon="inline-start" />

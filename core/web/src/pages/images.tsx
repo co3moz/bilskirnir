@@ -25,6 +25,7 @@ import {
   type DataColumn,
   type DataTable,
 } from "@/components/data-table"
+import { ConceptBadge, ConceptIcon } from "@/components/concept"
 import { ImageIcon } from "@/components/image-icon"
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { JobLogButton, PendingName, PendingStatus } from "@/components/pending"
@@ -212,7 +213,7 @@ const columns: DataColumn<Row>[] = [
           style={{ paddingLeft: `${Math.min(image.depth, 8) * 1.25}rem` }}
         >
           {image.kind === "catalog" ? (
-            <Icon className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+            <ConceptIcon concept="image" icon={Icon} className="mt-0.5 size-4 shrink-0" />
           ) : (
             // A saved image's icon is where its icon is changed.
             <Tooltip>
@@ -262,21 +263,19 @@ const columns: DataColumn<Row>[] = [
     header: () => t("images.source"),
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
-        <Badge variant="outline" className="border-violet/40 text-violet">
-          {imageKind(row.original.kind)}
-        </Badge>
+        <ConceptBadge concept="image">{imageKind(row.original.kind)}</ConceptBadge>
         {row.original.compose && (
           <Badge variant="outline" title={composeSummary(row.original.compose)}>
             {t("compose.name")}
           </Badge>
         )}
         {!!row.original.mcp_servers?.length && (
-          <Badge
-            variant="outline"
+          <ConceptBadge
+            concept="mcp"
             title={t("images.mcpServers", { names: formatList(row.original.mcp_servers) })}
           >
             MCP
-          </Badge>
+          </ConceptBadge>
         )}
       </div>
     ),
@@ -381,15 +380,11 @@ function PendingImageRow({
       cells={{
         name: (
           <div className="flex min-w-64 items-start gap-2 whitespace-normal">
-            <RiStackLine className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <ConceptIcon concept="image" className="mt-0.5 size-4 shrink-0" />
             <PendingName pending={pending} />
           </div>
         ),
-        kind: (
-          <Badge variant="outline" className="border-violet/40 text-violet">
-            {imageKind(pending.kind)}
-          </Badge>
-        ),
+        kind: <ConceptBadge concept="image">{imageKind(pending.kind)}</ConceptBadge>,
         status: <PendingStatus job={pending.job} />,
         actions: (
           <div className="flex justify-end">

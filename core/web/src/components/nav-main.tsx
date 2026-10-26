@@ -1,5 +1,6 @@
 import { RiAddCircleLine, RiHammerLine } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import {
   SidebarGroup,
@@ -57,7 +58,7 @@ export function NavMain({
                     openDialog({ kind: "build" })
                   }}
                 >
-                  <RiHammerLine />
+                  <ConceptIcon concept="image" icon={RiHammerLine} />
                   <span className="sr-only">{t("images.build")}</span>
                 </Button>
               </TooltipTrigger>

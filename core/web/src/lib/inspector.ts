@@ -1,6 +1,7 @@
 // What the MCP page's inspector shows of a server: its tools, prompts, resources and resource
 // templates, the arguments each takes, and how a result reads. Pure helpers; the connection is
 // in mcp-client.ts.
+import type { Concept } from "./concepts"
 import { formatNumber, t } from "./i18n"
 import type { InspectTarget } from "./mcp-client"
 import { isPlainObject, prettyJson, type JsonSchema } from "./schema-form"
@@ -14,7 +15,8 @@ export type TargetChoice = {
   /** Why it cannot be opened now. */
   unavailable?: string
 }
-export type TargetGroup = { label: string; choices: TargetChoice[] }
+/** A group of the picker; `concept` gives its heading an icon, a container's above its servers. */
+export type TargetGroup = { label: string; concept?: Concept; choices: TargetChoice[] }
 
 /** The picker's key of a target. */
 export function targetKey(target: InspectTarget): string {
@@ -60,6 +62,7 @@ export function targetGroups(
   if (endpoints.length)
     groups.push({
       label: t("mcp.view.endpoints"),
+      concept: "mcp",
       choices: [...endpoints]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((endpoint) => {
@@ -73,6 +76,7 @@ export function targetGroups(
   for (const [container, list] of byContainer)
     groups.push({
       label: names.get(container) ?? list[0].container_name,
+      concept: "container",
       choices: [...list]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((server) => {

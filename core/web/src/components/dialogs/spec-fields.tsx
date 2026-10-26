@@ -15,6 +15,7 @@ import {
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -385,6 +386,7 @@ function Mounts({
                 <SelectGroup>
                   {names.map((name) => (
                     <SelectItem key={name} value={name}>
+                      <ConceptIcon concept="volume" />
                       {name}
                     </SelectItem>
                   ))}

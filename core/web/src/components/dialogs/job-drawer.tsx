@@ -1,6 +1,7 @@
 import * as React from "react"
-import { RiComputerLine, RiAddLine } from "@remixicon/react"
+import { RiAddLine } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { JobStages } from "@/components/job-stages"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
@@ -123,7 +124,7 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
               navigate({ page: "containers" })
             }}
           >
-            <RiComputerLine data-icon="inline-start" />
+            <ConceptIcon concept="container" data-icon="inline-start" />
             {t("jobs.viewContainers")}
           </Button>
         )}

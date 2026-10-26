@@ -2,6 +2,7 @@ import * as React from "react"
 import { RiCheckboxCircleFill, RiErrorWarningLine, RiPlayLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -209,6 +210,7 @@ export function ServerDialog({ container, ...props }: DialogProps & { container?
                           value={entry.id}
                           disabled={entry.state !== "running"}
                         >
+                          <ConceptIcon concept="container" />
                           {entry.spec.name}
                           {entry.state === "running" ? "" : ` · ${t("usage.stopped")}`}
                         </SelectItem>

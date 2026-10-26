@@ -1,21 +1,28 @@
 import * as React from "react"
-import { RiImageAddLine, RiStackLine, type RemixiconComponentType } from "@remixicon/react"
+import { RiCloudLine, RiImageAddLine, type RemixiconComponentType } from "@remixicon/react"
 import { cn } from "cn"
 
+import { CONCEPT_ICONS, ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import { SelectItem } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import type { Concept } from "@/lib/concepts"
 import type { ImageChoice } from "@/lib/format"
 import { iconFromBlob } from "@/lib/icons"
 import { t } from "@/lib/i18n"
 
-/** An image's icon, or a violet line icon when it has none or the picture does not load. */
+/**
+ * An image's or a template's icon, or a line icon in its concept's color when it has none or the
+ * picture does not load.
+ */
 export function ImageIcon({
   src,
-  fallback: Fallback = RiStackLine,
+  concept = "image",
+  fallback = CONCEPT_ICONS[concept],
   className,
 }: {
   src?: string
+  concept?: Concept
   fallback?: RemixiconComponentType
   className?: string
 }) {
@@ -30,14 +37,18 @@ export function ImageIcon({
         className={cn("shrink-0 rounded-md object-contain", className)}
       />
     )
-  return <Fallback aria-hidden className={cn("shrink-0 text-violet", className)} />
+  return <ConceptIcon concept={concept} icon={fallback} className={cn("shrink-0", className)} />
 }
 
-/** An image in a select, with its icon when it has one. */
+/** An image in a select, with its own icon or a line icon saying where it comes from. */
 export function ImageChoiceItem({ choice }: { choice: ImageChoice }) {
   return (
     <SelectItem value={choice.value} disabled={choice.disabled}>
-      {choice.icon && <ImageIcon src={choice.icon} className="size-4 rounded-sm" />}
+      <ImageIcon
+        src={choice.icon}
+        fallback={choice.catalog ? RiCloudLine : undefined}
+        className="size-4 rounded-sm"
+      />
       {choice.label}
       {choice.disabled ? ` · ${t("images.unavailable")}` : ""}
     </SelectItem>

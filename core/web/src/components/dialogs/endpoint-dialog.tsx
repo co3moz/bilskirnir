@@ -4,7 +4,6 @@ import {
   RiAppsLine,
   RiArrowDownSLine,
   RiCloseLine,
-  RiComputerLine,
   RiEyeLine,
   RiFileEditLine,
   RiFileTextLine,
@@ -18,6 +17,7 @@ import {
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -205,7 +205,7 @@ function GrantFields({
     <div className="flex flex-col gap-4 rounded-2xl border p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <RiComputerLine className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <ConceptIcon concept="container" className="size-4 shrink-0" />
           <span className="text-sm font-medium break-all">{name}</span>
           {!container && (
             <Badge variant="outline" className="text-warning">
@@ -475,6 +475,7 @@ export function EndpointDialog({ name: existing, ...props }: DialogProps & { nam
                     <SelectGroup>
                       {available.map((container) => (
                         <SelectItem key={container.id} value={container.id}>
+                          <ConceptIcon concept="container" />
                           {container.spec.name}
                         </SelectItem>
                       ))}

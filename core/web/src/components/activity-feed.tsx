@@ -2,16 +2,15 @@ import * as React from "react"
 import {
   RiAlertLine,
   RiCheckLine,
-  RiComputerLine,
   RiEyeLine,
   RiLinkM,
   RiPencilLine,
-  RiPlugLine,
   RiShieldKeyholeLine,
   RiUserLine,
 } from "@remixicon/react"
 import { cn } from "cn"
 
+import { ConceptIcon } from "@/components/concept"
 import { Badge } from "@/components/ui/badge"
 import {
   activityLabel,
@@ -91,7 +90,7 @@ export function CallerBadge({ entry }: { entry: Pick<ActivityEntry, "endpoint" |
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       <Badge variant="outline" className="max-w-48 px-1.5 text-muted-foreground">
-        {entry.endpoint === null ? <RiShieldKeyholeLine /> : <RiPlugLine />}
+        {entry.endpoint === null ? <RiShieldKeyholeLine /> : <ConceptIcon concept="mcp" />}
         <span className={cn("truncate", entry.endpoint !== null && "font-mono")}>
           {callerLabel(entry)}
         </span>
@@ -172,7 +171,7 @@ function ActivityRow({
             <CallerBadge entry={entry} />
             {showContainer && container && (
               <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                <RiComputerLine className="size-3.5 shrink-0" aria-hidden />
+                <ConceptIcon concept="container" className="size-3.5 shrink-0" />
                 <span className="truncate">{container}</span>
               </span>
             )}

@@ -50,7 +50,6 @@ const itemTones = {
   info: "*:[svg]:text-info",
   success: "*:[svg]:text-success",
   warning: "*:[svg]:text-warning",
-  violet: "*:[svg]:text-violet",
   transfer: "*:[svg]:text-transfer",
   edit: "*:[svg]:text-edit",
 }

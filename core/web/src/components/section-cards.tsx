@@ -1,5 +1,6 @@
-import { RiPulseLine, RiCpuLine, RiRam2Line, RiComputerLine } from "@remixicon/react"
+import { RiPulseLine, RiCpuLine, RiRam2Line } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -75,7 +76,7 @@ export function SectionCards() {
         value={containers?.length}
         badge={
           <Badge variant="outline">
-            <RiComputerLine />
+            <ConceptIcon concept="container" />
             {t("dashboard.running", { count: formatNumber(running) })}
           </Badge>
         }

@@ -3,16 +3,16 @@ import {
   RiAlertLine,
   RiApps2Line,
   RiCheckLine,
+  RiGitMergeLine,
   RiHammerLine,
-  RiPlugLine,
   RiRefreshLine,
   RiSearchLine,
-  RiStackLine,
   RiTerminalBoxLine,
 } from "@remixicon/react"
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptIcon, ConceptMedia } from "@/components/concept"
 import { ImageIcon } from "@/components/image-icon"
 import { PageBody, SectionHeading } from "@/components/page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -112,6 +112,7 @@ function TemplateCard({
       >
         <ImageIcon
           src={templateFile(list, template.id, "png")}
+          concept="template"
           fallback={KIND_ICONS[template.kind]}
           className="row-span-2 size-14 rounded-xl"
         />
@@ -141,7 +142,7 @@ function TemplateCard({
         </CardDescription>
         {servers.length > 0 && (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <RiPlugLine className="mt-px size-3.5 shrink-0" aria-hidden />
+            <ConceptIcon concept="mcp" className="mt-px size-3.5 shrink-0" />
             {t("images.mcpServers", { names: formatList(servers) })}
           </p>
         )}
@@ -218,7 +219,7 @@ function TemplateSection({
       {heading && (
         <div className="flex flex-col gap-0.5">
           <h3 id={id} className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <ConceptIcon concept="template" icon={Icon} className="size-4 shrink-0" />
             {t(`templates.kind.${kind}`)}
           </h3>
           {kind === "environment" && (
@@ -324,7 +325,7 @@ export function TemplatesPage() {
                 {merging ? (
                   <Spinner data-icon="inline-start" />
                 ) : (
-                  <RiStackLine data-icon="inline-start" />
+                  <RiGitMergeLine data-icon="inline-start" />
                 )}
                 {t("templates.merge.go")}
               </Button>
@@ -333,7 +334,7 @@ export function TemplatesPage() {
             <>
               {mergeable && (
                 <Button variant="outline" size="sm" onClick={() => setChoosing(true)}>
-                  <RiStackLine data-icon="inline-start" />
+                  <RiGitMergeLine data-icon="inline-start" />
                   {t("templates.merge.start")}
                 </Button>
               )}
@@ -356,9 +357,7 @@ export function TemplatesPage() {
       {!list ? (
         <Empty className="mx-4 border lg:mx-6">
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <RiApps2Line />
-            </EmptyMedia>
+            <ConceptMedia concept="template" />
             <EmptyTitle>{t("templates.off")}</EmptyTitle>
             <EmptyDescription>{t("templates.offHint")}</EmptyDescription>
           </EmptyHeader>
@@ -426,7 +425,7 @@ export function TemplatesPage() {
           )}
           {choosing && (
             <Alert>
-              <RiStackLine />
+              <RiGitMergeLine />
               <AlertTitle>
                 {plural(chosen.length, {
                   one: "templates.merge.chosen.one",
@@ -439,9 +438,7 @@ export function TemplatesPage() {
           {all.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <RiApps2Line />
-                </EmptyMedia>
+                <ConceptMedia concept="template" />
                 <EmptyTitle>{t("templates.none")}</EmptyTitle>
                 <EmptyDescription>{t("templates.noneHint")}</EmptyDescription>
               </EmptyHeader>

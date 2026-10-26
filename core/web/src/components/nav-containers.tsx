@@ -7,6 +7,7 @@ import {
   RiUploadLine,
 } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +54,7 @@ export function NavContainers() {
               tooltip={t("containers.connectTo", { name: container.spec.name })}
             >
               <a href={href({ page: "desktop", id: container.id })}>
-                <RiComputerLine />
+                <ConceptIcon concept="container" />
                 <span>{container.spec.name}</span>
               </a>
             </SidebarMenuButton>

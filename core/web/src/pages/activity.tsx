@@ -3,13 +3,13 @@ import {
   RiAlertLine,
   RiErrorWarningLine,
   RiFilterOffLine,
-  RiPlugLine,
   RiPulseLine,
   RiSearchLine,
 } from "@remixicon/react"
 
 import { ActivityDetail } from "@/components/activity-detail"
 import { ActivityFeed } from "@/components/activity-feed"
+import { ConceptIcon } from "@/components/concept"
 import { SideDrawer } from "@/components/dialogs/side-drawer"
 import { PageBody } from "@/components/page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -134,6 +134,7 @@ function Filters({
             <SelectItem value={ALL}>{t("activity.filter.allContainers")}</SelectItem>
             {containerChoices.map(([id, name]) => (
               <SelectItem key={id} value={id}>
+                <ConceptIcon concept="container" />
                 {name}
               </SelectItem>
             ))}
@@ -162,7 +163,7 @@ function Filters({
               <SelectGroup>
                 {endpointNames.map((name) => (
                   <SelectItem key={name} value={callerFilter(name)}>
-                    <RiPlugLine className="text-muted-foreground" />
+                    <ConceptIcon concept="mcp" />
                     <span className="font-mono">{name}</span>
                   </SelectItem>
                 ))}
@@ -326,7 +327,7 @@ export function ActivityPage() {
               </EmptyHeader>
               <EmptyContent>
                 <Button variant="outline" onClick={() => navigate({ page: "mcp" })}>
-                  <RiPlugLine data-icon="inline-start" />
+                  <ConceptIcon concept="mcp" data-icon="inline-start" />
                   {t("activity.empty.action")}
                 </Button>
               </EmptyContent>

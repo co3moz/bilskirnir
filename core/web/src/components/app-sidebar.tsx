@@ -1,20 +1,16 @@
 import * as React from "react"
 import {
-  RiApps2Line,
   RiBookOpenLine,
-  RiDatabase2Line,
   RiFolderOpenLine,
-  RiStackLine,
   RiDashboardLine,
   RiListCheck3,
   RiNodeTree,
-  RiComputerLine,
-  RiPlugLine,
   RiPulseLine,
   RiBookletLine,
   RiSettings3Line,
 } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -37,17 +33,20 @@ export const pageTitle = (page: Page) => t(`nav.${page}`)
 
 const navMain = [
   { page: "dashboard", icon: <RiDashboardLine /> },
-  { page: "containers", icon: <RiComputerLine /> },
-  { page: "images", icon: <RiStackLine /> },
-  { page: "templates", icon: <RiApps2Line /> },
-  { page: "volumes", icon: <RiDatabase2Line /> },
-  { page: "mcp", icon: <RiPlugLine /> },
+  { page: "containers", icon: <ConceptIcon concept="container" /> },
+  { page: "images", icon: <ConceptIcon concept="image" /> },
+  { page: "templates", icon: <ConceptIcon concept="template" /> },
+  { page: "volumes", icon: <ConceptIcon concept="volume" /> },
+  { page: "mcp", icon: <ConceptIcon concept="mcp" /> },
   { page: "files", icon: <RiFolderOpenLine /> },
   { page: "jobs", icon: <RiListCheck3 /> },
   { page: "activity", icon: <RiPulseLine /> },
   { page: "dependencies", icon: <RiNodeTree /> },
   { page: "settings", icon: <RiSettings3Line /> },
 ] satisfies { page: Page; icon: React.ReactNode }[]
+
+/** A page's icon, in its concept's color on the pages of one kind of thing. */
+export const pageIcon = (page: Page) => navMain.find((item) => item.page === page)?.icon
 
 const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = () => [

@@ -1,5 +1,6 @@
-import { RiDeleteBinLine, RiPlugLine } from "@remixicon/react"
+import { RiDeleteBinLine } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field"
@@ -38,7 +39,7 @@ export function BuildServers({
             >
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <RiPlugLine className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <ConceptIcon concept="mcp" className="size-4 shrink-0" />
                   <span className="font-mono text-sm font-medium break-all">{server.name}</span>
                   <Badge variant="outline" className="text-muted-foreground">
                     {server.command ? "stdio" : "HTTP"}
