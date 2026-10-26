@@ -4,13 +4,13 @@ import {
   RiFolderOpenLine,
   RiDashboardLine,
   RiListCheck3,
-  RiNodeTree,
   RiPulseLine,
   RiBookletLine,
   RiSettings3Line,
 } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
+import { ActiveJobsBadge } from "@/components/jobs-menu"
 import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -31,7 +31,14 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
-const navMain = [
+/** Pages that belong to Management, which the sidebar keeps open while one of them is. */
+const underSettings: Page[] = ["jobs", "activity", "dependencies"]
+export const parentPage = (page: Page): Page | undefined =>
+  underSettings.includes(page) ? "settings" : undefined
+
+type NavPage = { page: Page; icon: React.ReactNode; badge?: React.ReactNode }
+
+const navMain: (NavPage & { children?: NavPage[] })[] = [
   { page: "dashboard", icon: <RiDashboardLine /> },
   { page: "containers", icon: <ConceptIcon concept="container" /> },
   { page: "images", icon: <ConceptIcon concept="image" /> },
@@ -39,14 +46,22 @@ const navMain = [
   { page: "volumes", icon: <ConceptIcon concept="volume" /> },
   { page: "mcp", icon: <ConceptIcon concept="mcp" /> },
   { page: "files", icon: <RiFolderOpenLine /> },
-  { page: "jobs", icon: <RiListCheck3 /> },
-  { page: "activity", icon: <RiPulseLine /> },
-  { page: "dependencies", icon: <RiNodeTree /> },
-  { page: "settings", icon: <RiSettings3Line /> },
-] satisfies { page: Page; icon: React.ReactNode }[]
+  {
+    page: "settings",
+    icon: <RiSettings3Line />,
+    children: [
+      { page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> },
+      { page: "activity", icon: <RiPulseLine /> },
+    ],
+  },
+]
+const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
 
 /** A page's icon, in its concept's color on the pages of one kind of thing. */
-export const pageIcon = (page: Page) => navMain.find((item) => item.page === page)?.icon
+export const pageIcon = (page: Page) => {
+  const pages = navMain.flatMap((item) => [item, ...(item.children ?? [])])
+  return pages.find((item) => item.page === page)?.icon
+}
 
 const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = () => [
@@ -86,7 +101,11 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain
           active={page}
-          items={navMain.map((item) => ({ ...item, title: pageTitle(item.page) }))}
+          section={parentPage(page) ?? page}
+          items={navMain.map((item) => ({
+            ...titled(item),
+            children: item.children?.map(titled),
+          }))}
         />
         <NavContainers />
         <NavSecondary items={navSecondary()} className="mt-auto" />

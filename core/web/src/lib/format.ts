@@ -97,6 +97,12 @@ export function jobTone(status: string): Tone {
 export const jobActive = (job: Pick<Job, "status">) =>
   job.status === "queued" || job.status === "running"
 
+/** The jobs the header's menu lists: those in progress first, then the latest, newest first. */
+export function recentJobs<T extends Pick<Job, "status" | "created_at">>(jobs: T[], limit: number) {
+  const newest = [...jobs].sort((a, b) => b.created_at - a.created_at)
+  return [...newest.filter(jobActive), ...newest.filter((job) => !jobActive(job))].slice(0, limit)
+}
+
 /**
  * What a job worked on, by name. The manager records `container:<id>` or `image:<id>`, where a
  * catalog image's ID is its catalog ID; a deleted container keeps the name its deletion job

@@ -1,5 +1,10 @@
 import * as React from "react"
-import { RiArrowUpCircleLine, RiExternalLinkLine, RiRefreshLine } from "@remixicon/react"
+import {
+  RiArrowRightSLine,
+  RiArrowUpCircleLine,
+  RiExternalLinkLine,
+  RiRefreshLine,
+} from "@remixicon/react"
 import { toast } from "sonner"
 
 import { BackupCard } from "@/components/backup-card"
@@ -24,6 +29,7 @@ import { openDialog } from "@/lib/dialogs"
 import { shortDate } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { queryClient, useUpdate } from "@/lib/queries"
+import { href } from "@/lib/route"
 import { releaseState } from "@/lib/settings"
 import type { UpdateStatus } from "@/lib/types"
 
@@ -158,6 +164,16 @@ function VersionCard() {
           )}
         </CardFooter>
       )}
+      <CardFooter className="flex-wrap gap-x-1.5 gap-y-1 border-t text-xs text-muted-foreground">
+        {t("settings.notice")}
+        <a
+          href={href({ page: "dependencies" })}
+          className="inline-flex items-center gap-0.5 rounded-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {t("settings.noticeLink")}
+          <RiArrowRightSLine className="size-3.5" />
+        </a>
+      </CardFooter>
     </Card>
   )
 }

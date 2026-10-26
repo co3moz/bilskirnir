@@ -98,6 +98,7 @@ export const fr: Messages = {
   "jobs.viewLog": "Voir le journal",
   "jobs.loading": "Chargement des tâches…",
   "jobs.noneInView": "Aucune tâche dans cette vue.",
+  "jobs.none": "Aucune tâche pour l'instant.",
   "jobs.log": "Journal de la tâche",
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
@@ -845,7 +846,7 @@ export const fr: Messages = {
   "nav.documentation": "Documentation",
   "nav.mcp": "MCP",
   "nav.files": "Fichiers",
-  "nav.settings": "Paramètres",
+  "nav.settings": "Administration",
   "filesPage.title": "Fichiers des conteneurs",
   "filesPage.description":
     "Parcourez les fichiers d'un conteneur actif en tant qu'utilisateur du bureau, et ouvrez un fichier texte pour le lire ou le modifier.",
@@ -902,6 +903,9 @@ export const fr: Messages = {
   "settings.versionHint":
     "Bilskirnir cherche une nouvelle version au démarrage puis toutes les six heures.",
   "settings.release": "Bilskirnir {version}",
+  "settings.notice":
+    "Bilskirnir est construit à partir de paquets open source, chacun sous sa propre licence.",
+  "settings.noticeLink": "Dépendances et licences",
   "settings.state.current": "À jour",
   "settings.state.available": "Mise à jour disponible",
   "settings.state.updating": "Mise à jour en cours",
@@ -1150,7 +1154,7 @@ export const fr: Messages = {
   "spec.features": "Fonctionnalités",
   "spec.turnedOffList": "Désactivé pour cette installation : {features}.",
   "spec.gpuUnavailable":
-    "Cet hôte n'a pas de GPU pour les bureaux ; la page des paramètres en donne la raison.",
+    "Cet hôte n'a pas de GPU pour les bureaux ; la page d'administration en donne la raison.",
   "spec.advanced": "Paramètres avancés",
   "spec.mounts.one": "{count} volume",
   "spec.mounts.other": "{count} volumes",

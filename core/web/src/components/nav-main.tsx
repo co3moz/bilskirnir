@@ -6,28 +6,34 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { openDialog } from "@/lib/dialogs"
-import { jobActive } from "@/lib/format"
-import { plural, t } from "@/lib/i18n"
-import { useJobs } from "@/lib/queries"
+import { t } from "@/lib/i18n"
 import { href, type Page } from "@/lib/route"
 
+type NavItem = { page: Page; title: string; icon?: React.ReactNode; badge?: React.ReactNode }
+
+/**
+ * The pages, with the open one marked. An item's own pages show below it while one of them, or a
+ * page that belongs to the item, is open; `section` is the item the open page belongs to.
+ */
 export function NavMain({
   items,
   active,
+  section,
 }: {
-  items: { page: Page; title: string; icon?: React.ReactNode }[]
+  items: (NavItem & { children?: NavItem[] })[]
   active: Page
+  section: Page
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
-  const jobs = useJobs()
-  const pending = jobs.data?.filter(jobActive).length ?? 0
   // The mobile sidebar is a sheet over the page; following a link should reveal the page.
   const close = () => isMobile && setOpenMobile(false)
 
@@ -67,26 +73,35 @@ export function NavMain({
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.page}>
-              <SidebarMenuButton tooltip={item.title} isActive={item.page === active} asChild>
-                <a href={href({ page: item.page })} onClick={close}>
-                  {item.icon}
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-              {item.page === "jobs" && pending > 0 && (
-                <SidebarMenuBadge
-                  aria-label={plural(pending, {
-                    one: "jobs.inProgress.one",
-                    other: "jobs.inProgress.other",
-                  })}
-                >
-                  {pending}
-                </SidebarMenuBadge>
-              )}
-            </SidebarMenuItem>
-          ))}
+          {items.map((item) => {
+            const open = item.page === section
+            const onChild = item.children?.some((child) => child.page === active)
+            return (
+              <SidebarMenuItem key={item.page}>
+                <SidebarMenuButton tooltip={item.title} isActive={open && !onChild} asChild>
+                  <a href={href({ page: item.page })} onClick={close}>
+                    {item.icon}
+                    <span>{item.title}</span>
+                  </a>
+                </SidebarMenuButton>
+                {open && item.children && (
+                  <SidebarMenuSub>
+                    {item.children.map((child) => (
+                      <SidebarMenuSubItem key={child.page}>
+                        <SidebarMenuSubButton isActive={child.page === active} asChild>
+                          <a href={href({ page: child.page })} onClick={close}>
+                            {child.icon}
+                            <span>{child.title}</span>
+                            {child.badge}
+                          </a>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+            )
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

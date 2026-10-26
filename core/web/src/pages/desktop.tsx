@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { cn } from "cn"
 
 import { HumanRequestStrip } from "@/components/human-requests"
+import { JobsMenu } from "@/components/jobs-menu"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -263,6 +264,7 @@ export function DesktopPage({ id }: { id: string }) {
               />
             </>
           )}
+          <JobsMenu labelFrom="xl" />
           <ToolButton
             label={fullscreen ? t("desktop.exitFullscreen") : t("desktop.fullscreen")}
             icon={fullscreen ? <RiFullscreenExitLine /> : <RiFullscreenLine />}

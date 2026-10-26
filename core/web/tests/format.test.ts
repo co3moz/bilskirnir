@@ -17,6 +17,7 @@ import {
   jobProgress,
   jobTarget,
   needsAttention,
+  recentJobs,
   restartNotice,
 } from "../src/lib/format"
 import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../src/lib/types"
@@ -229,6 +230,22 @@ test("job activity counts finished jobs per local day and leaves out running one
     points.reduce((sum, point) => sum + point.completed + point.failed, 0),
     4
   )
+})
+
+test("the jobs menu lists jobs in progress before newer finished ones", () => {
+  const job = (id: string, status: JobStatus, created_at: number) => ({ id, status, created_at })
+  const jobs = [
+    job("old-done", "completed", 1),
+    job("old-run", "running", 2),
+    job("failed", "failed", 5),
+    job("queued", "queued", 3),
+    job("new-done", "completed", 6),
+  ]
+  const ids = (limit: number) => recentJobs(jobs, limit).map((entry) => entry.id)
+  assert.deepEqual(ids(10), ["queued", "old-run", "new-done", "failed", "old-done"])
+  assert.deepEqual(ids(3), ["queued", "old-run", "new-done"])
+  // The list it was given keeps its order.
+  assert.equal(jobs[0].id, "old-done")
 })
 
 test("a job names what it worked on, even after that container was deleted", () => {

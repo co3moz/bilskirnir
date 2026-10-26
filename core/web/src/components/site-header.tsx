@@ -1,13 +1,19 @@
+import { RiArrowRightSLine } from "@remixicon/react"
+
+import { JobsMenu } from "@/components/jobs-menu"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function SiteHeader({
   title,
   icon,
+  parent,
   children,
 }: {
   title: string
   icon?: React.ReactNode
+  /** The page this one is reached from when the sidebar does not list it. */
+  parent?: { title: string; href: string }
   children?: React.ReactNode
 }) {
   return (
@@ -18,11 +24,28 @@ export function SiteHeader({
           orientation="vertical"
           className="mx-2 data-vertical:h-4 data-vertical:self-center"
         />
-        <h1 className="flex items-center gap-2 text-base font-medium [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground">
+        {parent && (
+          <>
+            <a
+              href={parent.href}
+              className="hidden rounded-md text-base text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 sm:inline"
+            >
+              {parent.title}
+            </a>
+            <RiArrowRightSLine
+              aria-hidden
+              className="hidden size-4 text-muted-foreground sm:block"
+            />
+          </>
+        )}
+        <h1 className="flex min-w-0 items-center gap-2 text-base font-medium [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground">
           {icon}
-          {title}
+          <span className="truncate">{title}</span>
         </h1>
-        <div className="ml-auto flex items-center gap-3">{children}</div>
+        <div className="ml-auto flex items-center gap-3">
+          {children}
+          <JobsMenu />
+        </div>
       </div>
     </header>
   )
