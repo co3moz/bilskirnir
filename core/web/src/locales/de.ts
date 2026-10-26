@@ -858,6 +858,7 @@ export const de: Messages = {
   "filesPage.notRunning": "{name} läuft nicht",
   "filesPage.notRunningHint": "Seine Dateien lassen sich durchsuchen, solange er läuft.",
   "nav.mcpGuide": "MCP-Anleitung",
+  "nav.version": "v{version}",
   "nav.running": "Laufende Container",
   "nav.noneRunning": "Kein Container läuft.",
   "nav.more": "{count} weitere",

@@ -30,6 +30,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { t } from "@/lib/i18n"
+import { useUpdate } from "@/lib/queries"
 import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
@@ -62,6 +63,8 @@ export function AppSidebar({
   page,
   ...props
 }: React.ComponentProps<typeof Sidebar> & { page: Page }) {
+  // The release this manager runs, also while release checks are turned off.
+  const version = useUpdate().data?.current
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -71,6 +74,11 @@ export function AppSidebar({
               <a href={href({ page: "dashboard" })}>
                 <img src="/mark.svg" alt="" className="size-6!" />
                 <span className="text-base font-semibold tracking-wide">Bilskirnir</span>
+                {version && (
+                  <span className="ml-auto font-mono text-xs text-muted-foreground">
+                    {t("nav.version", { version })}
+                  </span>
+                )}
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
