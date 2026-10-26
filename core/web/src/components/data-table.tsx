@@ -105,10 +105,18 @@ export function useDataTable<T extends RowData>({
   })
 }
 
+const SELECT = "select"
+
+/**
+ * dashboard-01 keeps its first column, the row selection, as narrow as a checkbox. Here only that
+ * column is: a table that starts with a name lets it take the width it needs.
+ */
+const cellWidth = (column: string) => (column === SELECT ? "w-8" : undefined)
+
 /** The row selection column from dashboard-01. */
 export function selectColumn<T extends RowData>(): DataColumn<T> {
   return columnHelper<T>().display({
-    id: "select",
+    id: SELECT,
     header: ({ table }) => (
       <div className="flex items-center justify-center">
         <Checkbox
@@ -214,7 +222,9 @@ export function ExtraRow<T extends RowData>({
   return (
     <TableRow>
       {table.getVisibleLeafColumns().map((column) => (
-        <TableCell key={column.id}>{cells[column.id]}</TableCell>
+        <TableCell key={column.id} className={cellWidth(column.id)}>
+          {cells[column.id]}
+        </TableCell>
       ))}
     </TableRow>
   )
@@ -245,13 +255,13 @@ export function DataTableView<T extends RowData>({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody className="**:data-[slot=table-cell]:first:w-8">
+        <TableBody>
           {extra}
           {rows.length || extra.length ? (
             rows.map((row) => (
               <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} className={cellWidth(cell.column.id)}>
                     <FlexRender cell={cell} />
                   </TableCell>
                 ))}
