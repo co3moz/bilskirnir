@@ -29,7 +29,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs` |
 | Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
 | Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
-| Settings page changes through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/bilskirnir-settings.path`, `packaging/wsl/bilskirnir-settings.service` |
+| Settings changes from the Management page through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/bilskirnir-settings.path`, `packaging/wsl/bilskirnir-settings.service` |
 | Settings changes after creation | `core/manager/src/reconfigure.rs` |
 | Composes and their setup runs | `core/manager/src/compose.rs`, `core/manager/helpers/setup_runner.py`, `core/manager/tests/test_setup_runner.py`, `core/web/src/lib/compose.ts`, `core/web/src/components/dialogs/compose-dialog.tsx` |
 | Metadata and image catalog | `core/manager/src/db.rs`, `core/manager/src/model.rs`, `core/manager/src/catalog.rs`, `images/desktop/profiles.json` |

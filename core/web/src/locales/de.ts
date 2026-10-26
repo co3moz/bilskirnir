@@ -99,6 +99,7 @@ export const de: Messages = {
   "jobs.viewLog": "Protokoll anzeigen",
   "jobs.loading": "Aufträge werden geladen…",
   "jobs.noneInView": "Keine Aufträge in dieser Ansicht.",
+  "jobs.none": "Noch keine Aufträge.",
   "jobs.log": "Auftragsprotokoll",
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
@@ -846,7 +847,7 @@ export const de: Messages = {
   "nav.documentation": "Dokumentation",
   "nav.mcp": "MCP",
   "nav.files": "Dateien",
-  "nav.settings": "Einstellungen",
+  "nav.settings": "Verwaltung",
   "filesPage.title": "Container-Dateien",
   "filesPage.description":
     "Durchsuche die Dateien eines laufenden Containers als Desktop-Benutzer und öffne eine Textdatei, um sie zu lesen oder zu ändern.",
@@ -903,6 +904,9 @@ export const de: Messages = {
   "settings.versionHint":
     "Bilskirnir sucht beim Start und alle sechs Stunden nach einer neuen Version.",
   "settings.release": "Bilskirnir {version}",
+  "settings.notice":
+    "Bilskirnir ist aus Open-Source-Paketen gebaut, jedes unter seiner eigenen Lizenz.",
+  "settings.noticeLink": "Abhängigkeiten und Lizenzen",
   "settings.state.current": "Aktuell",
   "settings.state.available": "Update verfügbar",
   "settings.state.updating": "Wird aktualisiert",
@@ -1155,7 +1159,7 @@ export const de: Messages = {
   "spec.features": "Funktionen",
   "spec.turnedOffList": "Für diese Installation deaktiviert: {features}.",
   "spec.gpuUnavailable":
-    "Dieser Host hat keine GPU für Desktops; die Einstellungsseite nennt den Grund.",
+    "Dieser Host hat keine GPU für Desktops; die Verwaltungsseite nennt den Grund.",
   "spec.advanced": "Erweiterte Einstellungen",
   "spec.mounts.one": "{count} Volume",
   "spec.mounts.other": "{count} Volumes",

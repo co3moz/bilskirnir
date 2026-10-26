@@ -18,6 +18,9 @@ const icons: Record<Tone, React.ReactNode> = {
   muted: <RiStopCircleLine className="text-muted-foreground" />,
 }
 
+/** A state's icon alone, where its words stand beside it. */
+export const StatusIcon = ({ tone }: { tone: Tone }) => icons[tone]
+
 /** A state always pairs its color with an icon and words, never color alone. */
 export function StatusBadge({
   state,
