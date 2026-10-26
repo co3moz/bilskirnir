@@ -14,6 +14,7 @@ import {
   RiUploadLine,
 } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -101,8 +102,8 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
           <RiSettings3Line />
           {t("containers.settings")}
         </DropdownMenuItem>
-        <DropdownMenuItem tone="violet" onSelect={() => openDialog({ kind: "snapshot", id })}>
-          <RiCameraLine />
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "snapshot", id })}>
+          <ConceptIcon concept="image" icon={RiCameraLine} />
           {t("containers.snapshot")}
         </DropdownMenuItem>
         <DropdownMenuItem

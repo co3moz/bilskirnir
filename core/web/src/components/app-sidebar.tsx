@@ -1,19 +1,15 @@
 import * as React from "react"
 import {
-  RiApps2Line,
   RiBookOpenLine,
-  RiDatabase2Line,
   RiFolderOpenLine,
-  RiStackLine,
   RiDashboardLine,
-  RiComputerLine,
   RiListCheck3,
-  RiPlugLine,
   RiPulseLine,
   RiBookletLine,
   RiSettings3Line,
 } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { ActiveJobsBadge } from "@/components/jobs-menu"
 import { NavContainers } from "@/components/nav-containers"
 import { NavMain } from "@/components/nav-main"
@@ -44,11 +40,11 @@ type NavPage = { page: Page; icon: React.ReactNode; badge?: React.ReactNode }
 
 const navMain: (NavPage & { children?: NavPage[] })[] = [
   { page: "dashboard", icon: <RiDashboardLine /> },
-  { page: "containers", icon: <RiComputerLine /> },
-  { page: "images", icon: <RiStackLine /> },
-  { page: "templates", icon: <RiApps2Line /> },
-  { page: "volumes", icon: <RiDatabase2Line /> },
-  { page: "mcp", icon: <RiPlugLine /> },
+  { page: "containers", icon: <ConceptIcon concept="container" /> },
+  { page: "images", icon: <ConceptIcon concept="image" /> },
+  { page: "templates", icon: <ConceptIcon concept="template" /> },
+  { page: "volumes", icon: <ConceptIcon concept="volume" /> },
+  { page: "mcp", icon: <ConceptIcon concept="mcp" /> },
   { page: "files", icon: <RiFolderOpenLine /> },
   {
     page: "settings",
@@ -60,6 +56,12 @@ const navMain: (NavPage & { children?: NavPage[] })[] = [
   },
 ]
 const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
+
+/** A page's icon, in its concept's color on the pages of one kind of thing. */
+export const pageIcon = (page: Page) => {
+  const pages = navMain.flatMap((item) => [item, ...(item.children ?? [])])
+  return pages.find((item) => item.page === page)?.icon
+}
 
 const repository = "https://github.com/co3moz/bilskirnir"
 const navSecondary = () => [

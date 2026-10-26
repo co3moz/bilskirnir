@@ -6,10 +6,12 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function SiteHeader({
   title,
+  icon,
   parent,
   children,
 }: {
   title: string
+  icon?: React.ReactNode
   /** The page this one is reached from when the sidebar does not list it. */
   parent?: { title: string; href: string }
   children?: React.ReactNode
@@ -36,7 +38,10 @@ export function SiteHeader({
             />
           </>
         )}
-        <h1 className="min-w-0 truncate text-base font-medium">{title}</h1>
+        <h1 className="flex min-w-0 items-center gap-2 text-base font-medium [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground">
+          {icon}
+          <span className="truncate">{title}</span>
+        </h1>
         <div className="ml-auto flex items-center gap-3">
           {children}
           <JobsMenu />

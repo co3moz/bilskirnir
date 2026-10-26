@@ -12,6 +12,7 @@ import {
   RiUploadLine,
 } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { ContainerActivity } from "@/components/container-activity"
 import { PrimaryAction, SpecBadges } from "@/components/container-card"
 import { ContainerPreview } from "@/components/container-preview"
@@ -81,7 +82,10 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
   return (
     <SideDrawer {...props}>
       <DrawerHeader className="gap-1">
-        <DrawerTitle>{spec.name}</DrawerTitle>
+        <DrawerTitle className="flex items-center justify-center gap-2 md:justify-start">
+          <ConceptIcon concept="container" className="size-4 shrink-0" />
+          {spec.name}
+        </DrawerTitle>
         <DrawerDescription>{desktopTitle(spec, item.desktop?.title, images)}</DrawerDescription>
       </DrawerHeader>
       <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">

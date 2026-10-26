@@ -1,7 +1,8 @@
 import * as React from "react"
-import { RiComputerLine, RiAddLine, RiSearchLine } from "@remixicon/react"
+import { RiAddLine, RiSearchLine } from "@remixicon/react"
 
 import { ViewTabs } from "@/components/data-table"
+import { ConceptMedia } from "@/components/concept"
 import { ContainerCard, PendingContainerCard } from "@/components/container-card"
 import { DockerAlert, PageBody } from "@/components/page"
 import { Button } from "@/components/ui/button"
@@ -11,7 +12,6 @@ import {
   EmptyContent,
   EmptyDescription,
   EmptyHeader,
-  EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
@@ -69,9 +69,7 @@ export function ContainersPage() {
       ) : all.length === 0 && pending.length === 0 ? (
         <Empty className="mx-4 border lg:mx-6">
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <RiComputerLine />
-            </EmptyMedia>
+            <ConceptMedia concept="container" />
             <EmptyTitle>{t("containers.none")}</EmptyTitle>
             <EmptyDescription>{t("containers.noneHint")}</EmptyDescription>
           </EmptyHeader>

@@ -1,7 +1,6 @@
 import * as React from "react"
 import {
   RiArchive2Line,
-  RiDatabase2Line,
   RiAddLine,
   RiDeleteBinLine,
   RiFileCopyLine,
@@ -17,6 +16,7 @@ import {
   useDataTable,
   type DataColumn,
 } from "@/components/data-table"
+import { ConceptIcon } from "@/components/concept"
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -46,7 +46,7 @@ const columns: DataColumn<Row>[] = [
       const { owner } = row.original
       return (
         <div className="flex items-start gap-2">
-          <RiDatabase2Line className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+          <ConceptIcon concept="volume" className="mt-0.5 size-4 shrink-0" />
           <div className="flex flex-col gap-1">
             {/* A long name keeps the icon beside it; the badges wrap below it instead. */}
             <div className="flex flex-wrap items-center gap-2">
@@ -109,6 +109,7 @@ const columns: DataColumn<Row>[] = [
         <ul className="flex flex-col gap-0.5 text-xs">
           {row.original.users.map((user) => (
             <li key={`${user.id}-${user.target}`}>
+              <ConceptIcon concept="container" className="mr-1 inline size-3.5 align-[-0.125rem]" />
               <button
                 type="button"
                 className="hover:underline"

@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
-import { AppSidebar, pageTitle, parentPage } from "@/components/app-sidebar"
+import { AppSidebar, pageIcon, pageTitle, parentPage } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
 import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
@@ -90,6 +90,7 @@ function Shell({ page }: { page: Page }) {
       <SidebarInset>
         <SiteHeader
           title={pageTitle(page)}
+          icon={pageIcon(page)}
           parent={parent && { title: pageTitle(parent), href: href({ page: parent }) }}
         >
           {page === "containers" && (

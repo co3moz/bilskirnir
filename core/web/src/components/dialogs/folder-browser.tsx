@@ -3,7 +3,6 @@ import {
   RiArrowUpLine,
   RiBookmarkLine,
   RiComputerLine,
-  RiDatabase2Line,
   RiDownloadLine,
   RiFileLine,
   RiFileTextLine,
@@ -17,6 +16,7 @@ import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import { DialogFooter } from "@/components/ui/dialog"
 import { FieldError } from "@/components/ui/field"
@@ -63,7 +63,7 @@ const homeIcons: Record<string, React.ReactNode> = {
 
 const kindIcons: Record<Exclude<QuickFolder["kind"], "home">, React.ReactNode> = {
   compose: <RiBookmarkLine aria-hidden />,
-  volume: <RiDatabase2Line aria-hidden />,
+  volume: <ConceptIcon concept="volume" />,
   recent: <RiHistoryLine aria-hidden />,
 }
 

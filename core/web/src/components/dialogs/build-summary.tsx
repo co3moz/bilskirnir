@@ -1,5 +1,4 @@
-import { RiApps2Line, RiPlugLine } from "@remixicon/react"
-
+import { ConceptIcon } from "@/components/concept"
 import { ImageIcon } from "@/components/image-icon"
 import { FieldLegend, FieldSet } from "@/components/ui/field"
 import { formatList, t } from "@/lib/i18n"
@@ -24,14 +23,14 @@ export function BuildSummary({
         {t("common.description")}
       </FieldLegend>
       <div className="flex items-start gap-3 rounded-xl bg-muted/60 p-3">
-        <ImageIcon src={icon} fallback={RiApps2Line} className="size-12 rounded-lg" />
+        <ImageIcon src={icon} concept="template" className="size-12 rounded-lg" />
         <div className="flex min-w-0 flex-col gap-2 text-sm">
           <p className="break-words whitespace-pre-line">
             {description.trim() || t("templates.noDescription")}
           </p>
           {servers.length > 0 && (
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-              <RiPlugLine className="mt-px size-3.5 shrink-0" aria-hidden />
+              <ConceptIcon concept="mcp" className="mt-px size-3.5 shrink-0" />
               {t("images.mcpServers", {
                 names: formatList(servers.map((server) => server.name)),
               })}

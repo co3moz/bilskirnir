@@ -1,9 +1,7 @@
 import * as React from "react"
-import { RiPlugLine } from "@remixicon/react"
-
 import { cn } from "cn"
 
-import { Badge } from "@/components/ui/badge"
+import { ConceptBadge, ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import {
   DrawerClose,
@@ -70,7 +68,10 @@ function StepRow({ step, largest, own }: { step: ImageStep; largest: number; own
         // The track makes a sliver of a small step read as part of a scale.
         <div className="h-1.5 rounded-r-[4px] bg-muted" aria-hidden>
           <div
-            className={cn("h-full rounded-r-[4px]", own ? "bg-violet" : "bg-muted-foreground/40")}
+            className={cn(
+              "h-full rounded-r-[4px]",
+              own ? "bg-concept-image" : "bg-muted-foreground/40"
+            )}
             style={{ width: `max(2px, ${(step.size / largest) * 100}%)` }}
           />
         </div>
@@ -129,7 +130,10 @@ function Group({
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <h4 className="flex items-center gap-2 text-sm font-medium">
           <span
-            className={cn("size-2 rounded-full", own ? "bg-violet" : "bg-muted-foreground/40")}
+            className={cn(
+              "size-2 rounded-full",
+              own ? "bg-concept-image" : "bg-muted-foreground/40"
+            )}
             aria-hidden
           />
           {own ? t("layers.own") : t("layers.from", { name: imageName(images, group.from!) })}
@@ -171,15 +175,16 @@ export function ImageDrawer({ id, ...props }: DialogProps & { id: string }) {
   return (
     <SideDrawer {...props} wide>
       <DrawerHeader className="gap-1">
-        <DrawerTitle>{image?.name ?? t("layers.title")}</DrawerTitle>
+        <DrawerTitle className="flex items-center justify-center gap-2 md:justify-start">
+          <ConceptIcon concept="image" className="size-4 shrink-0" />
+          {image?.name ?? t("layers.title")}
+        </DrawerTitle>
         <DrawerDescription asChild>
           {/* Centered like the header on a phone, where the drawer opens from the bottom. */}
           <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
             {image ? (
               <>
-                <Badge variant="outline" className="border-violet/40 text-violet">
-                  {imageKind(image.kind)}
-                </Badge>
+                <ConceptBadge concept="image">{imageKind(image.kind)}</ConceptBadge>
                 <code className="font-mono text-[0.7rem] break-all">{image.reference}</code>
               </>
             ) : (
@@ -191,7 +196,7 @@ export function ImageDrawer({ id, ...props }: DialogProps & { id: string }) {
       <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
         {!!image?.mcp_servers?.length && (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <RiPlugLine className="mt-px size-3.5 shrink-0" aria-hidden />
+            <ConceptIcon concept="mcp" className="mt-px size-3.5 shrink-0" />
             {t("images.mcpServers", { names: formatList(image.mcp_servers) })}
           </p>
         )}

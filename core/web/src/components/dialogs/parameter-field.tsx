@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
@@ -218,6 +219,7 @@ function VolumeControl({
               selected === NEW_VOLUME || selected === NO_VOLUME ? "" : value
             ).map((volume) => (
               <SelectItem key={volume} value={volume} className="font-mono">
+                <ConceptIcon concept="volume" />
                 {volume}
               </SelectItem>
             ))}

@@ -4,7 +4,6 @@ import {
   RiArrowUpLine,
   RiBookmarkLine,
   RiComputerLine,
-  RiDatabase2Line,
   RiDeleteBinLine,
   RiDownloadLine,
   RiFileLine,
@@ -23,6 +22,7 @@ import { cn } from "cn"
 import { toast } from "sonner"
 
 import { CodeEditor } from "@/components/code-editor"
+import { ConceptIcon } from "@/components/concept"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -77,7 +77,7 @@ const homeIcons: Record<string, React.ReactNode> = {
 
 const kindIcons: Record<Exclude<QuickFolder["kind"], "home">, React.ReactNode> = {
   compose: <RiBookmarkLine aria-hidden />,
-  volume: <RiDatabase2Line aria-hidden />,
+  volume: <ConceptIcon concept="volume" />,
   recent: <RiHistoryLine aria-hidden />,
 }
 

@@ -11,6 +11,7 @@ import {
 } from "@remixicon/react"
 import { cn } from "cn"
 
+import { ConceptIcon } from "@/components/concept"
 import { ContainerMenu } from "@/components/container-menu"
 import { ContainerPreview } from "@/components/container-preview"
 import { JobLogButton } from "@/components/pending"
@@ -157,7 +158,8 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
         <ContainerPreview item={item} />
       </CardContent>
       <CardHeader>
-        <CardTitle className="truncate text-base">
+        <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+          <ConceptIcon concept="container" className="size-4 shrink-0" />
           <button
             type="button"
             className="truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
@@ -238,7 +240,8 @@ export function PendingContainerCard({ pending }: { pending: Pending }) {
         </div>
       </CardContent>
       <CardHeader>
-        <CardTitle className="truncate text-base">
+        <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+          <ConceptIcon concept="container" className="size-4 shrink-0" />
           <button
             type="button"
             className="truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"

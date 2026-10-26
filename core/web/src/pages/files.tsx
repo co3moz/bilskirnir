@@ -1,6 +1,7 @@
 import * as React from "react"
 import { RiFolderOpenLine, RiPlayLine } from "@remixicon/react"
 
+import { ConceptIcon } from "@/components/concept"
 import { FileExplorer } from "@/components/file-explorer"
 import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
 import { Button } from "@/components/ui/button"
@@ -87,6 +88,7 @@ export function FilesPage() {
               <SelectGroup>
                 {running.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
+                    <ConceptIcon concept="container" />
                     {item.spec.name}
                   </SelectItem>
                 ))}

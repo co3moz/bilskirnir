@@ -22,6 +22,7 @@ import {
   ViewTabs,
   type DataColumn,
 } from "@/components/data-table"
+import { ConceptIcon } from "@/components/concept"
 import { InternetSwitch } from "@/components/container-card"
 import { ContainerMenu } from "@/components/container-menu"
 import { JobLogButton, PendingName, PendingStatus } from "@/components/pending"
@@ -65,17 +66,20 @@ function columns(images: ImageItem[]): DataColumn<ContainerItem>[] {
       cell: ({ row }) => {
         const container = row.original
         return (
-          <div className="flex min-w-40 flex-col">
-            <Button
-              variant="link"
-              className="h-auto w-fit p-0 text-left text-foreground"
-              onClick={() => openDialog({ kind: "details", id: container.id })}
-            >
-              {container.spec.name}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {desktopTitle(container.spec, container.desktop?.title, images)}
-            </span>
+          <div className="flex min-w-40 items-start gap-2">
+            <ConceptIcon concept="container" className="mt-0.5 size-4 shrink-0" />
+            <div className="flex flex-col">
+              <Button
+                variant="link"
+                className="h-auto w-fit p-0 text-left text-foreground"
+                onClick={() => openDialog({ kind: "details", id: container.id })}
+              >
+                {container.spec.name}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {desktopTitle(container.spec, container.desktop?.title, images)}
+              </span>
+            </div>
           </div>
         )
       },
@@ -302,7 +306,12 @@ export function ContainersTable() {
               key={entry.job.id}
               table={table}
               cells={{
-                name: <PendingName pending={entry} className="min-w-40" />,
+                name: (
+                  <div className="flex min-w-40 items-start gap-2">
+                    <ConceptIcon concept="container" className="mt-0.5 size-4 shrink-0" />
+                    <PendingName pending={entry} />
+                  </div>
+                ),
                 status: <PendingStatus job={entry.job} />,
                 actions: (
                   <div className="flex justify-end">

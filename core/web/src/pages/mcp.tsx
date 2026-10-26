@@ -1,7 +1,6 @@
 import * as React from "react"
 import {
   RiAddLine,
-  RiComputerLine,
   RiDeleteBinLine,
   RiEditLine,
   RiForbidLine,
@@ -9,7 +8,6 @@ import {
   RiKey2Line,
   RiMore2Line,
   RiPlayLine,
-  RiPlugLine,
   RiPulseLine,
   RiRefreshLine,
   RiShareForwardLine,
@@ -17,6 +15,7 @@ import {
 import { cn } from "cn"
 import { toast } from "sonner"
 
+import { ConceptBadge, ConceptIcon, ConceptMedia } from "@/components/concept"
 import { CopyButton } from "@/components/copy-button"
 import { InspectorView } from "@/components/inspector/inspector-view"
 import {
@@ -46,7 +45,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -168,7 +167,7 @@ const columns: DataColumn<Row>[] = [
         // Table cells do not wrap; the URL does here so the row's actions stay in view.
         <div className="flex min-w-56 flex-col gap-1 whitespace-normal">
           <div className="flex flex-wrap items-center gap-2">
-            <RiPlugLine className="size-4 shrink-0 text-primary" aria-hidden />
+            <ConceptIcon concept="mcp" className="size-4 shrink-0" />
             <span className="font-mono text-xs font-medium">{endpoint.name}</span>
             <Badge variant="outline" className="text-muted-foreground">
               {endpoint.automatic ? t("mcp.endpoint.automatic") : t("mcp.endpoint.custom")}
@@ -214,6 +213,7 @@ const columns: DataColumn<Row>[] = [
           {grants.map((grant) => (
             <li key={grant.container_id} className="flex flex-col gap-0.5">
               <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <ConceptIcon concept="container" className="size-3.5 shrink-0" />
                 {present.has(grant.container_id) ? (
                   <button
                     type="button"
@@ -389,20 +389,21 @@ function ServerRow({ server }: { server: DesktopServer }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
+            <ConceptIcon concept="mcp" className="size-4 shrink-0" />
             <span className="font-mono text-sm font-medium break-all">{server.name}</span>
-            <Badge
-              variant="outline"
-              className={
-                server.source === "image" ? "border-violet/40 text-violet" : "text-muted-foreground"
-              }
-              title={
-                server.source === "image"
-                  ? t("mcp.source.imageHint")
-                  : t("mcp.source.containerHint")
-              }
-            >
-              {server.source === "image" ? t("mcp.source.image") : t("mcp.source.container")}
-            </Badge>
+            {server.source === "image" ? (
+              <ConceptBadge concept="image" title={t("mcp.source.imageHint")}>
+                {t("mcp.source.image")}
+              </ConceptBadge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-muted-foreground"
+                title={t("mcp.source.containerHint")}
+              >
+                {t("mcp.source.container")}
+              </Badge>
+            )}
             <Badge variant="outline" className="text-muted-foreground">
               {server.transport === "stdio" ? "stdio" : "HTTP"}
             </Badge>
@@ -563,9 +564,7 @@ function ServersView({ containers }: { containers: ContainerItem[] }) {
     return (
       <Empty className="border">
         <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <RiComputerLine />
-          </EmptyMedia>
+          <ConceptMedia concept="container" />
           <EmptyTitle>{t("containers.none")}</EmptyTitle>
           <EmptyDescription>{t("mcp.servers.noContainers")}</EmptyDescription>
         </EmptyHeader>
@@ -586,7 +585,7 @@ function ServersView({ containers }: { containers: ContainerItem[] }) {
               )}
             >
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <RiComputerLine className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <ConceptIcon concept="container" className="size-4 shrink-0" />
                 <h3 className="text-sm font-medium break-all">{name}</h3>
                 {status ? (
                   <StatusBadge state={status.key} tone={status.tone} />
