@@ -17,9 +17,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 OOBE = ROOT / "packaging/wsl/oobe.sh"
 
+# chpasswd reads its input to the end, as the real one does. A stand-in that exits first leaves the
+# script's `printf ... | chpasswd` writing into a closed pipe, and pipefail ends the setup with 141.
 STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
 case "$(basename "$0")" in
+    chpasswd) cat >> "$CALLS.chpasswd" ;;
     getent) exit 2 ;;
     wslinfo) [[ -n ${NETWORKING:-} ]] || exit 1; echo "$NETWORKING" ;;
 esac
@@ -77,6 +80,9 @@ class FirstStartTest(unittest.TestCase):
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
         self.assertNotIn("thoric.ps1", result.stdout)
+        # The password reaches chpasswd on its input, never on a command line.
+        self.assertEqual((self.dir / "calls.chpasswd").read_text(), "alice:secret123\n")
+        self.assertNotIn("secret123", self.calls.read_text())
 
     def test_other_devices_get_the_windows_step_of_the_networking_mode(self):
         env_example = self.install / ".env.example"
@@ -106,6 +112,8 @@ class FirstStartTest(unittest.TestCase):
         settings = self.settings()
         self.assertEqual((settings["AUTH_MODE"], settings["ROOT_MCP_ENABLED"], settings["BIND_ADDRESS"]),
                          ("none", "false", "0.0.0.0"))
+        # Without a password the account gets none.
+        self.assertNotIn("chpasswd", self.calls.read_text())
         before, after = result.stdout.split("Who can reach the dashboard?", 1)
         self.assertIn("There is no password, so any device that reaches the dashboard controls every desktop.", before)
         self.assertIn("on the network who reaches it controls every desktop", after)
