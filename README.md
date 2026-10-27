@@ -1,8 +1,8 @@
-# Bilskirnir
+# Thoric
 
-![Bilskirnir dashboard with Ubuntu desktop previews](docs/screenshots/bilskirnir.png)
+![Thoric dashboard with Ubuntu desktop previews](docs/screenshots/thoric.png)
 
-Bilskirnir gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker, on WSL2 or on a Linux host, with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
+Thoric gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker, on WSL2 or on a Linux host, with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
 
 The same desktops open in your browser, so you can work in them yourself, save a prepared one as an image and start new containers from it.
 
@@ -11,7 +11,7 @@ The name is a nod to Thor.
 ## What you can do
 
 - **Built-in MCP agent integration** with 76 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
-- **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Bilskirnir's tools and those servers' tools, with a token of their own.
+- **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Thoric's tools and those servers' tools, with a token of their own.
 - **GPU acceleration** for Linux graphics applications, verified in WSL2 with an NVIDIA GPU. On a Linux host, NVIDIA GPUs through the NVIDIA Container Toolkit and AMD and Intel GPUs (experimental) are supported but not verified yet; see [GPU on a Linux host](docs/INSTALLATION.md#gpu-on-a-linux-host).
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
 - **Access, control, change and delete** containers from the browser.
@@ -30,39 +30,39 @@ Both supplied desktops use Ubuntu 24.04:
 | Lightweight XFCE | A smaller desktop for everyday tools and applications. |
 | GNOME | Ubuntu's GNOME Shell session and Yaru theme, with higher resource use. |
 
-Bilskirnir serves one administrator on a local machine or LAN.
+Thoric serves one administrator on a local machine or LAN.
 
 ## Getting started
 
 You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also need a Windows GPU driver with WSL support.
 
-1. Install the `bilskirnir.wsl` package from the [latest release](https://github.com/co3moz/bilskirnir/releases/latest), in one of two ways.
+1. Install the `thoric.wsl` package from the [latest release](https://github.com/co3moz/thoric/releases/latest), in one of two ways.
 
    **Option 1, the Windows helper.** Run this in PowerShell:
 
    ```powershell
-   irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex
+   irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
    ```
 
-   It asks for a folder for the distribution's disk, which holds every image and container, and its maximum size, then downloads the package and installs it. Run the same line again later to start, stop, update, move or remove Bilskirnir.
+   It asks for a folder for the distribution's disk, which holds every image and container, and its maximum size, then downloads the package and installs it. Run the same line again later to start, stop, update, move or remove Thoric.
 
-   **Option 2, the package by hand.** Download it and install it with WSL; `--location D:\WSL\Bilskirnir` keeps the disk on another drive:
+   **Option 2, the package by hand.** Download it and install it with WSL; `--location D:\WSL\Thoric` keeps the disk on another drive:
 
    ```powershell
-   curl.exe -fLo bilskirnir.wsl https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.wsl
-   wsl --install --from-file .\bilskirnir.wsl
+   curl.exe -fLo thoric.wsl https://github.com/co3moz/thoric/releases/latest/download/thoric.wsl
+   wsl --install --from-file .\thoric.wsl
    ```
 
-   Then open **Bilskirnir** from the Start menu.
-2. The first start follows, in the helper's window with option 1. It asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable root agent access at `/mcp` and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Bilskirnir.
-3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `bilskirnir mcp` shows them again.
+   Then open **Thoric** from the Start menu.
+2. The first start follows, in the helper's window with option 1. It asks for one username and password, used for both the Linux user and the dashboard; leave the password empty to open the dashboard without signing in. It asks whether to enable root agent access at `/mcp` and how agents authenticate (a random token by default, your own token or none), and whether only this computer or other devices too can reach the dashboard, then detects the GPU and offers to start Thoric.
+3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `thoric mcp` shows them again.
 4. Open [localhost:8080](http://localhost:8080), sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 
-WSL stops a distribution shortly after its last window closes; the helper's **Start** keeps it running and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `bilskirnir` command, updates, also from the dashboard, and removal.
+WSL stops a distribution shortly after its last window closes; the helper's **Start** keeps it running and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `thoric` command, updates, also from the dashboard, and removal.
 
 ## Custom installation
 
-The WSL package is the recommended installation. Bilskirnir itself needs only an x86_64 Linux host with Docker Engine and Compose v2, so you can also run it with Compose on a host you manage yourself, such as your own WSL2 distribution or another Linux machine.
+The WSL package is the recommended installation. Thoric itself needs only an x86_64 Linux host with Docker Engine and Compose v2, so you can also run it with Compose on a host you manage yourself, such as your own WSL2 distribution or another Linux machine.
 
 Run the commands below on that host, as a user who can use Docker.
 
@@ -71,23 +71,23 @@ GPU containers get the host's GPU through each route the host has, which the man
 Save this as `compose.yml` and change `ADMIN_PASSWORD` to a password of at least eight characters. Everything else can stay as shown for an NVIDIA GPU:
 
 ```yaml
-name: bilskirnir
+name: thoric
 
 services:
   manager:
-    image: ghcr.io/co3moz/bilskirnir:latest
-    container_name: bilskirnir-manager
+    image: ghcr.io/co3moz/thoric:latest
+    container_name: thoric-manager
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080" # Use 0.0.0.0 instead for LAN access.
     labels:
-      bilskirnir.manager: "true"
+      thoric.manager: "true"
     environment:
-      MANAGER_CONTAINER: bilskirnir-manager
+      MANAGER_CONTAINER: thoric-manager
       AUTH_MODE: password # Use none to disable login.
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: "replace-with-your-password"
-      DESKTOP_IMAGE: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
+      DESKTOP_IMAGE: ghcr.io/co3moz/thoric/ubuntu-xfce:24.04
       # GPU routes for containers created in the UI; each is used where the host has it.
       WSL_GPU: "true"
       NVIDIA_COMPUTE: "true" # The NVIDIA Container Toolkit: CUDA, and OpenGL outside WSL.
@@ -103,10 +103,10 @@ services:
 
 volumes:
   manager-data:
-    name: bilskirnir-data
+    name: thoric-data
 ```
 
-Start Bilskirnir:
+Start Thoric:
 
 ```bash
 docker compose up -d
@@ -119,7 +119,7 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 ## Where to go next
 
 - [Agent access with MCP](docs/MCP.md): connecting a client, the tool list and agent workflows.
-- [Using Bilskirnir](docs/USAGE.md): containers, GPU applications, images, snapshots, volumes, uploads and settings changes.
+- [Using Thoric](docs/USAGE.md): containers, GPU applications, images, snapshots, volumes, uploads and settings changes.
 - [WSL distribution package](docs/WSL_PACKAGE.md): installing, keeping it running, everyday commands, memory and disk size, and removal.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
 - [HTTP API](docs/API.md): the same operations for scripts and other applications.
@@ -129,8 +129,8 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 
 ## License
 
-Copyright (C) 2026 Bilskirnir contributors
+Copyright (C) 2026 Thoric contributors
 
-Bilskirnir is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`GPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Thoric is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`GPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-Releases up to and including 0.6.3 were published under the MIT license, which still applies to them. Bilskirnir is written in Rust with a React and TypeScript frontend; its bundled components keep their [own licenses](THIRD_PARTY_NOTICES.md), each one that GPL-3.0-or-later can carry, and the interface build refuses a package under any other.
+Releases up to and including 0.6.3 were published under the MIT license, which still applies to them. Thoric is written in Rust with a React and TypeScript frontend; its bundled components keep their [own licenses](THIRD_PARTY_NOTICES.md), each one that GPL-3.0-or-later can carry, and the interface build refuses a package under any other.

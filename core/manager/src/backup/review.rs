@@ -23,7 +23,7 @@ pub(crate) fn record_id(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-/// The tag a restored saved image gets: Bilskirnir's own, after its record, whatever tag it had.
+/// The tag a restored saved image gets: Thoric's own, after its record, whatever tag it had.
 /// No other name is ever applied, so a backup cannot put an image under a catalog reference or
 /// any other name this installation uses.
 pub(crate) fn image_reference(kind: &str, id: &str) -> String {
@@ -32,28 +32,28 @@ pub(crate) fn image_reference(kind: &str, id: &str) -> String {
         "snapshot" => "snapshot",
         _ => "imported",
     };
-    format!("bilskirnir/{repository}:{id}")
+    format!("thoric/{repository}:{id}")
 }
 
 /// What an image record's kind becomes: an image registered from the host it came from was there
-/// before Bilskirnir, but here the restore put it, so it goes like an imported archive.
+/// before Thoric, but here the restore put it, so it goes like an imported archive.
 pub(crate) fn image_kind(kind: &str) -> &str {
     if kind == "import" { "archive" } else { kind }
 }
 
 /// The tag of the commit that carries a restored container's files.
 pub(crate) fn files_reference(container: &str) -> String {
-    format!("bilskirnir/container:restored-{container}")
+    format!("thoric/container:restored-{container}")
 }
 
 /// The Docker names a container takes: its container, the one a settings change sets aside, and
 /// its two networks.
 pub(crate) fn docker_names(container: &str) -> [String; 4] {
     [
-        format!("bilskirnir-{container}"),
-        format!("bilskirnir-{container}-previous"),
-        format!("bilskirnir-{container}-private"),
-        format!("bilskirnir-{container}-egress"),
+        format!("thoric-{container}"),
+        format!("thoric-{container}-previous"),
+        format!("thoric-{container}-private"),
+        format!("thoric-{container}-egress"),
     ]
 }
 
@@ -61,11 +61,11 @@ pub(crate) fn docker_names(container: &str) -> [String; 4] {
 /// ones the manager would give, and that its parts are the ones it says it carries.
 pub(crate) fn check_manifest(manifest: &Manifest) -> Result<()> {
     if manifest.kind != KIND {
-        bail!("The file is not a Bilskirnir backup");
+        bail!("The file is not a Thoric backup");
     }
     if manifest.format != FORMAT {
         bail!(
-            "The backup was written by Bilskirnir {} in a layout this release does not read; restore it with that release or a newer one",
+            "The backup was written by Thoric {} in a layout this release does not read; restore it with that release or a newer one",
             manifest.version
         );
     }
@@ -351,7 +351,7 @@ pub(crate) fn conflict_message(conflicts: &[Conflict]) -> String {
 /// The manifest a request or an upload sent, read with its limit.
 pub(crate) fn parse_manifest(data: &[u8]) -> Result<Manifest> {
     let manifest: Manifest =
-        serde_json::from_slice(data).context("The file is not a Bilskirnir backup")?;
+        serde_json::from_slice(data).context("The file is not a Thoric backup")?;
     check_manifest(&manifest)?;
     Ok(manifest)
 }

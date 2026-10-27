@@ -27,7 +27,7 @@ use crate::{
     App,
     auth::origin_matches,
     error::{Error, Result},
-    mcp::{self, BilskirnirMcp},
+    mcp::{self, ThoricMcp},
     model::Container,
 };
 use axum::{
@@ -262,7 +262,7 @@ pub(super) async fn open(app: &Arc<App>, target: Target) -> Result<(Value, Peer)
         Target::Administrator => {
             root_enabled(app)?;
             let server = json!({"kind": "administrator", "path": "/mcp"});
-            Ok((server, serve(BilskirnirMcp::new(app.clone()))))
+            Ok((server, serve(ThoricMcp::new(app.clone()))))
         }
     }
 }

@@ -56,7 +56,7 @@ fn pax(records: &[(&str, &str)]) -> Vec<u8> {
 
 fn config(labelled: bool) -> Vec<u8> {
     let labels = if labelled {
-        json!({"bilskirnir.desktop": "true"})
+        json!({"thoric.desktop": "true"})
     } else {
         json!({})
     };
@@ -96,7 +96,7 @@ fn close(parts: Vec<Vec<u8>>) -> Vec<u8> {
     out
 }
 
-/// Laid out as Docker 25 saves an image, with Bilskirnir's metadata in front.
+/// Laid out as Docker 25 saves an image, with Thoric's metadata in front.
 fn archive(config_data: &[u8]) -> Vec<u8> {
     close(vec![
         file(METADATA, br#"{"format":1,"name":"Saved"}"#),
@@ -234,7 +234,7 @@ fn rebuilt_manifest_drops_case_variants_go_would_still_read() {
 
 #[test]
 fn only_a_desktop_image_and_only_one_is_accepted() {
-    assert!(error(&archive(&config(false))).contains("not contain a Bilskirnir desktop image"));
+    assert!(error(&archive(&config(false))).contains("not contain a Thoric desktop image"));
     let two = serde_json::to_vec(&json!([
         {"Config": CONFIG, "Layers": [LAYER]},
         {"Config": CONFIG, "Layers": [LAYER]}

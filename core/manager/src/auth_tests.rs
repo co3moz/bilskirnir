@@ -14,7 +14,7 @@ async fn attempt(app: &Arc<App>, from: Option<&str>) -> StatusCode {
         .uri("/api/login")
         .header("host", "localhost:8080")
         .header("content-type", "application/json")
-        .header("x-bilskirnir-request", "1")
+        .header("x-thoric-request", "1")
         .body(Body::from(r#"{"username":"admin","password":"wrong"}"#))
         .unwrap();
     if let Some(from) = from {
@@ -31,7 +31,7 @@ async fn attempt(app: &Arc<App>, from: Option<&str>) -> StatusCode {
 #[tokio::test]
 async fn failed_sign_ins_are_limited_per_address() {
     let mut app = crate::tests::app(true);
-    let salt = argon2::password_hash::SaltString::encode_b64(b"bilskirnir-test!").unwrap();
+    let salt = argon2::password_hash::SaltString::encode_b64(b"thoric-test!").unwrap();
     Arc::get_mut(&mut app).unwrap().config.password_hash = Some(
         argon2::PasswordHasher::hash_password(&Argon2::default(), b"correct horse", &salt)
             .unwrap()

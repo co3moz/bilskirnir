@@ -53,7 +53,7 @@ try:
         absmin[code], absmax[code] = low, high
         if high == 32767:
             absfuzz[code], absflat[code] = 16, 128
-    setup = (b"Bilskirnir Gamepad".ljust(80, b"\0") + struct.pack("<HHHHI", 3, 0x045E, 0x028E, 0x110, 0)
+    setup = (b"Thoric Gamepad".ljust(80, b"\0") + struct.pack("<HHHHI", 3, 0x045E, 0x028E, 0x110, 0)
              + struct.pack("<64i", *absmax) + struct.pack("<64i", *absmin)
              + struct.pack("<64i", *absfuzz) + struct.pack("<64i", *absflat))
     os.write(device, setup)

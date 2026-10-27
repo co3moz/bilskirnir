@@ -196,9 +196,9 @@ export function ToolsDialog({ name, ...props }: DialogProps & { name: string }) 
                 className="flex flex-col"
               >
                 <h3 className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  {group.source === "bilskirnir" ? (
+                  {group.source === "thoric" ? (
                     <Badge variant="outline" className="text-muted-foreground">
-                      Bilskirnir
+                      Thoric
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="font-mono text-muted-foreground">

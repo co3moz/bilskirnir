@@ -56,7 +56,7 @@ import { ItemDetail } from "./item-detail"
 import type { RunState } from "./result-view"
 import { TrafficLog } from "./traffic-log"
 
-const SORT_KEY = "bilskirnir.inspector.sort"
+const SORT_KEY = "thoric.inspector.sort"
 const SORTS: Sort[] = ["server", "ascending", "descending"]
 
 function storedSort(): Sort {

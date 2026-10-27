@@ -1,5 +1,5 @@
 //! Pins down how a backup's records are moved to this installation: image IDs to the ones Docker
-//! gave the loaded images here, tags to Bilskirnir's own, Docker names made from the ids again,
+//! gave the loaded images here, tags to Thoric's own, Docker names made from the ids again,
 //! the machine identity kept, and a reset still finding the image a container started from.
 use super::*;
 use crate::backup::{
@@ -7,22 +7,22 @@ use crate::backup::{
     tests::{container, image},
 };
 
-const CATALOG: &str = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04";
+const CATALOG: &str = "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04";
 
 fn records() -> Records {
     let mut built = image("i1", "Tools", "build");
-    built.reference = "bilskirnir/custom:i1".into();
+    built.reference = "thoric/custom:i1".into();
     let mut snapshot = image("i2", "Snap", "snapshot");
-    snapshot.reference = "bilskirnir/snapshot:i2".into();
+    snapshot.reference = "thoric/snapshot:i2".into();
     snapshot.parent_image_id = Some(built.image_id.clone());
     let mut registered = image("i3", "Host tag", "import");
     registered.reference = "registry.example/team/tool:1".into();
     registered.parent_image_id = Some("sha256:not-restored".into());
 
-    let mut from_snapshot = container("c1", "Desk", "bilskirnir/snapshot:i2", &[]);
+    let mut from_snapshot = container("c1", "Desk", "thoric/snapshot:i2", &[]);
     from_snapshot.source_image_id = snapshot.image_id.clone();
     // A record whose stored names point elsewhere gets them from its id again.
-    from_snapshot.container = "bilskirnir-manager".into();
+    from_snapshot.container = "thoric-manager".into();
     from_snapshot.private_network = "host".into();
     let mut from_catalog = container("c2", "Catalog", CATALOG, &[]);
     from_catalog.source_image_id = "sha256:catalog-elsewhere".into();
@@ -64,10 +64,10 @@ fn restored_images_take_the_ids_docker_gave_them_here_and_their_own_tags() {
     assert_eq!(
         images,
         [
-            ("sha256:new-i1", "bilskirnir/custom:i1", "build"),
-            ("sha256:new-i2", "bilskirnir/snapshot:i2", "snapshot"),
+            ("sha256:new-i1", "thoric/custom:i1", "build"),
+            ("sha256:new-i2", "thoric/snapshot:i2", "snapshot"),
             // The other host's tag is not applied here, and the image is the restore's own.
-            ("sha256:new-i3", "bilskirnir/imported:i3", "archive"),
+            ("sha256:new-i3", "thoric/imported:i3", "archive"),
         ]
     );
     // A parent that came along is found again; one that did not keeps its old ID.
@@ -88,9 +88,9 @@ fn restored_containers_keep_their_identity_and_find_their_images_here() {
     let [snapshot, catalog, same, by_id] = &records.containers[..] else {
         panic!("{:?}", records.containers);
     };
-    assert_eq!(snapshot.container, "bilskirnir-c1");
-    assert_eq!(snapshot.private_network, "bilskirnir-c1-private");
-    assert_eq!(snapshot.egress_network, "bilskirnir-c1-egress");
+    assert_eq!(snapshot.container, "thoric-c1");
+    assert_eq!(snapshot.private_network, "thoric-c1-private");
+    assert_eq!(snapshot.egress_network, "thoric-c1-egress");
     assert_eq!(snapshot.spec.hostname, before.containers[0].spec.hostname);
     assert_eq!(
         snapshot.spec.mac_address,
@@ -105,11 +105,11 @@ fn restored_containers_keep_their_identity_and_find_their_images_here() {
         snapshot.working_image,
         Some(crate::model::WorkingImage {
             image_id: "sha256:files-c1".into(),
-            reference: "bilskirnir/container:restored-c1".into(),
+            reference: "thoric/container:restored-c1".into(),
         })
     );
     assert_eq!(snapshot.source_image_id, "sha256:new-i2");
-    assert_eq!(snapshot.spec.image, "bilskirnir/snapshot:i2");
+    assert_eq!(snapshot.spec.image, "thoric/snapshot:i2");
     assert_eq!(snapshot.setup.as_ref().unwrap().status, "completed");
     // The catalog image it names, as this installation has it; the same image ID when it is here.
     assert_eq!(catalog.source_image_id, "sha256:catalog-here");

@@ -103,6 +103,6 @@ export function matches(item: Dependency, search: string) {
 /** A commit as Git shows it in one line. */
 export const shortCommit = (commit: string) => commit.slice(0, 7)
 
-/** The name the list is saved under: `bilskirnir-0.6.3-dependencies.json`. */
+/** The name the list is saved under: `thoric-0.6.3-dependencies.json`. */
 export const listFileName = (list: Pick<DependencyList, "version">) =>
-  `bilskirnir-${list.version.replace(/[^\w.-]/g, "_")}-dependencies.json`
+  `thoric-${list.version.replace(/[^\w.-]/g, "_")}-dependencies.json`

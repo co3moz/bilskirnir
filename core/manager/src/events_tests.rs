@@ -25,7 +25,7 @@ async fn open(app: &Arc<App>, cookie: Option<&str>) -> Response {
         .uri("/api/events")
         .header("host", "localhost:8080");
     if let Some(token) = cookie {
-        request = request.header("cookie", format!("bilskirnir_session={token}"));
+        request = request.header("cookie", format!("thoric_session={token}"));
     }
     crate::router(app.clone())
         .oneshot(request.body(Body::empty()).unwrap())

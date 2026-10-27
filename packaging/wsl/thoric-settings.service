@@ -1,0 +1,16 @@
+[Unit]
+Description=Apply a settings change from the Thoric dashboard
+Documentation=https://github.com/co3moz/thoric/blob/master/docs/WSL_PACKAGE.md#settings-from-the-dashboard
+After=docker.service
+
+[Service]
+Type=oneshot
+# The request moves aside first, so the path unit does not start this again once it ends. Its
+# first line names the dashboard's job, which the manager matches; the command reads the rest
+# and accepts only the settings the dashboard may change.
+ExecStartPre=/bin/mv -f /opt/thoric/update/settings-request /opt/thoric/update/settings-started
+ExecStart=/bin/sh -c 'exec /usr/local/bin/thoric apply-settings /opt/thoric/update/settings-started >/opt/thoric/update/settings-log 2>&1'
+# How the change ended, written after its last output and renamed into place, so the manager has
+# the whole log once this is there.
+ExecStopPost=/bin/sh -c 'echo "$$SERVICE_RESULT $$EXIT_STATUS" >/opt/thoric/update/settings-exit.new && mv -f /opt/thoric/update/settings-exit.new /opt/thoric/update/settings-exit'
+TimeoutStartSec=15min

@@ -20,9 +20,9 @@ fn container(id: &str, mounts: &[(&str, &str)]) -> Container {
         .collect();
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: "sha256:ws".into(),
         created_at: 0,
         spec,
@@ -36,21 +36,20 @@ fn container(id: &str, mounts: &[(&str, &str)]) -> Container {
 #[test]
 fn a_volume_created_for_a_container_carries_its_owner() {
     let owner = owner_labels("e", "UNITY_WORKSPACE");
-    let args = |filter| crate::volumes::create_args("bilskirnir-e-unity-workspace", filter, &owner);
+    let args = |filter| crate::volumes::create_args("thoric-e-unity-workspace", filter, &owner);
     assert_eq!(
-        args(Some("bilskirnir.managed=true")).join(" "),
-        "volume create --label bilskirnir.managed=true --label bilskirnir.environment=e --label bilskirnir.parameter=UNITY_WORKSPACE bilskirnir-e-unity-workspace"
+        args(Some("thoric.managed=true")).join(" "),
+        "volume create --label thoric.managed=true --label thoric.environment=e --label thoric.parameter=UNITY_WORKSPACE thoric-e-unity-workspace"
     );
     // It is created like any other volume, so another VOLUME_FILTER's label is on it too.
     assert_eq!(
         args(Some("team=unity")).join(" "),
-        "volume create --label bilskirnir.managed=true --label team=unity --label bilskirnir.environment=e --label bilskirnir.parameter=UNITY_WORKSPACE bilskirnir-e-unity-workspace"
+        "volume create --label thoric.managed=true --label team=unity --label thoric.environment=e --label thoric.parameter=UNITY_WORKSPACE thoric-e-unity-workspace"
     );
     // The owner label is the one the container carries.
     let desktop = crate::tests::app(false).container_args(&container("e", &[]));
     assert!(desktop.contains(&format!("{OWNER}=e")), "{desktop:?}");
-    let labelled =
-        |labels: Value| json!({"Name": "bilskirnir-e-unity-workspace", "Labels": labels});
+    let labelled = |labels: Value| json!({"Name": "thoric-e-unity-workspace", "Labels": labels});
     assert!(owned_by(
         &labelled(json!({LABEL: "true", OWNER: "e", PARAMETER: "UNITY_WORKSPACE"})),
         "e"
@@ -69,16 +68,16 @@ fn a_listing_names_the_owner_or_says_it_was_deleted() {
         |name: &str, labels: &str| json!({"Name": name, "Driver": "local", "Labels": labels});
     let mut volumes = vec![
         line(
-            "bilskirnir-e-unity-workspace",
-            "bilskirnir.environment=e,bilskirnir.managed=true,bilskirnir.parameter=UNITY_WORKSPACE",
+            "thoric-e-unity-workspace",
+            "thoric.environment=e,thoric.managed=true,thoric.parameter=UNITY_WORKSPACE",
         ),
         line(
-            "bilskirnir-gone-cache",
-            "bilskirnir.parameter=CACHE,bilskirnir.managed=true,bilskirnir.environment=gone",
+            "thoric-gone-cache",
+            "thoric.parameter=CACHE,thoric.managed=true,thoric.environment=gone",
         ),
         // Created by the manager, but for no container, or by someone else entirely.
-        line("projects", "bilskirnir.managed=true"),
-        line("foreign", "bilskirnir.environment=e"),
+        line("projects", "thoric.managed=true"),
+        line("foreign", "thoric.environment=e"),
         line("plain", ""),
         json!({"Name": "unlabelled"}),
     ];
@@ -96,8 +95,8 @@ fn a_listing_names_the_owner_or_says_it_was_deleted() {
     }
     // A label value with a comma in it spoils no other label.
     let mut odd = vec![line(
-        "bilskirnir-e-x",
-        "note=a,b,bilskirnir.managed=true,bilskirnir.environment=e",
+        "thoric-e-x",
+        "note=a,b,thoric.managed=true,thoric.environment=e",
     )];
     mark_owners(&mut odd, &[container("e", &[])]);
     assert_eq!(odd[0]["owner"]["container_id"], "e");
@@ -110,31 +109,23 @@ fn a_volume_another_container_mounts_stays() {
     composed.setup = Some(
         serde_json::from_value(json!({
             "status": "completed", "image": "img", "parameters": {}, "secrets": [],
-            "mounts": [{"volume": "bilskirnir-e-cache", "target": "/cache", "readonly": false}],
+            "mounts": [{"volume": "thoric-e-cache", "target": "/cache", "readonly": false}],
         }))
         .unwrap(),
     );
     let others = [
-        container("b", &[("bilskirnir-e-shared", "/shared")]),
+        container("b", &[("thoric-e-shared", "/shared")]),
         composed,
         container("d", &[("projects", "/projects")]),
     ];
-    let owned = [
-        "bilskirnir-e-cache",
-        "bilskirnir-e-shared",
-        "bilskirnir-e-workspace",
-    ]
-    .map(str::to_owned);
+    let owned = ["thoric-e-cache", "thoric-e-shared", "thoric-e-workspace"].map(str::to_owned);
     let (free, shared) = removable(owned.to_vec(), &others);
-    assert_eq!(free, ["bilskirnir-e-workspace"]);
+    assert_eq!(free, ["thoric-e-workspace"]);
     let kept = shared
         .iter()
         .map(|(name, other)| (name.as_str(), other.id.as_str()))
         .collect::<Vec<_>>();
-    assert_eq!(
-        kept,
-        [("bilskirnir-e-cache", "c"), ("bilskirnir-e-shared", "b")]
-    );
+    assert_eq!(kept, [("thoric-e-cache", "c"), ("thoric-e-shared", "b")]);
 }
 
 /// A manager whose Docker CLI is a shell script answering `cases`, the arms of a `case` over
@@ -143,17 +134,14 @@ fn a_volume_another_container_mounts_stays() {
 #[cfg(unix)]
 fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-owned-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-owned-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let manager = json!([{
         "Id": "manager",
-        "Config": {"Labels": {"bilskirnir.manager": "true"}},
-        "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
+        "Config": {"Labels": {"thoric.manager": "true"}},
+        "Mounts": [{"Type": "volume", "Name": "thoric-data", "Destination": "/data"}],
     }]);
-    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '@MANAGER@' ;;\n@CASES@\n  *) exit 1 ;;\nesac\n"
+    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'container inspect thoric-manager') echo '@MANAGER@' ;;\n@CASES@\n  *) exit 1 ;;\nesac\n"
         .replace("@DIR@", &dir.display().to_string())
         .replace("@MANAGER@", &manager.to_string())
         .replace("@CASES@", cases);
@@ -163,7 +151,7 @@ fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     let mut app = crate::tests::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
-    config.manager = Some("bilskirnir-manager".into());
+    config.manager = Some("thoric-manager".into());
     (app, dir)
 }
 
@@ -199,12 +187,12 @@ fn volume_json(name: &str, owner: &str) -> String {
 #[cfg(unix)]
 #[tokio::test]
 async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_remakes_it() {
-    let volume = "bilskirnir-f00d-unity-workspace";
-    let image = json!([{"Id": "sha256:ws", "Config": {"Labels": {"bilskirnir.desktop": "true"}}}]);
+    let volume = "thoric-f00d-unity-workspace";
+    let image = json!([{"Id": "sha256:ws", "Config": {"Labels": {"thoric.desktop": "true"}}}]);
     let cases = format!(
-        "  'image inspect sha256:ws') echo '{image}' ;;\n  'volume inspect {volume}') [ -f made ] && echo '{own}' || exit 1 ;;\n  'volume inspect bilskirnir-cafe-unity-workspace') echo '{foreign}' ;;\n  'volume create '*' {volume}') touch made; echo {volume} ;;\n  'volume ls --format {{{{.Name}}}}') if [ -f made ]; then echo {volume}; fi ;;\n  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;",
+        "  'image inspect sha256:ws') echo '{image}' ;;\n  'volume inspect {volume}') [ -f made ] && echo '{own}' || exit 1 ;;\n  'volume inspect thoric-cafe-unity-workspace') echo '{foreign}' ;;\n  'volume create '*' {volume}') touch made; echo {volume} ;;\n  'volume ls --format {{{{.Name}}}}') if [ -f made ]; then echo {volume}; fi ;;\n  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;",
         own = volume_json(volume, "f00d"),
-        foreign = volume_json("bilskirnir-cafe-unity-workspace", "someone-else"),
+        foreign = volume_json("thoric-cafe-unity-workspace", "someone-else"),
     );
     let (app, dir) = fake_docker(&cases);
     let compose: crate::compose::Compose = serde_json::from_value(json!({
@@ -216,7 +204,7 @@ async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_r
         id: "ws".into(),
         name: "Workspace".into(),
         image_id: "sha256:ws".into(),
-        reference: "bilskirnir/custom:ws".into(),
+        reference: "thoric/custom:ws".into(),
         parent_image_id: None,
         source_container: None,
         kind: "build".into(),
@@ -253,7 +241,7 @@ async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_r
     assert!(failed.to_string().contains("Docker"), "{failed:#}");
     assert!(
         calls(&dir).contains(&format!(
-            "volume create --label bilskirnir.managed=true --label bilskirnir.environment=f00d --label bilskirnir.parameter=UNITY_WORKSPACE {volume}\n"
+            "volume create --label thoric.managed=true --label thoric.environment=f00d --label thoric.parameter=UNITY_WORKSPACE {volume}\n"
         )),
         "{}",
         calls(&dir)
@@ -298,18 +286,18 @@ async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_r
 #[cfg(unix)]
 #[tokio::test]
 async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
-    let listing = "volume ls --filter label=bilskirnir.managed=true --filter label=bilskirnir.environment=e --format {{.Name}}";
+    let listing = "volume ls --filter label=thoric.managed=true --filter label=thoric.environment=e --format {{.Name}}";
     let cases = format!(
-        "  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;\n  '{listing}') printf 'bilskirnir-e-workspace\\nbilskirnir-e-cache\\nbilskirnir-e-shared\\nspoofed\\nbilskirnir-data\\n' ;;\n  'volume inspect bilskirnir-e-workspace') echo '{workspace}' ;;\n  'volume inspect bilskirnir-e-cache') echo '{cache}' ;;\n  'volume inspect bilskirnir-e-shared') echo '{shared}' ;;\n  'volume inspect spoofed') echo '{spoofed}' ;;\n  'volume inspect bilskirnir-data') echo '{data}' ;;\n  'volume rm bilskirnir-e-workspace') echo bilskirnir-e-workspace ;;\n  'volume rm bilskirnir-e-cache') echo 'Error response from daemon: volume is in use' >&2; exit 1 ;;",
-        workspace = volume_json("bilskirnir-e-workspace", "e"),
-        cache = volume_json("bilskirnir-e-cache", "e"),
-        shared = volume_json("bilskirnir-e-shared", "e"),
+        "  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;\n  '{listing}') printf 'thoric-e-workspace\\nthoric-e-cache\\nthoric-e-shared\\nspoofed\\nthoric-data\\n' ;;\n  'volume inspect thoric-e-workspace') echo '{workspace}' ;;\n  'volume inspect thoric-e-cache') echo '{cache}' ;;\n  'volume inspect thoric-e-shared') echo '{shared}' ;;\n  'volume inspect spoofed') echo '{spoofed}' ;;\n  'volume inspect thoric-data') echo '{data}' ;;\n  'volume rm thoric-e-workspace') echo thoric-e-workspace ;;\n  'volume rm thoric-e-cache') echo 'Error response from daemon: volume is in use' >&2; exit 1 ;;",
+        workspace = volume_json("thoric-e-workspace", "e"),
+        cache = volume_json("thoric-e-cache", "e"),
+        shared = volume_json("thoric-e-shared", "e"),
         spoofed = volume_json("spoofed", "other"),
-        data = volume_json("bilskirnir-data", "e"),
+        data = volume_json("thoric-data", "e"),
     );
     let (app, dir) = fake_docker(&cases);
     let env = container("e", &[]);
-    let other = container("b", &[("bilskirnir-e-shared", "/shared")]);
+    let other = container("b", &[("thoric-e-shared", "/shared")]);
     app.db.put(CONTAINERS, "b", &other).unwrap();
 
     // By default every volume stays, and none is even looked for.
@@ -346,8 +334,8 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
     assert_eq!(
         removed,
         RemovedVolumes {
-            deleted: vec!["bilskirnir-e-workspace".into()],
-            kept: vec!["bilskirnir-e-shared".into(), "bilskirnir-e-cache".into()],
+            deleted: vec!["thoric-e-workspace".into()],
+            kept: vec!["thoric-e-shared".into(), "thoric-e-cache".into()],
         }
     );
     let made = calls(&dir);
@@ -357,10 +345,7 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
         .collect::<Vec<_>>();
     assert_eq!(
         removals,
-        [
-            "volume rm bilskirnir-e-cache",
-            "volume rm bilskirnir-e-workspace"
-        ],
+        ["volume rm thoric-e-cache", "volume rm thoric-e-workspace"],
         "{made}"
     );
     let log = app
@@ -369,9 +354,9 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
         .unwrap()
         .log;
     for line in [
-        "Keeping the volume bilskirnir-e-shared: \"Desktop b\" mounts it too.",
-        "Deleted the volume bilskirnir-e-workspace.",
-        "Keeping the volume bilskirnir-e-cache: Docker: Error response from daemon: volume is in use",
+        "Keeping the volume thoric-e-shared: \"Desktop b\" mounts it too.",
+        "Deleted the volume thoric-e-workspace.",
+        "Keeping the volume thoric-e-cache: Docker: Error response from daemon: volume is in use",
         "Deleted \"Desktop e\" and the volumes created for it. Other named volumes and saved images were preserved.",
     ] {
         assert!(log.contains(line), "{line} is missing from {log}");
@@ -380,7 +365,7 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
         crate::api::removal("e", "Desktop e", true, removed),
         json!({
             "deleted": "e", "name": "Desktop e", "volumes_preserved": false, "images_preserved": true,
-            "volumes_deleted": ["bilskirnir-e-workspace"], "volumes_kept": ["bilskirnir-e-shared", "bilskirnir-e-cache"],
+            "volumes_deleted": ["thoric-e-workspace"], "volumes_kept": ["thoric-e-shared", "thoric-e-cache"],
         })
     );
     // The other container and its volume are untouched.
@@ -391,8 +376,8 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
 #[cfg(unix)]
 #[tokio::test]
 async fn the_volume_list_reports_owners_from_the_records() {
-    let line = json!({"Name": "bilskirnir-e-unity-workspace", "Driver": "local",
-        "Labels": "bilskirnir.managed=true,bilskirnir.environment=e,bilskirnir.parameter=UNITY_WORKSPACE"});
+    let line = json!({"Name": "thoric-e-unity-workspace", "Driver": "local",
+        "Labels": "thoric.managed=true,thoric.environment=e,thoric.parameter=UNITY_WORKSPACE"});
     let (app, dir) = fake_docker(&format!(
         "  'volume ls --format {{{{json .}}}}') echo '{line}' ;;"
     ));

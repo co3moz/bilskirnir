@@ -45,7 +45,7 @@ function entry(name: string, data: Uint8Array) {
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
 
 const manifest: BackupManifest = {
-  kind: "bilskirnir-backup",
+  kind: "thoric-backup",
   format: 1,
   version: "0.7.0",
   created_at: 1_792_676_706,
@@ -72,7 +72,7 @@ const manifest: BackupManifest = {
 }
 
 /** A backup as the manager streams one: the manifest, then records and a part that does not compress. */
-function backup(first = entry("bilskirnir-backup.json", json(manifest))) {
+function backup(first = entry("thoric-backup.json", json(manifest))) {
   let seed = 2463534242
   const part = new Uint8Array(3 << 20).map(() => {
     seed ^= seed << 13
@@ -109,20 +109,14 @@ test("the manifest is read from the start of a gzip or plain backup", async () =
 
 test("only a backup's manifest is taken for one", async () => {
   // An image archive opens with its own metadata, not a backup's manifest.
-  const image = backup(entry("bilskirnir.json", json({ format: 1, name: "Unity" })))
+  const image = backup(entry("thoric.json", json({ format: 1, name: "Unity" })))
   assert.equal(await readManifest(new Blob([gzipSync(image)])), null)
-  assert.equal(
-    parseManifest(entry("bilskirnir-backup.json", json({ ...manifest, kind: "x" }))),
-    null
-  )
-  assert.equal(parseManifest(entry("bilskirnir-backup.json", new TextEncoder().encode("{"))), null)
+  assert.equal(parseManifest(entry("thoric-backup.json", json({ ...manifest, kind: "x" }))), null)
+  assert.equal(parseManifest(entry("thoric-backup.json", new TextEncoder().encode("{"))), null)
   // A manifest without the list of left-out secrets reads as one that left none out.
   const older: Partial<BackupManifest> = { ...manifest }
   delete older.secrets_left_out
-  assert.deepEqual(
-    parseManifest(entry("bilskirnir-backup.json", json(older)))?.secrets_left_out,
-    []
-  )
+  assert.deepEqual(parseManifest(entry("thoric-backup.json", json(older)))?.secrets_left_out, [])
   assert.ok(readable(manifest))
   assert.ok(!readable({ ...manifest, format: BACKUP_FORMAT + 1 }))
 })
@@ -180,7 +174,7 @@ test("the restore upload goes to the restore route and outlives the page that st
 })
 
 test("a backup or a restore job names the installation as what it worked on", () => {
-  assert.equal(jobTarget({ resource: "installation" }, new Map()), "Bilskirnir")
+  assert.equal(jobTarget({ resource: "installation" }, new Map()), "Thoric")
 })
 
 // The routes this page calls are the manager's; a route renamed there fails here too.

@@ -15,7 +15,7 @@ import {
   templateFile,
 } from "../src/lib/templates"
 
-const LIST = "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
+const LIST = "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json"
 const unity = {
   id: "unity",
   name: "Unity Hub",
@@ -125,7 +125,7 @@ test("a template needs at least the release it names", () => {
 test("a template's files sit beside the list", () => {
   assert.equal(
     templateFile(LIST, "unity", "json"),
-    "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/unity.json"
+    "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/unity.json"
   )
   assert.equal(
     templateFile("http://10.0.0.5:8000/index.json", "vscode", "png"),
@@ -184,7 +184,7 @@ test("installing a template fills the build form and names the template", async 
   const icon = `${PNG}iVBORw0KGgo=`
   const requested = serve({
     [templateFile(LIST, "unity", "json")]: {
-      base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+      base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
       script: "set -eu\n",
       icon,
       template_id: "something-else",
@@ -192,7 +192,7 @@ test("installing a template fills the build form and names the template", async 
   })
   const config = await loadTemplate(LIST, unity)
   assert.deepEqual(config, {
-    base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+    base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
     script: "set -eu\n",
     // Without a name or description of its own, the list's are used.
     name: "Unity Hub",
@@ -217,7 +217,7 @@ test("a template that cannot fill the build form names itself in the error", asy
   await assert.rejects(loadTemplate(LIST, unity), /HTTP 404/)
 })
 
-const BASE = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"
+const BASE = "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"
 const step = (name: string, script: string) => ({
   parameters: [
     { name, label: "", description: "", type: "text" as const, required: false },

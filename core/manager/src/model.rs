@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub const LABEL: &str = "bilskirnir.managed";
+pub const LABEL: &str = "thoric.managed";
 /// The database kind of container records. They keep the name they were stored under before
 /// environments were called containers, so an existing installation reads them unchanged.
 pub const CONTAINERS: &str = "environment";
@@ -317,7 +317,7 @@ pub struct BuildConfig {
     /// The scripts of a build merged from several templates, in the order they run.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parts: Vec<BuildPart>,
-    /// The desktop MCP servers the build declared in the image, in `/etc/bilskirnir/mcp.d`.
+    /// The desktop MCP servers the build declared in the image, in `/etc/thoric/mcp.d`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp: Vec<crate::desktop_mcp::Declaration>,
 }

@@ -1,12 +1,12 @@
 """Read, watch and change the MCP servers a desktop declares, as the desktop user.
 
-The image declares servers in /etc/bilskirnir/mcp.d and the desktop user in
-~/.config/bilskirnir/mcp, one JSON file per server named after it. Symlinks are never followed.
+The image declares servers in /etc/thoric/mcp.d and the desktop user in
+~/.config/thoric/mcp, one JSON file per server named after it. Symlinks are never followed.
 stdout carries one JSON document per line and nothing else.
 
 While it watches, the manager sends the state of the servers and the endpoints that reach this
 desktop on stdin, one JSON document per line, and the helper keeps the latest in the desktop's
-runtime folder for bilskirnir-mcp and its tray, until stdin closes.
+runtime folder for thoric-mcp and its tray, until stdin closes.
 """
 import json
 import os
@@ -16,9 +16,9 @@ import stat
 import sys
 import time
 
-IMAGE = "/etc/bilskirnir/mcp.d"
-CONTAINER = "/home/desktop/.config/bilskirnir/mcp"
-STATUS = "/run/desktop/bilskirnir"
+IMAGE = "/etc/thoric/mcp.d"
+CONTAINER = "/home/desktop/.config/thoric/mcp"
+STATUS = "/run/desktop/thoric"
 STATUS_FILE = "mcp-status.json"
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 FILE_LIMIT = 64 * 1024

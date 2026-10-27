@@ -1,8 +1,8 @@
 //! MCP servers running inside desktops, and the scoped MCP endpoints that publish them.
 //!
 //! A desktop declares its MCP servers in JSON files, one per server: the image in
-//! `/etc/bilskirnir/mcp.d`, which a build writes from a template's declarations, and the desktop
-//! user in `~/.config/bilskirnir/mcp`, at any time. The manager watches both folders in every
+//! `/etc/thoric/mcp.d`, which a build writes from a template's declarations, and the desktop
+//! user in `~/.config/thoric/mcp`, at any time. The manager watches both folders in every
 //! running desktop and keeps the tool list it last read from each server, so the list is known
 //! while the container is stopped too. A server is started only through `docker exec` as the
 //! desktop user: a program speaks MCP on its stdio, and a Streamable HTTP server on the desktop's
@@ -15,7 +15,7 @@
 //!
 //! The MCP page's inspector reaches any of these servers from the dashboard over a WebSocket.
 //! Each running desktop is told the state of its servers and the endpoints that reach it, for
-//! `bilskirnir-mcp` and the tray inside it.
+//! `thoric-mcp` and the tray inside it.
 mod audit;
 mod client;
 mod endpoints;

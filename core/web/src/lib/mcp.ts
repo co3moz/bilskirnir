@@ -1,4 +1,4 @@
-// MCP endpoints and desktop MCP servers as the MCP page and the forms show them. Bilskirnir MCP at
+// MCP endpoints and desktop MCP servers as the MCP page and the forms show them. Thoric MCP at
 // `/mcp` is the administrator channel; an endpoint at `/mcp/<name>` gives an agent some of the
 // container tools of the containers it covers, plus the tools of their desktop MCP servers.
 import type { Tone } from "./format"
@@ -260,7 +260,7 @@ export function serversByContainer<C extends { id: string }>(
 }
 
 /**
- * An endpoint's tools by where they come from: Bilskirnir's or one server's, per container.
+ * An endpoint's tools by where they come from: Thoric's or one server's, per container.
  * A tool of the endpoint itself, such as `get_job`, has no container and forms a group of its own.
  */
 export function toolGroups(tools: EndpointTool[]) {

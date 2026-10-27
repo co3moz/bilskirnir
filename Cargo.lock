@@ -141,35 +141,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "bilskirnir"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "argon2",
- "axum",
- "base64 0.22.1",
- "blake2",
- "flate2",
- "futures-util",
- "http-body-util",
- "hyper",
- "hyper-util",
- "regex",
- "rmcp",
- "rusqlite",
- "serde",
- "serde_json",
- "subtle",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1301,6 +1272,35 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.8",
+]
+
+[[package]]
+name = "thoric"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "axum",
+ "base64 0.22.1",
+ "blake2",
+ "flate2",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "regex",
+ "rmcp",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

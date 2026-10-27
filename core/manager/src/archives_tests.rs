@@ -10,7 +10,7 @@ fn import_request(query: &str, content_type: &str) -> Request<Body> {
         .method("POST")
         .uri(format!("/api/images/import?{query}"))
         .header("host", "localhost:8080")
-        .header("x-bilskirnir-request", "1")
+        .header("x-thoric-request", "1")
         .header("content-type", content_type)
         .body(Body::from(vec![0u8; 16]))
         .unwrap()
@@ -128,7 +128,7 @@ async fn a_failed_export_breaks_the_download_and_fails_its_job() {
         id: "saved".into(),
         name: "Geliştirme masası".into(),
         image_id: format!("sha256:{}", "a".repeat(64)),
-        reference: "bilskirnir/snapshot:saved".into(),
+        reference: "thoric/snapshot:saved".into(),
         parent_image_id: None,
         source_container: None,
         kind: "snapshot".into(),
@@ -206,8 +206,8 @@ fn the_loaded_image_comes_from_docker_load_output() {
         id
     );
     assert_eq!(
-        loaded_image("Loaded image: bilskirnir/x:1\n").unwrap(),
-        "bilskirnir/x:1"
+        loaded_image("Loaded image: thoric/x:1\n").unwrap(),
+        "thoric/x:1"
     );
     assert!(loaded_image("").is_err());
     assert!(
@@ -244,7 +244,7 @@ fn imported_records_keep_the_archive_name_unless_one_is_given() {
 #[test]
 fn a_script_build_keeps_its_configuration_through_the_archive() {
     let build = BuildConfig {
-        base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
+        base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04".into(),
         internet: false,
         script: "apt-get install -y git\n".into(),
         parts: Vec::new(),
@@ -254,7 +254,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         id: "built".into(),
         name: "Tools".into(),
         image_id: format!("sha256:{}", "d".repeat(64)),
-        reference: "bilskirnir/custom:built".into(),
+        reference: "thoric/custom:built".into(),
         parent_image_id: None,
         source_container: None,
         kind: "build".into(),
@@ -278,7 +278,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
     assert!(info.build.is_none() && info.name == "Tools");
     // A build merged from templates keeps its parts; parts the build route refuses are dropped.
     let merged = BuildConfig {
-        base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
+        base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04".into(),
         internet: true,
         script: String::new(),
         parts: ["unity-dev", "chrome"]
@@ -331,7 +331,7 @@ fn a_compose_travels_with_the_archive_and_an_invalid_one_is_dropped() {
         id: "snap".into(),
         name: "Unity project".into(),
         image_id: format!("sha256:{}", "e".repeat(64)),
-        reference: "bilskirnir/snapshot:snap".into(),
+        reference: "thoric/snapshot:snap".into(),
         parent_image_id: None,
         source_container: None,
         kind: "snapshot".into(),
@@ -361,7 +361,7 @@ fn an_icon_and_template_travel_with_the_archive_and_unusable_ones_are_dropped() 
         id: "unity".into(),
         name: "Unity 6".into(),
         image_id: format!("sha256:{}", "f".repeat(64)),
-        reference: "bilskirnir/custom:unity".into(),
+        reference: "thoric/custom:unity".into(),
         parent_image_id: None,
         source_container: None,
         kind: "build".into(),

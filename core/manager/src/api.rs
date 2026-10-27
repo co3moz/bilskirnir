@@ -607,7 +607,7 @@ pub async fn register_image(
     }
     let _guard = app.operations.lock().await;
     let info = app.inspect("image", &body.reference).await?;
-    if info["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
+    if info["Config"]["Labels"]["thoric.desktop"] != "true" {
         return Err(anyhow::anyhow!("A desktop-compatible image is required").into());
     }
     let rec = ImageRecord {
@@ -659,7 +659,7 @@ pub struct BuildImage {
     pub template_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub template_ids: Vec<String>,
-    /// MCP servers the image declares for its desktops, written to `/etc/bilskirnir/mcp.d`.
+    /// MCP servers the image declares for its desktops, written to `/etc/thoric/mcp.d`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp: Vec<crate::desktop_mcp::Declaration>,
 }
@@ -720,14 +720,14 @@ pub async fn build(
             app.begin_stage(&id, "base")?;
             app.ensure_catalog_image(&body.base_image, &id).await?;
             let base = app.inspect("image", &body.base_image).await?;
-            if base["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
+            if base["Config"]["Labels"]["thoric.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");
             }
             let parent = base["Id"]
                 .as_str()
                 .context("Missing base image ID")?
                 .to_owned();
-            let base_tag = format!("bilskirnir/build-base:{id}");
+            let base_tag = format!("thoric/build-base:{id}");
             app.docker(&["image", "tag", &parent, &base_tag]).await?;
             let dir = app.config.data.join("builds").join(&id);
             tokio::fs::create_dir_all(&dir).await?;
@@ -754,7 +754,7 @@ pub async fn build(
             for (name, script) in files {
                 tokio::fs::write(dir.join(format!("{name}.sh")), script).await?;
                 dockerfile.push_str(&format!(
-                    "COPY {name}.sh /tmp/bilskirnir-{name}.sh\nRUN bash /tmp/bilskirnir-{name}.sh && rm /tmp/bilskirnir-{name}.sh\n"
+                    "COPY {name}.sh /tmp/thoric-{name}.sh\nRUN bash /tmp/thoric-{name}.sh && rm /tmp/thoric-{name}.sh\n"
                 ));
             }
             // After the scripts, so the declarations the build names are the ones that hold.
@@ -762,11 +762,9 @@ pub async fn build(
                 dockerfile
                     .push_str(&crate::desktop_mcp::write_declarations(&dir, &body.mcp).await?);
             }
-            dockerfile.push_str(&format!(
-                "LABEL bilskirnir.desktop=true\nLABEL {LABEL}=true\n"
-            ));
+            dockerfile.push_str(&format!("LABEL thoric.desktop=true\nLABEL {LABEL}=true\n"));
             tokio::fs::write(dir.join("Dockerfile"), dockerfile).await?;
-            let reference = format!("bilskirnir/custom:{id}");
+            let reference = format!("thoric/custom:{id}");
             let args = vec![
                 "build".into(),
                 "--progress=plain".into(),
@@ -858,7 +856,7 @@ pub async fn snapshot(
             app.begin_stage(&id, "check")?;
             let env = app.container(&env_id).map_err(|e| anyhow::anyhow!(e.1))?;
             let container = app.owned(&env).await?;
-            let reference = format!("bilskirnir/snapshot:{id}");
+            let reference = format!("thoric/snapshot:{id}");
             app.begin_stage(&id, "commit")?;
             app.append_log(&id,"Committing container changes. Volumes, /run, /tmp and running application state are excluded.")?;
             app.docker_logged(
@@ -869,7 +867,7 @@ pub async fn snapshot(
                     format!("LABEL {LABEL}=true"),
                     // The image's history says what this layer holds.
                     "--message".into(),
-                    format!("Bilskirnir snapshot of {}", env.spec.name),
+                    format!("Thoric snapshot of {}", env.spec.name),
                     container["Id"]
                         .as_str()
                         .context("Missing container ID")?

@@ -1,6 +1,6 @@
 //! What a running desktop is told about its MCP servers: their state, tools and errors, and the
 //! endpoints that reach it. The watcher sends a report on its helper's stdin whenever one changes,
-//! and the helper keeps the latest in the desktop's runtime folder, where `bilskirnir-mcp list
+//! and the helper keeps the latest in the desktop's runtime folder, where `thoric-mcp list
 //! --json` and the tray read it. A report names no token and no other container.
 use super::{
     endpoints::{ENDPOINTS, Endpoint},

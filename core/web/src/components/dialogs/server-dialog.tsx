@@ -364,7 +364,7 @@ export function ServerDialog({ container, ...props }: DialogProps & { container?
             </FieldDescription>
             <FieldDescription className="text-xs">
               {rich("mcp.server.insideHint", {
-                command: code("bilskirnir-mcp add NAME -- COMMAND ARGS"),
+                command: code("thoric-mcp add NAME -- COMMAND ARGS"),
               })}
             </FieldDescription>
           </FieldGroup>

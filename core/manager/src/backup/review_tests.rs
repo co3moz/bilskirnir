@@ -13,7 +13,7 @@ fn backup() -> (Manifest, Records) {
         containers: vec![container(
             "c1",
             "Desk",
-            "bilskirnir/custom:i1",
+            "thoric/custom:i1",
             &["projects", "absent"],
         )],
         images: vec![image("i1", "Tools", "build")],
@@ -44,7 +44,7 @@ fn only_a_backup_this_release_reads_is_accepted() {
 
     let mut other = manifest.clone();
     other.kind = "something-else".into();
-    assert_eq!(refused(&other), "The file is not a Bilskirnir backup");
+    assert_eq!(refused(&other), "The file is not a Thoric backup");
     let mut newer = manifest.clone();
     newer.format = FORMAT + 1;
     assert!(refused(&newer).contains("a layout this release does not read"));
@@ -138,19 +138,19 @@ fn a_restore_takes_only_names_nobody_uses() {
             ..Default::default()
         },
         Present {
-            docker_containers: HashSet::from(["bilskirnir-c1".into()]),
+            docker_containers: HashSet::from(["thoric-c1".into()]),
             ..Default::default()
         },
         Present {
-            docker_containers: HashSet::from(["bilskirnir-c1-previous".into()]),
+            docker_containers: HashSet::from(["thoric-c1-previous".into()]),
             ..Default::default()
         },
         Present {
-            networks: HashSet::from(["bilskirnir-c1-egress".into()]),
+            networks: HashSet::from(["thoric-c1-egress".into()]),
             ..Default::default()
         },
         Present {
-            tags: HashSet::from(["bilskirnir/container:restored-c1".into()]),
+            tags: HashSet::from(["thoric/container:restored-c1".into()]),
             ..Default::default()
         },
     ] {
@@ -169,7 +169,7 @@ fn a_restore_takes_only_names_nobody_uses() {
     );
     assert_eq!(
         conflict(Present {
-            tags: HashSet::from(["bilskirnir/custom:i1".into()]),
+            tags: HashSet::from(["thoric/custom:i1".into()]),
             ..Default::default()
         }),
         [image]
@@ -202,14 +202,14 @@ fn a_restore_takes_only_names_nobody_uses() {
 }
 
 #[test]
-fn restored_images_go_by_bilskirnirs_own_tags() {
-    assert_eq!(image_reference("build", "i1"), "bilskirnir/custom:i1");
-    assert_eq!(image_reference("snapshot", "i1"), "bilskirnir/snapshot:i1");
-    assert_eq!(image_reference("archive", "i1"), "bilskirnir/imported:i1");
+fn restored_images_go_by_thorics_own_tags() {
+    assert_eq!(image_reference("build", "i1"), "thoric/custom:i1");
+    assert_eq!(image_reference("snapshot", "i1"), "thoric/snapshot:i1");
+    assert_eq!(image_reference("archive", "i1"), "thoric/imported:i1");
     // One registered from the other host's own tag gets no name from that host.
-    assert_eq!(image_reference("import", "i1"), "bilskirnir/imported:i1");
+    assert_eq!(image_reference("import", "i1"), "thoric/imported:i1");
     assert_eq!(image_kind("import"), "archive");
     assert_eq!(image_kind("snapshot"), "snapshot");
-    assert_eq!(files_reference("c1"), "bilskirnir/container:restored-c1");
+    assert_eq!(files_reference("c1"), "thoric/container:restored-c1");
     assert!(record_id("0123abcd-ef"));
 }

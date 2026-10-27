@@ -1,6 +1,6 @@
 * text=auto eol=lf
 *.sh text eol=lf
-packaging/wsl/bilskirnir text eol=lf
+packaging/wsl/thoric text eol=lf
 *.ps1 text eol=crlf
 Dockerfile text eol=lf
 *.js text eol=lf

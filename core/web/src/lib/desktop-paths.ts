@@ -169,7 +169,7 @@ export function listingProblem(message: string) {
   return message
 }
 
-const RECENT_KEY = "bilskirnir.upload-folders"
+const RECENT_KEY = "thoric.upload-folders"
 const RECENT_LIMIT = 5
 
 /** The folders this browser uploaded into last for a container, newest first. */

@@ -2,9 +2,9 @@
 //!
 //! `.env` stays the only place settings are kept. The manager checks a change with the code it
 //! starts with ([`super::Config::check_changes`]) and then asks the WSL package, through the folder of
-//! [`crate::package_requests`], to write it into `/opt/bilskirnir/.env` and recreate this
-//! container: `bilskirnir-settings.path` starts `bilskirnir-settings.service`, which runs
-//! `bilskirnir apply-settings` as root. That command accepts only the settings of
+//! [`crate::package_requests`], to write it into `/opt/thoric/.env` and recreate this
+//! container: `thoric-settings.path` starts `thoric-settings.service`, which runs
+//! `thoric apply-settings` as root. That command accepts only the settings of
 //! [`super::EDITABLE`], checks each value again, keeps the previous file as `.env.previous`,
 //! recreates the manager and puts the previous file back when the new manager does not answer.
 //! The next manager follows the job to its end, as it follows an update.
@@ -38,8 +38,8 @@ pub(crate) const SETTINGS: Channel = Channel {
     started: SETTINGS_STARTED,
     log: SETTINGS_LOG,
     exit: SETTINGS_EXIT,
-    path_unit: "bilskirnir-settings.path",
-    command: "bilskirnir apply-settings",
+    path_unit: "thoric-settings.path",
+    command: "thoric apply-settings",
 };
 /// The service's own limit is 15 minutes; a little more covers reading what it wrote last.
 pub(crate) const TIMING: Timing = Timing {
@@ -180,7 +180,7 @@ pub(crate) fn outcome(ended: &str) -> anyhow::Result<Value> {
         return Ok(json!({"applied": true}));
     }
     anyhow::bail!(
-        "bilskirnir apply-settings did not succeed in the WSL distribution ({:.80})",
+        "thoric apply-settings did not succeed in the WSL distribution ({:.80})",
         ended.trim()
     )
 }

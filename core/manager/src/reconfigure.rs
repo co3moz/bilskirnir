@@ -298,7 +298,7 @@ impl App {
             job_id,
             "Saving the container's files for the new container. Named volumes stay where they are.",
         )?;
-        let reference = format!("bilskirnir/container:{job_id}");
+        let reference = format!("thoric/container:{job_id}");
         let committed = async {
             self.docker_logged(
                 job_id,
@@ -308,7 +308,7 @@ impl App {
                     format!("LABEL {LABEL}=true"),
                     // Snapshots taken later keep this layer, and their history says what it is.
                     "--message".into(),
-                    format!("Bilskirnir settings change of {}", env.spec.name),
+                    format!("Thoric settings change of {}", env.spec.name),
                     old_id.clone(),
                     reference.clone(),
                 ],
@@ -369,7 +369,7 @@ impl App {
             // Remove only the container this attempt created, never the original.
             if let Some(created) = self.optional_inspect("container", &env.container).await?
                 && created["Id"] != old_id.as_str()
-                && created["Config"]["Labels"]["bilskirnir.environment"] == env.id.as_str()
+                && created["Config"]["Labels"]["thoric.environment"] == env.id.as_str()
                 && let Some(created_id) = created["Id"].as_str()
             {
                 self.docker(&["rm", "--force", created_id]).await?;
@@ -417,7 +417,7 @@ impl App {
             return Ok(());
         };
         if info["Config"]["Labels"][LABEL] != "true"
-            || info["Config"]["Labels"]["bilskirnir.environment"] != env.id.as_str()
+            || info["Config"]["Labels"]["thoric.environment"] != env.id.as_str()
         {
             bail!("{previous} was not created for this container; check and remove it by hand");
         }
@@ -428,7 +428,7 @@ impl App {
             &format!("Removed {previous}, which an interrupted settings change had set aside."),
         )?;
         if let Some(image) = info["Config"]["Image"].as_str()
-            && image.starts_with("bilskirnir/container:")
+            && image.starts_with("thoric/container:")
             && env
                 .working_image
                 .as_ref()

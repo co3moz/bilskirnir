@@ -50,7 +50,7 @@ fn image(id: &str, compose: Option<Compose>) -> ImageRecord {
         id: id.into(),
         name: id.into(),
         image_id: format!("sha256:{id}"),
-        reference: format!("bilskirnir/snapshot:{id}"),
+        reference: format!("thoric/snapshot:{id}"),
         parent_image_id: None,
         source_container: None,
         kind: "snapshot".into(),
@@ -471,25 +471,22 @@ fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
         compose: workspace(),
         values,
     };
-    let own = mount("bilskirnir-e-unity-workspace", "/home/desktop/Projects");
+    let own = mount("thoric-e-unity-workspace", "/home/desktop/Projects");
     assert_eq!(pinned.mounts(), std::slice::from_ref(&own));
     assert_eq!(
         pinned.new_volumes("e"),
-        [(
-            "UNITY_WORKSPACE".to_string(),
-            "bilskirnir-e-unity-workspace"
-        )]
+        [("UNITY_WORKSPACE".to_string(), "thoric-e-unity-workspace")]
     );
     // The record shows it like a chosen volume, and the script reads it the same way.
     let setup = pinned.setup("img");
     assert_eq!(setup.mounts, std::slice::from_ref(&own));
     assert_eq!(
         setup.parameters["UNITY_WORKSPACE"],
-        "bilskirnir-e-unity-workspace"
+        "thoric-e-unity-workspace"
     );
     assert_eq!(
         pinned.environment(0)["UNITY_WORKSPACE_VOLUME"],
-        "bilskirnir-e-unity-workspace"
+        "thoric-e-unity-workspace"
     );
     // Its path is taken like a chosen volume's, so the volume settings cannot use it too.
     assert!(check_mounts(&[mount("projects", "/home/desktop/Projects")], &[own]).is_err());
@@ -518,7 +515,7 @@ fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
         setup: Some(pinned.setup("img")),
         ..container()
     };
-    let flag = "--mount type=volume,src=bilskirnir-e-unity-workspace,dst=/home/desktop/Projects";
+    let flag = "--mount type=volume,src=thoric-e-unity-workspace,dst=/home/desktop/Projects";
     assert!(app.container_args(&env).join(" ").contains(flag));
     // A reset or a retry that recreates a missing container runs the setup again with it.
     setup_again(&mut env);
@@ -550,17 +547,11 @@ async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
         .unwrap();
     assert_eq!(
         clone.mounts(),
-        [mount(
-            "bilskirnir-f-unity-workspace",
-            "/home/desktop/Projects"
-        )]
+        [mount("thoric-f-unity-workspace", "/home/desktop/Projects")]
     );
     assert_eq!(
         clone.new_volumes("f"),
-        [(
-            "UNITY_WORKSPACE".to_string(),
-            "bilskirnir-f-unity-workspace"
-        )]
+        [("UNITY_WORKSPACE".to_string(), "thoric-f-unity-workspace")]
     );
     // Sharing the source's volume is still a choice a request can make.
     let (_, shared) = app
@@ -568,7 +559,7 @@ async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
             "g",
             "sha256:snap",
             "sha256:snap",
-            &given(&[("UNITY_WORKSPACE", "bilskirnir-e-unity-workspace")]),
+            &given(&[("UNITY_WORKSPACE", "thoric-e-unity-workspace")]),
         )
         .unwrap()
         .unwrap();
@@ -585,7 +576,7 @@ fn the_compose_comes_from_a_record_of_the_requested_image() {
     let by_id = compose_image(&records, "sha256:unity", "sha256:unity").unwrap();
     assert_eq!(by_id.id, "unity");
     // A reference resolves through Docker to the record's image ID.
-    let by_reference = compose_image(&records, "bilskirnir/snapshot:unity", "sha256:unity");
+    let by_reference = compose_image(&records, "thoric/snapshot:unity", "sha256:unity");
     assert_eq!(by_reference.unwrap().id, "unity");
     let resolved = compose_image(&records, "some-tag:latest", "sha256:other");
     assert_eq!(resolved.unwrap().id, "other");
@@ -736,9 +727,9 @@ fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
 fn container() -> Container {
     Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:unity".into(),
         created_at: 1,
         spec: serde_json::from_value(serde_json::json!({"name": "Unity", "image": "sha256:unity"}))
@@ -873,7 +864,7 @@ fn steps_need_ids_of_their_own_but_may_ask_for_the_same_names() {
     assert!(
         with(&|c| {
             c.steps[1].id = "v".repeat(64);
-            c.steps[1].parameters[1].name = "A_RATHER_LONG_WORKSPACE".into();
+            c.steps[1].parameters[1].name = "A_RATHER_LONGER_WORKSPACE".into();
         })
         .unwrap_err()
         .contains("128 characters")
@@ -904,7 +895,7 @@ fn values_of_several_steps_go_by_their_step_unless_one_step_asks_for_the_name() 
             ("chrome.TOKEN", "t0k3n"),
             ("chrome.VERSION", "beta"),
             ("vscode.VERSION", "1.142.0"),
-            ("vscode.WORKSPACE", "bilskirnir-e-vscode-workspace"),
+            ("vscode.WORKSPACE", "thoric-e-vscode-workspace"),
         ])
     );
     let refused =
@@ -942,7 +933,7 @@ fn each_step_receives_only_its_own_values_and_the_record_shows_them_by_step() {
         given(&[
             ("VERSION", "1.142.0"),
             ("WORKSPACE", "/home/desktop/Projects"),
-            ("WORKSPACE_VOLUME", "bilskirnir-e-vscode-workspace"),
+            ("WORKSPACE_VOLUME", "thoric-e-vscode-workspace"),
         ])
     );
     let first = pinned.request(0);
@@ -955,10 +946,7 @@ fn each_step_receives_only_its_own_values_and_the_record_shows_them_by_step() {
     assert_eq!(second["mask"], json!(["t0k3n"]));
     assert_eq!(
         pinned.new_volumes("e"),
-        [(
-            "vscode.WORKSPACE".to_string(),
-            "bilskirnir-e-vscode-workspace"
-        )]
+        [("vscode.WORKSPACE".to_string(), "thoric-e-vscode-workspace")]
     );
     let setup = pinned.setup("img");
     assert_eq!(setup.secrets, ["chrome.TOKEN"]);

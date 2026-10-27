@@ -11,7 +11,7 @@ const LAYER: &str = "blobs/sha256/1111111111111111111111111111111111111111111111
 /// A `docker save` archive as Docker streams it, with a layer of `layer` bytes.
 fn saved(layer: &[u8], labelled: bool) -> Vec<u8> {
     let labels = if labelled {
-        json!({"bilskirnir.desktop": "true"})
+        json!({"thoric.desktop": "true"})
     } else {
         json!({})
     };
@@ -110,6 +110,6 @@ fn damaged_empty_or_refused_uploads_say_why() {
     assert!(message(import(&[b'x'; 2000], 5, 1 << 20)).contains("not a tar archive"));
     // The filter's own refusal is not blamed on gzip.
     let refused = message(import(&exported(&saved(&[5; 100], false)), 1000, 1 << 20));
-    assert!(refused.contains("not contain a Bilskirnir desktop image"));
+    assert!(refused.contains("not contain a Thoric desktop image"));
     assert!(!refused.contains("gzip"));
 }

@@ -3,7 +3,7 @@ import * as React from "react"
 export type Theme = "dark" | "light" | "system"
 
 // core/web/public/theme.js applies the same choice before the first paint; keep the key in step.
-const STORAGE_KEY = "bilskirnir-theme"
+const STORAGE_KEY = "thoric-theme"
 const query = "(prefers-color-scheme: dark)"
 
 type ThemeState = { theme: Theme; resolved: "dark" | "light"; setTheme: (theme: Theme) => void }

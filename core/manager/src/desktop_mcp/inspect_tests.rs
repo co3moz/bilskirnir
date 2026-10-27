@@ -432,7 +432,7 @@ async fn the_administrators_mcp_answers_through_the_inspector_without_a_token() 
     browser.send(INITIALIZE);
     let frame = browser.frame().await;
     assert_eq!(
-        frame["message"]["result"]["serverInfo"]["name"], "bilskirnir",
+        frame["message"]["result"]["serverInfo"]["name"], "thoric",
         "{frame}"
     );
     browser.send(INITIALIZED);
@@ -478,7 +478,7 @@ async fn an_endpoint_offers_the_inspector_the_tools_an_agent_sees() {
     browser.send(INITIALIZE);
     let frame = browser.frame().await;
     assert_eq!(
-        frame["message"]["result"]["serverInfo"]["name"], "bilskirnir-agent",
+        frame["message"]["result"]["serverInfo"]["name"], "thoric-agent",
         "{frame}"
     );
     browser.send(INITIALIZED);
@@ -568,7 +568,7 @@ async fn the_inspector_opens_from_a_signed_in_dashboard_on_its_own_origin() {
     let address = listener.local_addr().unwrap();
     let router = crate::router(app.clone());
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    let session = "Cookie: bilskirnir_session=signed-in\r\n";
+    let session = "Cookie: thoric_session=signed-in\r\n";
 
     for (headers, status) in [
         (String::new(), "401"),
@@ -592,7 +592,7 @@ async fn the_inspector_opens_from_a_signed_in_dashboard_on_its_own_origin() {
     client.send(INITIALIZE).await;
     let frame = client.receive().await;
     assert_eq!(
-        frame["message"]["result"]["serverInfo"]["name"], "bilskirnir",
+        frame["message"]["result"]["serverInfo"]["name"], "thoric",
         "{frame}"
     );
     client.send(INITIALIZED).await;

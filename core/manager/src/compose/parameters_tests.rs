@@ -293,7 +293,7 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
     // Left empty, the value names the container's own volume, so required never fails.
     let container = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
     let own = workspace.resolve(None, container, None).unwrap();
-    assert_eq!(own, format!("bilskirnir-{container}-unity-workspace"));
+    assert_eq!(own, format!("thoric-{container}-unity-workspace"));
     assert_eq!(
         workspace
             .resolve(Some(&String::new()), container, None)
@@ -308,7 +308,7 @@ fn a_volume_parameter_can_ask_for_a_new_volume_for_each_container() {
     };
     longest.validate().unwrap();
     let name = longest.new_volume_for(container, None).unwrap();
-    assert!(name.len() == 108 && name.ends_with("-b-bc"), "{name}");
+    assert!(name.len() == 104 && name.ends_with("-b-bc"), "{name}");
     crate::model::volume_name(&name).unwrap();
     // Another container gets another volume; a volume given by name is still used as it is.
     assert_ne!(workspace.resolve(None, "other", None).unwrap(), own);

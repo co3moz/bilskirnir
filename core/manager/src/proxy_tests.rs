@@ -120,7 +120,7 @@ async fn a_service_sees_no_credential_of_the_manager() {
         get_request(&format!("/api/containers/e/ports/{port}/echo/a%20b?x=1"))
             .method("POST")
             .header("authorization", format!("Bearer {TOKEN}"))
-            .header("cookie", "bilskirnir_session=dashboard; theme=dark")
+            .header("cookie", "thoric_session=dashboard; theme=dark")
             .header("origin", "http://localhost:8080")
             .header("connection", "keep-alive, x-hop")
             .header("x-hop", "connection only")
@@ -149,7 +149,7 @@ async fn a_service_sees_no_credential_of_the_manager() {
     let response = call(
         proxy,
         get_request(&format!("/api/containers/e/ports/{port}/"))
-            .header("cookie", "bilskirnir_session=dashboard")
+            .header("cookie", "thoric_session=dashboard")
             .body(Body::empty())
             .unwrap(),
     )
@@ -169,7 +169,7 @@ async fn an_answer_is_sandboxed_and_sets_nothing_on_the_dashboards_origin() {
                 (header::LOCATION, location),
                 (
                     header::SET_COOKIE,
-                    "bilskirnir_session=planted; Path=/".to_owned(),
+                    "thoric_session=planted; Path=/".to_owned(),
                 ),
                 (
                     HeaderName::from_static("clear-site-data"),
@@ -341,7 +341,7 @@ async fn a_websocket_is_joined_to_the_service() {
 
 #[tokio::test]
 async fn an_mcp_client_calls_a_tool_of_an_mcp_server_in_the_desktop() {
-    // Bilskirnir's own MCP endpoint stands in for a server inside the desktop.
+    // Thoric's own MCP endpoint stands in for a server inside the desktop.
     let mut inner = app(false);
     let config = &mut Arc::get_mut(&mut inner).unwrap().config;
     config.root_mcp_enabled = true;
@@ -377,9 +377,9 @@ async fn an_mcp_client_calls_a_tool_of_an_mcp_server_in_the_desktop() {
 fn container(app: &App, ports: &[u16]) {
     let env = model::Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(
@@ -427,7 +427,7 @@ async fn only_the_mcp_token_opens_a_listed_port() {
     let (code, _) = status(
         &app,
         "/api/containers/e/ports/8000/",
-        &[("cookie", "bilskirnir_session=dashboard")],
+        &[("cookie", "thoric_session=dashboard")],
     )
     .await;
     assert_eq!(code, StatusCode::UNAUTHORIZED);
@@ -501,7 +501,7 @@ async fn the_tools_and_guides_describe_the_ports_setting() {
 #[cfg(unix)]
 fn docker(app: &mut Arc<App>, state: &Value) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("bilskirnir-proxy-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("thoric-proxy-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
     std::fs::write(
@@ -522,9 +522,9 @@ fn docker(app: &mut Arc<App>, state: &Value) -> std::path::PathBuf {
 fn inspected(running: bool) -> Value {
     json!([{
         "Id": "c0ffee",
-        "Config": {"Labels": {"bilskirnir.managed": "true", "bilskirnir.environment": "e"}},
+        "Config": {"Labels": {"thoric.managed": "true", "thoric.environment": "e"}},
         "State": {"Running": running},
-        "NetworkSettings": {"Networks": {"bilskirnir-e-private": {"IPAddress": "127.0.0.1"}}}
+        "NetworkSettings": {"Networks": {"thoric-e-private": {"IPAddress": "127.0.0.1"}}}
     }])
 }
 

@@ -11,13 +11,13 @@ use tower::ServiceExt;
 fn record(id: &str, cpus: Option<f64>) -> Container {
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: "sha256:base".into(),
         created_at: 1,
         spec: serde_json::from_value::<ContainerSpec>(
-            json!({"name": format!("Desktop {id}"), "image": "bilskirnir/ubuntu-xfce:24.04", "cpus": cpus}),
+            json!({"name": format!("Desktop {id}"), "image": "thoric/ubuntu-xfce:24.04", "cpus": cpus}),
         )
         .unwrap(),
         last_error: None,

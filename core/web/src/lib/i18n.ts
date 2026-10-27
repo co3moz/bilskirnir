@@ -30,7 +30,7 @@ const regions: Record<Locale, string> = {
   tr: "tr-TR",
 }
 
-const STORAGE_KEY = "bilskirnir-locale"
+const STORAGE_KEY = "thoric-locale"
 
 const isLocale = (value: unknown): value is Locale =>
   typeof value === "string" && Object.hasOwn(catalogs, value)

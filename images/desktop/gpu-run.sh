@@ -31,7 +31,7 @@ display=${VGL_DISPLAY:-}
 if [[ -z $display && ! -e /dev/dxg ]]; then display=$(card); fi
 # Chromium-family processes turn on VirtualGL's Chrome workaround for themselves. The session
 # runs under gpu-run, so this also reaches a browser started from the panel, the menu or a link.
-chromium_gpu=/usr/local/lib/bilskirnir/chromium-gpu.so
+chromium_gpu=/usr/local/lib/thoric/chromium-gpu.so
 if [[ :${LD_PRELOAD:-}: != *:"$chromium_gpu":* ]]; then
     export LD_PRELOAD="$chromium_gpu${LD_PRELOAD:+:$LD_PRELOAD}"
 fi

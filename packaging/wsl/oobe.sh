@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# First start of the Bilskirnir WSL distribution: create the account, write the installation
+# First start of the Thoric WSL distribution: create the account, write the installation
 # settings and optionally start the manager. WSL runs this as root the first time the distribution opens.
 set -euo pipefail
-INSTALL=/opt/bilskirnir
+INSTALL=/opt/thoric
 ENV_FILE=$INSTALL/.env
 
 if getent passwd 1000 >/dev/null; then
@@ -80,13 +80,13 @@ choose() {
     choice=${words[selected]}
 }
 
-echo "Bilskirnir: first start"
+echo "Thoric: first start"
 echo
 echo "Choose one account. It is your Linux user and your dashboard sign-in."
 username=""
 while [[ -z $username ]]; do
-    read -erp "Username [bilskirnir]: " username || true
-    username=${username:-bilskirnir}
+    read -erp "Username [thoric]: " username || true
+    username=${username:-thoric}
     if ! [[ $username =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
         echo "Use lowercase letters, digits, dashes and underscores (at most 32 characters)."
         username=""
@@ -236,25 +236,25 @@ echo
 start=no
 if [[ -t 0 ]]; then
     echo "Starting downloads the manager image; desktop images download when you first create a desktop."
-    choose "Start Bilskirnir now?" "Yes" "No"
+    choose "Start Thoric now?" "Yes" "No"
     start=$choice
 fi
 if [[ $start == yes ]]; then
-    runuser -u "$username" -- /usr/local/bin/bilskirnir start ||
-        echo "Bilskirnir did not start. Run 'bilskirnir doctor', then 'bilskirnir start'."
+    runuser -u "$username" -- /usr/local/bin/thoric start ||
+        echo "Thoric did not start. Run 'thoric doctor', then 'thoric start'."
 else
-    echo "Run 'bilskirnir start' to download and start the manager."
+    echo "Run 'thoric start' to download and start the manager."
 fi
 echo
 if [[ $mcp == yes ]]; then
     # The agent settings are printed once here, last, so they are not scrolled away by the download.
-    /usr/local/bin/bilskirnir mcp
+    /usr/local/bin/thoric mcp
     echo
-    echo "'bilskirnir mcp' shows this again, and 'bilskirnir doctor' checks Docker, the GPU and the network."
+    echo "'thoric mcp' shows this again, and 'thoric doctor' checks Docker, the GPU and the network."
 else
     echo "Root agent access (/mcp) is off; MCP endpoints made on the dashboard work without it, and"
-    echo "'bilskirnir mcp' explains how to turn it on."
-    echo "'bilskirnir doctor' checks Docker, the GPU and the network."
+    echo "'thoric mcp' explains how to turn it on."
+    echo "'thoric doctor' checks Docker, the GPU and the network."
 fi
 if [[ $access == other ]]; then
     # Docker publishes the port inside WSL. How other devices get through Windows to it depends on the
@@ -276,7 +276,7 @@ if [[ $access == other ]]; then
     esac
     echo "The Windows helper sets it up. Run it in PowerShell, choose to let other devices reach the"
     echo "dashboard and confirm the administrator prompt:"
-    echo '  irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex'
+    echo '  irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex'
     echo "The guide describes it, and the same steps by hand:"
-    echo "  https://github.com/co3moz/bilskirnir/blob/master/docs/WSL_PACKAGE.md#access-from-other-devices"
+    echo "  https://github.com/co3moz/thoric/blob/master/docs/WSL_PACKAGE.md#access-from-other-devices"
 fi

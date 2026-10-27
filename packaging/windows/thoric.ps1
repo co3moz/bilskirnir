@@ -1,24 +1,24 @@
-# Bilskirnir's Windows helper: installs the WSL distribution, then starts, stops, updates, moves,
+# Thoric's Windows helper: installs the WSL distribution, then starts, stops, updates, moves,
 # resizes and removes it, and opens it to other devices. It runs straight from a release, without
 # saving it:
 #
-#   irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex
+#   irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
 #
-# 'irm | iex' runs this text in the caller's scope, so everything lives inside Invoke-Bilskirnir and
+# 'irm | iex' runs this text in the caller's scope, so everything lives inside Invoke-Thoric and
 # only that function stays behind in the PowerShell window. Keep the file ASCII, since Windows
 # PowerShell reads a script without a byte order mark in the ANSI code page, and never call 'exit',
 # which would close the window that ran it.
 #
-# Copyright (C) 2026 Bilskirnir contributors. Bilskirnir is free software under the GNU General Public
-# License, version 3 or later, and comes with no warranty: https://github.com/co3moz/bilskirnir/blob/master/LICENSE
-function Invoke-Bilskirnir {
+# Copyright (C) 2026 Thoric contributors. Thoric is free software under the GNU General Public
+# License, version 3 or later, and comes with no warranty: https://github.com/co3moz/thoric/blob/master/LICENSE
+function Invoke-Thoric {
     param(
         [Parameter(Position = 0)][string]$Command = "",
         [Parameter(Position = 1)][string]$Option = "",
         [string]$Package = "",
         [string]$Location = "",
         [string]$VhdSize = "",
-        [string]$Distro = "Bilskirnir",
+        [string]$Distro = "Thoric",
         [int]$Port = 0,
         [string]$Address = "",
         [string]$TaskUser = "",
@@ -26,30 +26,30 @@ function Invoke-Bilskirnir {
     )
     # -Address, -TaskUser and -Log are what 'lan' hands the copy of this script that runs as administrator.
     $ErrorActionPreference = "Stop"
-    $taskName = "Bilskirnir keep-alive"
+    $taskName = "Thoric keep-alive"
     # Under NAT, a task with administrator rights points the port proxy at the address in this file, which
     # 'start' and the keep-alive task write without them.
-    $lanTaskName = "Bilskirnir LAN"
-    $addressFile = Join-Path $env:LOCALAPPDATA "Bilskirnir\wsl-address"
-    $helperUrl = "https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1"
-    $packageUrl = "https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.wsl"
+    $lanTaskName = "Thoric LAN"
+    $addressFile = Join-Path $env:LOCALAPPDATA "Thoric\wsl-address"
+    $helperUrl = "https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1"
+    $packageUrl = "https://github.com/co3moz/thoric/releases/latest/download/thoric.wsl"
     $usage = @"
-Usage: bilskirnir.ps1 [command] [options]
+Usage: thoric.ps1 [command] [options]
 
-Without a command it offers to install Bilskirnir, or lists what it can do with an installed one.
+Without a command it offers to install Thoric, or lists what it can do with an installed one.
 
   install                             Download the latest package, register it and run its first-start setup
-      -Location D:\WSL\Bilskirnir     Keep the distribution's disk in this folder
+      -Location D:\WSL\Thoric     Keep the distribution's disk in this folder
       -VhdSize 200GB                  Set the disk's maximum size (1 TB unless given)
-      -Package .\bilskirnir.wsl       Install this package file instead of downloading one
+      -Package .\thoric.wsl       Install this package file instead of downloading one
   start                               Boot the distribution, keep it running and start the manager
   stop                                Stop the manager and shut the distribution down
   status                              Show the manager state
   open                                Open the dashboard in the browser
   update                              Move the installation to the newest release
-  move D:\WSL\Bilskirnir              Move the distribution's disk to another folder
+  move D:\WSL\Thoric              Move the distribution's disk to another folder
   resize 200GB                        Change the disk's maximum size
-  autostart enable|disable            Start Bilskirnir at Windows sign-in through a scheduled task
+  autostart enable|disable            Start Thoric at Windows sign-in through a scheduled task
   lan enable|disable|status           Let other devices reach the dashboard through Windows
   uninstall                           Remove the auto-start task and unregister the distribution
 
@@ -57,14 +57,14 @@ Without a command it offers to install Bilskirnir, or lists what it can do with 
   -Port <port>                        Use this dashboard port instead of the one in .env
 
 A command runs without saving the helper too:
-  & ([scriptblock]::Create((irm $helperUrl))) move D:\WSL\Bilskirnir
+  & ([scriptblock]::Create((irm $helperUrl))) move D:\WSL\Thoric
 
 WSL stops a distribution shortly after its last Windows-started process ends, so 'start' and the
 auto-start task keep a hidden keep-alive process open while Docker and the manager run inside.
 
 WSL lets go of a stopped distribution's disk only when its virtual machine shuts down, so 'move'
 and 'resize' shut WSL down, asking first when other distributions are running, and then start
-Bilskirnir again.
+Thoric again.
 
 'lan enable' opens the dashboard's port, or -Port, through Windows once BIND_ADDRESS in the
 distribution's .env lets the manager listen beyond localhost. It asks for administrator rights and sets
@@ -91,7 +91,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
     # around some values. The secrets in the same file stay inside the distribution.
     function Get-Settings {
         $settings = @{}
-        $lines = & wsl.exe -d $Distro -- sh -c "grep -E '^(PORT|BIND_ADDRESS|AUTH_MODE|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' /opt/bilskirnir/.env 2>/dev/null"
+        $lines = & wsl.exe -d $Distro -- sh -c "grep -E '^(PORT|BIND_ADDRESS|AUTH_MODE|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' /opt/thoric/.env 2>/dev/null"
         foreach ($line in $lines) {
             if (($line -replace "`0", "") -match '^([A-Z_]+)=(.*)$') { $settings[$Matches[1]] = $Matches[2].Trim('"', "'", " ") }
         }
@@ -128,10 +128,10 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         $settings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName $taskName -Action $actions -Trigger $trigger -Settings $settings -Force | Out-Null
     }
-    function Start-Bilskirnir {
+    function Start-Thoric {
         Start-KeepAlive
-        Invoke-Wsl @("-d", $Distro, "--", "bilskirnir", "start")
-        try { Update-PortProxy } catch { Write-Warning "Other devices may not reach Bilskirnir: $($_.Exception.Message)" }
+        Invoke-Wsl @("-d", $Distro, "--", "thoric", "start")
+        try { Update-PortProxy } catch { Write-Warning "Other devices may not reach Thoric: $($_.Exception.Message)" }
         Write-Host "Dashboard: http://localhost:$(Get-Port)"
     }
     # A terminated distribution's disk stays attached to the WSL virtual machine, and WSL refuses to
@@ -145,10 +145,10 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             Write-Host "This shuts WSL down, which also stops $($others -join ', ')."
             if ((Read-Host "Type 'yes' to continue") -ne "yes") { Write-Host "Nothing was changed."; return }
         }
-        if ($running -contains $Distro) { & wsl.exe -d $Distro -- bilskirnir stop }
+        if ($running -contains $Distro) { & wsl.exe -d $Distro -- thoric stop }
         Invoke-Wsl @("--shutdown")
         Write-Host $Message
-        try { Invoke-Wsl $Arguments } finally { Start-Bilskirnir }
+        try { Invoke-Wsl $Arguments } finally { Start-Thoric }
     }
 
     # The WSL networking mode, a Windows setting shared by every distribution: nat, mirrored or another.
@@ -177,10 +177,10 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         param([switch]$HyperV)
         if ($HyperV) {
             if (-not (Get-Command Get-NetFirewallHyperVRule -ErrorAction SilentlyContinue)) { return }
-            $rule = Get-NetFirewallHyperVRule -Name Bilskirnir -ErrorAction SilentlyContinue
+            $rule = Get-NetFirewallHyperVRule -Name Thoric -ErrorAction SilentlyContinue
             if ($rule) { $first = @($rule.LocalPorts)[0] }
         } else {
-            $rule = Get-NetFirewallRule -Name Bilskirnir -ErrorAction SilentlyContinue
+            $rule = Get-NetFirewallRule -Name Thoric -ErrorAction SilentlyContinue
             if ($rule) { $first = @(($rule | Get-NetFirewallPortFilter).LocalPort)[0] }
         }
         if ($rule -and $first -match '^[0-9]+$') { return [int]$first }
@@ -212,20 +212,20 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
     function Set-LanAccess {
         param([string]$Mode, [int]$ListenPort, [string]$Target, [string]$User)
         $ports = @($ListenPort)
-        $rule = Get-NetFirewallRule -Name Bilskirnir -ErrorAction SilentlyContinue
+        $rule = Get-NetFirewallRule -Name Thoric -ErrorAction SilentlyContinue
         if ($rule) { $ports += @(($rule | Get-NetFirewallPortFilter).LocalPort) }
         foreach ($old in $ports | Select-Object -Unique) { netsh.exe interface portproxy delete v4tov4 listenport=$old listenaddress=0.0.0.0 | Out-Null }
-        Remove-NetFirewallRule -Name Bilskirnir -ErrorAction SilentlyContinue
+        Remove-NetFirewallRule -Name Thoric -ErrorAction SilentlyContinue
         $hyperV = [bool](Get-Command New-NetFirewallHyperVRule -ErrorAction SilentlyContinue)
-        if ($hyperV) { Remove-NetFirewallHyperVRule -Name Bilskirnir -ErrorAction SilentlyContinue }
+        if ($hyperV) { Remove-NetFirewallHyperVRule -Name Thoric -ErrorAction SilentlyContinue }
         Unregister-ScheduledTask -TaskName $lanTaskName -Confirm:$false -ErrorAction SilentlyContinue
         if ($Mode -eq "mirrored") {
             if (-not $hyperV) { throw "Mirrored networking needs the Hyper-V firewall, which this Windows lacks." }
-            New-NetFirewallHyperVRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -VMCreatorId "{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}" -Protocol TCP -LocalPorts $ListenPort | Out-Null
+            New-NetFirewallHyperVRule -Name Thoric -DisplayName Thoric -Direction Inbound -VMCreatorId "{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}" -Protocol TCP -LocalPorts $ListenPort | Out-Null
         } elseif ($Mode -eq "nat") {
             netsh.exe interface portproxy add v4tov4 listenport=$ListenPort listenaddress=0.0.0.0 connectport=$ListenPort connectaddress=$Target | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "netsh could not forward port $ListenPort to $Target." }
-            New-NetFirewallRule -Name Bilskirnir -DisplayName Bilskirnir -Direction Inbound -Protocol TCP -LocalPort $ListenPort -Action Allow | Out-Null
+            New-NetFirewallRule -Name Thoric -DisplayName Thoric -Direction Inbound -Protocol TCP -LocalPort $ListenPort -Action Allow | Out-Null
             if ($User) {
                 $file = $addressFile -replace "'", "''"
                 $refresh = "`$address = Get-Content -LiteralPath '$file' -TotalCount 1; if (`$address -match '^[0-9]{1,3}(\.[0-9]{1,3}){3}`$') { " +
@@ -263,7 +263,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         $copy = ""
         if (-not $script) {
             $copy = [IO.Path]::ChangeExtension($log, ".ps1")
-            Set-Content -LiteralPath $copy -Encoding ASCII -Value ("function Invoke-Bilskirnir {" + ${function:Invoke-Bilskirnir}.ToString() + "}`nInvoke-Bilskirnir @args")
+            Set-Content -LiteralPath $copy -Encoding ASCII -Value ("function Invoke-Thoric {" + ${function:Invoke-Thoric}.ToString() + "}`nInvoke-Thoric @args")
             $script = $copy
         }
         $arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$script`" elevated $Step -Port $ListenPort -Log `"$log`""
@@ -315,7 +315,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         $bind = $settings["BIND_ADDRESS"]
         if (-not $bind) { $bind = "127.0.0.1" }
         if (Test-Loopback $bind) {
-            throw "The manager listens on ${bind}:$lanPort, which only this computer reaches, whatever Windows allows. Set BIND_ADDRESS=0.0.0.0 with 'bilskirnir settings' in the distribution, run 'bilskirnir restart', then 'lan enable' again."
+            throw "The manager listens on ${bind}:$lanPort, which only this computer reaches, whatever Windows allows. Set BIND_ADDRESS=0.0.0.0 with 'thoric settings' in the distribution, run 'thoric restart', then 'lan enable' again."
         }
         if ($settings["AUTH_MODE"] -eq "none") {
             Write-Warning "The dashboard has no password (AUTH_MODE=none), so any device that reaches it controls every container."
@@ -367,7 +367,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         Invoke-Elevated "none" $lanPort
         Remove-Item -LiteralPath $addressFile -ErrorAction SilentlyContinue
         if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) { Register-KeepAlive }
-        Write-Host "Other devices no longer get through Windows to Bilskirnir. BIND_ADDRESS in .env is unchanged."
+        Write-Host "Other devices no longer get through Windows to Thoric. BIND_ADDRESS in .env is unchanged."
     }
 
     function Show-Lan {
@@ -389,7 +389,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         $open = 0
         $problem = ""
         if (Test-Loopback $bind) {
-            $problem = "the manager listens on this computer only; set BIND_ADDRESS=0.0.0.0 with 'bilskirnir settings'"
+            $problem = "the manager listens on this computer only; set BIND_ADDRESS=0.0.0.0 with 'thoric settings'"
         } elseif ($mode -eq "mirrored") {
             if ($hyperVPort) { $open = $hyperVPort } else { $problem = "the Hyper-V firewall keeps them out; run 'lan enable'" }
         } elseif ($mode -eq "nat") {
@@ -420,14 +420,14 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
     # 'irm | iex' cannot pass a command, so without one the helper asks.
     if (-not $Command) {
         if (-not (Test-Registered)) {
-            Write-Host "Bilskirnir is not installed yet. Its disk will hold every image, container and volume."
-            $Location = Read-Host "Folder for the disk, such as D:\WSL\Bilskirnir (Enter for the WSL default)"
+            Write-Host "Thoric is not installed yet. Its disk will hold every image, container and volume."
+            $Location = Read-Host "Folder for the disk, such as D:\WSL\Thoric (Enter for the WSL default)"
             $VhdSize = Read-Host "Maximum disk size, such as 200GB (Enter for 1 TB)"
             $Command = "install"
         } else {
             $state = if ((Get-Running) -contains $Distro) { "running" } else { "stopped" }
             $folder = Get-DiskFolder
-            if ($folder) { Write-Host "Bilskirnir is $state, with its disk in $folder." } else { Write-Host "Bilskirnir is $state." }
+            if ($folder) { Write-Host "Thoric is $state, with its disk in $folder." } else { Write-Host "Thoric is $state." }
             $autostart = [bool](Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)
             # Reading the port from .env would boot a stopped distribution, and with it the manager; the
             # firewall rules and the LAN task show a setup without it.
@@ -450,7 +450,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             $number = 0
             if (-not [int]::TryParse($answer, [ref]$number) -or $number -lt 1 -or $number -gt $choices.Count) { throw "Choose a number from 1 to $($choices.Count)." }
             $Command = $choices[$number - 1][0]
-            if ($Command -eq "move") { $Option = Read-Host "New folder for the disk, such as D:\WSL\Bilskirnir" }
+            if ($Command -eq "move") { $Option = Read-Host "New folder for the disk, such as D:\WSL\Thoric" }
             if ($Command -eq "resize") { $Option = Read-Host "New maximum size, such as 200GB" }
             if ($Command -eq "autostart") { $Option = if ($autostart) { "disable" } else { "enable" } }
             if ($Command -eq "lan") { $Option = if ($lan) { "disable" } else { "enable" } }
@@ -462,7 +462,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             if (Test-Registered) { throw "The $Distro distribution is already installed; 'update' moves it to the newest release." }
             $file = $Package
             if (-not $file) {
-                $file = Join-Path $env:TEMP "bilskirnir-$PID.wsl"
+                $file = Join-Path $env:TEMP "thoric-$PID.wsl"
                 Write-Host "Downloading $packageUrl"
                 & curl.exe -fL --progress-bar -o $file $packageUrl
                 if ($LASTEXITCODE -ne 0) { Remove-Item $file -ErrorAction SilentlyContinue; throw "The download failed: curl.exe exited with code $LASTEXITCODE." }
@@ -474,29 +474,29 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             try { Invoke-Wsl $arguments } finally { if (-not $Package) { Remove-Item $file -ErrorAction SilentlyContinue } }
             Write-Host "The distribution is registered. Its first start asks for the username and password used by Linux and the dashboard."
             Invoke-Wsl @("-d", $Distro)
-            Write-Host "Run the helper again to start Bilskirnir, keep it running, open it to other devices or move its disk."
+            Write-Host "Run the helper again to start Thoric, keep it running, open it to other devices or move its disk."
         }
         "start" {
             if (-not (Test-Registered)) { throw "The $Distro distribution is not registered. Run 'install' first." }
-            Start-Bilskirnir
+            Start-Thoric
         }
         "stop" {
-            & wsl.exe -d $Distro -- bilskirnir stop
+            & wsl.exe -d $Distro -- thoric stop
             & wsl.exe --terminate $Distro
-            Write-Host "Bilskirnir stopped."
+            Write-Host "Thoric stopped."
         }
         "status" {
-            if (Test-Registered) { & wsl.exe -d $Distro -- bilskirnir status } else { Write-Host "The $Distro distribution is not registered." }
+            if (Test-Registered) { & wsl.exe -d $Distro -- thoric status } else { Write-Host "The $Distro distribution is not registered." }
         }
         "open" {
             Start-Process "http://localhost:$(Get-Port)"
         }
         "update" {
             if (-not (Test-Registered)) { throw "The $Distro distribution is not registered. Run 'install' first." }
-            Invoke-Wsl @("-d", $Distro, "--", "bilskirnir", "update")
+            Invoke-Wsl @("-d", $Distro, "--", "thoric", "update")
         }
         "move" {
-            if (-not $Option) { throw "Name the folder to move the disk to, for example 'move D:\WSL\Bilskirnir'." }
+            if (-not $Option) { throw "Name the folder to move the disk to, for example 'move D:\WSL\Thoric'." }
             $folder = Resolve-Folder $Option
             Invoke-DiskChange @("--manage", $Distro, "--move", $folder) "Moving the disk to $folder. Copying a large disk to another drive takes a while."
         }
@@ -508,7 +508,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             switch ($Option.ToLower()) {
                 "enable" {
                     Register-KeepAlive
-                    Write-Host "Bilskirnir will keep running after you sign in to Windows."
+                    Write-Host "Thoric will keep running after you sign in to Windows."
                 }
                 "disable" {
                     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -563,4 +563,4 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
     }
 }
 
-Invoke-Bilskirnir @args
+Invoke-Thoric @args

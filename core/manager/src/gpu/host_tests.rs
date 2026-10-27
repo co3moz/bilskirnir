@@ -9,7 +9,7 @@ struct Sys(PathBuf);
 
 impl Sys {
     fn new() -> Sys {
-        let root = std::env::temp_dir().join(format!("bilskirnir-sys-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("thoric-sys-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("class")).unwrap();
         Sys(root)
     }
@@ -130,7 +130,7 @@ fn a_hybrid_laptop_shows_both() {
 
 #[test]
 fn nothing_is_seen_without_a_sys() {
-    let missing = std::env::temp_dir().join(format!("bilskirnir-sys-{}", uuid::Uuid::new_v4()));
+    let missing = std::env::temp_dir().join(format!("thoric-sys-{}", uuid::Uuid::new_v4()));
     assert_eq!(Seen::read(&missing), None);
     // A host without GPUs is still seen.
     assert_eq!(Sys::new().read(), Seen::default());

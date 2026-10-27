@@ -59,7 +59,7 @@ impl Scope {
             Scope::Power => "power",
         }
     }
-    /// The Bilskirnir MCP tools of the scope, each of which works on one container.
+    /// The Thoric MCP tools of the scope, each of which works on one container.
     pub fn tools(self) -> &'static [&'static str] {
         match self {
             Scope::View => &[
@@ -128,9 +128,9 @@ const ROOT_TOOLS: [&str; 2] = ["exec_container", "open_terminal"];
 /// What a tool of an endpoint calls.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Target {
-    /// A Bilskirnir MCP tool, for the containers listed by their alias. With one grant the tool
+    /// A Thoric MCP tool, for the containers listed by their alias. With one grant the tool
     /// takes no container argument.
-    Bilskirnir {
+    Thoric {
         tool: &'static str,
         containers: Vec<(String, String)>,
     },
@@ -213,7 +213,7 @@ fn exposed(parts: &[&str], hashed: bool) -> String {
     format!("{}_{suffix}", &clean[..clean.len().min(57)])
 }
 
-/// A Bilskirnir tool as an endpoint offers it: bound to its one container, or taking `container`
+/// A Thoric tool as an endpoint offers it: bound to its one container, or taking `container`
 /// among the aliases of those granted it, and never as root.
 pub(crate) fn bound_tool(tool: &Tool, aliases: Option<&[String]>) -> Tool {
     let mut schema = Value::Object((*tool.input_schema).clone());
@@ -258,9 +258,9 @@ fn server_tool(
     exposed.annotations = None;
     exposed.icons = None;
     let mut meta = serde_json::Map::new();
-    meta.insert("bilskirnir/container_id".into(), json!(container_id));
-    meta.insert("bilskirnir/server".into(), json!(server));
-    meta.insert("bilskirnir/tool".into(), json!(tool.name));
+    meta.insert("thoric/container_id".into(), json!(container_id));
+    meta.insert("thoric/server".into(), json!(server));
+    meta.insert("thoric/tool".into(), json!(tool.name));
     exposed.meta = Some(MetaObject(meta));
     exposed
 }
@@ -296,7 +296,7 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
             let aliases: Vec<String> = containers.iter().map(|(alias, _)| alias.clone()).collect();
             entries.push(Entry {
                 tool: bound_tool(&tool, (!single).then_some(aliases.as_slice())),
-                target: Target::Bilskirnir {
+                target: Target::Thoric {
                     tool: name,
                     containers,
                 },

@@ -929,7 +929,7 @@
 				"unshare"
 			],
 			"action": "SCMP_ACT_ALLOW",
-			"comment": "Bilskirnir: let processes create user namespaces, which Chromium and Electron sandboxes need. Everything else is Docker's default profile."
+			"comment": "Thoric: let processes create user namespaces, which Chromium and Electron sandboxes need. Everything else is Docker's default profile."
 		}
 	]
 }

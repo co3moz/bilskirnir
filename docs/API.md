@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md) · [MCP guide](MCP.md)
 
-The dashboard and MCP server share Bilskirnir's backend operations. You can also call the HTTP API directly from a script or another application to manage containers and build your own interface.
+The dashboard and MCP server share Thoric's backend operations. You can also call the HTTP API directly from a script or another application to manage containers and build your own interface.
 
 All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message.
 
@@ -11,14 +11,14 @@ All paths below are relative to your installation, for example `http://localhost
 The HTTP API uses the same administrator session as the dashboard. Sign in and keep the returned cookie:
 
 ```bash
-curl --cookie-jar bilskirnir.cookies \
+curl --cookie-jar thoric.cookies \
   --header 'Content-Type: application/json' \
-  --header 'X-Bilskirnir-Request: 1' \
+  --header 'X-Thoric-Request: 1' \
   --data '{"username":"admin","password":"YOUR_PASSWORD"}' \
   http://localhost:8080/api/login
 ```
 
-Send that cookie with subsequent requests. POST and DELETE requests also need `X-Bilskirnir-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
+Send that cookie with subsequent requests. POST and DELETE requests also need `X-Thoric-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
 
 The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
 
@@ -34,7 +34,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/configuration` | Check a change of the editable settings, or have the WSL package write it to `.env` and recreate the manager; returns a job. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
 | GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
-| POST | `/api/update` | Ask the WSL package to run `bilskirnir update`; returns a job. See [updates](#updates). |
+| POST | `/api/update` | Ask the WSL package to run `thoric update`; returns a job. See [updates](#updates). |
 | POST | `/api/update/check` | Ask GitHub for the newest release now; answers as `GET /api/update` does. See [updates](#updates). |
 | GET | `/api/backup` | Download a [backup](#backup-and-restore) of the whole installation; `images`, `volumes`, `files` and `secrets` choose its optional parts. The transfer is a `backup` job. |
 | POST | `/api/backup/check` | Compare a backup's manifest with this installation: the names a [restore](#backup-and-restore) would take that are in use, and the volumes it would lack. |
@@ -102,7 +102,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET, PUT, DELETE | `/api/images/{id}/icon` | Read, set or remove a saved image's [icon](#image-icons). |
 | GET | `/api/images/{id}/archive` | Download a saved image as a gzip-compressed `docker save` archive; the transfer is recorded as a job. |
 | POST | `/api/images/import` | Stream a `.tar.gz` or `.tar` image archive with optional `size`, `name` and `description`; returns a job. |
-| GET | `/api/volumes` | Docker named volumes that carry the `VOLUME_FILTER` label (by default the ones Bilskirnir created), each as `docker volume ls` describes it plus a boolean `manager` and an `owner`. A route or container setting that names a volume the filter leaves out answers as if it did not exist, except for a volume a container already mounts. `manager: true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. `owner` is set on a volume a [`new_volume` parameter](#composes) created for a container, from its labels: `{"container_id": ..., "parameter": "WORKSPACE", "name": "Unity dev", "deleted": false}`, with `name: null` and `deleted: true` once that container's record is gone. It is `null` on every other volume. |
+| GET | `/api/volumes` | Docker named volumes that carry the `VOLUME_FILTER` label (by default the ones Thoric created), each as `docker volume ls` describes it plus a boolean `manager` and an `owner`. A route or container setting that names a volume the filter leaves out answers as if it did not exist, except for a volume a container already mounts. `manager: true` marks the manager's own volumes, such as its data volume: containers cannot mount them and their files cannot be opened. Without `MANAGER_CONTAINER`, or when it names no manager container, none is marked. `owner` is set on a volume a [`new_volume` parameter](#composes) created for a container, from its labels: `{"container_id": ..., "parameter": "WORKSPACE", "name": "Unity dev", "deleted": false}`, with `name: null` and `deleted: true` once that container's record is gone. It is `null` on every other volume. |
 | POST | `/api/volumes` | Create a named volume using `name`, with the manager's label and the one `VOLUME_FILTER` asks for. |
 | DELETE | `/api/volumes/{name}` | Delete a named volume and its files at once, without a job; returns `{"name": ..., "deleted": true}`. `403` for the manager's own volumes, `404` for a missing one or one `VOLUME_FILTER` leaves out, and `409` while a container record mounts it, through its volume settings or its compose, with that container's name in `error`, or while Docker reports another container using it. Nothing is forced or pruned. |
 | POST | `/api/volumes/{name}/files/list` | List a folder of a volume; see [volume files](#volume-files). |
@@ -144,17 +144,17 @@ The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/cont
 ## Create a container and follow the job
 
 ```bash
-curl --cookie bilskirnir.cookies \
+curl --cookie thoric.cookies \
   --header 'Content-Type: application/json' \
-  --header 'X-Bilskirnir-Request: 1' \
-  --data '{"name":"Agent desktop","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04","gpu":true,"internet":true}' \
+  --header 'X-Thoric-Request: 1' \
+  --data '{"name":"Agent desktop","image":"ghcr.io/co3moz/thoric/ubuntu-xfce:24.04","gpu":true,"internet":true}' \
   http://localhost:8080/api/containers
 ```
 
 The response contains `job_id`. Poll its detail endpoint:
 
 ```bash
-curl --cookie bilskirnir.cookies http://localhost:8080/api/jobs/JOB_ID
+curl --cookie thoric.cookies http://localhost:8080/api/jobs/JOB_ID
 ```
 
 A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `container_id` in `result`. A job that makes a container or an image, `create`, `build`, `snapshot` or `image-import`, carries its `name` from the moment it is queued, so a list can show what is on its way before the record exists; an import sent without a name has none, since its image takes the archive's. Other jobs have no `name`. Read the log for a failed job; after interruption, inspect the resources before retrying.
@@ -200,12 +200,12 @@ Records saved before identities were kept have `null` for all three until a Dock
 
 ## Change settings after creation
 
-`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `hostname`, `mac_address`, `machine_id`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `bilskirnir/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
+`POST .../settings` takes the creation fields to change, except `image`; fields that are left out keep their value. `name`, `internet`, `ports` and a new or changed `cpus` or `memory_mb` apply to the running container. `resolution`, `gpu`, `audio`, `microphone`, `sudo`, `gamepad`, `hostname`, `mac_address`, `machine_id`, `shm_mb`, `mounts` and removing a limit (`null`) cannot be changed on an existing Docker container: the job stops the container, commits its container layer to an image tagged `thoric/container:JOB_ID`, creates a new container from that image with the new settings and starts it again if it was running. Running applications close; files in the container layer are kept, and named volumes are not touched. If the new container cannot start, the previous one is restored. A reset still recreates the container from its original source image, and deleting the container removes the committed image unless a snapshot builds on it.
 
 With `"dry_run": true` the request is validated and answered at once with `live` and `restart`, the changed fields grouped by how they apply, without a job:
 
 ```bash
-curl --cookie bilskirnir.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Bilskirnir-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
+curl --cookie thoric.cookies \n  --header 'Content-Type: application/json' \n  --header 'X-Thoric-Request: 1' \n  --data '{"audio":true,"dry_run":true}' \n  http://localhost:8080/api/containers/CONTAINER_ID/settings
 ```
 
 A feature the installation has switched off cannot be turned on, and an identity field can be changed but not set back to `null`. The job's result repeats the `live` and `restart` lists.
@@ -234,7 +234,7 @@ The default user is UID/GID 1001:1001; root execution must be explicit. Bash run
 
 | Kind | Image |
 | --- | --- |
-| `catalog` | A desktop published with Bilskirnir. It is downloaded the first time a container or a build starts from it. |
+| `catalog` | A desktop published with Thoric. It is downloaded the first time a container or a build starts from it. |
 | `build` | Built from a base image with a script through `/api/images/build`. |
 | `snapshot` | A container's files saved with `.../snapshot`. |
 | `import` | A desktop image already on the Docker host, registered with `POST /api/images`. |
@@ -248,11 +248,11 @@ The catalog images come first. Their `id` is the catalog ID, such as `ubuntu-xfc
 
 | Kind | What goes |
 | --- | --- |
-| `build`, `snapshot`, `archive` | The record, and Docker's image with `docker image rm` of the tag Bilskirnir gave it, or of its `image_id` once that tag is gone. Docker removes only the tag while another tag or another image still holds the image. |
+| `build`, `snapshot`, `archive` | The record, and Docker's image with `docker image rm` of the tag Thoric gave it, or of its `image_id` once that tag is gone. Docker removes only the tag while another tag or another image still holds the image. |
 | `import` | Only the record. The image was on the Docker host before it was registered, so Docker keeps it. |
 | `catalog` | Only the download. The image stays listed with `downloaded: false`, and a container, a build or `.../pull` downloads it again. `404` when it is not downloaded. |
 
-The answer comes at once, without a job: `{"id": ..., "name": ..., "deleted": true, "image_removed": true}`, where `image_removed` tells whether Docker deleted the image itself rather than only its tag. Nothing is forced and nothing is pruned, and a refusal deletes nothing. A container created from the image refuses it with `409` and its name, since a reset, a retry and a settings change that recreates the container need that image again; delete the container first. Another saved image of the same Docker image, such as an archive imported on the host it was exported from, keeps it for the container, so either record can go then. Docker's own refusal, for an image another Docker container still uses or one that a tag Bilskirnir did not give it still names, is `409` with Docker's message. So is a delete while a download, a build or another change of the same image runs. Images built or saved from the deleted one keep working: Docker keeps the layers they share with it.
+The answer comes at once, without a job: `{"id": ..., "name": ..., "deleted": true, "image_removed": true}`, where `image_removed` tells whether Docker deleted the image itself rather than only its tag. Nothing is forced and nothing is pruned, and a refusal deletes nothing. A container created from the image refuses it with `409` and its name, since a reset, a retry and a settings change that recreates the container need that image again; delete the container first. Another saved image of the same Docker image, such as an archive imported on the host it was exported from, keeps it for the container, so either record can go then. Docker's own refusal, for an image another Docker container still uses or one that a tag Thoric did not give it still names, is `409` with Docker's message. So is a delete while a download, a build or another change of the same image runs. Images built or saved from the deleted one keep working: Docker keeps the layers they share with it.
 
 ## Image sizes and layers
 
@@ -274,8 +274,8 @@ Every image Docker has carries three sizes in bytes, all `null` for an image Doc
   "layers_size": 1977327616,
   "own_size": 1067704320,
   "steps": [
-    {"instruction": "LABEL bilskirnir.managed=true", "kind": "config", "size": 0, "created": 1792351597, "layer": false, "from": null, "shared_with": []},
-    {"instruction": "RUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh", "kind": "run", "size": 1067692032, "created": 1792351597, "layer": true, "from": null, "shared_with": []},
+    {"instruction": "LABEL thoric.managed=true", "kind": "config", "size": 0, "created": 1792351597, "layer": false, "from": null, "shared_with": []},
+    {"instruction": "RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh", "kind": "run", "size": 1067692032, "created": 1792351597, "layer": true, "from": null, "shared_with": []},
     {"instruction": "ADD file:7121eb4a5ba3... in /", "kind": "add", "size": 87633920, "created": 1790928654, "layer": true, "from": "ubuntu-xfce", "shared_with": ["ubuntu-xfce", "0d4c2b1a9e8f7d6c5b4a3f2e1d0c9b8a"]}
   ]
 }
@@ -298,7 +298,7 @@ The dashboard's **Templates** page lists ready-made images. It reads the list in
 ```json
 {
   "name": "Visual Studio Code + Node.js",
-  "base_image": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+  "base_image": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
   "internet": true,
   "parts": [
     {"id": "vscode", "name": "Visual Studio Code", "script": "#!/usr/bin/env bash\n..."},
@@ -378,7 +378,7 @@ A text parameter's `pattern` is a regular expression that a value must match as 
 
 A volume parameter keeps data that every container of an image needs in the same place, such as Unity installs, out of the image and the container. Its value is the name of an existing named volume (`GET /api/volumes`, one not marked `manager`), or empty or `"-"` for none, and `required` means a volume must be chosen. The volume is mounted at the parameter's `path`, an absolute, normalized folder that the compose fixes and that follows the same rules as a [volume setting](#create-a-container-and-follow-the-job): not `/`, `/opt`, `/var` or `/home` themselves, and nothing under the system folders or the paths the manager mounts itself, such as `/tmp`, `/run`, `/dev` and `/usr`. Two volume parameters cannot share a path, and no other parameter can be named like a volume parameter's second variable. The script receives the path in the parameter's variable and the volume's name, or an empty string, in the same name with `_VOLUME` appended: `UNITY_HOME=/opt/unity` and `UNITY_HOME_VOLUME=unity-installs`. Without a volume the folder stays inside the container, in its files and its snapshots. Either way, before the script runs, a missing folder is created and an empty one owned by root is given to the desktop user, as Docker leaves a new volume's mount point to root; a folder that already holds files keeps its owner. Docker creates the missing folders above a volume's path owned by root. In the desktop's home, those of every volume the container mounts go to the desktop user before the container starts, so a volume under `~/.config` leaves the desktop session a configuration folder it can write. Elsewhere, those inside a folder of the desktop user go to it before the script runs, while they hold nothing else.
 
-A volume parameter with `"new_volume": true` gives each container a volume of its own instead, such as a workspace that no other container shares. A container whose request leaves the value empty, or out, gets the volume `bilskirnir-CONTAINER_ID-NAME`, the parameter's name in lowercase with dashes for underscores, such as `bilskirnir-0f1e...e1f0-workspace`, or `bilskirnir-CONTAINER_ID-STEP-NAME` for a step of [several](#steps), whose step id and parameter name take at most 83 characters together; a request that names a volume still uses that one, and one that gives `"-"` gets none, which the container keeps as an empty value, as the dashboard's **No volume** does. `required` then refuses only `"-"`, and the parameter cannot have a `default`, since an empty value is what asks for the new volume. The creation job creates the volume, so a request that is refused or a form that is cancelled leaves nothing behind, with the labels `bilskirnir.managed=true`, `bilskirnir.environment=CONTAINER_ID` and `bilskirnir.parameter=NAME`. A volume of that name that does not carry the container's labels stops the job. The value, the script's `NAME_VOLUME` and the container's `setup.mounts` name the volume like a chosen one, and a reset, a retry and a settings change mount it again. A container created from a snapshot gets a new volume of its own, not its source container's. The volume outlives its container unless the container is deleted with `delete_volumes=true`, and `GET /api/volumes` names its owner.
+A volume parameter with `"new_volume": true` gives each container a volume of its own instead, such as a workspace that no other container shares. A container whose request leaves the value empty, or out, gets the volume `thoric-CONTAINER_ID-NAME`, the parameter's name in lowercase with dashes for underscores, such as `thoric-0f1e...e1f0-workspace`, or `thoric-CONTAINER_ID-STEP-NAME` for a step of [several](#steps), whose step id and parameter name take at most 83 characters together; a request that names a volume still uses that one, and one that gives `"-"` gets none, which the container keeps as an empty value, as the dashboard's **No volume** does. `required` then refuses only `"-"`, and the parameter cannot have a `default`, since an empty value is what asks for the new volume. The creation job creates the volume, so a request that is refused or a form that is cancelled leaves nothing behind, with the labels `thoric.managed=true`, `thoric.environment=CONTAINER_ID` and `thoric.parameter=NAME`. A volume of that name that does not carry the container's labels stops the job. The value, the script's `NAME_VOLUME` and the container's `setup.mounts` name the volume like a chosen one, and a reset, a retry and a settings change mount it again. A container created from a snapshot gets a new volume of its own, not its source container's. The volume outlives its container unless the container is deleted with `delete_volumes=true`, and `GET /api/volumes` names its owner.
 
 A folder parameter names a folder of the desktop the script works in, such as the project an editor opens. Its value is an absolute, normalized path outside the system folders, by the rules of a volume parameter's `path` except that it may hold a comma: `/home/desktop/UnityProjects/MyGame` or `/srv/projects`, not `/tmp/build`. The manager neither creates the folder nor changes its owner; the script does what it needs. Uploads may go into it and into a volume parameter's `path`, with or without a volume, and the dashboard's upload dialog offers both by their labels, as [files](#files) describes.
 
@@ -415,15 +415,15 @@ Writes are atomic, create missing parent directories and use mode 0600. Existing
 The same route downloads a folder: its path answers with a gzip-compressed tar named after the folder, such as `project.tar.gz`, that holds the folder under its own name. tar runs in the desktop as the desktop user while the archive streams, so its size is not known up front and `UPLOAD_MAX_MB` does not apply. No symlink on the path is followed, and symlinks inside the folder are archived as links. The transfer is a `folder-download` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent; it shares the two archive transfer slots with image and volume archives. A file the desktop user may not read fails the download instead of leaving the archive incomplete, and a file that changes while it is read is archived as it was read and noted in the job log. `/` itself is refused; download the folders in it.
 
 ```bash
-curl --cookie bilskirnir.cookies --remote-header-name --remote-name \
+curl --cookie thoric.cookies --remote-header-name --remote-name \
   'http://localhost:8080/api/containers/CONTAINER_ID/files/download?path=/home/desktop/project'
 ```
 
 For larger uploads, POST the raw file body with `Content-Type: application/octet-stream` to `/api/containers/{id}/files`. Supply `destination`, `name`, `size` and optional `replace` as query parameters:
 
 ```bash
-curl --cookie bilskirnir.cookies \
-  --header 'X-Bilskirnir-Request: 1' \
+curl --cookie thoric.cookies \
+  --header 'X-Thoric-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --data-binary @notes.txt \
   'http://localhost:8080/api/containers/CONTAINER_ID/files?destination=/home/desktop/Downloads&name=notes.txt&size=FILE_SIZE_IN_BYTES'
@@ -448,7 +448,7 @@ A folder of a volume downloads as a `.tar.gz` like a container's. Its path is ch
 `GET /api/volumes/{name}/archive` streams a volume's files as an ordinary gzip-compressed tar, so other tools read it too. A helper container reads the volume as root on a read-only mount, with only the capability to read every file, so files the desktop user may not read are included; numeric owners and permissions are recorded. The transfer is a `volume-export` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent. A file that changes while it is read is archived as it was read and noted in the job log.
 
 ```bash
-curl --cookie bilskirnir.cookies --output unity-projects.tar.gz \
+curl --cookie thoric.cookies --output unity-projects.tar.gz \
   http://localhost:8080/api/volumes/unity-projects/archive
 ```
 
@@ -459,8 +459,8 @@ A volume's file routes run their helper under the volume's lock from the check t
 `size`, the archive's exact length in bytes, is optional. With it, a body of any other length fails the import, and a size above the limit is refused at once with 413. Without it, an archive can stream in as it is made, with no temporary file on the sending side:
 
 ```bash
-tar -c -C project . | curl --cookie bilskirnir.cookies \
-  --header 'X-Bilskirnir-Request: 1' \
+tar -c -C project . | curl --cookie thoric.cookies \
+  --header 'X-Thoric-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file - \
   'http://localhost:8080/api/volumes/import?name=NEW_VOLUME'
@@ -471,8 +471,8 @@ curl sends such a body in chunks. Its bytes are counted as they arrive, and the 
 `POST /api/volumes/{name}/extract?path=/FOLDER` unpacks a `.tar.gz` or `.tar` into a new folder of a volume that exists, such as one a running container mounts. The body, `size` and limits are those of an import:
 
 ```bash
-tar -c -C project . | curl --cookie bilskirnir.cookies \
-  --header 'X-Bilskirnir-Request: 1' \
+tar -c -C project . | curl --cookie thoric.cookies \
+  --header 'X-Thoric-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file - \
   'http://localhost:8080/api/volumes/unity-projects/extract?path=/worktree-42'
@@ -486,10 +486,10 @@ A copy is a full copy, not copy-on-write: disk use grows by the volume's size, a
 
 ## Image archives
 
-`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `bilskirnir.json`, holds the record's name, description, kind, desktop information, icon and template, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
+`GET /api/images/{id}/archive` streams a saved image, where `id` is the record's `id` from `GET /api/images`. The download is a gzip-compressed `docker save` archive of the image ID, so it names no image. Its first entry, `thoric.json`, holds the record's name, description, kind, desktop information, icon and template, and a script build's configuration, so `/api/images/{id}/config` works for the imported record too. Docker's own `docker load` reads the archive too and reports the loaded image ID.
 
 ```bash
-curl --cookie bilskirnir.cookies --output unity.tar.gz \
+curl --cookie thoric.cookies --output unity.tar.gz \
   http://localhost:8080/api/images/IMAGE_RECORD_ID/archive
 ```
 
@@ -498,8 +498,8 @@ An archive holds every layer, the base desktop included, and its size is not kno
 `POST /api/images/import` takes the archive as an `application/octet-stream` body: an exported `.tar.gz` or a plain `docker save` `.tar`. Supply its exact `size` when it is known, and optionally `name` and `description`, as query parameters; the name and description default to the values stored in the archive. `--upload-file` streams the file instead of reading it into memory:
 
 ```bash
-curl --cookie bilskirnir.cookies \
-  --header 'X-Bilskirnir-Request: 1' \
+curl --cookie thoric.cookies \
+  --header 'X-Thoric-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
   --request POST --upload-file unity.tar.gz \
   'http://localhost:8080/api/images/import?size=FILE_SIZE_IN_BYTES&name=Unity%20workspace'
@@ -508,10 +508,10 @@ curl --cookie bilskirnir.cookies \
 The archive streams into `docker load` as it arrives. On the way, the manager removes every tag and image name the archive carries, so an import cannot replace a catalog image or any other existing tag. Docker can register the image only after the archive has passed these checks:
 
 - It holds exactly one image, with its `manifest.json` and configuration.
-- The image has the `bilskirnir.desktop=true` label.
+- The image has the `thoric.desktop=true` label.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
-The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `bilskirnir/imported:<id>`.
+The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `thoric/imported:<id>`.
 
 ## Backup and restore
 
@@ -527,17 +527,17 @@ Query parameters of `true` or `false`, all `false` by default, add the optional 
 | --- | --- |
 | `images` | The saved images, as their records with names, descriptions, icons, composes and build configurations, and each image Docker still has as a `docker save` of its ID with every layer. Catalog images stay out: the installation the backup returns to downloads them when it needs them. Without `images` the saved images stay out altogether. |
 | `files` | Each container's files: a commit of its container layer made for the backup, saved the same way and removed afterwards, or the commit a settings change left a container whose Docker container is missing. Docker pauses a running desktop while it commits. Named volumes, `/tmp` and `/run` are not part of it. |
-| `volumes` | The named volumes the containers mount, also one `VOLUME_FILTER` leaves out, and those Bilskirnir created that the volume list shows, read as a [volume export](#volume-archives) reads them. The manager's own volumes never are. |
+| `volumes` | The named volumes the containers mount, also one `VOLUME_FILTER` leaves out, and those Thoric created that the volume list shows, read as a [volume export](#volume-archives) reads them. The manager's own volumes never are. |
 | `secrets` | The values of the composes' secret parameters. Without it they are left out, and the manifest names the containers whose values were. |
 
 Jobs, the applications, terminals and recordings of running desktops, the tool lists of [desktop MCP servers](#desktop-mcp-servers-and-endpoints), which the manager reads again once a desktop runs, and any record kind added later stay out. So do the installation's settings, which live in `.env` outside the manager; [the installation guide](INSTALLATION.md#move-to-another-computer) says how they move.
 
 ```bash
-curl --cookie bilskirnir.cookies --remote-name --remote-header-name \
+curl --cookie thoric.cookies --remote-name --remote-header-name \
   'http://localhost:8080/api/backup?images=true&volumes=true&files=true'
 ```
 
-The backup is an ordinary tar inside gzip. Its first entry, `bilskirnir-backup.json`, is the manifest: `kind` (`bilskirnir-backup`), `format`, the `version` that wrote it, `created_at`, the `included` parts, the `containers`, `images`, `volumes` and `endpoints` by name, and the `parts` in order. It holds no secret value. `records.json` follows with the records. Each part is then a `docker save` stream or a volume's plain tar in entries `parts/NNNN/NNNNNNNN` of at most 4 MiB, closed by `parts/NNNN/end` with the part's `bytes` and its BLAKE2s-256 digest `blake2s`; `bilskirnir-backup-end.json` comes last. Joined in order, a part's entries are the stream as Docker or tar wrote it, so `cat parts/0001/0* | docker load` loads an image without Bilskirnir. tar needs an entry's size before its data, and Docker and tar tell a stream's length only when it ends, so the manager holds one entry in memory at a time and writes nothing to its disk; the browser's file is the only copy. An image and a container's files are each saved whole, so the desktop layers they share are in the backup once for each of them.
+The backup is an ordinary tar inside gzip. Its first entry, `thoric-backup.json`, is the manifest: `kind` (`thoric-backup`), `format`, the `version` that wrote it, `created_at`, the `included` parts, the `containers`, `images`, `volumes` and `endpoints` by name, and the `parts` in order. It holds no secret value. `records.json` follows with the records. Each part is then a `docker save` stream or a volume's plain tar in entries `parts/NNNN/NNNNNNNN` of at most 4 MiB, closed by `parts/NNNN/end` with the part's `bytes` and its BLAKE2s-256 digest `blake2s`; `thoric-backup-end.json` comes last. Joined in order, a part's entries are the stream as Docker or tar wrote it, so `cat parts/0001/0* | docker load` loads an image without Thoric. tar needs an entry's size before its data, and Docker and tar tell a stream's length only when it ends, so the manager holds one entry in memory at a time and writes nothing to its disk; the browser's file is the only copy. An image and a container's files are each saved whole, so the desktop layers they share are in the backup once for each of them.
 
 The transfer is a `backup` job, named in the `X-Job-Id` response header, whose `progress` counts the bytes sent and whose stages are `plan`, which reads the installation, then `images`, `files` and `volumes`, each skipped when the backup has no such part. If Docker or tar fails partway, the download ends with an error instead of a short file. One backup or restore runs at a time, another answers 409, and each takes one of the two archive transfer slots (429 while both are in use).
 
@@ -546,17 +546,17 @@ The transfer is a `backup` job, named in the `X-Job-Id` response header, whose `
 `POST /api/backup/restore` takes the backup as an `application/octet-stream` body, with its exact `size` when it is known, as an [image import](#image-archives) does:
 
 ```bash
-curl --cookie bilskirnir.cookies \
-  --header 'X-Bilskirnir-Request: 1' \
+curl --cookie thoric.cookies \
+  --header 'X-Thoric-Request: 1' \
   --header 'Content-Type: application/octet-stream' \
-  --request POST --upload-file bilskirnir-backup-20261022-134506.tar.gz \
+  --request POST --upload-file thoric-backup-20261022-134506.tar.gz \
   'http://localhost:8080/api/backup/restore?size=FILE_SIZE_IN_BYTES'
 ```
 
 A restore needs `MANAGER_CONTAINER` and reads the upload as it arrives, at most `IMAGE_ARCHIVE_MAX_MB` after decompression, in a `restore` job:
 
 - `verify` reads the manifest and the records and holds them to the rules of the routes that create the same things. A restore adds to an installation and never replaces anything in it: a backup that would take a name in use is refused with 409 and the conflicts named, before anything is created. Delete or rename those first, or restore into a new installation.
-- `images` and `files` load each image through the checks an [image import](#image-archives) applies, so no name the stream carries is applied, and tag it with Bilskirnir's own name after its record: `bilskirnir/custom:<id>` for a script build, `bilskirnir/snapshot:<id>` for a snapshot, `bilskirnir/imported:<id>` for the others, whose kind becomes `archive` since this installation's copy is the restore's own. A container's files get `bilskirnir/container:restored-<id>`. Docker gives a loaded image the ID its own image store computes, and every record that names an image ID is moved to it.
+- `images` and `files` load each image through the checks an [image import](#image-archives) applies, so no name the stream carries is applied, and tag it with Thoric's own name after its record: `thoric/custom:<id>` for a script build, `thoric/snapshot:<id>` for a snapshot, `thoric/imported:<id>` for the others, whose kind becomes `archive` since this installation's copy is the restore's own. A container's files get `thoric/container:restored-<id>`. Docker gives a loaded image the ID its own image store computes, and every record that names an image ID is moved to it.
 - `volumes` creates each volume anew, with the owner labels of one a `new_volume` parameter made, and unpacks it as the desktop user, keeping the modes it was saved with. The name must not exist.
 - `records` saves every record at once, once the whole backup has arrived and each part's length and digest matched. The response to the upload comes here: `{"job_id": ...}`.
 - `containers` creates each container whose files came along from them, with its networks, its hostname, its MAC address and its machine ID, and leaves it stopped. A container without its files is saved with an error that says so: a retry (`POST /api/containers/{id}/retry`, **Retry setup** in the dashboard) creates it from its image and runs its compose setup again. One that mounts a volume this installation lacks waits the same way until the volume is here and it is retried.
@@ -577,11 +577,11 @@ The request runs the route the link stands for, with that route's limits, locks,
 curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
 ```
 
-The token replaces the cookie and the `X-Bilskirnir-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing. A link that is used is recorded in the [agent activity](#agent-activity) log under the caller whose `create_transfer` issued it.
+The token replaces the cookie and the `X-Thoric-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing. A link that is used is recorded in the [agent activity](#agent-activity) log under the caller whose `create_transfer` issued it.
 
 ## Desktop MCP servers and endpoints
 
-A desktop declares MCP servers in `/etc/bilskirnir/mcp.d/NAME.json`, which an image build writes, and in `~/.config/bilskirnir/mcp/NAME.json`, which the desktop user writes; [the MCP guide](MCP.md#mcp-servers-inside-a-desktop) describes the files and how the manager runs them. A server as the routes list it:
+A desktop declares MCP servers in `/etc/thoric/mcp.d/NAME.json`, which an image build writes, and in `~/.config/thoric/mcp/NAME.json`, which the desktop user writes; [the MCP guide](MCP.md#mcp-servers-inside-a-desktop) describes the files and how the manager runs them. A server as the routes list it:
 
 ```json
 {"container_id": "...", "container_name": "Chrome dev", "name": "chrome", "source": "image",
@@ -658,7 +658,7 @@ A value no call could have, such as `kind=delete`, answers 400. A call is listed
 | `endpoint` | The endpoint's name, `null` for `/mcp`. |
 | `credential` | `endpoint_token`, `mcp_token`, `none` with `MCP_AUTH_MODE=none`, `inspector` for the dashboard's [MCP inspector](#the-mcp-inspector), or `link` for a transfer link, which names the caller whose tool call issued it. |
 | `client` | The name and version the MCP client gives itself: a session's client, or any request of the `2026-07-28` revision. `null` for a client of an older revision on `/mcp`, which keeps no session. |
-| `source`, `tool`, `server` | `tool` for a Bilskirnir tool; `server` for a desktop server's tool, with `tool` its own name and `server` the server's; `transfer` for a link, with `tool` its operation. |
+| `source`, `tool`, `server` | `tool` for a Thoric tool; `server` for a desktop server's tool, with `tool` its own name and `server` the server's; `transfer` for a link, with `tool` its operation. |
 | `container_id`, `container_name` | The container the call worked on, with its name when the call began. |
 | `kind` | `read`, `change` or `destructive`, from the tool's annotations. |
 | `arguments` | The arguments as [masked](MCP.md#agent-activity): a value kept only by its size is `{"$masked": "string", "length": 12}`, `{"$masked": "array", "items": 2}`, `{"$masked": "object", "keys": 3}`, `{"$masked": "number"}` or `{"$masked": "boolean"}`; a text cut short is `{"$truncated": "the start", "length": 9000}`; `"$more"` counts the arguments past the first 64. |
@@ -680,7 +680,7 @@ The service receives the method, `{path}` with the query, the body and the other
 Whatever a desktop serves would appear on the dashboard's address, and a desktop browses sites nobody vouches for, so the route keeps the dashboard's session away from it:
 
 - It takes the MCP bearer token, as `/mcp` does, and never the session cookie, so a browser does not open it signed in. With MCP disabled it answers 404; with `MCP_AUTH_MODE=none` it needs no token, like `/mcp`. A request with an `Origin` header must come from the manager's own address.
-- The `Authorization` header, the `bilskirnir_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
+- The `Authorization` header, the `thoric_session` cookie, `Origin` and the connection's own headers are removed before the request is forwarded, so the desktop sees no credential of the manager. Other cookies pass. A service that requires its own `Authorization` header cannot be reached this way.
 - Every response carries `Content-Security-Policy: sandbox` beside the dashboard's own policy, and `X-Content-Type-Options: nosniff`. A browser that renders one, as it could with `MCP_AUTH_MODE=none`, runs no script in it and treats it as an origin of its own. `Set-Cookie` and `Clear-Site-Data` from the service are dropped, and a redirect to a path of the service stays under the proxy's prefix.
 
 ## Screenshots
@@ -738,7 +738,7 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 `POST .../reset` recreates the container from its saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the container ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
 
-`POST .../recordings` with `{"fps":2,"max_seconds":60,"max_width":960,"region":"0,0,1280,720","name":"level 1"}` starts capturing JPEG frames into `/tmp/bilskirnir-recordings/{recording_id}` inside the desktop and returns `recording_id`. Recording stops at `max_seconds`, after 3000 frames or 256 MiB, or on `POST .../recordings/{recording_id}/stop`, which returns `frames`, `bytes`, `started_at`, `ended_at` and `reason`. Frames are named `frame-00000-<unix ms>.jpg` and can be read with the file routes; stopping also writes `recording.avi`, an MJPEG video playable with VLC, mpv or ffmpeg, whose details are returned under `video`. `POST .../artifacts` with `{"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":[...],"application_ids":[...],"replace":false}` writes an archive containing `recordings/<id>/` frames, `applications/<id>/` logs and a `manifest.json`; the destination follows the upload rules and existing archives return 409 unless `replace` is set. Recording files live in tmpfs and disappear when the desktop restarts.
+`POST .../recordings` with `{"fps":2,"max_seconds":60,"max_width":960,"region":"0,0,1280,720","name":"level 1"}` starts capturing JPEG frames into `/tmp/thoric-recordings/{recording_id}` inside the desktop and returns `recording_id`. Recording stops at `max_seconds`, after 3000 frames or 256 MiB, or on `POST .../recordings/{recording_id}/stop`, which returns `frames`, `bytes`, `started_at`, `ended_at` and `reason`. Frames are named `frame-00000-<unix ms>.jpg` and can be read with the file routes; stopping also writes `recording.avi`, an MJPEG video playable with VLC, mpv or ffmpeg, whose details are returned under `video`. `POST .../artifacts` with `{"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":[...],"application_ids":[...],"replace":false}` writes an archive containing `recordings/<id>/` frames, `applications/<id>/` logs and a `manifest.json`; the destination follows the upload rules and existing archives return 409 unless `replace` is set. Recording files live in tmpfs and disappear when the desktop restarts.
 
 ## Audio, terminals, accessibility and gamepad
 
@@ -782,7 +782,7 @@ Each sample has `t`, the Unix time in milliseconds when it was stored, and:
 `GET /api/events` tells a signed-in client what happens as it happens, so it does not have to poll for it. It is a [server-sent event](https://html.spec.whatwg.org/multipage/server-sent-events.html) stream that a browser reads with `EventSource`, which sends the session cookie, and that curl follows with `--no-buffer`:
 
 ```bash
-curl --no-buffer --cookie bilskirnir.cookies http://localhost:8080/api/events
+curl --no-buffer --cookie thoric.cookies http://localhost:8080/api/events
 ```
 
 Every event is unnamed, and its data is one JSON object whose `type` says what it is:
@@ -828,13 +828,13 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 - `installable`: whether this installation runs the update itself, which only the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) does.
 - `job_id`: the running update job, or `null`.
 
-`POST /api/update` starts that update and returns a job. It answers 409 while the lookup is turned off, on an installation other than the WSL package, without a newer release and while any job runs, since every job ends with the manager. The manager leaves a request in the folder the package mounts at `/update`, and the distribution runs `bilskirnir update` as root, which moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the newest release and recreates the manager. The job's log is that command's output. The new manager finds the job still running and follows it to its end; sessions end with the old manager, so sign in again.
+`POST /api/update` starts that update and returns a job. It answers 409 while the lookup is turned off, on an installation other than the WSL package, without a newer release and while any job runs, since every job ends with the manager. The manager leaves a request in the folder the package mounts at `/update`, and the distribution runs `thoric update` as root, which moves `MANAGER_IMAGE` in `/opt/thoric/.env` to the newest release and recreates the manager. The job's log is that command's output. The new manager finds the job still running and follows it to its end; sessions end with the old manager, so sign in again.
 
 ## Configuration
 
-`GET /api/configuration` returns `{"variables": [...], "editable": ..., "job_id": ...}`. `variables` are the settings of `.env.example` that Compose passes to the manager, in the order the dashboard's **Management** page lists them. Each has the `name` it has in `.env` and the `value` the manager runs with, read once when it started: a string, a number for the limits in MiB, a boolean for the switches or `null` for a name left unset. A value is what the manager made of its environment rather than the text it was given, so an empty `TEMPLATES_URL` reads as the wiki's list and `none` as `"none"`. `ALLOWED_HOSTS` is the list `.env` gives, and `DESKTOP_HOST`, which the manager answers too, comes on its own. `ADMIN_PASSWORD` and `MCP_TOKEN` come as `{"name": ..., "secret": true, "set": ...}`, without a value: neither ever leaves the manager. Every other setting says whether the Management page may change it, `"editable"`, and an editable one also has its `text`, the value as its environment gave it, empty when it gave none. `editable` at the top says whether this installation takes changes from the dashboard: only the WSL package does, once its `bilskirnir-settings.path` unit watches the folder it mounts at `/update`. `job_id` is a change that is running.
+`GET /api/configuration` returns `{"variables": [...], "editable": ..., "job_id": ...}`. `variables` are the settings of `.env.example` that Compose passes to the manager, in the order the dashboard's **Management** page lists them. Each has the `name` it has in `.env` and the `value` the manager runs with, read once when it started: a string, a number for the limits in MiB, a boolean for the switches or `null` for a name left unset. A value is what the manager made of its environment rather than the text it was given, so an empty `TEMPLATES_URL` reads as the wiki's list and `none` as `"none"`. `ALLOWED_HOSTS` is the list `.env` gives, and `DESKTOP_HOST`, which the manager answers too, comes on its own. `ADMIN_PASSWORD` and `MCP_TOKEN` come as `{"name": ..., "secret": true, "set": ...}`, without a value: neither ever leaves the manager. Every other setting says whether the Management page may change it, `"editable"`, and an editable one also has its `text`, the value as its environment gave it, empty when it gave none. `editable` at the top says whether this installation takes changes from the dashboard: only the WSL package does, once its `thoric-settings.path` unit watches the folder it mounts at `/update`. `job_id` is a change that is running.
 
-`POST /api/configuration` changes settings, with `{"changes": {"NAME": "text", ...}}`, the text each setting gets in `.env`. The editable ones are `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, `INTERNET_ENABLED`, `SUDO_ENABLED`, `GAMEPAD_ENABLED`, `GPU_DEFAULT`, `INTERNET_DEFAULT`, `SUDO_DEFAULT`, `AUDIO_DEFAULT`, `MICROPHONE_DEFAULT`, `GAMEPAD_DEFAULT`, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`; sign-in, the root MCP and its token, `MANAGER_CONTAINER` and what only Compose reads change in `.env` alone. A text must be one line of at most 2048 printable ASCII characters, without quotes, `$`, `#`, backslashes, backquotes or spaces at either end, which `.env` would read otherwise, and the manager reads each change with the code it starts with, alone and together, so a value it would refuse when it starts again is refused before anything restarts. With `"dry_run": true` nothing changes and the answer is `{"errors": {"NAME": "..."}, "error": ..., "running_jobs": n}`: what is wrong with each setting, what is wrong with them only together, and how many jobs a restart would interrupt. Otherwise a change answers 400 with the problems, 400 when every value is the one the manager has, and 409 on an installation other than the WSL package, while an update or another change runs, and while other jobs run unless `"interrupt_jobs": true`, since they end with the manager. It returns a job of kind `settings`: the manager leaves the change in the folder, and the distribution runs `bilskirnir apply-settings` as root, which accepts only these settings, checks each value again, rewrites only their lines of `/opt/bilskirnir/.env`, keeps the previous file as `.env.previous` and recreates the manager. When the new manager does not answer within 90 seconds, it puts the previous file back and recreates the manager again, and the job fails. The job's log is that command's output, and the next manager follows the job to its end; sessions end with the old manager, so sign in again.
+`POST /api/configuration` changes settings, with `{"changes": {"NAME": "text", ...}}`, the text each setting gets in `.env`. The editable ones are `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, `INTERNET_ENABLED`, `SUDO_ENABLED`, `GAMEPAD_ENABLED`, `GPU_DEFAULT`, `INTERNET_DEFAULT`, `SUDO_DEFAULT`, `AUDIO_DEFAULT`, `MICROPHONE_DEFAULT`, `GAMEPAD_DEFAULT`, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`; sign-in, the root MCP and its token, `MANAGER_CONTAINER` and what only Compose reads change in `.env` alone. A text must be one line of at most 2048 printable ASCII characters, without quotes, `$`, `#`, backslashes, backquotes or spaces at either end, which `.env` would read otherwise, and the manager reads each change with the code it starts with, alone and together, so a value it would refuse when it starts again is refused before anything restarts. With `"dry_run": true` nothing changes and the answer is `{"errors": {"NAME": "..."}, "error": ..., "running_jobs": n}`: what is wrong with each setting, what is wrong with them only together, and how many jobs a restart would interrupt. Otherwise a change answers 400 with the problems, 400 when every value is the one the manager has, and 409 on an installation other than the WSL package, while an update or another change runs, and while other jobs run unless `"interrupt_jobs": true`, since they end with the manager. It returns a job of kind `settings`: the manager leaves the change in the folder, and the distribution runs `thoric apply-settings` as root, which accepts only these settings, checks each value again, rewrites only their lines of `/opt/thoric/.env`, keeps the previous file as `.env.previous` and recreates the manager. When the new manager does not answer within 90 seconds, it puts the previous file back and recreates the manager again, and the job fails. The job's log is that command's output, and the next manager follows the job to its end; sessions end with the old manager, so sign in again.
 
 ## Dependencies
 

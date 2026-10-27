@@ -173,7 +173,7 @@ impl Kind {
     }
 }
 
-/// What a call reached: a Bilskirnir tool, a desktop server's tool or a transfer link's operation.
+/// What a call reached: a Thoric tool, a desktop server's tool or a transfer link's operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Source {
     Tool,
@@ -219,7 +219,7 @@ pub(crate) struct Entry {
     pub credential: String,
     pub client: Option<String>,
     pub source: String,
-    /// A Bilskirnir tool, a desktop server's tool by its own name, or a transfer's operation.
+    /// A Thoric tool, a desktop server's tool by its own name, or a transfer's operation.
     pub tool: String,
     pub server: Option<String>,
     pub container_id: Option<String>,
@@ -266,7 +266,7 @@ pub(crate) struct Call {
 }
 
 impl Call {
-    /// A tool call as it arrives. Until a handler says more, it is a Bilskirnir tool classified by
+    /// A tool call as it arrives. Until a handler says more, it is a Thoric tool classified by
     /// the annotations `/mcp` gives it, on `/mcp` on the container its `container_id` names. An
     /// endpoint binds its containers itself, so what its caller names is not taken for one.
     pub(crate) fn start(app: &App, caller: Caller, request: &CallToolRequestParams) -> Self {
@@ -473,7 +473,7 @@ impl Call {
     }
 }
 
-/// The text of a tool's error result, which Bilskirnir's tools put in their first text block.
+/// The text of a tool's error result, which Thoric's tools put in their first text block.
 fn error_text(result: &CallToolResult) -> String {
     result
         .content
@@ -482,7 +482,7 @@ fn error_text(result: &CallToolResult) -> String {
         .unwrap_or_else(|| "The tool reported an error".into())
 }
 
-/// The job a tool's result names, as Bilskirnir's tools that start one do.
+/// The job a tool's result names, as Thoric's tools that start one do.
 fn job_of(result: &CallToolResult) -> Option<String> {
     result
         .structured_content

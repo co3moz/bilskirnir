@@ -82,7 +82,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout), (0, b"after-cat\n"))
 
     def test_the_script_file_is_gone_before_it_runs(self):
-        result = run('ls "${TMPDIR:-/tmp}" | grep -c bilskirnir-setup || true\n')
+        result = run('ls "${TMPDIR:-/tmp}" | grep -c thoric-setup || true\n')
         self.assertEqual(result.stdout.strip(), b"0")
 
     def test_a_script_past_its_time_limit_is_stopped_with_its_children(self):

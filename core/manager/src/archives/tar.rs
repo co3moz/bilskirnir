@@ -2,7 +2,7 @@
 //!
 //! The archive streams through block by block. Layer and configuration blobs pass unchanged;
 //! `manifest.json` and `index.json` are rebuilt without the fields that name images, the legacy
-//! `repositories` file is dropped and Bilskirnir's own `bilskirnir.json` is taken out. The two
+//! `repositories` file is dropped and Thoric's own `thoric.json` is taken out. The two
 //! rebuilt files are held back until the whole archive has been read and checked, and go out with
 //! the closing blocks, so a stream that stops early or fails a check never gives Docker an image
 //! it could register.
@@ -15,8 +15,8 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 
 pub(crate) const BLOCK: usize = 512;
-/// Bilskirnir's description of an exported image, the first entry of its archives.
-pub(crate) const METADATA: &str = "bilskirnir.json";
+/// Thoric's description of an exported image, the first entry of its archives.
+pub(crate) const METADATA: &str = "thoric.json";
 /// The files that tell Docker what an archive holds. A save never nests them in a directory.
 const SPECIAL: [&str; 5] = [
     "manifest.json",
@@ -39,7 +39,7 @@ const CONFIGS_TOTAL: usize = 32 << 20;
 
 /// What the archive described about itself, once it has been read to its end.
 pub(crate) struct Contents {
-    /// The raw `bilskirnir.json`, when the archive has one.
+    /// The raw `thoric.json`, when the archive has one.
     pub metadata: Option<Vec<u8>>,
 }
 
@@ -716,8 +716,8 @@ fn rebuild_index(data: &[u8]) -> Result<Vec<u8>> {
 fn check_desktop(config: &[u8]) -> Result<()> {
     let config: Value = serde_json::from_slice(config)
         .context("The archive's image configuration is not valid JSON")?;
-    if config["config"]["Labels"]["bilskirnir.desktop"] != "true" {
-        bail!("The archive does not contain a Bilskirnir desktop image");
+    if config["config"]["Labels"]["thoric.desktop"] != "true" {
+        bail!("The archive does not contain a Thoric desktop image");
     }
     Ok(())
 }

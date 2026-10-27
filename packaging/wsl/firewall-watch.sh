@@ -8,7 +8,7 @@
 # still has its rule in DOCKER-FORWARD and restarts Docker when one is missing twice in a row;
 # live-restore keeps the containers running across that restart.
 #
-# Usage: firewall-watch.sh          watch and repair (the bilskirnir-firewall service)
+# Usage: firewall-watch.sh          watch and repair (the thoric-firewall service)
 #        firewall-watch.sh --check  print the bridge networks without rules; exit 1 if there are any
 set -uo pipefail
 INTERVAL=10

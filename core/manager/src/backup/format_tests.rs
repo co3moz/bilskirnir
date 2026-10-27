@@ -55,7 +55,7 @@ fn noise(length: usize) -> Vec<u8> {
 #[test]
 fn what_the_writer_writes_the_reader_reads_back_in_any_steps() {
     let entries = vec![
-        (MANIFEST, br#"{"kind":"bilskirnir-backup"}"#.to_vec()),
+        (MANIFEST, br#"{"kind":"thoric-backup"}"#.to_vec()),
         (RECORDS, Vec::new()),
         ("parts/0000/00000000", noise(CHUNK)),
         ("parts/0000/00000001", noise(1000)),
@@ -102,7 +102,7 @@ fn a_backup_cut_short_is_refused() {
 
 #[test]
 fn only_plain_files_with_short_names_are_read() {
-    let mut link = entry("bilskirnir-backup.json", b"", 0);
+    let mut link = entry("thoric-backup.json", b"", 0);
     link[156] = b'2';
     let mut damaged = entry(MANIFEST, b"{}", 0);
     damaged[0] = b'X';
@@ -125,10 +125,7 @@ fn only_plain_files_with_short_names_are_read() {
         assert!(error.contains(why), "{why}: {error}");
     }
     let error = read(&[b'x'; 600], 64, u64::MAX).unwrap_err();
-    assert!(
-        error.to_string().contains("not a Bilskirnir backup"),
-        "{error}"
-    );
+    assert!(error.to_string().contains("not a Thoric backup"), "{error}");
 }
 
 #[test]

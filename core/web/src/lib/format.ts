@@ -115,7 +115,7 @@ export function jobTarget(
 ) {
   if (!job.resource) return ""
   // An update, a backup and a restore work on the whole installation.
-  if (job.resource === "update" || job.resource === "installation") return "Bilskirnir"
+  if (job.resource === "update" || job.resource === "installation") return "Thoric"
   const [kind, id] = job.resource.split(/:(.*)/s)
   const reported = job.result?.name as string | undefined
   // Jobs from before environments were called containers name them `environment:<id>`.

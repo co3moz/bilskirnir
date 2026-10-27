@@ -1,0 +1,11 @@
+[Unit]
+Description=Take settings changes from the Thoric dashboard
+Documentation=https://github.com/co3moz/thoric/blob/master/docs/WSL_PACKAGE.md#settings-from-the-dashboard
+
+[Path]
+# The manager sees this folder at /update and leaves a settings change in it; see
+# core/manager/src/config/changes.rs. The package and thoric update make the folder.
+PathExists=/opt/thoric/update/settings-request
+
+[Install]
+WantedBy=multi-user.target

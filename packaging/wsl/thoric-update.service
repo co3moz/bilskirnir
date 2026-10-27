@@ -1,0 +1,15 @@
+[Unit]
+Description=Run thoric update for the Thoric dashboard
+Documentation=https://github.com/co3moz/thoric/blob/master/docs/WSL_PACKAGE.md#update-from-the-dashboard
+After=docker.service
+
+[Service]
+Type=oneshot
+# The request moves aside first, so the path unit does not start this again once it ends. It names
+# the dashboard's job, which the manager matches.
+ExecStartPre=/bin/mv -f /opt/thoric/update/request /opt/thoric/update/started
+ExecStart=/bin/sh -c 'exec /usr/local/bin/thoric update >/opt/thoric/update/log 2>&1'
+# How the update ended, written after its last output and renamed into place, so the manager has
+# the whole log once this is there.
+ExecStopPost=/bin/sh -c 'echo "$$SERVICE_RESULT $$EXIT_STATUS" >/opt/thoric/update/exit.new && mv -f /opt/thoric/update/exit.new /opt/thoric/update/exit'
+TimeoutStartSec=2h

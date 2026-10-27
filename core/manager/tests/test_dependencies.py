@@ -114,7 +114,7 @@ class ManagerTest(unittest.TestCase):
     def test_scope_follows_how_the_manager_uses_a_crate(self):
         metadata = {
             "packages": [
-                crate("bilskirnir", "1.0.0", "bin", source=None),
+                crate("thoric", "1.0.0", "bin", source=None),
                 crate("web", "1.0.0", license="MIT"),
                 crate("derive", "1.0.0", "proc-macro", license="MIT"),
                 crate("syntax", "2.0.0", license="MIT OR Apache-2.0"),
@@ -123,9 +123,9 @@ class ManagerTest(unittest.TestCase):
                 crate("forked", "0.2.0", source="git+https://example.org/forked", repository="https://example.org/forked"),
             ],
             "resolve": {
-                "root": "bilskirnir@1.0.0",
+                "root": "thoric@1.0.0",
                 "nodes": [
-                    node("bilskirnir@1.0.0", ("web@1.0.0", None), ("derive@1.0.0", None), ("mock@0.1.0", "dev")),
+                    node("thoric@1.0.0", ("web@1.0.0", None), ("derive@1.0.0", None), ("mock@0.1.0", "dev")),
                     node("web@1.0.0", ("cc@1.0.0", "build"), ("forked@0.2.0", None)),
                     node("derive@1.0.0", ("syntax@2.0.0", None)),
                     node("syntax@2.0.0"),
@@ -137,7 +137,7 @@ class ManagerTest(unittest.TestCase):
         }
         found = {item["name"]: item for item in dependencies.backend_dependencies(metadata)}
 
-        self.assertNotIn("bilskirnir", found)
+        self.assertNotIn("thoric", found)
         self.assertEqual(found["web"]["scope"], "runtime")
         self.assertTrue(found["web"]["direct"])
         self.assertEqual(found["web"]["url"], "https://crates.io/crates/web/1.0.0")
@@ -192,15 +192,15 @@ RUN apt-get update && apt-get install -y curl
         self.assertNotIn(("chef", "latest"), found)
         self.assertFalse(any(name.endswith(".deb") or name.startswith("/") for name, _ in found))
 
-    def test_compose_names_images_but_bilskirnir_own(self):
+    def test_compose_names_images_but_thoric_own(self):
         text = """
 services:
   manager:
-    image: ${MANAGER_IMAGE:-ghcr.io/co3moz/bilskirnir:latest}
+    image: ${MANAGER_IMAGE:-ghcr.io/co3moz/thoric:latest}
   local:
-    image: bilskirnir/manager:local
+    image: thoric/manager:local
   xfce:
-    image: ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
+    image: ghcr.io/co3moz/thoric/ubuntu-xfce:24.04
   https:
     image: "caddy:2-alpine"
   proxy:

@@ -50,7 +50,7 @@ impl ClientHandler for Listener {
     fn get_info(&self) -> ClientConfig {
         ClientConfig::new(
             ClientCapabilities::default(),
-            Implementation::new("bilskirnir", env!("CARGO_PKG_VERSION")),
+            Implementation::new("thoric", env!("CARGO_PKG_VERSION")),
         )
         .with_protocol_version(ProtocolVersion::V_2025_11_25)
     }

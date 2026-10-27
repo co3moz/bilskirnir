@@ -1,4 +1,4 @@
-"""The WSL package's `bilskirnir update`: which manager release it moves an installation to, which
+"""The WSL package's `thoric update`: which manager release it moves an installation to, which
 desktop images it refreshes for that manager, how it brings the installation files of that release
 without losing edits made by hand, and when it replaces the command itself with the one that
 release bundles.
@@ -19,11 +19,11 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
-CLI = ROOT / "packaging/wsl/bilskirnir"
-REPOSITORY = "ghcr.io/co3moz/bilskirnir"
+CLI = ROOT / "packaging/wsl/thoric"
+REPOSITORY = "ghcr.io/co3moz/thoric"
 FILES = ("compose.yml", "deploy/Caddyfile", ".env.example")
-UNITS = ("bilskirnir-update.path", "bilskirnir-update.service")
-SETTINGS_UNITS = ("bilskirnir-settings.path", "bilskirnir-settings.service")
+UNITS = ("thoric-update.path", "thoric-update.service")
+SETTINGS_UNITS = ("thoric-settings.path", "thoric-settings.service")
 
 STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
@@ -31,7 +31,7 @@ case "$(basename "$0") $*" in
     "curl "*) [[ -n ${RELEASE:-} ]] || exit 22; printf '{\\n  "url": "x",\\n  "tag_name": "%s",\\n  "name": "%s"\\n}\\n' "$RELEASE" "$RELEASE" ;;
     "docker pull "*) exit "${PULL_STATUS:-0}" ;;
     "docker run "*) exec cat "$IMAGE_ROOT${*: -1}" ;;
-    "docker compose exec "*) printf '[{"reference": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}]\\n' ;;
+    "docker compose exec "*) printf '[{"reference": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}]\\n' ;;
     "docker compose ps "*) echo manager-container ;;
     "docker inspect "*) printf '%s\\n' "${RELEASE_LABEL-<no value>}" ;;
     "docker image inspect "*":24.04") [[ -n ${DOWNLOADED:-} ]] || exit 1 ;;
@@ -66,14 +66,14 @@ class UpdateTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        self.cli = self.dir / "bilskirnir"
+        self.cli = self.dir / "thoric"
         self.level = self.dir / "package-level"
         self.units = self.dir / "systemd"
         self.units.mkdir()
         self.script = CLI.read_text()
         for line, replacement in (
-            ("INSTALL=/opt/bilskirnir", f"INSTALL={self.install}"),
-            ("CLI=/usr/local/bin/bilskirnir", f"CLI={self.cli}"),
+            ("INSTALL=/opt/thoric", f"INSTALL={self.install}"),
+            ("CLI=/usr/local/bin/thoric", f"CLI={self.cli}"),
             ("PACKAGE_LEVEL=/usr/lib/wsl/package-level", f"PACKAGE_LEVEL={self.level}"),
             ("UNIT_DIR=/etc/systemd/system", f"UNIT_DIR={self.units}"),
         ):
@@ -135,7 +135,7 @@ class UpdateTest(unittest.TestCase):
 
     def bundle(self, script):
         """Puts a command into the manager image."""
-        (self.image / "app/install/bilskirnir").write_text(script)
+        (self.image / "app/install/thoric").write_text(script)
 
     def update(self, env_file, release="v0.3.0", pull_status=0, **stubs):
         (self.install / ".env").write_text(env_file)
@@ -175,7 +175,7 @@ class UpdateTest(unittest.TestCase):
         self.cli.write_text(installed)
         self.bundle(self.command(marker="new command"))
         # The last one names a Docker Hub image that only looks like a release.
-        for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/bilskirnir:0.1.0", "0.9.0"):
+        for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/thoric:0.1.0", "0.9.0"):
             with self.subTest(image=image):
                 self.calls.unlink(missing_ok=True)
                 before = f"MANAGER_IMAGE={image}\n"
@@ -186,7 +186,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertIn("docker compose pull", calls)
                 self.assertIn("docker compose up -d", calls)
                 self.assertEqual(self.cli.read_text(), installed)
-                self.assertFalse(any(call.endswith("/app/install/bilskirnir") for call in calls))
+                self.assertFalse(any(call.endswith("/app/install/thoric") for call in calls))
                 self.assertIn("command stays as it is", result.stdout)
 
     def test_a_missing_image_setting_is_pinned_to_the_newest_release(self):
@@ -207,7 +207,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertNotIn("docker compose up -d", calls)
 
     def test_downloaded_desktops_follow_the_release_of_the_manager(self):
-        desktop = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce"
+        desktop = "ghcr.io/co3moz/thoric/ubuntu-xfce"
         before = f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n"
         _, _, calls = self.update(before, DOWNLOADED="1", RELEASE_LABEL="0.3.0")
         refresh = calls[calls.index("docker compose ps -q manager") + 1 :]
@@ -262,7 +262,7 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(list(self.tmp.iterdir()), [])
         copies = [
             i for i, call in enumerate(calls)
-            if call.startswith("docker run ") and not call.endswith("/bilskirnir") and "/systemd/" not in call
+            if call.startswith("docker run ") and not call.endswith("/thoric") and "/systemd/" not in call
         ]
         self.assertEqual(len(copies), len(FILES))
         for i in copies:
@@ -339,7 +339,7 @@ class UpdateTest(unittest.TestCase):
         # The manager offers the update and settings changes once the path units watch the folder.
         self.assertTrue((self.install / "update/watched").is_file())
         self.assertTrue((self.install / "update/settings-watched").is_file())
-        for path_unit in ("bilskirnir-update.path", "bilskirnir-settings.path"):
+        for path_unit in ("thoric-update.path", "thoric-settings.path"):
             enable = calls.index(f"systemctl enable --now {path_unit}")
             self.assertLess(calls.index("systemctl daemon-reload"), enable)
             self.assertLess(enable, calls.index("docker compose up -d"))
@@ -348,22 +348,22 @@ class UpdateTest(unittest.TestCase):
         result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("systemctl daemon-reload", calls)
-        self.assertNotIn("systemctl enable --now bilskirnir-update.path", calls)
-        self.assertNotIn("systemctl enable --now bilskirnir-settings.path", calls)
+        self.assertNotIn("systemctl enable --now thoric-update.path", calls)
+        self.assertNotIn("systemctl enable --now thoric-settings.path", calls)
 
     def test_a_release_with_only_the_update_units_leaves_settings_changes_as_they_are(self):
         self.bundle_units(UNITS)
         result, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("systemctl enable --now bilskirnir-update.path", calls)
-        self.assertNotIn("systemctl enable --now bilskirnir-settings.path", calls)
+        self.assertIn("systemctl enable --now thoric-update.path", calls)
+        self.assertNotIn("systemctl enable --now thoric-settings.path", calls)
         self.assertIn("settings changes from the dashboard stay as they are", result.stdout)
         self.assertFalse((self.install / "update/settings-watched").exists())
         self.assertEqual(sorted(p.name for p in self.units.iterdir()), sorted(UNITS))
 
     def test_the_units_come_only_from_releases(self):
         self.bundle_units()
-        for image in (f"{REPOSITORY}:latest", "ghcr.io/someone/bilskirnir:0.1.0"):
+        for image in (f"{REPOSITORY}:latest", "ghcr.io/someone/thoric:0.1.0"):
             with self.subTest(image=image):
                 self.calls.unlink(missing_ok=True)
                 result, _, calls = self.update(f"MANAGER_IMAGE={image}\n")
@@ -378,7 +378,7 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("updates from the dashboard stay as they are", result.stdout)
         self.assertEqual(list(self.units.iterdir()), [])
-        self.assertNotIn("systemctl enable --now bilskirnir-update.path", calls)
+        self.assertNotIn("systemctl enable --now thoric-update.path", calls)
         self.assertIn("docker compose up -d", calls)
 
     def test_a_newer_release_replaces_the_command_and_the_update_continues_with_it(self):
@@ -399,14 +399,14 @@ class UpdateTest(unittest.TestCase):
         self.assertLess(calls.index(f"docker pull {REPOSITORY}:0.3.0"), restart)
         self.assertFalse(any(call.startswith("docker compose ") for call in calls[:restart]))
         self.assertFalse(any("/app/install/compose.yml" in call for call in calls[:restart]))
-        self.assertEqual(sum(call.endswith("/app/install/bilskirnir") for call in calls), 1)
+        self.assertEqual(sum(call.endswith("/app/install/thoric") for call in calls), 1)
         self.assertEqual(calls.count("docker compose up -d"), 1)
-        desktop = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce"
+        desktop = "ghcr.io/co3moz/thoric/ubuntu-xfce"
         self.assertEqual(calls.count(f"docker tag {desktop}:0.3.0 {desktop}:24.04"), 1)
         self.assertLess(restart, calls.index(f"docker tag {desktop}:0.3.0 {desktop}:24.04"))
         self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
         self.assertEqual(list(self.tmp.iterdir()), [])
-        self.assertEqual(sorted(p.name for p in self.dir.glob("bilskirnir*")), ["bilskirnir"])
+        self.assertEqual(sorted(p.name for p in self.dir.glob("thoric*")), ["thoric"])
 
     def test_the_command_never_moves_to_the_same_or_an_older_release(self):
         self.bundle(self.command(marker="new command"))
@@ -419,7 +419,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
                 self.assertEqual(self.cli.read_text(), installed)
-                self.assertFalse(any(call.endswith("/app/install/bilskirnir") for call in calls))
+                self.assertFalse(any(call.endswith("/app/install/thoric") for call in calls))
                 self.assertNotIn("new command update", calls)
                 self.assertIn("docker compose up -d", calls)
 
@@ -467,7 +467,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.cli.read_text(), installed)
                 self.assertNotIn("new command update", calls)
-                self.assertIn("bilskirnir command", result.stderr)
+                self.assertIn("thoric command", result.stderr)
                 self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
                 self.assertIn("docker compose up -d", calls)
 
@@ -488,15 +488,15 @@ printf 'EDITED_BY=%s\\n' "$(basename "$0")" >> "$1"
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class SettingsTest(unittest.TestCase):
-    """`bilskirnir settings` as the first-start user, who may read .env but not write it."""
+    """`thoric settings` as the first-start user, who may read .env but not write it."""
 
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        self.cli = self.dir / "bilskirnir"
-        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.cli = self.dir / "thoric"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n"))
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
         (bin_dir / "sudo").write_text(SUDO_EDIT)
@@ -520,16 +520,16 @@ class SettingsTest(unittest.TestCase):
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(env_file.read_text(), f"AUTH_MODE=none\nEDITED_BY={editor}\n")
-                self.assertIn("bilskirnir restart", result.stdout)
+                self.assertIn("thoric restart", result.stdout)
 
 
 # docker, sudo, systemctl and sleep for apply-settings. The manager answers its health check unless
-# .env holds the line in BREAKS, and bilskirnir-update.service is active only with UPDATING set.
+# .env holds the line in BREAKS, and thoric-update.service is active only with UPDATING set.
 APPLY_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
 case "$(basename "$0") $*" in
     "docker compose exec "*) [[ -n ${BREAKS:-} ]] && grep -qxF "$BREAKS" "$ENV_FILE" && exit 1; exit 0 ;;
-    "systemctl is-active --quiet bilskirnir-update.service") [[ -n ${UPDATING:-} ]] && exit 0; exit 3 ;;
+    "systemctl is-active --quiet thoric-update.service") [[ -n ${UPDATING:-} ]] && exit 0; exit 3 ;;
     "sudo "*) exec "$@" ;;
 esac
 exit 0
@@ -538,7 +538,7 @@ exit 0
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class ApplySettingsTest(unittest.TestCase):
-    """`bilskirnir apply-settings`, which bilskirnir-settings.service runs as root with the request the
+    """`thoric apply-settings`, which thoric-settings.service runs as root with the request the
     dashboard left: which settings it accepts, how it rewrites .env and how it goes back when the
     manager does not answer with the new settings."""
 
@@ -554,12 +554,12 @@ class ApplySettingsTest(unittest.TestCase):
         self.env_file.chmod(0o640)
         script = CLI.read_text()
         for line, replacement in (
-            ("INSTALL=/opt/bilskirnir", f"INSTALL={self.install}"),
+            ("INSTALL=/opt/thoric", f"INSTALL={self.install}"),
             ("SETTINGS_WAIT=90", "SETTINGS_WAIT=2"),
         ):
             self.assertEqual(script.count(f"\n{line}\n"), 1, line)
             script = script.replace(f"\n{line}\n", f"\n{replacement}\n")
-        self.cli = self.dir / "bilskirnir"
+        self.cli = self.dir / "thoric"
         self.cli.write_text(script)
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
@@ -659,12 +659,12 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith(f"MANAGER_IMAGE={REPOSITORY}:"), lines[0])
         self.assertIn(f"\nMANAGER_REPOSITORY={REPOSITORY}\n", CLI.read_text())
-        self.assertIn(f"MANAGER_IMAGE={REPOSITORY}:$BILSKIRNIR_VERSION", (ROOT / "packaging/wsl/Dockerfile").read_text())
+        self.assertIn(f"MANAGER_IMAGE={REPOSITORY}:$THORIC_VERSION", (ROOT / "packaging/wsl/Dockerfile").read_text())
 
     def test_the_manager_image_carries_the_release_label_the_cli_reads(self):
         # The manager image is built from the same argument the Rust build reads for its desktops.
-        self.assertIn('LABEL bilskirnir.release="${BILSKIRNIR_RELEASE}"', (ROOT / "core/manager/Dockerfile").read_text())
-        self.assertIn('"bilskirnir.release"', CLI.read_text())
+        self.assertIn('LABEL thoric.release="${THORIC_RELEASE}"', (ROOT / "core/manager/Dockerfile").read_text())
+        self.assertIn('"thoric.release"', CLI.read_text())
 
     def test_the_package_and_the_manager_bundle_the_files_an_update_copies(self):
         # An update copies these from /app/install in the manager image over the package's copies, and
@@ -677,7 +677,7 @@ class PackageTest(unittest.TestCase):
         for name in FILES:
             source = copy_source(manager, f"/app/install/{name}")
             self.assertIsNotNone(source, name)
-            self.assertEqual(source, copy_source(package, f"/opt/bilskirnir/{name}"))
+            self.assertEqual(source, copy_source(package, f"/opt/thoric/{name}"))
         self.assertIn(f"sha256sum {' '.join(FILES)} > .shipped.sha256", package)
 
     def test_the_package_and_the_manager_bundle_the_update_and_settings_units(self):
@@ -692,16 +692,16 @@ class PackageTest(unittest.TestCase):
         for name in UNITS + SETTINGS_UNITS:
             self.assertEqual(copy_source(manager, f"/app/install/systemd/{name}"), f"packaging/wsl/{name}")
             self.assertEqual(copy_source(package, f"{unit_dir}/{name}"), f"packaging/wsl/{name}")
-        self.assertRegex(package, r"systemctl enable [^\n]*\bbilskirnir-update\.path\b")
-        self.assertRegex(package, r"systemctl enable [^\n]*\bbilskirnir-settings\.path\b")
+        self.assertRegex(package, r"systemctl enable [^\n]*\bthoric-update\.path\b")
+        self.assertRegex(package, r"systemctl enable [^\n]*\bthoric-settings\.path\b")
 
     def test_the_settings_units_use_the_names_the_manager_reads(self):
         script = CLI.read_text()
         install = re.search(r"^INSTALL=(\S+)$", script, re.M).group(1)
         folder = f"{install}/update"
         names = dict(re.findall(r'^pub\(crate\) const (\w+): &str = "([^"]*)";$', (ROOT / "core/manager/src/config/changes.rs").read_text(), re.M))
-        self.assertIn(f"\nPathExists={folder}/{names['SETTINGS_REQUEST']}\n", (ROOT / "packaging/wsl/bilskirnir-settings.path").read_text())
-        service = (ROOT / "packaging/wsl/bilskirnir-settings.service").read_text()
+        self.assertIn(f"\nPathExists={folder}/{names['SETTINGS_REQUEST']}\n", (ROOT / "packaging/wsl/thoric-settings.path").read_text())
+        service = (ROOT / "packaging/wsl/thoric-settings.service").read_text()
         cli = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
         self.assertIn(f"ExecStartPre=/bin/mv -f {folder}/{names['SETTINGS_REQUEST']} {folder}/{names['SETTINGS_STARTED']}\n", service)
         self.assertIn(f"'exec {cli} apply-settings {folder}/{names['SETTINGS_STARTED']} >{folder}/{names['SETTINGS_LOG']} 2>&1'", service)
@@ -733,8 +733,8 @@ class PackageTest(unittest.TestCase):
         folder = f"{install}/update"
         names = dict(re.findall(r'^pub\(crate\) const (\w+): &str = "([^"]*)";$', (ROOT / "core/manager/src/releases.rs").read_text(), re.M))
         self.assertIn(f"      - ./update:{names['UPDATE_DIR']}\n", (ROOT / "compose.ghcr.yml").read_text())
-        self.assertIn(f"\nPathExists={folder}/{names['REQUEST']}\n", (ROOT / "packaging/wsl/bilskirnir-update.path").read_text())
-        service = (ROOT / "packaging/wsl/bilskirnir-update.service").read_text()
+        self.assertIn(f"\nPathExists={folder}/{names['REQUEST']}\n", (ROOT / "packaging/wsl/thoric-update.path").read_text())
+        service = (ROOT / "packaging/wsl/thoric-update.service").read_text()
         self.assertIn(f"ExecStartPre=/bin/mv -f {folder}/{names['REQUEST']} {folder}/{names['STARTED']}\n", service)
         cli = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
         self.assertIn(f"'exec {cli} update >{folder}/{names['LOG']} 2>&1'", service)
@@ -745,12 +745,12 @@ class PackageTest(unittest.TestCase):
     def test_the_manager_bundles_the_command_the_package_installs(self):
         script = CLI.read_text()
         target = re.search(r"^CLI=(\S+)$", script, re.M).group(1)
-        self.assertEqual(copy_source((ROOT / "packaging/wsl/Dockerfile").read_text(), target), "packaging/wsl/bilskirnir")
-        self.assertEqual(copy_source((ROOT / "core/manager/Dockerfile").read_text(), "/app/install/bilskirnir"), "packaging/wsl/bilskirnir")
+        self.assertEqual(copy_source((ROOT / "packaging/wsl/Dockerfile").read_text(), target), "packaging/wsl/thoric")
+        self.assertEqual(copy_source((ROOT / "core/manager/Dockerfile").read_text(), "/app/install/thoric"), "packaging/wsl/thoric")
         # Commands already installed read these two lines from a newer one before they install it, and
         # the package records its release in the first. Without one, any release counts as newer.
         self.assertEqual(re.findall(r"^CLI_VERSION=.*$", script, re.M), ["CLI_VERSION="])
-        self.assertIn("CLI_VERSION=$BILSKIRNIR_VERSION", (ROOT / "packaging/wsl/Dockerfile").read_text())
+        self.assertIn("CLI_VERSION=$THORIC_VERSION", (ROOT / "packaging/wsl/Dockerfile").read_text())
         needs = re.findall(r"^NEEDS_PACKAGE=(\d+)$", script, re.M)
         self.assertEqual(len(needs), 1)
         # A package runs the command it ships, so it has at least the level that command needs.
@@ -760,7 +760,7 @@ class PackageTest(unittest.TestCase):
         self.assertLessEqual(int(needs[0]), level[0])
 
 
-COMPLETION = ROOT / "packaging/wsl/bilskirnir-completion.bash"
+COMPLETION = ROOT / "packaging/wsl/thoric-completion.bash"
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
@@ -770,15 +770,15 @@ class CompletionTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.dir)
-        shutil.copy(CLI, self.dir / "bilskirnir")
-        (self.dir / "bilskirnir").chmod(0o755)
+        shutil.copy(CLI, self.dir / "thoric")
+        (self.dir / "thoric").chmod(0o755)
 
     def complete(self, *words):
         """What Tab offers after the words typed so far, the last one being the word under the cursor."""
         script = (
             f'source "{COMPLETION}"\n'
             'COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1))\n'
-            '_bilskirnir "$1" "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
+            '_thoric "$1" "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"\n'
             'printf "%s\\n" "${COMPREPLY[@]}"\n'
         )
         env = {**os.environ, "PATH": f"{self.dir}:{os.environ['PATH']}"}
@@ -787,43 +787,43 @@ class CompletionTest(unittest.TestCase):
         return result.stdout.split()
 
     def test_a_prefix_completes_to_its_command(self):
-        self.assertEqual(self.complete("bilskirnir", "re"), ["restart"])
-        self.assertEqual(sorted(self.complete("bilskirnir", "st")), ["start", "status", "stop"])
-        self.assertEqual(self.complete("bilskirnir", "x"), [])
+        self.assertEqual(self.complete("thoric", "re"), ["restart"])
+        self.assertEqual(sorted(self.complete("thoric", "st")), ["start", "status", "stop"])
+        self.assertEqual(self.complete("thoric", "x"), [])
 
     def test_every_command_is_offered_and_only_the_first_word_completes(self):
         # Each branch of the command's case is offered, except help, which is what the bare command shows.
         branches = re.findall(r"^    ([a-z][a-z|-]*)\)$", CLI.read_text(), re.M)
         commands = sorted(branch for branch in branches if not branch.startswith("help"))
         self.assertIn("restart", commands)
-        self.assertEqual(sorted(self.complete("bilskirnir", "")), commands)
-        self.assertEqual(self.complete("bilskirnir", "restart", ""), [])
+        self.assertEqual(sorted(self.complete("thoric", "")), commands)
+        self.assertEqual(self.complete("thoric", "restart", ""), [])
 
     def test_the_package_installs_the_completion_where_bash_completion_loads_it(self):
         # bash-completion loads completions/<command> the first time that command is completed.
         package = (ROOT / "packaging/wsl/Dockerfile").read_text()
         command = Path(re.search(r"^CLI=(\S+)$", CLI.read_text(), re.M).group(1)).name
         target = f"/usr/share/bash-completion/completions/{command}"
-        self.assertEqual(copy_source(package, target), "packaging/wsl/bilskirnir-completion.bash")
+        self.assertEqual(copy_source(package, target), "packaging/wsl/thoric-completion.bash")
         self.assertRegex(package, r"apt-get install [^&]*\bbash-completion\b")
 
     def test_the_short_name_completes_like_the_command(self):
-        # b8r is a link to the command, so its help lists the same commands.
-        (self.dir / "b8r").symlink_to("bilskirnir")
-        self.assertEqual(self.complete("b8r", "re"), ["restart"])
+        # thor is a link to the command, so its help lists the same commands.
+        (self.dir / "thor").symlink_to("thoric")
+        self.assertEqual(self.complete("thor", "re"), ["restart"])
         registered = subprocess.run(
-            ["bash", "-c", f'source "{COMPLETION}"; complete -p b8r'], capture_output=True, text=True
+            ["bash", "-c", f'source "{COMPLETION}"; complete -p thor'], capture_output=True, text=True
         )
-        self.assertEqual(registered.stdout.strip(), "complete -F _bilskirnir b8r")
+        self.assertEqual(registered.stdout.strip(), "complete -F _thoric thor")
 
     def test_the_package_links_the_short_name_and_its_completion(self):
-        # Completing b8r loads completions/b8r, which is the command's completion file and registers both names.
+        # Completing thor loads completions/thor, which is the command's completion file and registers both names.
         package = (ROOT / "packaging/wsl/Dockerfile").read_text()
         cli = Path(re.search(r"^CLI=(\S+)$", CLI.read_text(), re.M).group(1))
         completions = "/usr/share/bash-completion/completions"
-        self.assertEqual(copy_source(package, f"{completions}/{cli.name}"), "packaging/wsl/bilskirnir-completion.bash")
-        self.assertRegex(package, rf"\bln -s {cli.name} {cli.parent}/b8r\b")
-        self.assertRegex(package, rf"\bln -s {cli.name} {completions}/b8r\b")
+        self.assertEqual(copy_source(package, f"{completions}/{cli.name}"), "packaging/wsl/thoric-completion.bash")
+        self.assertRegex(package, rf"\bln -s {cli.name} {cli.parent}/thor\b")
+        self.assertRegex(package, rf"\bln -s {cli.name} {completions}/thor\b")
 
 
 if __name__ == "__main__":
@@ -839,8 +839,8 @@ class PortTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        self.cli = self.dir / "bilskirnir"
-        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.cli = self.dir / "thoric"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n"))
         # Without explorer.exe, `open` prints the address instead of opening it.
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
@@ -863,7 +863,7 @@ class PortTest(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class McpTest(unittest.TestCase):
-    """`bilskirnir mcp` follows ROOT_MCP_ENABLED, and MCP_ENABLED, its name before 0.6.3, while the new
+    """`thoric mcp` follows ROOT_MCP_ENABLED, and MCP_ENABLED, its name before 0.6.3, while the new
     one is missing, as the manager does."""
 
     def setUp(self):
@@ -871,8 +871,8 @@ class McpTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        self.cli = self.dir / "bilskirnir"
-        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.cli = self.dir / "thoric"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n"))
         self.env = {"PATH": "/usr/bin:/bin", "HOME": str(self.dir)}
 
     def mcp(self, settings):
@@ -898,7 +898,7 @@ class McpTest(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
 class AccessTest(unittest.TestCase):
-    """`bilskirnir status` tells who can reach the dashboard from BIND_ADDRESS, which the first start
+    """`thoric status` tells who can reach the dashboard from BIND_ADDRESS, which the first start
     sets and Compose publishes the port on, with 127.0.0.1 when it is missing or empty."""
 
     def setUp(self):
@@ -906,8 +906,8 @@ class AccessTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir)
         self.install = self.dir / "install"
         self.install.mkdir()
-        self.cli = self.dir / "bilskirnir"
-        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n"))
+        self.cli = self.dir / "thoric"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n"))
         # A running Docker and a manager that answers its health check.
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()

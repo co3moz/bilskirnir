@@ -148,8 +148,8 @@ test("scopes and servers read as a few words", () => {
 })
 
 test("an endpoint's URL joins the dashboard's origin and its path", () => {
-  const url = endpointUrl("https://bilskirnir.lan/", "/mcp/unity")
-  assert.equal(url, "https://bilskirnir.lan/mcp/unity")
+  const url = endpointUrl("https://thoric.lan/", "/mcp/unity")
+  assert.equal(url, "https://thoric.lan/mcp/unity")
   assert.equal(endpointUrl("http://localhost:8080", "mcp/unity"), "http://localhost:8080/mcp/unity")
 })
 
@@ -337,20 +337,20 @@ test("an endpoint's tools are grouped by where they come from", () => {
     server,
   })
   const groups = toolGroups([
-    tool("bilskirnir", "a", null),
+    tool("thoric", "a", null),
     tool("server", "a", "chrome"),
-    tool("bilskirnir", "a", null),
+    tool("thoric", "a", null),
     tool("server", "b", "chrome"),
     // get_job is the endpoint's own tool and belongs to no container.
-    tool("bilskirnir", null, null),
+    tool("thoric", null, null),
   ])
   assert.deepEqual(
     groups.map((group) => [group.source, group.container_id, group.server, group.tools.length]),
     [
-      ["bilskirnir", "a", null, 2],
+      ["thoric", "a", null, 2],
       ["server", "a", "chrome", 1],
       ["server", "b", "chrome", 1],
-      ["bilskirnir", null, null, 1],
+      ["thoric", null, null, 1],
     ]
   )
 })

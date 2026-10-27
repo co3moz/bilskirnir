@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-These notes record reviews of Bilskirnir's behavior: the problems found, the changes made and the checks performed at the time. They are not reports of new test runs or complete lists of later changes.
+These notes record reviews of Thoric's behavior: the problems found, the changes made and the checks performed at the time. They are not reports of new test runs or complete lists of later changes.
 
 ## Follow-up audit: October 13, 2026
 

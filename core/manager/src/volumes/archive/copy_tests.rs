@@ -27,7 +27,7 @@ async fn a_copy_is_refused_before_anything_starts() {
                     .uri(format!("/api/volumes/{source}/copy"))
                     .header("host", "localhost:8080")
                     .header("content-type", "application/json")
-                    .header("x-bilskirnir-request", "1")
+                    .header("x-thoric-request", "1")
                     .body(Body::from(body))
                     .unwrap(),
             )

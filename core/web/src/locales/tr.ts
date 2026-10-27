@@ -67,7 +67,7 @@ export const tr: Messages = {
   "job.volume-import": "Volume içe aktarma",
   "job.volume-extract": "Volume'a arşiv açma",
   "job.volume-copy": "Volume kopyalama",
-  "job.update": "Bilskirnir güncelleme",
+  "job.update": "Thoric güncelleme",
   "job.backup": "Kurulumu yedekleme",
   "job.restore": "Yedeği geri yükleme",
   "jobs.target.container": "Konteyner {id}",
@@ -132,7 +132,7 @@ export const tr: Messages = {
   "activity.filter.errors": "Yalnızca hatalar",
   "activity.filter.destructive": "Yalnızca yıkıcı",
   "activity.filter.clear": "Filtreleri temizle",
-  "activity.caller.administrator": "Bilskirnir MCP",
+  "activity.caller.administrator": "Thoric MCP",
   "activity.credential.endpoint_token": "Uç noktanın token'ı",
   "activity.credential.mcp_token": "MCP token'ı",
   "activity.credential.none": "Token yok",
@@ -274,7 +274,7 @@ export const tr: Messages = {
   "images.deleteSaved":
     "İmaj ve kaydı silinir. Bu işlem geri alınamaz; yeniden ihtiyacınız olabilecekse önce bir arşiv dışa aktarın.",
   "images.deleteImport":
-    "Bilskirnir bu imajı unutur. Kaydedilmeden önce de Docker sunucusunda olduğu için Docker onu tutar.",
+    "Thoric bu imajı unutur. Kaydedilmeden önce de Docker sunucusunda olduğu için Docker onu tutar.",
   "images.deleteCatalog":
     "İndirilen kopya silinir. İmaj listede kalır ve bir konteyner ya da imaj ondan oluşturulurken yeniden indirilir.",
   "images.deleteUsed":
@@ -437,9 +437,9 @@ export const tr: Messages = {
   "volumes.createdFor": "{container} için oluşturuldu",
   "volumes.ownerDeleted": "Sahibi silindi",
   "volumes.ownerDeletedHint": "Onsuz silinen bir konteyner için oluşturuldu.",
-  "volumes.manager": "Bilskirnir verisi",
+  "volumes.manager": "Thoric verisi",
   "volumes.managerHint":
-    "Bilskirnir'in kendi veritabanı ve oturumları. Açılamaz, dışa aktarılamaz ve konteynerlere bağlanamaz.",
+    "Thoric'in kendi veritabanı ve oturumları. Açılamaz, dışa aktarılamaz ve konteynerlere bağlanamaz.",
   "volumes.driver": "Sürücü",
   "volumes.scope": "Kapsam",
   "volumes.browse": "Dosyalara göz at",
@@ -598,16 +598,16 @@ export const tr: Messages = {
     "Geri yükleme yalnızca yedektekileri ekler; bir ad zaten kullanılıyorsa başlamadan durur.",
   "backup.choose": "Yedeği buraya bırakın ya da bir dosya seçin",
   "backup.reading": "Yedek okunuyor…",
-  "backup.notBackup": "Bu dosya bir Bilskirnir yedeği değil.",
+  "backup.notBackup": "Bu dosya bir Thoric yedeği değil.",
   "backup.newer":
-    "Bu yedeği Bilskirnir {version}, bu sürümün okuyamadığı bir düzende yazdı. Önce güncelleyin.",
+    "Bu yedeği Thoric {version}, bu sürümün okuyamadığı bir düzende yazdı. Önce güncelleyin.",
   "backup.finishing": "Yüklendi. Geri yükleme tamamlanıyor…",
-  "backup.keepOpen": "Yükleme bitene kadar Bilskirnir'i açık tutun.",
+  "backup.keepOpen": "Yükleme bitene kadar Thoric'i açık tutun.",
   "backup.cancel": "Geri yüklemeyi iptal et",
   "backup.restoring": "Yedek geri yükleniyor",
   "backup.restoringDetail": "Yükleme bitti. İş, kayıtları kaydedip konteynerleri oluşturuyor.",
   "backup.confirmTitle": "Bu yedek geri yüklensin mi?",
-  "backup.confirmFrom": "Bilskirnir {version} ile {date} tarihinde oluşturuldu.",
+  "backup.confirmFrom": "Thoric {version} ile {date} tarihinde oluşturuldu.",
   "backup.stopped":
     "Konteynerler durdurulmuş olarak; ana bilgisayar adları, MAC adresleri ve makine kimlikleriyle geri gelir.",
   "backup.nothing": "Yedekte konteyner, imaj, volume ya da uç nokta yok.",
@@ -759,7 +759,7 @@ export const tr: Messages = {
   "templates.installOf": "{name} şablonunu yükle",
   "templates.installed.one": "Yüklü",
   "templates.installed.other": "{count} kez yüklendi",
-  "templates.requires": "Bilskirnir {version} gerekli",
+  "templates.requires": "Thoric {version} gerekli",
   "templates.broken.one": "Listedeki {count} şablon sunulamıyor",
   "templates.broken.other": "Listedeki {count} şablon sunulamıyor",
   "templates.broken.entry": "kayıt bir nesne değil",
@@ -784,7 +784,7 @@ export const tr: Messages = {
     "{name}, {base} için hazırlandı. Birleştirilen imaj ilk şablonun temeli üzerinde oluşturulur; betiğinin o masaüstüne uyduğunu kontrol edin.",
   "templates.merge.mcpTwice":
     "{first} ve {second} aynı masaüstü MCP sunucusunu ({name}) tanımlıyor; bunlardan yalnızca birini seçin.",
-  "dependencies.heading": "Bilskirnir {version}",
+  "dependencies.heading": "Thoric {version}",
   "dependencies.description":
     "Bu sürümün üzerine kurulduğu her şey, yönetici imajının derlemesinin listelediği hâliyle.",
   "dependencies.group.ui": "Arayüz",
@@ -872,25 +872,25 @@ export const tr: Messages = {
   "account.signOut": "Çıkış yap",
   "account.language": "Dil",
   "account.languageAutomatic": "Tarayıcı dili",
-  "update.available": "Bilskirnir {version} çıktı",
+  "update.available": "Thoric {version} çıktı",
   "update.current": "Bu kurulum {version} sürümünde.",
   "update.manual":
-    "Bu kurulum {version} sürümünde. WSL'de bilskirnir update çalıştırın ya da yeni manager imajını indirin.",
+    "Bu kurulum {version} sürümünde. WSL'de thoric update çalıştırın ya da yeni manager imajını indirin.",
   "update.install": "Güncelle",
   "update.notes": "Yenilikler",
-  "update.confirmTitle": "Bilskirnir {version} sürümüne güncellensin mi?",
+  "update.confirmTitle": "Thoric {version} sürümüne güncellensin mi?",
   "update.confirmText":
-    "WSL dağıtımı bilskirnir update komutunu çalıştırır: /opt/bilskirnir/.env içindeki MANAGER_IMAGE değerini {version} yapar, bu sürümü indirir ve manager'ı yeniden oluşturur. Konteynerler çalışmaya devam eder; yeni manager yanıt verince panel yeniden yüklenir.",
-  "update.running": "Bilskirnir güncelleniyor",
+    "WSL dağıtımı thoric update komutunu çalıştırır: /opt/thoric/.env içindeki MANAGER_IMAGE değerini {version} yapar, bu sürümü indirir ve manager'ı yeniden oluşturur. Konteynerler çalışmaya devam eder; yeni manager yanıt verince panel yeniden yüklenir.",
+  "update.running": "Thoric güncelleniyor",
   "update.runningDetail": "Yeni manager yanıt verince panel yeniden yüklenir.",
   "update.finishing": "Yeni manager güncellemeyi tamamlıyor.",
   "update.showLog": "Logu göster",
-  "update.done": "Bilskirnir {version} sürümüne güncellendi.",
+  "update.done": "Thoric {version} sürümüne güncellendi.",
 
   "settings.version": "Sürüm",
-  "settings.versionHint": "Bilskirnir yeni sürümü açılışta ve altı saatte bir kontrol eder.",
-  "settings.release": "Bilskirnir {version}",
-  "settings.notice": "Bilskirnir, her biri kendi lisansıyla gelen açık kaynak paketlerden oluşur.",
+  "settings.versionHint": "Thoric yeni sürümü açılışta ve altı saatte bir kontrol eder.",
+  "settings.release": "Thoric {version}",
+  "settings.notice": "Thoric, her biri kendi lisansıyla gelen açık kaynak paketlerden oluşur.",
   "settings.noticeLink": "Bağımlılıklar ve lisanslar",
   "settings.state.current": "Güncel",
   "settings.state.available": "Güncelleme var",
@@ -905,7 +905,7 @@ export const tr: Messages = {
   "settings.checksOff":
     "Sürüm kontrolü UPDATE_CHECK=false ile kapalı; manager GitHub'a hiç istek göndermez.",
   "settings.check": "Şimdi kontrol et",
-  "settings.upToDate": "En yeni sürüm Bilskirnir {version}.",
+  "settings.upToDate": "En yeni sürüm Thoric {version}.",
   "settings.updateTo": "{version} sürümüne güncelle",
   "settings.configuration": "Yapılandırma",
   "settings.configurationHint":
@@ -925,10 +925,10 @@ export const tr: Messages = {
   "settings.edit.readOnly":
     "Bu kurulumda ayarlar .env dosyasında değişir: dosyayı düzenleyin ve manager'ı yeniden oluşturun, örneğin docker compose up -d ile. WSL paketinde bu sayfa çoğunu değiştirebilir.",
   "settings.edit.editableHint":
-    "Bir ayarı kendi denetimiyle değiştirin, sonra Uygula ve yeniden başlat'ı seçin: WSL paketi ayarı .env dosyasına yazar ve manager'ı yeniden oluşturur. Yalnızca CLI olarak işaretli bir ayar, Bilskirnir terminalinde bilskirnir settings ve ardından bilskirnir restart ile değişir.",
+    "Bir ayarı kendi denetimiyle değiştirin, sonra Uygula ve yeniden başlat'ı seçin: WSL paketi ayarı .env dosyasına yazar ve manager'ı yeniden oluşturur. Yalnızca CLI olarak işaretli bir ayar, Thoric terminalinde thoric settings ve ardından thoric restart ile değişir.",
   "settings.edit.cliOnly": "Yalnızca CLI",
   "settings.edit.cliOnlyHint":
-    "Bilskirnir terminalinde bilskirnir settings ile değiştirin, sonra bilskirnir restart çalıştırın.",
+    "Thoric terminalinde thoric settings ile değiştirin, sonra thoric restart çalıştırın.",
   "settings.edit.changed": "Değişti",
   "settings.edit.reset": "{name} değişikliğini geri al",
   "settings.edit.mib": "MiB",
@@ -952,9 +952,9 @@ export const tr: Messages = {
     "Tırnak, $, #, ters eğik çizgi, ters tırnak ve baştaki ya da sondaki boşluk olmadan tek satır yazdırılabilir ASCII kullanın.",
   "settings.edit.problem.number": "{min} ile {max} arasında bir tam sayı girin.",
   "settings.choice.automatic": "Otomatik",
-  "settings.choice.wiki": "Bilskirnir wiki",
+  "settings.choice.wiki": "Thoric wiki",
   "settings.choice.off": "Kapalı",
-  "settings.choice.ownLabel": "Bilskirnir'in kendi etiketi",
+  "settings.choice.ownLabel": "Thoric'in kendi etiketi",
   "settings.choice.everyVolume": "Tüm volume'lar",
   "settings.choice.custom": "Diğer",
   "settings.about.AUTH_MODE": "password yönetici parolasını sorar; none girişi kapatır.",
@@ -1017,7 +1017,7 @@ export const tr: Messages = {
   "settings.about.TEMPLATES_URL": "Şablonlar sayfasının okuduğu liste; none sayfayı kapatır.",
   "settings.about.VOLUME_FILTER":
     "Bir volume'un listelenip bağlanması için gereken etiket; none her volume'u listeler.",
-  "settings.about.MANAGER_CONTAINER": "Manager'ın kendi konteyneri; Bilskirnir ona dokunmaz.",
+  "settings.about.MANAGER_CONTAINER": "Manager'ın kendi konteyneri; Thoric ona dokunmaz.",
   "settings.about.UPDATE_CHECK": "Altı saatte bir GitHub'da yeni sürüm arar.",
   "dashboard.running": "{count} çalışıyor",
   "dashboard.attention.one": "{count} dikkat gerektiriyor",
@@ -1080,7 +1080,7 @@ export const tr: Messages = {
   "usage.deleted": "Silindi",
   "usage.deletedName": "{name} (silindi)",
   "usage.empty":
-    "Bilskirnir başladığından beri hiçbir konteyner çalışmadı. Kullanımını burada görmek için bir konteyner başlatın.",
+    "Thoric başladığından beri hiçbir konteyner çalışmadı. Kullanımını burada görmek için bir konteyner başlatın.",
   "usage.noSamples": "Henüz ölçüm yok. Ölçümler konteyner çalışınca başlar.",
   "usage.waiting": "İlk ölçümler bekleniyor…",
   "usage.unavailable": "Kullanım okunamıyor",
@@ -1151,7 +1151,7 @@ export const tr: Messages = {
   "spec.mountsHint": "Bağlı volume'ler anlık görüntülere dahil edilmez.",
   "spec.proxiedPorts": "Yönlendirilen portlar",
   "spec.proxiedPortsHint":
-    "Masaüstündeki programların, MCP token'ı olan ajanların Bilskirnir üzerinden ulaştığı portları; virgülle ayrılır.",
+    "Masaüstündeki programların, MCP token'ı olan ajanların Thoric üzerinden ulaştığı portları; virgülle ayrılır.",
   "spec.ports.one": "{count} yönlendirilen port",
   "spec.ports.other": "{count} yönlendirilen port",
 
@@ -1268,7 +1268,7 @@ export const tr: Messages = {
   "parameter.volume.newOwn": "Bu konteyner için yeni bir volume",
   "parameter.volume.newMounted": "Konteynerle birlikte oluşturulur ve {path} konumuna bağlanır.",
   "import.archive.description":
-    "Bilskirnir'den dışa aktarılmış ya da docker save ile kaydedilmiş bir arşivi Docker'a yükler.",
+    "Thoric'ten dışa aktarılmış ya da docker save ile kaydedilmiş bir arşivi Docker'a yükler.",
   "import.docker.description":
     "Bu Docker ana makinesinde zaten bulunan, masaüstüyle uyumlu bir imajı kaydeder.",
   "import.archive.arrived": "Arşiv ulaştı. Docker imajı yüklüyor.",
@@ -1287,7 +1287,7 @@ export const tr: Messages = {
   "mcp.view.inspector": "Test",
   "mcp.namePattern": "Küçük harf, rakam ve tire; bir harf ya da rakamla başlar",
   "mcp.endpoints.description":
-    "Her uç nokta bir ajana konteyner araçlarının bir kısmını ve seçilen masaüstü MCP sunucularının araçlarını kendi token'ıyla verir. {admin} adresindeki Bilskirnir MCP her şeye yönetici erişimini korur.",
+    "Her uç nokta bir ajana konteyner araçlarının bir kısmını ve seçilen masaüstü MCP sunucularının araçlarını kendi token'ıyla verir. {admin} adresindeki Thoric MCP her şeye yönetici erişimini korur.",
   "mcp.endpoints.loading": "Uç noktalar yükleniyor…",
   "mcp.endpoints.none":
     "Henüz MCP uç noktası yok. Yeni konteynerler bir tane alır; kendi oluşturduğunuz bir uç nokta birden çok konteyneri kapsayabilir.",
@@ -1395,11 +1395,11 @@ export const tr: Messages = {
   "mcp.connect.actionOf": "{name} uç noktasını bir istemciye ekle",
   "mcp.connect.admin": "/mcp'yi istemciye ekle",
   "mcp.connect.titleOf": "{name} uç noktasını bir MCP istemcisine ekle",
-  "mcp.connect.titleAdmin": "Bilskirnir MCP'yi bir MCP istemcisine ekle",
+  "mcp.connect.titleAdmin": "Thoric MCP'yi bir MCP istemcisine ekle",
   "mcp.connect.description":
     "İstemciyi seçin ve ayarlarını kopyalayın. Token yalnızca aşağıdaki metni doldurur, hiçbir yere gönderilmez.",
   "mcp.connect.adminWarning":
-    "Bilskirnir MCP, root komutları ve silme dahil her konteynere yönetici erişimi verir. Daha azına ihtiyacı olan bir ajana bunun yerine bir uç nokta verin.",
+    "Thoric MCP, root komutları ve silme dahil her konteynere yönetici erişimi verir. Daha azına ihtiyacı olan bir ajana bunun yerine bir uç nokta verin.",
   "mcp.connect.header": "Authorization başlığı",
   "mcp.connect.tokenEndpoint":
     "Uç noktanın oluşturulurken bir kez gösterilen token'ı ya da yönetici MCP token'ı.",
@@ -1440,7 +1440,7 @@ export const tr: Messages = {
   "mcp.connect.hint.amp":
     "Girdiyi Amp ayarlarına, ev klasörünüzde ya da bir çalışma alanında ekleyin; Amp çalışma alanındaki sunucuyu kullanmadan önce sorar.",
   "mcp.connect.hint.claude-desktop":
-    "Claude Desktop'ın connector'ları sunuculara bu adresten değil Anthropic'in bulutundan ulaşır, bu yüzden onun yerine yerel bir program başlatır. Windows'ta Bilskirnir WSL paketiyle yöneticideki köprü token gerektirmez; başka yerlerde mcp-remote URL'ye bağlanır. Dosyayı Settings, Developer, Edit Config ile açın ve kaydettikten sonra Claude Desktop'ı yeniden başlatın.",
+    "Claude Desktop'ın connector'ları sunuculara bu adresten değil Anthropic'in bulutundan ulaşır, bu yüzden onun yerine yerel bir program başlatır. Windows'ta Thoric WSL paketiyle yöneticideki köprü token gerektirmez; başka yerlerde mcp-remote URL'ye bağlanır. Dosyayı Settings, Developer, Edit Config ile açın ve kaydettikten sonra Claude Desktop'ı yeniden başlatın.",
   "mcp.connect.hint.generic":
     "Streamable HTTP konuşan bir istemciye URL ve bearer token içeren bir Authorization başlığı yeter. Yalnızca yerel programları başlatan bir istemci WSL üzerinden köprüyü kullanabilir.",
   "mcp.servers.description":
@@ -1470,7 +1470,7 @@ export const tr: Messages = {
   "mcp.server.testSaved": "Bir kez çalışıp durdu; eklemeden hiçbir şey kaydedilmez.",
   "mcp.server.startFirst": "Sunucu eklemek için konteyneri başlatın.",
   "mcp.server.formDescription":
-    "Masaüstünün içinde bir MCP sunucusu: Bilskirnir'in orada başlattığı bir komut ya da içinde zaten dinleyen bir sunucunun URL'si. Araçları eklenirken okunur.",
+    "Masaüstünün içinde bir MCP sunucusu: Thoric'in orada başlattığı bir komut ya da içinde zaten dinleyen bir sunucunun URL'si. Araçları eklenirken okunur.",
   "mcp.server.transport": "Aktarım",
   "mcp.server.stdio": "Komut",
   "mcp.server.http": "HTTP URL",
@@ -1485,7 +1485,7 @@ export const tr: Messages = {
   "mcp.server.headers": "Başlıklar",
   "mcp.server.headersHint": "Her satıra bir Ad: değer.",
   "mcp.server.valuesHint":
-    "Argümanlar, ortam, URL ve başlıklar konteynerin compose değerlerini {value} olarak, compose birden çok adımlıysa {stepValue} olarak kullanabilir. Bilskirnir bağlanırken bunları doldurur.",
+    "Argümanlar, ortam, URL ve başlıklar konteynerin compose değerlerini {value} olarak, compose birden çok adımlıysa {stepValue} olarak kullanabilir. Thoric bağlanırken bunları doldurur.",
   "mcp.server.insideHint": "Masaüstünün içinde {command} aynı işi yapar.",
   "mcp.server.added.one": "{name}, {count} araçla eklendi.",
   "mcp.server.added.other": "{name}, {count} araçla eklendi.",
@@ -1526,7 +1526,7 @@ export const tr: Messages = {
   "mcp.read.twice": "{name} masaüstü MCP sunucusu iki kez tanımlanmış.",
 
   "inspector.description":
-    "Bir MCP sunucusunu açıp neler sunduğunu görün, araçlarını, istemlerini ve kaynaklarını deneyin. Masaüstü sunucusu test için ayrı bir süreçte çalışır; uç noktalar ve Bilskirnir MCP bir ajana nasıl yanıt veriyorsa öyle yanıt verir.",
+    "Bir MCP sunucusunu açıp neler sunduğunu görün, araçlarını, istemlerini ve kaynaklarını deneyin. Masaüstü sunucusu test için ayrı bir süreçte çalışır; uç noktalar ve Thoric MCP bir ajana nasıl yanıt veriyorsa öyle yanıt verir.",
   "inspector.open": "Test sekmesinde aç",
   "inspector.openOf": "{name} sunucusunu Test sekmesinde aç",
   "inspector.connection.title": "Sunucu",
@@ -1534,15 +1534,15 @@ export const tr: Messages = {
   "inspector.connection.reconnect": "Yeniden bağlan",
   "inspector.connection.disconnect": "Bağlantıyı kes",
   "inspector.connection.hint":
-    "Bir masaüstü sunucusu, bir uç nokta ya da Bilskirnir MCP seçip bağlanın.",
+    "Bir masaüstü sunucusu, bir uç nokta ya da Thoric MCP seçip bağlanın.",
   "inspector.connection.server": "{name} {version}",
   "inspector.connection.protocol": "protokol {version}",
   "inspector.connection.closed": "Bağlantı sona erdi",
   "inspector.connection.instructions": "Sunucunun yönergeleri",
   "inspector.target.label": "Test edilecek sunucu",
   "inspector.target.placeholder": "Bir sunucu seçin…",
-  "inspector.target.bilskirnir": "Bilskirnir",
-  "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
+  "inspector.target.thoric": "Thoric",
+  "inspector.target.administrator": "Thoric MCP (/mcp)",
   "inspector.target.rootOff": "Kök /mcp kapalı",
   "inspector.target.stopped": "konteyner durdurulmuş",
   "inspector.status.connecting": "Sunucu başlatılıyor…",
@@ -1687,11 +1687,11 @@ export const tr: Messages = {
   "inspector.log.refused": "reddedildi",
   "inspector.log.closed": "kapandı",
   "inspector.log.server": "sunucu",
-  "inspector.lost": "Bilskirnir ile bağlantı koptu.",
+  "inspector.lost": "Thoric ile bağlantı koptu.",
   "inspector.disconnected": "Bağlantı kesildi.",
   "inspector.rpcError": "Sunucu bir hatayla yanıt verdi.",
   "inspector.notConnected": "Test bağlantısı açık değil.",
-  "inspector.tooLarge": "İstek, Bilskirnir'in kabul ettiği 1,1 MB'tan büyük.",
+  "inspector.tooLarge": "İstek, Thoric'in kabul ettiği 1,1 MB'tan büyük.",
   "inspector.timedOut": "{seconds} saniyede yanıt gelmedi.",
   "inspector.cancelled": "İptal edildi.",
   "inspector.handshake": "MCP el sıkışması başarısız oldu: {error}",

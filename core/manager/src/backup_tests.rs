@@ -13,9 +13,9 @@ use serde_json::json;
 pub(super) fn container(id: &str, name: &str, image: &str, volumes: &[&str]) -> Container {
     serde_json::from_value(json!({
         "id": id,
-        "container": format!("bilskirnir-{id}"),
-        "private_network": format!("bilskirnir-{id}-private"),
-        "egress_network": format!("bilskirnir-{id}-egress"),
+        "container": format!("thoric-{id}"),
+        "private_network": format!("thoric-{id}-private"),
+        "egress_network": format!("thoric-{id}-egress"),
         "source_image_id": format!("sha256:source-of-{id}"),
         "created_at": 10,
         "spec": {
@@ -39,7 +39,7 @@ pub(super) fn image(id: &str, name: &str, kind: &str) -> ImageRecord {
         "id": id,
         "name": name,
         "image_id": format!("sha256:image-{id}"),
-        "reference": format!("bilskirnir/{kind}:{id}"),
+        "reference": format!("thoric/{kind}:{id}"),
         "parent_image_id": null,
         "source_container": null,
         "kind": kind,
@@ -81,29 +81,26 @@ pub(super) fn endpoint(name: &str, containers: &[&str]) -> Endpoint {
 
 /// A manager whose Docker CLI is a shell script running `cases`, arms of a `case` over its
 /// arguments, in a new directory of its own, where each call is appended to `calls` and the
-/// manager container is `bilskirnir-manager` with its data volume `bilskirnir-data`.
+/// manager container is `thoric-manager` with its data volume `thoric-data`.
 #[cfg(unix)]
 pub(super) fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-backup-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-backup-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("manager.json"),
         json!([{
             "Id": "manager",
             "Image": "sha256:manager",
-            "Config": {"Labels": {"bilskirnir.manager": "true"}},
-            "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
+            "Config": {"Labels": {"thoric.manager": "true"}},
+            "Mounts": [{"Type": "volume", "Name": "thoric-data", "Destination": "/data"}],
             "NetworkSettings": {"Networks": {}},
         }])
         .to_string(),
     )
     .unwrap();
     let script = format!(
-        "#!/bin/sh\ncd '{}'\nprintf '%s\\n' \"$*\" >> calls\ncase \"$*\" in\n  'container inspect bilskirnir-manager') cat manager.json ;;\n{cases}\n  *) exit 1 ;;\nesac\n",
+        "#!/bin/sh\ncd '{}'\nprintf '%s\\n' \"$*\" >> calls\ncase \"$*\" in\n  'container inspect thoric-manager') cat manager.json ;;\n{cases}\n  *) exit 1 ;;\nesac\n",
         dir.display()
     );
     let docker = dir.join("docker");
@@ -112,7 +109,7 @@ pub(super) fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathB
     let mut app = crate::tests::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
-    config.manager = Some("bilskirnir-manager".into());
+    config.manager = Some("thoric-manager".into());
     config.archive_limit = 64 << 20;
     (app, dir)
 }
@@ -156,15 +153,15 @@ pub(super) fn calls(dir: &std::path::Path) -> String {
 
 #[test]
 fn a_backup_file_is_named_by_its_time_in_utc() {
-    assert_eq!(file_name(0), "bilskirnir-backup-19700101-000000.tar.gz");
+    assert_eq!(file_name(0), "thoric-backup-19700101-000000.tar.gz");
     // 2026-10-22 13:45:06 UTC, and a leap day.
     assert_eq!(
         file_name(1_792_676_706),
-        "bilskirnir-backup-20261022-134506.tar.gz"
+        "thoric-backup-20261022-134506.tar.gz"
     );
     assert_eq!(
         file_name(951_782_400),
-        "bilskirnir-backup-20000229-000000.tar.gz"
+        "thoric-backup-20000229-000000.tar.gz"
     );
 }
 

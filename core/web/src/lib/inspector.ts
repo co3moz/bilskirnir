@@ -33,7 +33,7 @@ export function targetKey(target: InspectTarget): string {
 }
 
 /**
- * What the inspector can open: Bilskirnir's own MCP while the root /mcp is on, the endpoints, which
+ * What the inspector can open: Thoric's own MCP while the root /mcp is on, the endpoints, which
  * answer either way, and the desktop servers of the running containers. A stopped container's
  * servers are listed too, so it is clear why they cannot be opened.
  */
@@ -48,7 +48,7 @@ export function targetGroups(
   const names = new Map(containers.map((c) => [c.id, c.spec.name]))
   const groups: TargetGroup[] = [
     {
-      label: t("inspector.target.bilskirnir"),
+      label: t("inspector.target.thoric"),
       choices: [
         {
           key: "administrator",

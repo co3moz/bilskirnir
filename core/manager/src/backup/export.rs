@@ -272,7 +272,7 @@ impl Out<'_> {
                     "--change".into(),
                     format!("LABEL {LABEL}=true"),
                     "--message".into(),
-                    format!("Bilskirnir backup of {}", env.spec.name),
+                    format!("Thoric backup of {}", env.spec.name),
                     info["Id"].as_str().context("Missing container ID")?.into(),
                 ];
                 let output = process::capture(
@@ -466,7 +466,7 @@ impl App {
     }
 
     /// The volumes a backup may carry: those the containers mount, also one `VOLUME_FILTER`
-    /// leaves out, and those Bilskirnir created that the volume list shows; never the manager's.
+    /// leaves out, and those Thoric created that the volume list shows; never the manager's.
     async fn backup_volumes(
         &self,
         containers: &[Container],

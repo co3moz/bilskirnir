@@ -102,7 +102,7 @@ pub(crate) const RENAMED: &[Renamed] = &[Renamed {
 }];
 /// The settings the dashboard's Settings page may change, through the WSL package. The rest, such
 /// as the sign-in, the root MCP and its token, and what only Compose reads, change only in `.env`,
-/// with `bilskirnir settings` in the package. `DASHBOARD_SETTINGS` in `packaging/wsl/bilskirnir`,
+/// with `thoric settings` in the package. `DASHBOARD_SETTINGS` in `packaging/wsl/thoric`,
 /// the list the package accepts, is the same; the tests hold the two together.
 pub(crate) const EDITABLE: &[&str] = &[
     "SECURE_COOKIE",
@@ -131,7 +131,7 @@ pub(crate) const EDITABLE: &[&str] = &[
 ];
 /// The template list on the project's GitHub wiki.
 pub(crate) const TEMPLATES_URL: &str =
-    "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json";
+    "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json";
 /// What [`Config::parse`] reads the environment for.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Reading {
@@ -186,25 +186,25 @@ pub(crate) fn renamed_value(
         (new_value, None) => Ok(new_value),
         (None, Some(old_value)) => {
             notices.push(format!(
-                "{old} was renamed {new} in Bilskirnir {release}. Its value still applies; rename it in .env."
+                "{old} was renamed {new} in Thoric {release}. Its value still applies; rename it in .env."
             ));
             Ok(Some(old_value))
         }
         (Some(new_value), Some(old_value)) if new_value == old_value => {
             notices.push(format!(
-                "{old} was renamed {new} in Bilskirnir {release}, and {new} applies. Remove {old} from .env."
+                "{old} was renamed {new} in Thoric {release}, and {new} applies. Remove {old} from .env."
             ));
             Ok(Some(new_value))
         }
         (Some(new_value), Some(old_value)) => bail!(
-            "{old}={old_value} and {new}={new_value} disagree. {old} was renamed {new} in Bilskirnir {release}; remove {old} from .env"
+            "{old}={old_value} and {new}={new_value} disagree. {old} was renamed {new} in Thoric {release}; remove {old} from .env"
         ),
     }
 }
 /// Whether `value` can stand as `KEY=value` in `.env` and come back unchanged: one line of
 /// printable ASCII, without the quotes, `$`, `#`, backslashes and backquotes that Compose's
 /// quoting and interpolation would read otherwise, and without the spaces at either end that it
-/// trims. `bilskirnir apply-settings` checks a value from the dashboard the same way.
+/// trims. `thoric apply-settings` checks a value from the dashboard the same way.
 pub(crate) fn env_value(key: &str, value: &str) -> Result<()> {
     if value.len() > 2048
         || value.trim() != value
@@ -270,7 +270,7 @@ impl Config {
         for (key, value) in changes {
             let problem = if !EDITABLE.contains(&key.as_str()) {
                 Some(format!(
-                    "{key} changes only in .env, with bilskirnir settings in the WSL package"
+                    "{key} changes only in .env, with thoric settings in the WSL package"
                 ))
             } else if let Err(error) = env_value(key, value) {
                 Some(format!("{error:#}"))
@@ -570,7 +570,7 @@ pub(crate) fn templates_url(value: Option<&str>) -> Result<Option<String>> {
 
 /// `VOLUME_FILTER`: the label a volume needs to be listed and chosen, as `key` or `key=value`.
 /// Empty keeps the label the manager puts on every volume it creates, so volumes made outside
-/// Bilskirnir, the manager's own data volume among them, are out of reach; `none` lists every
+/// Thoric, the manager's own data volume among them, are out of reach; `none` lists every
 /// volume. The manager gives the label to each volume it creates, so the label has to be one
 /// `docker volume create --label` and Docker's `label` filter read the same way.
 pub(crate) fn volume_filter(value: Option<&str>) -> Result<Option<String>> {

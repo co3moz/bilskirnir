@@ -10,7 +10,7 @@ use serde_json::Value;
 /// Tell `call` what the endpoint's tool `entry`, called with `args`, reaches.
 pub(super) fn describe(app: &App, entry: &Entry, args: &Value, call: &mut Call) {
     match &entry.target {
-        Target::Bilskirnir { containers, .. } => {
+        Target::Thoric { containers, .. } => {
             // As the endpoint resolves it: its one container, or the one `container` names.
             let id = if containers.len() == 1 && args.get("container").is_none() {
                 containers.first().map(|(_, id)| id.clone())

@@ -68,7 +68,7 @@ export const fr: Messages = {
   "job.volume-import": "Import de volume",
   "job.volume-extract": "Extraction dans un volume",
   "job.volume-copy": "Copie de volume",
-  "job.update": "Mise à jour de Bilskirnir",
+  "job.update": "Mise à jour de Thoric",
   "job.backup": "Sauvegarde de l'installation",
   "job.restore": "Restauration d'une sauvegarde",
   "jobs.target.container": "Conteneur {id}",
@@ -134,7 +134,7 @@ export const fr: Messages = {
   "activity.filter.errors": "Erreurs seulement",
   "activity.filter.destructive": "Destructifs seulement",
   "activity.filter.clear": "Effacer les filtres",
-  "activity.caller.administrator": "Bilskirnir MCP",
+  "activity.caller.administrator": "Thoric MCP",
   "activity.credential.endpoint_token": "Le jeton du point d'accès",
   "activity.credential.mcp_token": "Le jeton MCP",
   "activity.credential.none": "Aucun jeton",
@@ -277,7 +277,7 @@ export const fr: Messages = {
   "images.deleteSaved":
     "L'image et son enregistrement sont supprimés. Cette action est irréversible ; exportez d'abord une archive si vous pourriez encore en avoir besoin.",
   "images.deleteImport":
-    "Bilskirnir oublie cette image. Docker la conserve, car elle était déjà sur l'hôte avant son enregistrement.",
+    "Thoric oublie cette image. Docker la conserve, car elle était déjà sur l'hôte avant son enregistrement.",
   "images.deleteCatalog":
     "Le téléchargement est supprimé. L'image reste dans la liste et est de nouveau téléchargée quand un conteneur ou une construction en a besoin.",
   "images.deleteUsed":
@@ -442,7 +442,7 @@ export const fr: Messages = {
   "volumes.ownerDeletedHint": "Créé pour un conteneur supprimé sans lui.",
   "volumes.manager": "Données du gestionnaire",
   "volumes.managerHint":
-    "La base de données et les sessions de Bilskirnir. Il ne peut être ni ouvert, ni exporté, ni monté.",
+    "La base de données et les sessions de Thoric. Il ne peut être ni ouvert, ni exporté, ni monté.",
   "volumes.driver": "Pilote",
   "volumes.scope": "Portée",
   "volumes.browse": "Parcourir les fichiers",
@@ -604,17 +604,17 @@ export const fr: Messages = {
     "Une restauration ne fait qu'ajouter ce que contient la sauvegarde, et s'arrête avant de commencer si un nom est déjà utilisé.",
   "backup.choose": "Déposez une sauvegarde ici ou choisissez un fichier",
   "backup.reading": "Lecture de la sauvegarde…",
-  "backup.notBackup": "Ce fichier n'est pas une sauvegarde Bilskirnir.",
+  "backup.notBackup": "Ce fichier n'est pas une sauvegarde Thoric.",
   "backup.newer":
-    "Bilskirnir {version} a écrit cette sauvegarde dans un format que cette version ne sait pas lire. Mettez d'abord à jour.",
+    "Thoric {version} a écrit cette sauvegarde dans un format que cette version ne sait pas lire. Mettez d'abord à jour.",
   "backup.finishing": "Envoyée. Fin de la restauration…",
-  "backup.keepOpen": "Gardez Bilskirnir ouvert jusqu'à la fin de l'envoi.",
+  "backup.keepOpen": "Gardez Thoric ouvert jusqu'à la fin de l'envoi.",
   "backup.cancel": "Annuler la restauration",
   "backup.restoring": "Restauration de la sauvegarde",
   "backup.restoringDetail":
     "L'envoi est terminé. La tâche enregistre les fiches et crée les conteneurs.",
   "backup.confirmTitle": "Restaurer cette sauvegarde ?",
-  "backup.confirmFrom": "Créée par Bilskirnir {version} le {date}.",
+  "backup.confirmFrom": "Créée par Thoric {version} le {date}.",
   "backup.stopped":
     "Les conteneurs reviennent arrêtés, avec leur nom d'hôte, leur adresse MAC et leur identifiant de machine.",
   "backup.nothing":
@@ -770,7 +770,7 @@ export const fr: Messages = {
   "templates.installOf": "Installer {name}",
   "templates.installed.one": "Installé",
   "templates.installed.other": "Installé {count} fois",
-  "templates.requires": "Nécessite Bilskirnir {version}",
+  "templates.requires": "Nécessite Thoric {version}",
   "templates.broken.one": "{count} modèle de la liste ne peut pas être proposé",
   "templates.broken.other": "{count} modèles de la liste ne peuvent pas être proposés",
   "templates.broken.entry": "l'entrée n'est pas un objet",
@@ -796,7 +796,7 @@ export const fr: Messages = {
     "{name} a été conçu pour {base}. L'image fusionnée est construite sur la base du premier modèle ; vérifiez que son script convient à ce bureau.",
   "templates.merge.mcpTwice":
     "{first} et {second} déclarent tous deux le serveur MCP du bureau {name} ; choisissez un seul des deux.",
-  "dependencies.heading": "Bilskirnir {version}",
+  "dependencies.heading": "Thoric {version}",
   "dependencies.description":
     "Tout ce à partir de quoi cette version est construite, tel que l'a listé la construction de l'image du gestionnaire.",
   "dependencies.group.ui": "Interface",
@@ -884,27 +884,27 @@ export const fr: Messages = {
   "account.signOut": "Se déconnecter",
   "account.language": "Langue",
   "account.languageAutomatic": "Langue du navigateur",
-  "update.available": "Bilskirnir {version} est disponible",
+  "update.available": "Thoric {version} est disponible",
   "update.current": "Cette installation utilise la {version}.",
   "update.manual":
-    "Cette installation utilise la {version}. Lancez bilskirnir update dans WSL ou téléchargez la nouvelle image du gestionnaire.",
+    "Cette installation utilise la {version}. Lancez thoric update dans WSL ou téléchargez la nouvelle image du gestionnaire.",
   "update.install": "Mettre à jour",
   "update.notes": "Nouveautés",
-  "update.confirmTitle": "Mettre Bilskirnir à jour vers la {version} ?",
+  "update.confirmTitle": "Mettre Thoric à jour vers la {version} ?",
   "update.confirmText":
-    "La distribution WSL lance bilskirnir update : la commande règle MANAGER_IMAGE sur {version} dans /opt/bilskirnir/.env, télécharge cette version et recrée le gestionnaire. Les conteneurs continuent de tourner, et le tableau de bord se recharge dès que le nouveau gestionnaire répond.",
-  "update.running": "Mise à jour de Bilskirnir en cours",
+    "La distribution WSL lance thoric update : la commande règle MANAGER_IMAGE sur {version} dans /opt/thoric/.env, télécharge cette version et recrée le gestionnaire. Les conteneurs continuent de tourner, et le tableau de bord se recharge dès que le nouveau gestionnaire répond.",
+  "update.running": "Mise à jour de Thoric en cours",
   "update.runningDetail": "Le tableau de bord se recharge dès que le nouveau gestionnaire répond.",
   "update.finishing": "Le nouveau gestionnaire termine la mise à jour.",
   "update.showLog": "Voir le journal",
-  "update.done": "Bilskirnir a été mis à jour vers la {version}.",
+  "update.done": "Thoric a été mis à jour vers la {version}.",
 
   "settings.version": "Version",
   "settings.versionHint":
-    "Bilskirnir cherche une nouvelle version au démarrage puis toutes les six heures.",
-  "settings.release": "Bilskirnir {version}",
+    "Thoric cherche une nouvelle version au démarrage puis toutes les six heures.",
+  "settings.release": "Thoric {version}",
   "settings.notice":
-    "Bilskirnir est construit à partir de paquets open source, chacun sous sa propre licence.",
+    "Thoric est construit à partir de paquets open source, chacun sous sa propre licence.",
   "settings.noticeLink": "Dépendances et licences",
   "settings.state.current": "À jour",
   "settings.state.available": "Mise à jour disponible",
@@ -919,7 +919,7 @@ export const fr: Messages = {
   "settings.checksOff":
     "La vérification des versions est désactivée par UPDATE_CHECK=false : le manager n'interroge jamais GitHub.",
   "settings.check": "Vérifier",
-  "settings.upToDate": "Bilskirnir {version} est la dernière version.",
+  "settings.upToDate": "Thoric {version} est la dernière version.",
   "settings.updateTo": "Passer à la {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
@@ -939,10 +939,10 @@ export const fr: Messages = {
   "settings.edit.readOnly":
     "Sur cette installation, les paramètres se changent dans .env : modifiez-le puis recréez le gestionnaire, par exemple avec docker compose up -d. Dans le paquet WSL, cette page en change la plupart.",
   "settings.edit.editableHint":
-    "Changez un paramètre avec sa commande, puis choisissez Appliquer et redémarrer : le paquet WSL l'écrit dans .env et recrée le gestionnaire. Un paramètre marqué CLI uniquement se change avec bilskirnir settings dans un terminal Bilskirnir, puis bilskirnir restart.",
+    "Changez un paramètre avec sa commande, puis choisissez Appliquer et redémarrer : le paquet WSL l'écrit dans .env et recrée le gestionnaire. Un paramètre marqué CLI uniquement se change avec thoric settings dans un terminal Thoric, puis thoric restart.",
   "settings.edit.cliOnly": "CLI uniquement",
   "settings.edit.cliOnlyHint":
-    "Changez-le avec bilskirnir settings dans un terminal Bilskirnir, puis lancez bilskirnir restart.",
+    "Changez-le avec thoric settings dans un terminal Thoric, puis lancez thoric restart.",
   "settings.edit.changed": "Modifié",
   "settings.edit.reset": "Annuler la modification de {name}",
   "settings.edit.mib": "Mio",
@@ -967,9 +967,9 @@ export const fr: Messages = {
     "Utilisez une seule ligne d'ASCII imprimable, sans guillemets, $, #, barres obliques inverses, accents graves ni espaces au début ou à la fin.",
   "settings.edit.problem.number": "Saisissez un nombre entier de {min} à {max}.",
   "settings.choice.automatic": "Automatique",
-  "settings.choice.wiki": "Wiki de Bilskirnir",
+  "settings.choice.wiki": "Wiki de Thoric",
   "settings.choice.off": "Désactivé",
-  "settings.choice.ownLabel": "Le label de Bilskirnir",
+  "settings.choice.ownLabel": "Le label de Thoric",
   "settings.choice.everyVolume": "Tous les volumes",
   "settings.choice.custom": "Autre",
   "settings.about.AUTH_MODE":
@@ -1031,7 +1031,7 @@ export const fr: Messages = {
   "settings.about.TEMPLATES_URL": "La liste que lit la page Modèles ; none désactive la page.",
   "settings.about.VOLUME_FILTER":
     "L'étiquette qu'un volume doit porter pour être listé et monté ; none liste tous les volumes.",
-  "settings.about.MANAGER_CONTAINER": "Le conteneur du manager, auquel Bilskirnir ne touche pas.",
+  "settings.about.MANAGER_CONTAINER": "Le conteneur du manager, auquel Thoric ne touche pas.",
   "settings.about.UPDATE_CHECK": "Cherche de nouvelles versions sur GitHub toutes les six heures.",
   "dashboard.running": "{count} en cours d'exécution",
   "dashboard.attention.one": "{count} requiert votre attention",
@@ -1095,7 +1095,7 @@ export const fr: Messages = {
   "usage.deleted": "Supprimé",
   "usage.deletedName": "{name} (supprimé)",
   "usage.empty":
-    "Aucun conteneur n'a tourné depuis le démarrage de Bilskirnir. Démarrez-en un pour voir son utilisation ici.",
+    "Aucun conteneur n'a tourné depuis le démarrage de Thoric. Démarrez-en un pour voir son utilisation ici.",
   "usage.noSamples": "Pas encore de mesures. Elles commencent dès que le conteneur tourne.",
   "usage.waiting": "En attente des premières mesures…",
   "usage.unavailable": "Impossible de lire l'utilisation",
@@ -1167,7 +1167,7 @@ export const fr: Messages = {
   "spec.mountsHint": "Les volumes montés sont exclus des instantanés.",
   "spec.proxiedPorts": "Ports relayés",
   "spec.proxiedPortsHint":
-    "Ports de programmes du bureau que les agents munis du jeton MCP atteignent par Bilskirnir, séparés par des virgules.",
+    "Ports de programmes du bureau que les agents munis du jeton MCP atteignent par Thoric, séparés par des virgules.",
   "spec.ports.one": "{count} port relayé",
   "spec.ports.other": "{count} ports relayés",
 
@@ -1285,7 +1285,7 @@ export const fr: Messages = {
   "parameter.volume.newOwn": "Un nouveau volume pour ce conteneur",
   "parameter.volume.newMounted": "Créé avec le conteneur et monté sur {path}.",
   "import.archive.description":
-    "Charge dans Docker une archive exportée depuis Bilskirnir ou enregistrée avec docker save.",
+    "Charge dans Docker une archive exportée depuis Thoric ou enregistrée avec docker save.",
   "import.docker.description":
     "Enregistre une image compatible avec le bureau déjà présente sur cet hôte Docker.",
   "import.archive.arrived": "L'archive est arrivée. Docker charge l'image.",
@@ -1305,7 +1305,7 @@ export const fr: Messages = {
   "mcp.namePattern":
     "Lettres minuscules, chiffres et tirets, en commençant par une lettre ou un chiffre",
   "mcp.endpoints.description":
-    "Chaque point d'accès donne à un agent une partie des outils du conteneur et les outils des serveurs MCP du bureau choisis, avec son propre jeton. Bilskirnir MCP à {admin} garde l'accès administrateur à tout.",
+    "Chaque point d'accès donne à un agent une partie des outils du conteneur et les outils des serveurs MCP du bureau choisis, avec son propre jeton. Thoric MCP à {admin} garde l'accès administrateur à tout.",
   "mcp.endpoints.loading": "Chargement des points d'accès…",
   "mcp.endpoints.none":
     "Aucun point d'accès MCP pour l'instant. Les nouveaux conteneurs en reçoivent un, et un point d'accès à vous peut couvrir plusieurs conteneurs.",
@@ -1415,11 +1415,11 @@ export const fr: Messages = {
   "mcp.connect.actionOf": "Ajouter {name} à un client",
   "mcp.connect.admin": "Ajouter /mcp à un client",
   "mcp.connect.titleOf": "Ajouter {name} à un client MCP",
-  "mcp.connect.titleAdmin": "Ajouter Bilskirnir MCP à un client MCP",
+  "mcp.connect.titleAdmin": "Ajouter Thoric MCP à un client MCP",
   "mcp.connect.description":
     "Choisissez le client et copiez ses réglages. Le jeton remplit seulement le texte ci-dessous et n'est envoyé nulle part.",
   "mcp.connect.adminWarning":
-    "Bilskirnir MCP a un accès administrateur à chaque conteneur, y compris les commandes root et la suppression. Donnez plutôt un point d'accès à un agent qui a besoin de moins.",
+    "Thoric MCP a un accès administrateur à chaque conteneur, y compris les commandes root et la suppression. Donnez plutôt un point d'accès à un agent qui a besoin de moins.",
   "mcp.connect.header": "En-tête Authorization",
   "mcp.connect.tokenEndpoint":
     "Le jeton du point d'accès, affiché une fois à sa création, ou le jeton MCP administrateur.",
@@ -1462,7 +1462,7 @@ export const fr: Messages = {
   "mcp.connect.hint.amp":
     "Ajoutez l'entrée aux réglages d'Amp, dans votre dossier personnel ou dans un espace de travail, où Amp demande avant d'utiliser le serveur.",
   "mcp.connect.hint.claude-desktop":
-    "Les connecteurs de Claude Desktop atteignent les serveurs depuis le cloud d'Anthropic, pas cette adresse ; il lance donc un programme local à la place. Sous Windows avec le paquet WSL de Bilskirnir, le pont du gestionnaire n'a pas besoin de jeton ; ailleurs, mcp-remote se connecte à l'URL. Ouvrez le fichier par Settings, Developer, Edit Config et redémarrez Claude Desktop après l'avoir enregistré.",
+    "Les connecteurs de Claude Desktop atteignent les serveurs depuis le cloud d'Anthropic, pas cette adresse ; il lance donc un programme local à la place. Sous Windows avec le paquet WSL de Thoric, le pont du gestionnaire n'a pas besoin de jeton ; ailleurs, mcp-remote se connecte à l'URL. Ouvrez le fichier par Settings, Developer, Edit Config et redémarrez Claude Desktop après l'avoir enregistré.",
   "mcp.connect.hint.generic":
     "Un client qui parle Streamable HTTP a besoin de l'URL et d'un en-tête Authorization avec le jeton Bearer. Un client qui ne lance que des programmes locaux peut utiliser le pont par WSL.",
   "mcp.servers.description":
@@ -1493,7 +1493,7 @@ export const fr: Messages = {
     "Il a tourné une fois puis s'est arrêté ; rien n'est enregistré avant l'ajout.",
   "mcp.server.startFirst": "Démarrez le conteneur pour ajouter un serveur.",
   "mcp.server.formDescription":
-    "Un serveur MCP dans le bureau : une commande que Bilskirnir y lance, ou l'URL d'un serveur qui y écoute déjà. Ses outils sont lus à l'ajout.",
+    "Un serveur MCP dans le bureau : une commande que Thoric y lance, ou l'URL d'un serveur qui y écoute déjà. Ses outils sont lus à l'ajout.",
   "mcp.server.transport": "Transport",
   "mcp.server.stdio": "Commande",
   "mcp.server.http": "URL HTTP",
@@ -1508,7 +1508,7 @@ export const fr: Messages = {
   "mcp.server.headers": "En-têtes",
   "mcp.server.headersHint": "Un Nom: valeur par ligne.",
   "mcp.server.valuesHint":
-    "Les arguments, l'environnement, l'URL et les en-têtes peuvent utiliser les valeurs du Compose du conteneur sous la forme {value}, ou {stepValue} quand son Compose a plusieurs étapes. Bilskirnir les remplit à la connexion.",
+    "Les arguments, l'environnement, l'URL et les en-têtes peuvent utiliser les valeurs du Compose du conteneur sous la forme {value}, ou {stepValue} quand son Compose a plusieurs étapes. Thoric les remplit à la connexion.",
   "mcp.server.insideHint": "Dans le bureau, {command} fait la même chose.",
   "mcp.server.added.one": "{name} ajouté avec {count} outil.",
   "mcp.server.added.other": "{name} ajouté avec {count} outils.",
@@ -1550,7 +1550,7 @@ export const fr: Messages = {
   "mcp.read.twice": "Le serveur MCP du bureau {name} est déclaré deux fois.",
 
   "inspector.description":
-    "Ouvrez un serveur MCP pour voir ce qu'il propose et essayer ses outils, prompts et ressources. Un serveur du bureau tourne dans un processus à part pour l'inspecteur ; un point d'accès et Bilskirnir MCP répondent comme ils répondent à un agent.",
+    "Ouvrez un serveur MCP pour voir ce qu'il propose et essayer ses outils, prompts et ressources. Un serveur du bureau tourne dans un processus à part pour l'inspecteur ; un point d'accès et Thoric MCP répondent comme ils répondent à un agent.",
   "inspector.open": "Tester dans l'inspecteur",
   "inspector.openOf": "Tester {name} dans l'inspecteur",
   "inspector.connection.title": "Serveur",
@@ -1558,15 +1558,15 @@ export const fr: Messages = {
   "inspector.connection.reconnect": "Se reconnecter",
   "inspector.connection.disconnect": "Se déconnecter",
   "inspector.connection.hint":
-    "Choisissez un serveur du bureau, un point d'accès ou Bilskirnir MCP, puis connectez-vous.",
+    "Choisissez un serveur du bureau, un point d'accès ou Thoric MCP, puis connectez-vous.",
   "inspector.connection.server": "{name} {version}",
   "inspector.connection.protocol": "protocole {version}",
   "inspector.connection.closed": "La connexion a pris fin",
   "inspector.connection.instructions": "Instructions du serveur",
   "inspector.target.label": "Serveur à inspecter",
   "inspector.target.placeholder": "Choisir un serveur…",
-  "inspector.target.bilskirnir": "Bilskirnir",
-  "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
+  "inspector.target.thoric": "Thoric",
+  "inspector.target.administrator": "Thoric MCP (/mcp)",
   "inspector.target.rootOff": "/mcp racine désactivé",
   "inspector.target.stopped": "conteneur arrêté",
   "inspector.status.connecting": "Démarrage du serveur…",

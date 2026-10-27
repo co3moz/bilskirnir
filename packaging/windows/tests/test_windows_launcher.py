@@ -1,4 +1,4 @@
-"""The Windows launcher, packaging/windows/bilskirnir.ps1, which releases attach next to the package
+"""The Windows launcher, packaging/windows/thoric.ps1, which releases attach next to the package
 and nothing else runs before a user does: that Windows PowerShell 5.1 reads it as written, that it
 parses, and that its administrator side, the copy of itself that 'lan' starts through UAC, runs
 nothing from the distribution, whose user has passwordless sudo.
@@ -14,7 +14,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "packaging/windows/bilskirnir.ps1"
+SCRIPT = ROOT / "packaging/windows/thoric.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell") or shutil.which("powershell.exe")
 
 # Reads the script from stdin and walks from the 'elevated' command through every function of the script

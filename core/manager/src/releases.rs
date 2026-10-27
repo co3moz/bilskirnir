@@ -1,16 +1,16 @@
-//! Newer releases of Bilskirnir, and the update the dashboard asks the WSL package to run.
+//! Newer releases of Thoric, and the update the dashboard asks the WSL package to run.
 //!
 //! Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when it starts and
 //! every six hours after, with the `curl` its image carries for the health check, and at once when
 //! the settings page asks. The dashboard offers a release that is newer than this manager.
 //!
-//! Only the WSL package updates from the dashboard, with the same `bilskirnir update` a terminal
-//! runs: it moves `MANAGER_IMAGE` in `/opt/bilskirnir/.env` to the release, brings that release's
+//! Only the WSL package updates from the dashboard, with the same `thoric update` a terminal
+//! runs: it moves `MANAGER_IMAGE` in `/opt/thoric/.env` to the release, brings that release's
 //! installation files and command, and recreates this container. None of that is reachable from
 //! inside the container, so the manager asks the package through the folder it mounts at
 //! [`UPDATE_DIR`], with a [`WATCHED`] file in it once the units below take requests; see
 //! [`crate::package_requests`]. The manager leaves a [`REQUEST`] naming its job there, and
-//! `bilskirnir-update.path` in the distribution starts `bilskirnir-update.service`, which renames
+//! `thoric-update.path` in the distribution starts `thoric-update.service`, which renames
 //! the request to [`STARTED`], runs the command as root with its output in [`LOG`] and writes how
 //! it ended to [`EXIT`]. The next manager follows the update to its end; see [`resumable`].
 use crate::{
@@ -34,18 +34,18 @@ pub(crate) use package_requests::Timing;
 
 /// This manager's release.
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The newest published release. Drafts and prereleases are left out, as `bilskirnir update`
+/// The newest published release. Drafts and prereleases are left out, as `thoric update`
 /// leaves them out.
-const RELEASES: &str = "https://api.github.com/repos/co3moz/bilskirnir/releases/latest";
+const RELEASES: &str = "https://api.github.com/repos/co3moz/thoric/releases/latest";
 /// Where a release's notes are, followed by its version.
-const RELEASE_PAGE: &str = "https://github.com/co3moz/bilskirnir/releases/tag/v";
+const RELEASE_PAGE: &str = "https://github.com/co3moz/thoric/releases/tag/v";
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
 /// curl gives up within its own limits below; the process is stopped here in any case.
 const CHECK_LIMIT: Duration = Duration::from_secs(30);
 
-/// The package's `/opt/bilskirnir/update` in the manager container.
+/// The package's `/opt/thoric/update` in the manager container.
 pub(crate) const UPDATE_DIR: &str = "/update";
-/// Put there by the package and by `bilskirnir update` once the path unit watches the folder.
+/// Put there by the package and by `thoric update` once the path unit watches the folder.
 pub(crate) const WATCHED: &str = "watched";
 pub(crate) const REQUEST: &str = "request";
 pub(crate) const STARTED: &str = "started";
@@ -60,8 +60,8 @@ pub(crate) const UPDATE: Channel = Channel {
     started: STARTED,
     log: LOG,
     exit: EXIT,
-    path_unit: "bilskirnir-update.path",
-    command: "bilskirnir update",
+    path_unit: "thoric-update.path",
+    command: "thoric update",
 };
 
 /// The service's own limit is two hours; a little more covers reading what it wrote last.
@@ -104,7 +104,7 @@ impl Releases {
         match result {
             Ok(version) => {
                 if newer(&version, VERSION) && check.newest.as_deref() != Some(version.as_str()) {
-                    tracing::info!("Bilskirnir {version} is available; this manager is {VERSION}");
+                    tracing::info!("Thoric {version} is available; this manager is {VERSION}");
                 }
                 check.newest = Some(version);
                 check.error = None;
@@ -237,7 +237,7 @@ pub async fn check(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     status(State(app)).await
 }
 
-/// `POST /api/update`: ask the WSL distribution to run `bilskirnir update`; returns a job.
+/// `POST /api/update`: ask the WSL distribution to run `thoric update`; returns a job.
 pub async fn start(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let conflict = |message: &str| Error(StatusCode::CONFLICT, message.into());
     if !app.config.update_check {
@@ -272,7 +272,7 @@ pub(crate) async fn run(app: &App, id: &str, timing: Timing) -> anyhow::Result<V
         .unwrap_or_else(|| "the newest release".into());
     app.append_log(
         id,
-        &format!("Asked the WSL distribution to run bilskirnir update, which moves this installation to {target}."),
+        &format!("Asked the WSL distribution to run thoric update, which moves this installation to {target}."),
     )?;
     let ended = package_requests::request(app, &UPDATE, id, &[], timing).await?;
     outcome(&ended)
@@ -296,7 +296,7 @@ pub(crate) fn outcome(ended: &str) -> anyhow::Result<Value> {
         return Ok(json!({"version": VERSION}));
     }
     bail!(
-        "bilskirnir update did not succeed in the WSL distribution ({:.80})",
+        "thoric update did not succeed in the WSL distribution ({:.80})",
         ended.trim()
     )
 }

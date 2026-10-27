@@ -19,7 +19,7 @@ try:
         child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
         os.close(folder)
         folder = child
-    temporary = ".bilskirnir-export-" + uuid.uuid4().hex
+    temporary = ".thoric-export-" + uuid.uuid4().hex
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=folder)
     included = {"recordings": [], "applications": []}
     with os.fdopen(descriptor, "wb") as output, tarfile.open(fileobj=output, mode="w:gz") as archive:

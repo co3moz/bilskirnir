@@ -1,8 +1,8 @@
-# Using Bilskirnir from an agent
+# Using Thoric from an agent
 
 [Back to the README](../README.md)
 
-Bilskirnir includes an MCP server at `/mcp`, on the same port as the dashboard. An agent can create a container, install software, read and write files, inspect its screen, interact with applications and save the result as an image. You do not need a separate MCP container.
+Thoric includes an MCP server at `/mcp`, on the same port as the dashboard. An agent can create a container, install software, read and write files, inspect its screen, interact with applications and save the result as an image. You do not need a separate MCP container.
 
 The server uses the [official Rust MCP SDK](https://github.com/modelcontextprotocol/rust-sdk) and Streamable HTTP. The same operations are available through the [HTTP API](API.md) for scripts and other applications.
 
@@ -15,9 +15,9 @@ ROOT_MCP_ENABLED: "true"
 MCP_TOKEN: "your-random-token"
 ```
 
-With the full installation manifests, set `ROOT_MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable root agent access, how agents authenticate and whether other devices may reach the endpoint; run `bilskirnir mcp` inside the distribution to see the endpoint together with the client settings below. An enabled root server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
+With the full installation manifests, set `ROOT_MCP_ENABLED=true` and `MCP_TOKEN` in `.env` instead. Recreate the manager after changing its settings. The [WSL distribution package](WSL_PACKAGE.md) asks at first start whether to enable root agent access, how agents authenticate and whether other devices may reach the endpoint; run `thoric mcp` inside the distribution to see the endpoint together with the client settings below. An enabled root server requires a token of 1 to 256 visible ASCII characters without spaces, even if dashboard login is disabled, unless `MCP_AUTH_MODE=none` is set. The length is your choice, but a short token is easy to guess.
 
-The setting was called `MCP_ENABLED` before 0.6.3. An `.env` that still has the old name keeps working while `ROOT_MCP_ENABLED` is missing, and the manager logs that it should be renamed; it refuses to start when the two names disagree. `bilskirnir update` renames it in the WSL package.
+The setting was called `MCP_ENABLED` before 0.6.3. An `.env` that still has the old name keeps working while `ROOT_MCP_ENABLED` is missing, and the manager logs that it should be renamed; it refuses to start when the two names disagree. `thoric update` renames it in the WSL package.
 
 [MCP endpoints](#mcp-endpoints-for-one-agent) made on the dashboard, or by an agent on `/mcp`, are not affected by this setting: each answers with its own token, so an agent can be given chosen containers while `/mcp` stays off.
 
@@ -44,23 +44,23 @@ For clients that use an `mcpServers` configuration:
 ```json
 {
   "mcpServers": {
-    "bilskirnir": {
+    "thoric": {
       "command": "wsl.exe",
-      "args": ["-d", "Bilskirnir", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+      "args": ["-d", "Thoric", "--", "docker", "exec", "-i", "thoric-manager", "python3", "/app/mcp_bridge.py"]
     }
   }
 }
 ```
 
-Use your WSL distribution and manager container names; `Bilskirnir` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `bilskirnir-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
+Use your WSL distribution and manager container names; `Thoric` is the distribution installed from the package, and a manual installation uses its own distribution name such as `Ubuntu-24.04`. The local development preview uses `thoric-preview`. For an agent already inside WSL, use `docker` as the command and start the argument list at `exec`.
 
-The root `/mcp` must be on (`ROOT_MCP_ENABLED`) for the bridge's default address. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent), which answers while `/mcp` is off too: give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN bilskirnir-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`. Once the client sends `notifications/initialized`, the bridge also opens that session's own stream, which a stdio client cannot open itself, and relays what the endpoint sends there, such as `notifications/tools/list_changed` when a desktop server is added, removed or changes its tools. Listing the tools again is still up to the client. A lost stream is opened again after 20 seconds, and the endpoint then repeats what it kept of it, so a notification can arrive twice. Without `-e MCP_TOKEN` it sends the manager's own token, which opens every endpoint too; the dashboard's settings for Claude Desktop use that form, so no token is written into them.
+The root `/mcp` must be on (`ROOT_MCP_ENABLED`) for the bridge's default address. The bridge uses the manager's existing `MCP_TOKEN`, or none with `MCP_AUTH_MODE=none`, so you do not put a token in the client command. Anyone able to run Docker exec already has access to that Docker Engine. The bridge negotiates MCP `2025-11-25`, which the connected client must support. HTTP clients can continue to use the normal endpoint directly. The bridge also reaches a [scoped endpoint](#mcp-endpoints-for-one-agent), which answers while `/mcp` is off too: give it that endpoint's path and token, `docker exec -i -e MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/NAME -e MCP_TOKEN=ENDPOINT_TOKEN thoric-manager python3 /app/mcp_bridge.py`, and it names the session the endpoint assigns on every request after `initialize`. Once the client sends `notifications/initialized`, the bridge also opens that session's own stream, which a stdio client cannot open itself, and relays what the endpoint sends there, such as `notifications/tools/list_changed` when a desktop server is added, removed or changes its tools. Listing the tools again is still up to the client. A lost stream is opened again after 20 seconds, and the endpoint then repeats what it kept of it, so a notification can arrive twice. Without `-e MCP_TOKEN` it sends the manager's own token, which opens every endpoint too; the dashboard's settings for Claude Desktop use that form, so no token is written into them.
 
 ### Broken responses from localhost on Windows
 
 Some Windows security products scan HTTP traffic on localhost and rewrite responses on the way. The web protection in Norton does this for requests whose path is `/mcp` (and `GET /sse`), on any local server: it replaces a `Content-Length` header with `Transfer-Encoding: chunked` but leaves the body unchunked, so clients drop the connection with errors such as `Invalid character in chunk size` (Node.js) or `Malformed encoding found in chunked-encoding` (curl). A response that is already chunked passes through unchanged.
 
-The manager therefore sends every `/mcp` response chunked, including the `401` for a missing token. Managers up to 0.2.0 still used `Content-Length` and are affected: update them (`bilskirnir update` in the WSL package), or exclude `localhost` or the manager's port from the product's web or HTTP scanning, or use the stdio bridge above, which reaches the manager without the Windows loopback connection.
+The manager therefore sends every `/mcp` response chunked, including the `401` for a missing token. Managers up to 0.2.0 still used `Content-Length` and are affected: update them (`thoric update` in the WSL package), or exclude `localhost` or the manager's port from the product's web or HTTP scanning, or use the stdio bridge above, which reaches the manager without the Windows loopback connection.
 
 To check what reaches Windows, send the same request from Windows and from inside the WSL distribution, where the security product does not see the traffic. In `token` mode both should print `401` with `transfer-encoding: chunked` and the JSON error body:
 
@@ -153,7 +153,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 }
 ```
 
-`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`; with a compose of several steps a value is `STEP.NAME`, such as `"vscode.GIT_EMAIL"`, or the name alone when only one step asks for it. Its job completes after every script succeeded, and `get_container` reports the result in `setup`, with each step's `status` in `setup.steps`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `text` parameter can have a `pattern`, a regular expression in the syntax of Rust's regex crate that a value must match as a whole, and a `pattern_message` describing the expected format, which the error repeats when a value does not match; an empty value is left to `required`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes`, other than one marked `manager`, or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. With `"new_volume": true`, `""` or no value gives the new container a volume of its own, `bilskirnir-CONTAINER_ID-name`, which its creation job creates, so there is no `create_volume` to call first and nothing to clean up when the request is refused; `"-"` gives it none instead, unless the parameter is required. `list_volumes` reports such a volume's `owner`: its `container_id`, `parameter` and the container's `name`, or `deleted: true` once that container was deleted. `delete_container` keeps it unless `delete_volumes` is `true`, and then removes only the volumes created for that container that no other container mounts, listing them in the job result as `volumes_deleted` and `volumes_kept`. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
+`create_container` then takes the values in `parameters`, such as `{"UNITY_EMAIL":"dev@example.com","UNITY_PASSWORD":"..."}`; with a compose of several steps a value is `STEP.NAME`, such as `"vscode.GIT_EMAIL"`, or the name alone when only one step asks for it. Its job completes after every script succeeded, and `get_container` reports the result in `setup`, with each step's `status` in `setup.steps`. A secret value is never returned and appears as `***` in the job log. A parameter's `type` is `text`, `number`, `boolean`, `choice`, `choices` or `volume`, and its `display` picks the dashboard control; the values an agent sends are text in the form the script reads, such as `"4"`, `"true"` or `"linux\nwebgl"`. A `text` parameter can have a `pattern`, a regular expression in the syntax of Rust's regex crate that a value must match as a whole, and a `pattern_message` describing the expected format, which the error repeats when a value does not match; an empty value is left to `required`. A `volume` parameter has a `path`, such as `/opt/unity`, and takes the name of a volume from `list_volumes`, other than one marked `manager`, or `create_volume`, or `""` for none: the volume is mounted at the path, and the script reads the path from the parameter's variable and the volume from the same name with `_VOLUME` appended. With `"new_volume": true`, `""` or no value gives the new container a volume of its own, `thoric-CONTAINER_ID-name`, which its creation job creates, so there is no `create_volume` to call first and nothing to clean up when the request is refused; `"-"` gives it none instead, unless the parameter is required. `list_volumes` reports such a volume's `owner`: its `container_id`, `parameter` and the container's `name`, or `deleted: true` once that container was deleted. `delete_container` keeps it unless `delete_volumes` is `true`, and then removes only the volumes created for that container that no other container mounts, listing them in the job result as `volumes_deleted` and `volumes_kept`. The rules for names, values, volumes, reruns and snapshots are in [the HTTP API](API.md#composes).
 
 ## See what takes disk space
 
@@ -191,7 +191,7 @@ Supervisor files live under `/tmp` in the desktop, so they are not part of snaps
 
 ## Record and export evidence
 
-`start_recording` captures the desktop as JPEG frames at `fps` (1 to 5) until `stop_recording`, `max_seconds` (up to 600), 3000 frames or 256 MiB. `max_width` scales frames (default 960) and `region` limits them to part of the desktop. `list_recordings` shows each recording's state, frame count and size; frames are regular files under `/tmp/bilskirnir-recordings/<recording_id>` and can be read with `read_file`. The frames are a sequence, not an encoded video.
+`start_recording` captures the desktop as JPEG frames at `fps` (1 to 5) until `stop_recording`, `max_seconds` (up to 600), 3000 frames or 256 MiB. `max_width` scales frames (default 960) and `region` limits them to part of the desktop. `list_recordings` shows each recording's state, frame count and size; frames are regular files under `/tmp/thoric-recordings/<recording_id>` and can be read with `read_file`. The frames are a sequence, not an encoded video.
 
 Stopping a recording also writes `recording.avi`, an MJPEG video that VLC, mpv and ffmpeg play; the stop result describes it under `video`. `export_artifacts` packages recordings and application logs into a tar.gz with a `manifest.json`, saved in the desktop home, a writable mounted volume or a compose folder so the files outlive the desktop, and returns the archive's `path` and `download_url`. Recording and application files live in tmpfs and disappear when the desktop restarts, so export them before resetting or restarting a container.
 
@@ -274,8 +274,8 @@ The file tools carry at most 512 KiB per call as base64 through the conversation
 The result holds `url`, relative to the manager's address like `download_url`, the `method`, `expires_in_seconds` and `expires_at`:
 
 ```bash
-curl --fail-with-body --upload-file project.tar.gz http://bilskirnir.lan:8080/api/transfers/TOKEN
-curl --fail --output build.zip http://bilskirnir.lan:8080/api/transfers/TOKEN
+curl --fail-with-body --upload-file project.tar.gz http://thoric.lan:8080/api/transfers/TOKEN
+curl --fail --output build.zip http://thoric.lan:8080/api/transfers/TOKEN
 ```
 
 The request runs the HTTP route the dashboard uses, with its limits, locks, job and progress, and answers as that route does: an upload with the saved path, an import with a `job_id` once the whole archive has arrived, an export or a folder download with the archive and its job in the `X-Job-Id` header. Follow jobs with `get_job`. An upload's size comes from `Content-Length`, which `--upload-file` sends for a file, or from a `size` query parameter for a body sent without one. An import also takes an archive of unknown size, such as `tar -c -C project . | curl --upload-file - URL`, with the checks the [HTTP API](API.md#volume-archives) describes. Nothing else in the request changes what the link does.
@@ -285,7 +285,7 @@ A link is a credential of its own:
 - Its token is random, 244 bits, kept in the manager's memory only, so a restart forgets it.
 - It expires after five minutes, and the first request that presents it spends it, whatever that request's outcome. A transfer that has begun runs to its end; signing out of the dashboard does not stop it.
 - It runs only the operation and arguments it was issued for, and it is neither a session cookie nor a bearer token for any other route.
-- It needs no cookie, no `X-Bilskirnir-Request` header and no `Authorization` header, so a shell can use it without the administrator password or the MCP token. If the request carries an `Origin` header, it must match the manager's address.
+- It needs no cookie, no `X-Thoric-Request` header and no `Authorization` header, so a shell can use it without the administrator password or the MCP token. If the request carries an `Origin` header, it must match the manager's address.
 - The manager keeps the token out of job logs, error messages and its request tracing. Treat the URL as a secret until it has been used: whoever holds it can run that one request.
 
 Links come only from `create_transfer`, so with MCP disabled the route answers `404`. Accepting the MCP token on the HTTP API itself would have been simpler, but it would put a long-lived administrator credential into curl commands and shell history, where a leak reaches every route for as long as the token is configured.
@@ -296,8 +296,8 @@ A desktop can run MCP servers of its own: a browser automation server attached t
 
 | Folder | Who writes it | Source |
 | --- | --- | --- |
-| `/etc/bilskirnir/mcp.d/NAME.json` | The image: a template's or build's `mcp` declarations, or its script. | `image` |
-| `~/.config/bilskirnir/mcp/NAME.json` | The desktop user, at any time: `bilskirnir-mcp add`, the dashboard's MCP page or `register_mcp_server`. | `container` |
+| `/etc/thoric/mcp.d/NAME.json` | The image: a template's or build's `mcp` declarations, or its script. | `image` |
+| `~/.config/thoric/mcp/NAME.json` | The desktop user, at any time: `thoric-mcp add`, the dashboard's MCP page or `register_mcp_server`. | `container` |
 
 The desktop user's declaration of a name replaces the image's. A declaration is either a program that speaks MCP on stdio or a Streamable HTTP server already listening on the desktop's loopback:
 
@@ -311,24 +311,24 @@ The desktop user's declaration of a name replaces the image's. A declaration is 
 {"url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}
 ```
 
-Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. Inside the desktop, `bilskirnir-mcp` writes the desktop user's files:
+Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. Inside the desktop, `thoric-mcp` writes the desktop user's files:
 
 ```bash
-bilskirnir-mcp add x --description "My extension's helper" -- node /home/desktop/ext/mcp.js
-bilskirnir-mcp add api --url http://127.0.0.1:8931/mcp --header 'Authorization: Bearer ${API_TOKEN}'
-bilskirnir-mcp list
-bilskirnir-mcp list --json
-bilskirnir-mcp show x
-bilskirnir-mcp remove x
+thoric-mcp add x --description "My extension's helper" -- node /home/desktop/ext/mcp.js
+thoric-mcp add api --url http://127.0.0.1:8931/mcp --header 'Authorization: Bearer ${API_TOKEN}'
+thoric-mcp list
+thoric-mcp list --json
+thoric-mcp show x
+thoric-mcp remove x
 ```
 
 `add` refuses what the manager would refuse anyway, such as an address that is not on the desktop's loopback, and replaces the desktop user's declaration of the same name. `list --json` prints both folders' declarations, each with its `spec`, or an `error` when its file cannot be read, and `active`, which is false for the image's declaration of a name the desktop user declares too. While the manager watches the desktop it adds `watched: true`, the `endpoints` that reach it, and each used declaration's `status` as the manager knows it: `state`, `error`, `tools` with the first line of each description, `tools_at` and the end of its stderr in `log`. `show NAME` prints the used declaration with its name, as a template's or a build's `mcp` list holds it.
 
-The XFCE and GNOME images show the same in the panel's tray, through XFCE's Status Tray and GNOME's AppIndicator extension. The tray's menu lists the servers with their states, and its icon carries a red dot while one has an error; **Manage MCP servers**, a middle click on the icon or **MCP Servers** in the applications menu opens a window with each server's command, file, tools, error and output, and the endpoints that reach the desktop with their scopes and whether they have a token of their own. **Add server**, **Edit** and **Remove** run `bilskirnir-mcp`, and the dialog shows the command line before it runs it, so whatever is done there can be repeated in a terminal or a script. An image's server is changed with **Change here**, which saves a copy of it in the desktop user's folder; **Use the image's** removes the copy. **Copy command** and **Copy for a template** give a server's `bilskirnir-mcp add` command line and its declaration for a template. The tray starts with the session from `/etc/xdg/autostart`, where XFCE's Session and Startup settings can turn it off.
+The XFCE and GNOME images show the same in the panel's tray, through XFCE's Status Tray and GNOME's AppIndicator extension. The tray's menu lists the servers with their states, and its icon carries a red dot while one has an error; **Manage MCP servers**, a middle click on the icon or **MCP Servers** in the applications menu opens a window with each server's command, file, tools, error and output, and the endpoints that reach the desktop with their scopes and whether they have a token of their own. **Add server**, **Edit** and **Remove** run `thoric-mcp`, and the dialog shows the command line before it runs it, so whatever is done there can be repeated in a terminal or a script. An image's server is changed with **Change here**, which saves a copy of it in the desktop user's folder; **Use the image's** removes the copy. **Copy command** and **Copy for a template** give a server's `thoric-mcp add` command line and its declaration for a template. The tray starts with the session from `/etc/xdg/autostart`, where XFCE's Session and Startup settings can turn it off.
 
 The manager watches both folders in every running desktop. A new or changed server is started once to read its tool list, which is kept, so its tools stay listed while the container is stopped. `list_mcp_servers` reports each server's `state`: `ready`, `pending` while its tools are read, `error` with the reason, or `stopped` while the container does not run, with the end of its stderr in `log`. A server that sends `notifications/tools/list_changed` has its list read again, once per burst of notifications. A list of more than 256 tools, larger than 1 MiB as JSON or spread over more than 16 pages is refused and reported as the server's error, since every endpoint sends the whole list in each `tools/list`.
 
-The desktop hears what the manager knows of it through the same watch: whenever one of its servers or an endpoint that covers it changes, the manager sends a report on the watcher's stdin, and the watcher keeps the latest in `/run/desktop/bilskirnir/mcp-status.json`, readable by the desktop user alone, until the manager stops watching. A report carries each server's state, tools, error and output, and for each endpoint that covers the container its name, path, scopes, servers, left-out tools and whether it has a token. It never carries a token or its hash, another container's grant or anything about another container, and the desktop never connects to the manager.
+The desktop hears what the manager knows of it through the same watch: whenever one of its servers or an endpoint that covers it changes, the manager sends a report on the watcher's stdin, and the watcher keeps the latest in `/run/desktop/thoric/mcp-status.json`, readable by the desktop user alone, until the manager stops watching. A report carries each server's state, tools, error and output, and for each endpoint that covers the container its name, path, scopes, servers, left-out tools and whether it has a token. It never carries a token or its hash, another container's grant or anything about another container, and the desktop never connects to the manager.
 
 A server is never published on a port and never reached over the desktop's network. The manager runs it with `docker exec` as the desktop user, with `DISPLAY`, `HOME` and a `PATH` that includes `~/.local/bin`: a stdio program directly, an HTTP server through a small adapter inside the desktop that connects to its loopback address, so a server that listens on `127.0.0.1` only works, and its own `Authorization` header is sent. Root is never used. A declared variable's value, which may be a resolved compose value, reaches the server through the Docker CLI's environment rather than its command line, so `ps` in the manager does not show it; a declared argument has no such channel and is on the command line. A server whose declaration the image carries cannot be removed from a container, only left out of an endpoint.
 
@@ -374,15 +374,15 @@ The manager records every tool call an agent makes, on `/mcp` and on every endpo
 - its arguments, masked as below, and a one-line summary of them;
 - how it ended: a result, an error the tool reported with the first 300 characters of its text, or a refusal before any tool ran, such as an unknown tool or an argument its schema does not take; and the job it started.
 
-A result is never kept beyond that error text, so a token a tool returns, such as `create_mcp_endpoint_token`'s, never reaches the log. Each call also writes one line to the manager's own log (`docker compose logs manager`, or `bilskirnir logs` in the WSL package) with its caller, tool, container, kind, outcome and duration, and none of its arguments.
+A result is never kept beyond that error text, so a token a tool returns, such as `create_mcp_endpoint_token`'s, never reaches the log. Each call also writes one line to the manager's own log (`docker compose logs manager`, or `thoric logs` in the WSL package) with its caller, tool, container, kind, outcome and duration, and none of its arguments.
 
-A call's kind comes from its tool's annotations: `read` for `readOnlyHint`, `change` for a tool that says it is not destructive, and `destructive` otherwise, as MCP assumes of a tool that says nothing. Bilskirnir marks the mouse, keyboard and window tools destructive, since input can change or delete an application's data, so a session of clicks and keys shows as destructive calls. A desktop server's annotations come from inside the desktop: they can mark its tool destructive but never a read, so a server cannot pass its calls off as reads.
+A call's kind comes from its tool's annotations: `read` for `readOnlyHint`, `change` for a tool that says it is not destructive, and `destructive` otherwise, as MCP assumes of a tool that says nothing. Thoric marks the mouse, keyboard and window tools destructive, since input can change or delete an application's data, so a session of clicks and keys shows as destructive calls. A desktop server's annotations come from inside the desktop: they can mark its tool destructive but never a read, so a server cannot pass its calls off as reads.
 
 What is kept of the arguments:
 
-- Every Bilskirnir tool has a list of the arguments whose values are kept: paths, names, IDs, options and limits, a text cut at 256 characters. `exec_container`'s `script`, the first thing to look at, is kept up to its first 4,096 characters, as is `build_image`'s.
+- Every Thoric tool has a list of the arguments whose values are kept: paths, names, IDs, options and limits, a text cut at 256 characters. `exec_container`'s `script`, the first thing to look at, is kept up to its first 4,096 characters, as is `build_image`'s.
 - Every other argument is kept as its type and size only. That covers what `write_file` writes; the base64 of `upload_file`, `inject_audio` and an image icon; compose values in `create_container` and the composes of `build_image` and `set_image_compose`; the arguments, environment and headers of `register_mcp_server` and the environment of `launch_application`; text typed with `desktop_input` or `act_and_observe`, and every key of a single character they press, since a password can be typed a key at a time; and what `terminal_input` types, since a terminal is where a password prompt waits. An argument a later release adds is kept the same way until its tool's list names it.
-- A desktop server's tool is opaque to Bilskirnir, so its arguments keep their names and sizes and never their values, whatever the tool is called.
+- A desktop server's tool is opaque to Thoric, so its arguments keep their names and sizes and never their values, whatever the tool is called.
 - An error text loses every masked value it quotes before it is kept.
 
 The newest 10,000 calls are kept in the manager's database, so they survive a restart, and older ones are removed as new ones arrive. Recording never fails or holds up a call: the row is written after the call has answered, and one that cannot be written is logged and lost.
@@ -413,7 +413,7 @@ Read/write and execution tools operate inside managed desktop containers. They d
 
 `update_container` changes a container's settings after creation; pass only the fields to change. `name`, `internet`, `ports` and a new or changed resource limit apply in place. Use `dry_run=true` first: its `restart` list names the changes that recreate the container, which restarts the desktop and closes running applications while keeping the files in its container layer.
 
-Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one. It lists only the volumes that carry the installation's `VOLUME_FILTER` label, by default the ones Bilskirnir created; a volume it leaves out cannot be mounted or opened, so create or copy one instead of naming a volume from elsewhere on the host.
+Snapshots save filesystem changes; they do not save volumes or running application state. Use a named volume for project files that must survive container deletion, and save an image before deleting a container whose installation you want to reuse. `list_volumes` marks the manager's own volumes, such as its data volume, with `manager: true`; a container cannot mount them, so pick another one. It lists only the volumes that carry the installation's `VOLUME_FILTER` label, by default the ones Thoric created; a volume it leaves out cannot be mounted or opened, so create or copy one instead of naming a volume from elsewhere on the host.
 
 `copy_volume` copies a named volume, `volume`, into a new one called `name`: a prepared project or cache that each task starts from, or a copy kept before a risky change. Poll `get_job` until it completes before mounting the copy. The copy keeps the tree and modes, and its files belong to the desktop user. It is a full copy, not copy-on-write, so it takes as much disk space as the volume. The rules are in [volume archives](API.md#volume-archives).
 

@@ -453,8 +453,8 @@ pub async fn endpoint_tools(
                     server,
                     ..
                 } => ("server", json!(container_id), json!(server)),
-                super::scopes::Target::Bilskirnir { containers, .. } => (
-                    "bilskirnir",
+                super::scopes::Target::Thoric { containers, .. } => (
+                    "thoric",
                     json!(if containers.len() == 1 {
                         Some(&containers[0].1)
                     } else {
@@ -462,7 +462,7 @@ pub async fn endpoint_tools(
                     }),
                     Value::Null,
                 ),
-                super::scopes::Target::Job { .. } => ("bilskirnir", Value::Null, Value::Null),
+                super::scopes::Target::Job { .. } => ("thoric", Value::Null, Value::Null),
             };
             json!({
                 "name": entry.tool.name,

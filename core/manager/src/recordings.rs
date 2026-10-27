@@ -19,7 +19,7 @@ use std::{sync::Arc, time::Duration};
 const RECORDER: &str = include_str!("../helpers/recorder.py");
 const CONTROL: &str = include_str!("../helpers/app_control.py");
 const EXPORTER: &str = include_str!("../helpers/export_artifacts.py");
-pub const ROOT: &str = "/tmp/bilskirnir-recordings";
+pub const ROOT: &str = "/tmp/thoric-recordings";
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -304,7 +304,7 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
     Ok(value)
 }
 fn apps_root() -> &'static str {
-    "/tmp/bilskirnir-apps"
+    "/tmp/thoric-apps"
 }
 pub async fn start(
     State(app): State<Arc<App>>,

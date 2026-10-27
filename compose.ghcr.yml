@@ -1,16 +1,16 @@
-name: bilskirnir
+name: thoric
 
 services:
   manager:
-    image: ${MANAGER_IMAGE:-ghcr.io/co3moz/bilskirnir:latest}
-    container_name: ${MANAGER_CONTAINER:-bilskirnir-manager}
+    image: ${MANAGER_IMAGE:-ghcr.io/co3moz/thoric:latest}
+    container_name: ${MANAGER_CONTAINER:-thoric-manager}
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
     labels:
-      bilskirnir.manager: "true"
+      thoric.manager: "true"
     environment:
-      MANAGER_CONTAINER: ${MANAGER_CONTAINER:-bilskirnir-manager}
+      MANAGER_CONTAINER: ${MANAGER_CONTAINER:-thoric-manager}
       AUTH_MODE: ${AUTH_MODE:-password}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
@@ -21,7 +21,7 @@ services:
       MCP_TOKEN: ${MCP_TOKEN:-}
       MCP_AUTH_MODE: ${MCP_AUTH_MODE:-token}
       SECURE_COOKIE: ${SECURE_COOKIE:-false}
-      DESKTOP_IMAGE: ${DESKTOP_IMAGE:-ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04}
+      DESKTOP_IMAGE: ${DESKTOP_IMAGE:-ghcr.io/co3moz/thoric/ubuntu-xfce:24.04}
       WSL_GPU: ${WSL_GPU:-true}
       NVIDIA_COMPUTE: ${NVIDIA_COMPUTE:-true}
       DRI_GPU: ${DRI_GPU:-true}
@@ -46,7 +46,7 @@ services:
       # Apart, so the Settings page edits ALLOWED_HOSTS as .env has it; the manager answers both.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
       DESKTOP_HOST: ${DESKTOP_HOST:-localhost}
-      RUST_LOG: ${RUST_LOG:-bilskirnir=info,tower_http=info}
+      RUST_LOG: ${RUST_LOG:-thoric=info,tower_http=info}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - manager-data:/data
@@ -80,6 +80,6 @@ networks:
   management:
 volumes:
   manager-data:
-    name: ${MANAGER_DATA_VOLUME:-bilskirnir-data}
+    name: ${MANAGER_DATA_VOLUME:-thoric-data}
   caddy-data:
   caddy-config:

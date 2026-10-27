@@ -396,7 +396,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "bilskirnir=info,tower_http=info".into()),
+                .unwrap_or_else(|_| "thoric=info,tower_http=info".into()),
         )
         .init();
     let mut config = config::Config::load()?;
@@ -500,7 +500,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
     let listener = tokio::net::TcpListener::bind(&listen).await?;
-    tracing::info!("Bilskirnir listening: {listen}");
+    tracing::info!("Thoric listening: {listen}");
     let closing = app.clone();
     axum::serve(
         listener,
@@ -520,7 +520,7 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
         return Ok(());
     };
     let m = app.inspect("container", manager).await?;
-    if m["Config"]["Labels"]["bilskirnir.manager"] != "true" {
+    if m["Config"]["Labels"]["thoric.manager"] != "true" {
         anyhow::bail!("Missing manager label");
     }
     for mut env in app.db.list::<model::Container>(model::CONTAINERS)? {

@@ -3,7 +3,7 @@
 //!
 //! Both end in a command that recreates this container, which nothing inside it can do, and the
 //! manager never reaches into the distribution itself. Instead the package mounts
-//! `/opt/bilskirnir/update` at [`crate::releases::UPDATE_DIR`]. For each kind of request, a
+//! `/opt/thoric/update` at [`crate::releases::UPDATE_DIR`]. For each kind of request, a
 //! [`Channel`], the manager leaves a request naming its job on the request's first line; a path
 //! unit in the distribution starts a service, which renames the request to the channel's
 //! `started`, runs the command as root with its output in `log` and writes how it ended to `exit`.
@@ -92,7 +92,7 @@ pub(crate) async fn request(
         remove(&dir.join(channel.request)).await?;
         if started_by(dir, channel).await?.as_deref() != Some(id) {
             bail!(
-                "The WSL distribution did not take the request. Check 'systemctl status {}' there, or run '{}' in a Bilskirnir terminal",
+                "The WSL distribution did not take the request. Check 'systemctl status {}' there, or run '{}' in a Thoric terminal",
                 channel.path_unit,
                 channel.command
             );

@@ -31,7 +31,7 @@ export type Template = {
   tags: string[]
   /** `application` when the list names none. */
   kind: TemplateKind
-  /** The oldest Bilskirnir release that can build it, such as `0.5.0`. */
+  /** The oldest Thoric release that can build it, such as `0.5.0`. */
   requires?: string
   /** The names of the desktop MCP servers an image built from it declares. */
   mcp?: string[]

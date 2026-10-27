@@ -33,7 +33,7 @@ import {
 import { useMcpEndpoints } from "@/lib/queries"
 import type { DialogProps } from "./side-drawer"
 
-const CLIENT_KEY = "bilskirnir.mcp.client"
+const CLIENT_KEY = "thoric.mcp.client"
 
 /** A client's name; `generic` is the one that is not a product. */
 const clientName = (client: McpClient) =>
@@ -161,7 +161,7 @@ export function ClientSetup({ target }: { target: ConnectTarget }) {
 }
 
 /**
- * Connects an agent to an endpoint, or to Bilskirnir MCP at `/mcp` without a name. The token is
+ * Connects an agent to an endpoint, or to Thoric MCP at `/mcp` without a name. The token is
  * shown only once when it is made, so it is typed or pasted here and fills in the settings alone.
  */
 export function ConnectDialog({ name, ...props }: DialogProps & { name?: string }) {
@@ -171,7 +171,7 @@ export function ConnectDialog({ name, ...props }: DialogProps & { name?: string 
   const [header, setHeader] = React.useState(true)
   const path = name ? (endpoint?.path ?? `/mcp/${name}`) : "/mcp"
   const target: ConnectTarget = {
-    name: name ?? "bilskirnir",
+    name: name ?? "thoric",
     url: endpointUrl(location.origin, path),
     path,
     token: header ? token.trim() || (name ? ENDPOINT_TOKEN : ADMIN_TOKEN) : null,

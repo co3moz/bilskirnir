@@ -31,13 +31,7 @@ fn after<'a>(args: &'a [String], flag: &str) -> &'a str {
 #[test]
 fn a_helper_reaches_nothing_but_the_volume() {
     for access in [Access::Read, Access::Write, Access::Archive] {
-        let args = helper_args(
-            &volume(),
-            access,
-            "bilskirnir-volume-test",
-            false,
-            &command(),
-        );
+        let args = helper_args(&volume(), access, "thoric-volume-test", false, &command());
         let joined = args.join(" ");
         assert_eq!(&args[..2], ["run", "--rm"]);
         assert_eq!(after(&args, "--network"), "none");
@@ -122,17 +116,17 @@ fn paths_stay_inside_the_volume() {
 fn the_managers_own_volume_is_recognized() {
     let manager = serde_json::json!({"Mounts": [
         {"Type": "bind", "Name": "", "Source": "/var/run/docker.sock"},
-        {"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"},
+        {"Type": "volume", "Name": "thoric-data", "Destination": "/data"},
     ]});
-    assert!(manager_volume(&manager, "bilskirnir-data"));
+    assert!(manager_volume(&manager, "thoric-data"));
     assert!(!manager_volume(&manager, "project"));
-    assert!(!manager_volume(&serde_json::json!({}), "bilskirnir-data"));
+    assert!(!manager_volume(&serde_json::json!({}), "thoric-data"));
 }
 
 #[test]
 fn a_desktop_cannot_mount_the_managers_own_volume() {
     let manager = serde_json::json!({"Mounts": [
-        {"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"},
+        {"Type": "volume", "Name": "thoric-data", "Destination": "/data"},
     ]});
     let mount = |volume: &str, target: &str| Mount {
         volume: volume.into(),
@@ -146,24 +140,24 @@ fn a_desktop_cannot_mount_the_managers_own_volume() {
         &manager,
         &[
             mount("project", "/workspace"),
-            mount("bilskirnir-data", "/opt/data"),
+            mount("thoric-data", "/opt/data"),
         ],
     )
     .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+        "thoric-data is the manager's own volume and cannot be mounted in a desktop"
     );
 }
 
 #[test]
 fn a_listing_marks_the_managers_own_volumes() {
     let manager = serde_json::json!({"Mounts": [
-        {"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"},
+        {"Type": "volume", "Name": "thoric-data", "Destination": "/data"},
     ]});
     let listing = || {
         vec![
-            serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
+            serde_json::json!({"Name": "thoric-data", "Driver": "local"}),
             serde_json::json!({"Name": "project", "Driver": "local"}),
         ]
     };
@@ -172,7 +166,7 @@ fn a_listing_marks_the_managers_own_volumes() {
     assert_eq!(
         volumes,
         [
-            serde_json::json!({"Name": "bilskirnir-data", "Driver": "local", "manager": true}),
+            serde_json::json!({"Name": "thoric-data", "Driver": "local", "manager": true}),
             serde_json::json!({"Name": "project", "Driver": "local", "manager": false}),
         ]
     );
@@ -200,7 +194,7 @@ async fn the_volume_list_marks_what_the_manager_mounts() {
             })
             .collect()
     }
-    let data = |manager| ("bilskirnir-data".to_owned(), manager);
+    let data = |manager| ("thoric-data".to_owned(), manager);
     let project = ("project".to_owned(), false);
     assert_eq!(marks(&app).await, [data(true), project.clone()]);
 
@@ -222,13 +216,13 @@ async fn the_volume_list_marks_what_the_manager_mounts() {
 fn a_filter_reads_labels_as_dockers_label_filter() {
     use serde_json::json;
     let volume = |labels: Value| json!({"Name": "v", "Labels": labels});
-    let managed = volume(json!({"bilskirnir.managed": "true", "team": ""}));
+    let managed = volume(json!({"thoric.managed": "true", "team": ""}));
     let compose = volume(json!({"com.docker.compose.project": "db"}));
     let bare = volume(Value::Null);
     for volume in [&managed, &compose, &bare] {
         assert!(listed(None, volume));
     }
-    let default = Some("bilskirnir.managed=true");
+    let default = Some("thoric.managed=true");
     assert!(listed(default, &managed));
     assert!(!listed(default, &compose));
     assert!(!listed(default, &bare));
@@ -244,14 +238,14 @@ fn a_filter_reads_labels_as_dockers_label_filter() {
 fn every_volume_the_manager_creates_is_one_its_filter_lists() {
     for filter in [
         None,
-        Some("bilskirnir.managed=true"),
-        Some("bilskirnir.managed"),
+        Some("thoric.managed=true"),
+        Some("thoric.managed"),
         Some("team"),
         Some("team="),
         Some("com.example.team=unity"),
     ] {
         let labels = labels(filter);
-        assert_eq!(labels[0], "bilskirnir.managed=true");
+        assert_eq!(labels[0], "thoric.managed=true");
         // As `docker volume create --label` sets them: a bare key gets an empty value.
         let set = labels
             .iter()
@@ -329,7 +323,7 @@ async fn a_volume_filter_hides_and_refuses_what_it_leaves_out() {
     assert!(
         std::fs::read_to_string(&calls)
             .unwrap()
-            .starts_with("volume ls --filter label=bilskirnir.managed=true --format")
+            .starts_with("volume ls --filter label=thoric.managed=true --format")
     );
     // Named in a request, a volume the filter leaves out is as missing as one that never was.
     let refused = app.open_volume("outside").await.err().unwrap();
@@ -371,7 +365,7 @@ async fn post(app: Arc<App>, uri: &str, body: serde_json::Value) -> (StatusCode,
                 .uri(uri)
                 .header("host", "localhost:8080")
                 .header("content-type", "application/json")
-                .header("x-bilskirnir-request", "1")
+                .header("x-thoric-request", "1")
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )

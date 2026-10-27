@@ -27,16 +27,7 @@ const RESERVED: &[&str] = &[
     "PS4", "PWD", "SHELL", "SHLVL", "TERM", "TMPDIR", "TZ", "USER",
 ];
 const RESERVED_PREFIXES: &[&str] = &[
-    "BASH",
-    "BILSKIRNIR",
-    "DBUS_",
-    "DESKTOP_",
-    "GPU_",
-    "LC_",
-    "LD_",
-    "PULSE_",
-    "PYTHON",
-    "XDG_",
+    "BASH", "THORIC", "DBUS_", "DESKTOP_", "GPU_", "LC_", "LD_", "PULSE_", "PYTHON", "XDG_",
 ];
 
 /// What a parameter's value is.
@@ -440,15 +431,15 @@ impl Parameter {
     }
 
     /// The volume a container with this ID gets for a parameter that creates one:
-    /// `bilskirnir-<container>-<name>`, the name in lowercase with dashes for underscores, and
-    /// `bilskirnir-<container>-<step>-<name>` for a parameter of a step in a compose of several,
+    /// `thoric-<container>-<name>`, the name in lowercase with dashes for underscores, and
+    /// `thoric-<container>-<step>-<name>` for a parameter of a step in a compose of several,
     /// where another step may ask for the same name.
     pub(super) fn new_volume_for(&self, container: &str, step: Option<&str>) -> Option<String> {
         self.new_volume.then(|| {
             let name = self.name.to_ascii_lowercase().replace('_', "-");
             match step {
-                Some(step) => format!("bilskirnir-{container}-{step}-{name}"),
-                None => format!("bilskirnir-{container}-{name}"),
+                Some(step) => format!("thoric-{container}-{step}-{name}"),
+                None => format!("thoric-{container}-{name}"),
             }
         })
     }

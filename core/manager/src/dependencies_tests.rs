@@ -7,7 +7,7 @@ use axum::body::to_bytes;
 #[tokio::test]
 async fn hands_over_the_list_the_build_wrote() {
     let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-dependencies-{}",
+        "thoric-dependencies-{}",
         uuid::Uuid::new_v4().simple()
     ));
     std::fs::create_dir_all(&dir).unwrap();

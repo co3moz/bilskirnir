@@ -1,5 +1,5 @@
 //! What the manager makes of GitHub's answer, when the dashboard may start an update, and how an
-//! update job follows `bilskirnir update` through the folder the WSL package watches, also once
+//! update job follows `thoric update` through the folder the WSL package watches, also once
 //! the update has replaced the manager that started it.
 use super::*;
 use crate::package_requests::active;
@@ -14,10 +14,7 @@ const FAST: Timing = Timing {
 };
 
 fn folder() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-update-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-update-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -49,7 +46,7 @@ async fn request(app: Arc<App>, method: &str, uri: &str) -> (StatusCode, Value) 
                 .method(method)
                 .uri(uri)
                 .header("host", "localhost:8080")
-                .header("x-bilskirnir-request", "1")
+                .header("x-thoric-request", "1")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -101,7 +98,7 @@ fn host(
 #[test]
 fn the_newest_release_is_the_version_of_its_tag() {
     assert_eq!(
-        newest(br#"{"tag_name": "v0.7.0", "name": "Bilskirnir v0.7.0"}"#).unwrap(),
+        newest(br#"{"tag_name": "v0.7.0", "name": "Thoric v0.7.0"}"#).unwrap(),
         "0.7.0"
     );
     assert_eq!(newest(br#"{"tag_name": "1.2.3"}"#).unwrap(), "1.2.3");
@@ -237,7 +234,7 @@ async fn the_dashboard_updates_only_a_watched_package_to_a_newer_release() {
     assert_eq!(body["newest"], "999.0.0");
     assert_eq!(
         body["release_url"],
-        "https://github.com/co3moz/bilskirnir/releases/tag/v999.0.0"
+        "https://github.com/co3moz/thoric/releases/tag/v999.0.0"
     );
     assert_eq!(body["installable"], false);
     assert_eq!(body["job_id"], Value::Null);
@@ -337,7 +334,7 @@ async fn a_request_nobody_takes_is_withdrawn() {
         .put("job", "lonely", &job("lonely", JOB, "running"))
         .unwrap();
     let error = run(&app, "lonely", FAST).await.unwrap_err().to_string();
-    assert!(error.contains("bilskirnir-update.path"), "{error}");
+    assert!(error.contains("thoric-update.path"), "{error}");
     // A request taken later would start an update that no job follows.
     assert!(!dir.join(REQUEST).exists());
     std::fs::remove_dir_all(&dir).unwrap();
@@ -385,13 +382,13 @@ fn the_package_mounts_this_folder_and_its_units_write_these_names() {
         )
         .unwrap()
     };
-    let folder = "/opt/bilskirnir/update";
+    let folder = "/opt/thoric/update";
     assert!(read("compose.ghcr.yml").contains(&format!("      - ./update:{UPDATE_DIR}\n")));
     assert!(
-        read("packaging/wsl/bilskirnir-update.path")
+        read("packaging/wsl/thoric-update.path")
             .contains(&format!("\nPathExists={folder}/{REQUEST}\n"))
     );
-    let service = read("packaging/wsl/bilskirnir-update.service");
+    let service = read("packaging/wsl/thoric-update.service");
     for written in [
         format!(" {folder}/{REQUEST} {folder}/{STARTED}\n"),
         format!(">{folder}/{LOG} 2>&1'"),
@@ -400,7 +397,5 @@ fn the_package_mounts_this_folder_and_its_units_write_these_names() {
         assert!(service.contains(&written), "{written}");
     }
     assert!(read("packaging/wsl/Dockerfile").contains(&format!("touch {folder}/{WATCHED}")));
-    assert!(
-        read("packaging/wsl/bilskirnir").contains(&format!("install_units \"$image\" {WATCHED} "))
-    );
+    assert!(read("packaging/wsl/thoric").contains(&format!("install_units \"$image\" {WATCHED} ")));
 }

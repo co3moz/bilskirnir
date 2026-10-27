@@ -47,11 +47,7 @@ pub fn cookie(headers: &HeaderMap) -> Option<String> {
         .to_str()
         .ok()?
         .split(';')
-        .find_map(|p| {
-            p.trim()
-                .strip_prefix("bilskirnir_session=")
-                .map(str::to_owned)
-        })
+        .find_map(|p| p.trim().strip_prefix("thoric_session=").map(str::to_owned))
 }
 /// What a long transfer answers to once it has begun. A dashboard request's session cookie ends
 /// it when the session signs out or expires. A one-time transfer link was checked when its
@@ -179,7 +175,7 @@ pub async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> R
         axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
     ) && (req
         .headers()
-        .get("x-bilskirnir-request")
+        .get("x-thoric-request")
         .is_none_or(|v| v != "1")
         || (req.headers().contains_key(header::ORIGIN) && !origin_matches(req.headers())))
     {
@@ -198,7 +194,7 @@ pub async fn login(
     headers: HeaderMap,
     Json(body): Json<Login>,
 ) -> Result<Response> {
-    if headers.get("x-bilskirnir-request").is_none_or(|v| v != "1")
+    if headers.get("x-thoric-request").is_none_or(|v| v != "1")
         || (headers.contains_key(header::ORIGIN) && !origin_matches(&headers))
     {
         return Err(Error(
@@ -268,7 +264,7 @@ pub async fn login(
         [(
             header::SET_COOKIE,
             format!(
-                "bilskirnir_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{secure}"
+                "thoric_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{secure}"
             ),
         )],
         StatusCode::NO_CONTENT,
@@ -283,7 +279,7 @@ pub async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Response
     (
         [(
             header::SET_COOKIE,
-            "bilskirnir_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0",
+            "thoric_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0",
         )],
         StatusCode::NO_CONTENT,
     )

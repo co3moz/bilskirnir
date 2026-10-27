@@ -63,7 +63,7 @@ export const pageIcon = (page: Page) => {
   return pages.find((item) => item.page === page)?.icon
 }
 
-const repository = "https://github.com/co3moz/bilskirnir"
+const repository = "https://github.com/co3moz/thoric"
 const navSecondary = () => [
   { title: t("nav.documentation"), url: `${repository}#readme`, icon: <RiBookOpenLine /> },
   {
@@ -87,7 +87,7 @@ export function AppSidebar({
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:p-1.5!">
               <a href={href({ page: "dashboard" })}>
                 <img src="/mark.svg" alt="" className="size-6!" />
-                <span className="text-base font-semibold tracking-wide">Bilskirnir</span>
+                <span className="text-base font-semibold tracking-wide">Thoric</span>
                 {version && (
                   <span className="ml-auto font-mono text-xs text-muted-foreground">
                     {t("nav.version", { version })}

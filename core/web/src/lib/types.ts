@@ -137,7 +137,7 @@ export type ContainerItem = Container & {
 }
 
 /**
- * An image as `GET images` lists it: the catalog images published with Bilskirnir first, then the
+ * An image as `GET images` lists it: the catalog images published with Thoric first, then the
  * saved ones. `kind` is `catalog`, `build`, `snapshot`, `import` or `archive`.
  */
 export type ImageItem = {
@@ -355,7 +355,7 @@ export type UpdateStatus = {
   checked_at: number | null
   /** Why the last look at GitHub failed; `newest` is then the one seen before. */
   error: string | null
-  /** Whether the WSL package runs `bilskirnir update` when the dashboard asks. */
+  /** Whether the WSL package runs `thoric update` when the dashboard asks. */
   installable: boolean
   /** The running update job, which outlives the manager it replaces. */
   job_id: string | null
@@ -516,10 +516,10 @@ export type EndpointToken = { endpoint: McpEndpoint; token: string }
 
 /** A tool as an endpoint exposes it; `container_id` is null for a tool of the endpoint itself, such as `get_job`. */
 export type EndpointTool = McpTool & {
-  source: "bilskirnir" | "server"
+  source: "thoric" | "server"
   container_id: string | null
   server: string | null
 }
 
-/** The scopes and the Bilskirnir tools in each; `default` is what a new grant starts with. */
+/** The scopes and the Thoric tools in each; `default` is what a new grant starts with. */
 export type McpScopes = { scopes: { id: McpScope; tools: string[] }[]; default: McpScope[] }

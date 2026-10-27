@@ -22,7 +22,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MARK "BILSKIRNIR_CHROMEHACK"
+#define MARK "THORIC_CHROMEHACK"
 
 static int beside_executable(char *path, size_t directory, const char *name)
 {

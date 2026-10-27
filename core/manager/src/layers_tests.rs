@@ -47,7 +47,7 @@ fn desktop_lines(desktop: &str) -> Vec<String> {
             desktop,
             BUILDKIT,
         ),
-        line("LABEL bilskirnir.desktop=true", 0, desktop, BUILDKIT),
+        line("LABEL thoric.desktop=true", 0, desktop, BUILDKIT),
         line(
             "RUN |2 DEBIAN_FRONTEND=noninteractive VIRTUALGL_VERSION=3.1.4 /bin/sh -c apt-get install -y xfce4 # buildkit",
             88_707_072,
@@ -62,18 +62,18 @@ fn build_lines(script: u64) -> Vec<String> {
     vec![
         line("USER root", 0, BUILD, BUILDKIT),
         line(
-            "COPY setup.sh /tmp/bilskirnir-setup.sh # buildkit",
+            "COPY setup.sh /tmp/thoric-setup.sh # buildkit",
             12_288,
             BUILD,
             BUILDKIT,
         ),
         line(
-            "RUN /bin/sh -c bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh # buildkit",
+            "RUN /bin/sh -c bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh # buildkit",
             script,
             BUILD,
             BUILDKIT,
         ),
-        line("LABEL bilskirnir.managed=true", 0, BUILD, BUILDKIT),
+        line("LABEL thoric.managed=true", 0, BUILD, BUILDKIT),
     ]
 }
 
@@ -116,7 +116,7 @@ fn history_reads_as_instructions_in_build_order() {
                 StepKind::Run,
                 721_317_888
             ),
-            ("LABEL bilskirnir.desktop=true", StepKind::Config, 0),
+            ("LABEL thoric.desktop=true", StepKind::Config, 0),
             ("RUN apt-get install -y xfce4", StepKind::Run, 88_707_072),
         ]
     );
@@ -159,7 +159,7 @@ fn every_builder_form_is_described() {
             "COPY dir:abc in /srv",
         ),
         // `docker commit` records the container's command, or nothing.
-        ("", "Bilskirnir snapshot of Work", StepKind::Commit, ""),
+        ("", "Thoric snapshot of Work", StepKind::Commit, ""),
         (
             "/usr/bin/tini -- desktop-entrypoint",
             "",
@@ -232,7 +232,7 @@ fn steps_that_wrote_bytes_are_the_layers_and_an_empty_commit_counts_when_it_must
 
     // A snapshot of a container that changed nothing still wrote a layer, of no bytes.
     let mut lines = desktop_lines(DESKTOP);
-    lines.push(line("", 0, BUILD, "Bilskirnir snapshot of Idle"));
+    lines.push(line("", 0, BUILD, "Thoric snapshot of Idle"));
     let snapshot = image(&lines, &["base", "deps", "xfce", "empty"]);
     let commit = snapshot.steps.last().unwrap();
     assert!(commit.layer);
@@ -302,7 +302,7 @@ fn a_step_belongs_to_the_image_it_came_from_by_its_layers() {
     // The setup script's layers are its own, and so is the label on top of them.
     assert_eq!(from("COPY"), None);
     assert_eq!(from("RUN bash"), None);
-    assert_eq!(from("LABEL bilskirnir.managed"), None);
+    assert_eq!(from("LABEL thoric.managed"), None);
     let add = images[2]
         .image
         .steps
@@ -332,9 +332,9 @@ fn a_step_belongs_to_the_image_it_came_from_by_its_layers() {
 #[test]
 fn a_snapshot_of_a_snapshot_takes_its_parents_layer_from_the_parent() {
     let mut first = desktop_lines(DESKTOP);
-    first.push(line("", 5_000, BUILD, "Bilskirnir snapshot of Work"));
+    first.push(line("", 5_000, BUILD, "Thoric snapshot of Work"));
     let mut second = first.clone();
-    second.push(line("", 7_000, BUILD, "Bilskirnir snapshot of Work"));
+    second.push(line("", 7_000, BUILD, "Thoric snapshot of Work"));
     let images = vec![
         listed(
             "ubuntu-xfce",
@@ -361,7 +361,7 @@ fn a_snapshot_of_a_snapshot_takes_its_parents_layer_from_the_parent() {
     assert_eq!(steps[0]["size"], 7_000);
     assert_eq!(steps[0]["from"], Value::Null);
     assert_eq!(steps[0]["kind"], "commit");
-    assert_eq!(steps[0]["comment"], "Bilskirnir snapshot of Work");
+    assert_eq!(steps[0]["comment"], "Thoric snapshot of Work");
     assert_eq!(steps[1]["from"], "parent");
     assert_eq!(steps[1]["shared_with"], json!(["parent"]));
     assert_eq!(steps.last().unwrap()["from"], "ubuntu-xfce");
@@ -436,13 +436,10 @@ async fn without_docker_sizes_are_null_and_layers_are_refused() {
 #[cfg(unix)]
 fn layered_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-layers-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-layers-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut snapshot = desktop_lines(DESKTOP);
-    snapshot.push(line("", 5_000, BUILD, "Bilskirnir snapshot of Work"));
+    snapshot.push(line("", 5_000, BUILD, "Thoric snapshot of Work"));
     std::fs::write(dir.join("xfce.history"), history(&desktop_lines(DESKTOP))).unwrap();
     std::fs::write(dir.join("snap.history"), history(&snapshot)).unwrap();
     std::fs::write(
@@ -450,9 +447,9 @@ fn layered_docker(app: &mut Arc<App>) -> std::path::PathBuf {
         json!([{
             "Id": "sha256:xfce",
             "Config": {"Labels": {
-                "bilskirnir.desktop": "true",
-                "bilskirnir.profile": "ubuntu-xfce",
-                "bilskirnir.session": "xfce",
+                "thoric.desktop": "true",
+                "thoric.profile": "ubuntu-xfce",
+                "thoric.session": "xfce",
                 "org.opencontainers.image.title": "Ubuntu 24.04 · Lightweight XFCE",
             }},
         }])
@@ -465,7 +462,7 @@ cd 'DIR'
 echo "$*" >> calls
 case "$*" in
   'image ls -a --no-trunc --format {{.ID}}') echo sha256:xfce; [ -e present ] && echo sha256:snap ;;
-  'image inspect ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04') cat xfce.json ;;
+  'image inspect ghcr.io/co3moz/thoric/ubuntu-xfce:24.04') cat xfce.json ;;
   'image inspect --format {{.Size}} {{json .RootFS.Layers}} sha256:xfce') echo '1200000000 ["sha256:base","sha256:deps","sha256:xfce"]' ;;
   'image inspect --format {{.Size}} {{json .RootFS.Layers}} sha256:snap') echo '1200010000 ["sha256:base","sha256:deps","sha256:xfce","sha256:work"]' ;;
   'image history --no-trunc --human=false --format {{json .}} sha256:xfce') cat xfce.history ;;
@@ -482,7 +479,7 @@ esac
         id: "snap".into(),
         name: "Work".into(),
         image_id: "sha256:snap".into(),
-        reference: "bilskirnir/snapshot:snap".into(),
+        reference: "thoric/snapshot:snap".into(),
         parent_image_id: Some("sha256:xfce".into()),
         source_container: None,
         kind: "snapshot".into(),
@@ -541,7 +538,7 @@ async fn each_image_is_read_once_and_leaves_the_cache_with_its_image() {
     assert_eq!(by_id(&images, "ubuntu-gnome")["size"], Value::Null);
 
     let layers = get(&app, "/api/images/snap/layers").await;
-    assert_eq!(layers["steps"][0]["comment"], "Bilskirnir snapshot of Work");
+    assert_eq!(layers["steps"][0]["comment"], "Thoric snapshot of Work");
     assert_eq!(layers["steps"][1]["from"], "ubuntu-xfce");
     get(&app, "/api/images").await;
     let calls = std::fs::read_to_string(dir.join("calls")).unwrap();

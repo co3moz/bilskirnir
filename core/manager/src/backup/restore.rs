@@ -45,8 +45,8 @@ pub async fn check(
     State(app): State<Arc<App>>,
     Json(manifest): Json<Value>,
 ) -> Result<Json<Value>> {
-    let manifest: Manifest = serde_json::from_value(manifest)
-        .map_err(|_| anyhow!("The file is not a Bilskirnir backup"))?;
+    let manifest: Manifest =
+        serde_json::from_value(manifest).map_err(|_| anyhow!("The file is not a Thoric backup"))?;
     check_manifest(&manifest)?;
     let present = app.present().await?;
     Ok(Json(json!(review(&manifest, &present))))
@@ -384,12 +384,12 @@ impl App {
         let loaded = load.finish().await?;
         let info = self.inspect("image", &loaded).await?;
         let image_id = info["Id"].as_str().context("Missing image ID")?.to_owned();
-        if info["Config"]["Labels"]["bilskirnir.desktop"] != "true" {
+        if info["Config"]["Labels"]["thoric.desktop"] != "true" {
             // An untagged image is this restore's own; a tagged one was already on the host.
             if info["RepoTags"].as_array().is_none_or(Vec::is_empty) {
                 let _ = self.docker(&["image", "rm", &image_id]).await;
             }
-            bail!("Part {index} of the backup is not a Bilskirnir desktop image");
+            bail!("Part {index} of the backup is not a Thoric desktop image");
         }
         Ok(image_id)
     }
@@ -527,7 +527,7 @@ impl App {
 /// What a restore brings, for its job log: counts and names, never a value.
 fn describe(manifest: &Manifest, missing: &[String]) -> String {
     let mut text = format!(
-        "The backup from Bilskirnir {} holds {} containers, the files of {} of them, {} saved images, {} volumes and {} MCP endpoints.",
+        "The backup from Thoric {} holds {} containers, the files of {} of them, {} saved images, {} volumes and {} MCP endpoints.",
         manifest.version,
         manifest.containers.len(),
         manifest.containers.iter().filter(|c| c.files).count(),

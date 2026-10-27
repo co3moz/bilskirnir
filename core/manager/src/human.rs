@@ -298,7 +298,7 @@ impl Caller {
         if let Some((token, peer)) = &self.progress {
             let progress = ProgressNotificationParam::new(token.clone(), waited.as_secs_f64())
                 .with_total(wait.as_secs_f64())
-                .with_message("Waiting for a person to answer in the Bilskirnir dashboard");
+                .with_message("Waiting for a person to answer in the Thoric dashboard");
             let _ = peer.notify_progress(progress).await;
         }
     }

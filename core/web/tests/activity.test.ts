@@ -44,7 +44,7 @@ test("a page's path carries each filter the API takes, and no empty one", () => 
     before: "1234",
     limit: "20",
   })
-  // Bilskirnir MCP itself is a caller of its own, not an endpoint.
+  // Thoric MCP itself is a caller of its own, not an endpoint.
   const administrator = new URLSearchParams(activityPath({ caller: callerFilter(null) }).slice(9))
   assert.equal(administrator.get("caller"), "administrator")
   assert.equal(administrator.get("endpoint"), null)
@@ -64,12 +64,12 @@ test("the API guide documents every parameter a page sends", () => {
   assert.ok(api.includes("| `caller` |"))
 })
 
-test("a caller filter names an endpoint or Bilskirnir MCP", () => {
+test("a caller filter names an endpoint or Thoric MCP", () => {
   assert.equal(callerFilter("chrome-dev"), "endpoint:chrome-dev")
   assert.equal(filterEndpoint("endpoint:chrome-dev"), "chrome-dev")
   assert.equal(filterEndpoint("administrator"), undefined)
   assert.equal(filterEndpoint(undefined), undefined)
-  assert.equal(callerLabel({ endpoint: null }), "Bilskirnir MCP")
+  assert.equal(callerLabel({ endpoint: null }), "Thoric MCP")
   assert.equal(callerLabel({ endpoint: "chrome-dev" }), "chrome-dev")
 })
 

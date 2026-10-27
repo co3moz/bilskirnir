@@ -1,5 +1,5 @@
 //! The dependency list of the Dependencies page: every interface package, crate, image, system
-//! package, tool and workflow action Bilskirnir is built from. `core/manager/dependencies.py`
+//! package, tool and workflow action Thoric is built from. `core/manager/dependencies.py`
 //! writes it while the manager image builds, so it is always the list of this very build; a
 //! manager built any other way has none, and says so.
 
@@ -10,8 +10,8 @@ use axum::{
 };
 use std::path::Path;
 
-/// Where the manager image keeps the list, beside Bilskirnir's license.
-pub(crate) const LIST: &str = "/usr/share/doc/bilskirnir/dependencies.json";
+/// Where the manager image keeps the list, beside Thoric's license.
+pub(crate) const LIST: &str = "/usr/share/doc/thoric/dependencies.json";
 
 /// `GET /api/dependencies`: the list as the build wrote it.
 pub async fn list() -> Result<Response> {

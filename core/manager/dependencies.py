@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write every dependency Bilskirnir is built from as JSON, the list the Dependencies page shows.
+"""Write every dependency Thoric is built from as JSON, the list the Dependencies page shows.
 
 The interface's packages come from core/web/bun.lock, with their licenses from
 core/web/node_modules; the manager's crates from `cargo metadata`; and the infrastructure (images,
@@ -34,8 +34,8 @@ KINDS = ("image", "package", "tool", "download", "action", "runner")
 NPM_PLATFORM = {"os": "linux", "cpu": "x64"}
 CARGO_TARGET = "x86_64-unknown-linux-gnu"
 CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
-# The images Bilskirnir publishes or builds itself are not its dependencies.
-OWN_IMAGE = re.compile(r"^(?:(?:ghcr\.io|docker\.io)/)?(?:co3moz/)?bilskirnir(?:[/:-]|$)")
+# The images Thoric publishes or builds itself are not its dependencies.
+OWN_IMAGE = re.compile(r"^(?:(?:ghcr\.io|docker\.io)/)?(?:co3moz/)?thoric(?:[/:-]|$)")
 VARIABLE = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)")
 RELEASE_DOWNLOAD = re.compile(r"https://github\.com/([\w.-]+)/([\w.-]+)/releases/download/([^/\s\"']+)/")
 DESCRIPTION_LIMIT = 200

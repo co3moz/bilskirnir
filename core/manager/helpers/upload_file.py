@@ -26,7 +26,7 @@ try:
         child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
         os.close(folder)
         folder = child
-    temporary = ".bilskirnir-upload-" + uuid.uuid4().hex
+    temporary = ".thoric-upload-" + uuid.uuid4().hex
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=folder)
     if replace == "true":
         # A file saved over keeps its permissions, so an edited script stays executable.

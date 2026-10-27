@@ -85,7 +85,7 @@ export function OutcomeBadge({ outcome }: { outcome: string }) {
   )
 }
 
-/** Who called: Bilskirnir MCP or an endpoint, marked when it was the inspector or a link. */
+/** Who called: Thoric MCP or an endpoint, marked when it was the inspector or a link. */
 export function CallerBadge({ entry }: { entry: Pick<ActivityEntry, "endpoint" | "credential"> }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1">

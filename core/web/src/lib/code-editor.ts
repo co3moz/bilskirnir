@@ -88,7 +88,7 @@ export const MORE_FILES: readonly {
  * file's language from the name at its end, such as `.py` or `Dockerfile`.
  */
 export const modelUri = (id: string, name: string) =>
-  `inmemory://bilskirnir/editor/${id}/${encodeURIComponent(name)}`
+  `inmemory://thoric/editor/${id}/${encodeURIComponent(name)}`
 
 /**
  * The JSON language service's options for the editors open now, each model matched to its own

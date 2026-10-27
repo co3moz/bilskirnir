@@ -97,7 +97,7 @@ test("the manager's own volumes are not offered for a mount", () => {
     Scope: "local",
     manager,
   })
-  const listed = [volume("bilskirnir-data", true), volume("project", false), volume("saves")]
+  const listed = [volume("thoric-data", true), volume("project", false), volume("saves")]
   // An older manager sends no mark; such a volume is still offered.
   assert.deepEqual(
     mountableVolumes(listed).map((item) => item.Name),
@@ -119,12 +119,12 @@ test("a volume shows where its compose mounts it, and only its owner may delete 
   })
   const mount = (volume: string) => ({ volume, target: `/${volume}`, readonly: false })
   const containers = [
-    container("e", ["projects"], ["bilskirnir-e-workspace"]),
-    container("b", [], ["bilskirnir-e-workspace"]),
+    container("e", ["projects"], ["thoric-e-workspace"]),
+    container("b", [], ["thoric-e-workspace"]),
   ]
   // The compose's mount counts as much as a volume setting does.
   assert.deepEqual(
-    volumeUsers("bilskirnir-e-workspace", containers).map((user) => [user.id, user.compose]),
+    volumeUsers("thoric-e-workspace", containers).map((user) => [user.id, user.compose]),
     [
       ["e", true],
       ["b", true],
@@ -148,17 +148,17 @@ test("a volume shows where its compose mounts it, and only its owner may delete 
   assert.deepEqual(
     ownedVolumes(
       [
-        owned("bilskirnir-e-workspace", "e"),
+        owned("thoric-e-workspace", "e"),
         owned("projects"),
-        owned("bilskirnir-e-cache", "e"),
+        owned("thoric-e-cache", "e"),
         owned("x", "b"),
       ],
       "e"
     ),
-    ["bilskirnir-e-cache", "bilskirnir-e-workspace"]
+    ["thoric-e-cache", "thoric-e-workspace"]
   )
   // An older manager sends no owner, so nothing is offered for deletion.
-  assert.deepEqual(ownedVolumes([{ Name: "bilskirnir-e-workspace" }], "e"), [])
+  assert.deepEqual(ownedVolumes([{ Name: "thoric-e-workspace" }], "e"), [])
 })
 
 test("a volume any container mounts names each of those containers once", () => {
@@ -189,7 +189,7 @@ test("a volume any container mounts names each of those containers once", () => 
   assert.deepEqual(volumeHolders("projects", containers), ["Unity", "Build", "Build"])
   assert.deepEqual(volumeHolders("saves", containers), ["Other"])
   // An orphan, such as one whose owner was deleted without it, is held by nobody.
-  assert.deepEqual(volumeHolders("bilskirnir-gone-cache", containers), [])
+  assert.deepEqual(volumeHolders("thoric-gone-cache", containers), [])
 })
 
 test("downloads name the volume and the path in the query", () => {

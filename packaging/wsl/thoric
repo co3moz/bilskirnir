@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Manage the Bilskirnir installation inside the WSL distribution.
+# Manage the Thoric installation inside the WSL distribution.
 set -euo pipefail
-INSTALL=/opt/bilskirnir
+INSTALL=/opt/thoric
 # The manager the package installs, and where its releases are listed.
-MANAGER_REPOSITORY=ghcr.io/co3moz/bilskirnir
-RELEASES=https://api.github.com/repos/co3moz/bilskirnir/releases/latest
+MANAGER_REPOSITORY=ghcr.io/co3moz/thoric
+RELEASES=https://api.github.com/repos/co3moz/thoric/releases/latest
 # The installation files every manager image bundles under /app/install. The package and each update
 # record their checksums in .shipped.sha256, which tells an update whether a file was edited by hand.
 INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
@@ -12,7 +12,7 @@ INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
 # update_cli. The package build and that update fill in the release the command came with, and
 # NEEDS_PACKAGE is the lowest package level it works on. An older command reads both lines from a newer
 # one before it installs it, so they keep this form.
-CLI=/usr/local/bin/bilskirnir
+CLI=/usr/local/bin/thoric
 CLI_VERSION=
 NEEDS_PACKAGE=1
 # The package records the level of its own files here, such as the firewall watcher and its unit. A
@@ -21,11 +21,11 @@ PACKAGE_LEVEL=/usr/lib/wsl/package-level
 # The units that run an update or a settings change the dashboard asks for. Every manager image
 # bundles them under /app/install/systemd, and the package installs them as well; see update_units.
 UNIT_DIR=/etc/systemd/system
-UPDATE_UNITS=(bilskirnir-update.path bilskirnir-update.service)
-SETTINGS_UNITS=(bilskirnir-settings.path bilskirnir-settings.service)
+UPDATE_UNITS=(thoric-update.path thoric-update.service)
+SETTINGS_UNITS=(thoric-settings.path thoric-settings.service)
 # The settings the dashboard's Settings page may change, through apply-settings: EDITABLE in
 # core/manager/src/config.rs, and the tests hold the two lists together. The rest of .env, such as
-# the password, the agent token and the published port, changes only with 'bilskirnir settings'.
+# the password, the agent token and the published port, changes only with 'thoric settings'.
 DASHBOARD_SETTINGS=(SECURE_COOKIE ALLOWED_HOSTS DESKTOP_IMAGE DESKTOP_USER_NAMESPACES WSL_GPU NVIDIA_COMPUTE GPU_ADAPTER AUDIO_ENABLED MICROPHONE_ENABLED INTERNET_ENABLED SUDO_ENABLED GAMEPAD_ENABLED GPU_DEFAULT INTERNET_DEFAULT SUDO_DEFAULT AUDIO_DEFAULT MICROPHONE_DEFAULT GAMEPAD_DEFAULT UPLOAD_MAX_MB IMAGE_ARCHIVE_MAX_MB TEMPLATES_URL VOLUME_FILTER UPDATE_CHECK)
 # How long apply-settings waits for the manager to answer with the new settings, in seconds.
 SETTINGS_WAIT=90
@@ -33,7 +33,7 @@ SETTINGS_WAIT=90
 # Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
     cat <<'EOF'
-Usage: bilskirnir <command>
+Usage: thoric <command>
 
   start     Start Docker if needed, download the manager if missing and start it
   stop      Stop the manager (desktop containers stop with the distribution)
@@ -44,8 +44,8 @@ Usage: bilskirnir <command>
   doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
-  settings  Edit /opt/bilskirnir/.env, then run 'bilskirnir restart'
-  apply-settings <request>  Apply a settings change from the dashboard; bilskirnir-settings.service runs it as root
+  settings  Edit /opt/thoric/.env, then run 'thoric restart'
+  apply-settings <request>  Apply a settings change from the dashboard; thoric-settings.service runs it as root
 EOF
 }
 compose() {
@@ -53,7 +53,7 @@ compose() {
 }
 require_settings() {
     if [[ ! -f $INSTALL/.env ]]; then
-        echo "Settings are missing. Open a new Bilskirnir terminal to run the first-start setup." >&2
+        echo "Settings are missing. Open a new Thoric terminal to run the first-start setup." >&2
         exit 1
     fi
 }
@@ -65,7 +65,7 @@ ensure_docker() {
         if docker info >/dev/null 2>&1; then return 0; fi
         sleep 1
     done
-    echo "Docker did not become ready. Run 'bilskirnir doctor'." >&2
+    echo "Docker did not become ready. Run 'thoric doctor'." >&2
     exit 1
 }
 # The port the dashboard answers on is a setting, so the command follows .env, not the shell.
@@ -141,7 +141,7 @@ newest_release() {
 update_profiles() {
     local catalog release ref source source_was_here
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
-        ! release=$(docker inspect --format '{{index .Config.Labels "bilskirnir.release"}}' "$(compose ps -q manager)"); then
+        ! release=$(docker inspect --format '{{index .Config.Labels "thoric.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
@@ -184,34 +184,34 @@ put_file() {
 # of it follows the new release's rules. Each replacement records a newer release, which the new
 # command finds equal to its own, so the update ends.
 update_cli() {
-    local image=$1 release=${1#"$MANAGER_REPOSITORY":} new=$tmp/bilskirnir needs level
+    local image=$1 release=${1#"$MANAGER_REPOSITORY":} new=$tmp/thoric needs level
     if [[ $release == "$image" || ! $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "MANAGER_IMAGE is not a release, so the bilskirnir command stays as it is."
+        echo "MANAGER_IMAGE is not a release, so the thoric command stays as it is."
         return 0
     fi
     if [[ $CLI_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ &&
         $(printf '%s\n' "$release" "$CLI_VERSION" | sort -V | tail -n1) == "$CLI_VERSION" ]]; then
         return 0
     fi
-    if ! docker run --rm --network none --entrypoint cat "$image" /app/install/bilskirnir >"$new" 2>/dev/null ||
+    if ! docker run --rm --network none --entrypoint cat "$image" /app/install/thoric >"$new" 2>/dev/null ||
         [[ ! -s $new ]]; then
-        echo "$image has no bilskirnir command; this one stays as it is." >&2
+        echo "$image has no thoric command; this one stays as it is." >&2
         return 0
     fi
     needs=$(sed -n 's/^NEEDS_PACKAGE=\([0-9][0-9]*\)$/\1/p' "$new" | head -n1)
     sed -i "s|^CLI_VERSION=.*|CLI_VERSION=$release|" "$new"
     if [[ -z $needs ]] || ! grep -qFx "CLI_VERSION=$release" "$new" || ! bash -n "$new" 2>/dev/null; then
-        echo "The bilskirnir command in $image is incomplete; this one stays as it is." >&2
+        echo "The thoric command in $image is incomplete; this one stays as it is." >&2
         return 0
     fi
     level=$(cat "$PACKAGE_LEVEL" 2>/dev/null || true)
     if ! [[ $level =~ ^[0-9]+$ ]]; then level=1; fi
     if ((10#$needs > 10#$level)); then
-        echo "The bilskirnir command of $release needs a newer WSL package (level $needs, this one has $level), so this one stays as it is."
+        echo "The thoric command of $release needs a newer WSL package (level $needs, this one has $level), so this one stays as it is."
         return 0
     fi
     put_file "$CLI" "$new" 0755
-    echo "The bilskirnir command moves from ${CLI_VERSION:-an earlier version} to $release; the update continues with it."
+    echo "The thoric command moves from ${CLI_VERSION:-an earlier version} to $release; the update continues with it."
     # exec skips the EXIT trap.
     rm -rf "$tmp"
     exec "$CLI" update
@@ -251,9 +251,9 @@ update_install_files() {
     put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
 # The dashboard asks for an update or a settings change by leaving a request in $INSTALL/update,
-# which the manager sees at /update. bilskirnir-update.path notices an update and
-# bilskirnir-update.service runs this command's update as root; bilskirnir-settings.path and
-# bilskirnir-settings.service do the same for apply-settings. Like the command, the units come only
+# which the manager sees at /update. thoric-update.path notices an update and
+# thoric-update.service runs this command's update as root; thoric-settings.path and
+# thoric-settings.service do the same for apply-settings. Like the command, the units come only
 # from releases, since they run as root and would stay after a MANAGER_IMAGE chosen by hand is gone.
 # An update brings them to an installation whose package came before them, and enables them only
 # then or when a release changes them, so a path unit turned off by hand stays off. The manager
@@ -345,7 +345,7 @@ apply_settings() {
         key=${line%%=*}
         value=${line#*=}
         if [[ $line != *=* ]] || ! dashboard_setting "$key"; then
-            echo "The dashboard cannot change '${key:0:64}'; that changes only with 'bilskirnir settings'. Nothing was changed." >&2
+            echo "The dashboard cannot change '${key:0:64}'; that changes only with 'thoric settings'. Nothing was changed." >&2
             return 1
         fi
         if [[ -n ${asked[$key]:-} ]]; then
@@ -364,7 +364,7 @@ apply_settings() {
         echo "The request changes no setting; nothing was changed." >&2
         return 1
     fi
-    if systemctl is-active --quiet bilskirnir-update.service; then
+    if systemctl is-active --quiet thoric-update.service; then
         echo "An update is running, so the settings stay as they are. Change them once it has finished." >&2
         return 1
     fi
@@ -413,7 +413,7 @@ apply_settings() {
     if compose up -d --force-recreate manager && manager_answers; then
         echo "The manager answers with the previous settings again."
     else
-        echo "The manager does not answer with the previous settings either. Run 'bilskirnir logs' and 'bilskirnir doctor'."
+        echo "The manager does not answer with the previous settings either. Run 'thoric logs' and 'thoric doctor'."
     fi
     return 1
 }
@@ -422,7 +422,7 @@ case ${1:-help} in
         require_settings
         ensure_docker
         compose up -d
-        echo "Bilskirnir is starting at $(address)"
+        echo "Thoric is starting at $(address)"
         ;;
     stop)
         compose stop
@@ -441,7 +441,7 @@ case ${1:-help} in
                 echo "The manager is not answering yet."
             fi
         else
-            echo "Docker is not running. Use 'bilskirnir start'."
+            echo "Docker is not running. Use 'thoric start'."
         fi
         ;;
     logs)
@@ -490,7 +490,7 @@ case ${1:-help} in
             echo "nftables:  enabled; it flushes the firewall of every WSL distribution when it starts or stops. Run 'sudo systemctl mask nftables'."
         fi
         if missing=$(sudo -n /usr/lib/wsl/firewall-watch.sh --check 2>/dev/null); then
-            echo "firewall:  Docker's rules are in place ($(systemctl is-active bilskirnir-firewall 2>/dev/null || true) watcher)"
+            echo "firewall:  Docker's rules are in place ($(systemctl is-active thoric-firewall 2>/dev/null || true) watcher)"
         elif [[ -n $missing ]]; then
             echo "firewall:  no rules for $(awk '{print $1}' <<<"$missing" | paste -sd, -); another WSL distribution removed them. 'sudo systemctl restart docker' restores them."
         else
@@ -505,7 +505,7 @@ case ${1:-help} in
             print ""
         }' /proc/meminfo
         echo "CPUs:      $(nproc)"
-        df -Pk / | awk -v distro="${WSL_DISTRO_NAME:-Bilskirnir}" 'NR == 2 {
+        df -Pk / | awk -v distro="${WSL_DISTRO_NAME:-Thoric}" 'NR == 2 {
             printf "disk:      %.0f GiB free of %.0f GiB", $4 / 1048576, $2 / 1048576
             if ($4 < 10 * 1048576) printf "; below 10 GB, enlarge it from Windows with wsl --manage %s --resize <size>", distro
             print ""
@@ -538,15 +538,15 @@ case ${1:-help} in
         if [[ $token =~ ^\'(.*)\'$ || $token =~ ^\"(.*)\"$ ]]; then token=${BASH_REMATCH[1]}; fi
         if [[ $enabled != true || ($mode != none && -z $token) ]]; then
             echo "Root agent access (/mcp) is off. MCP endpoints made on the dashboard's MCP page work without it, each with its own token, and its Connect shows their client settings." >&2
-            echo "To turn on /mcp, which reaches every desktop, set ROOT_MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'bilskirnir settings', then run 'bilskirnir restart'." >&2
+            echo "To turn on /mcp, which reaches every desktop, set ROOT_MCP_ENABLED=true and MCP_TOKEN (or MCP_AUTH_MODE=none) with 'thoric settings', then run 'thoric restart'." >&2
             exit 1
         fi
-        distro=${WSL_DISTRO_NAME:-Bilskirnir}
+        distro=${WSL_DISTRO_NAME:-Thoric}
         claude_shell=""
         if [[ $mode == none ]]; then
             echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
             header="" claude_header=""
-            footer="Require a token by setting MCP_AUTH_MODE=token and MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+            footer="Require a token by setting MCP_AUTH_MODE=token and MCP_TOKEN with 'thoric settings', then run 'thoric restart'."
         else
             echo "Agent access (MCP) is enabled. The token grants administrator access to every desktop."
             header=$'\n'"  Header:  Authorization: Bearer $token"
@@ -559,7 +559,7 @@ case ${1:-help} in
                 claude_shell=" (PowerShell)"
                 claude_header=" --header 'Authorization: Bearer ${token//$quote/$quote$quote}'"
             fi
-            footer="Rotate the token by editing MCP_TOKEN with 'bilskirnir settings', then run 'bilskirnir restart'."
+            footer="Rotate the token by editing MCP_TOKEN with 'thoric settings', then run 'thoric restart'."
         fi
         others=""
         if [[ $(access) == other* ]]; then
@@ -571,14 +571,14 @@ Streamable HTTP
   URL:     $(address)/mcp$header$others
 
 Claude Code on Windows$claude_shell:
-  claude mcp add --transport http bilskirnir $(address)/mcp$claude_header
+  claude mcp add --transport http thoric $(address)/mcp$claude_header
 
 stdio bridge (no token in the client; it runs inside the manager container):
   {
     "mcpServers": {
-      "bilskirnir": {
+      "thoric": {
         "command": "wsl.exe",
-        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "bilskirnir-manager", "python3", "/app/mcp_bridge.py"]
+        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "thoric-manager", "python3", "/app/mcp_bridge.py"]
       }
     }
   }
@@ -592,14 +592,14 @@ EOF
         # directly. sudoedit opens a copy in the user's editor and writes it back with the file's owner
         # and mode; it picks SUDO_EDITOR, VISUAL or EDITOR, and nano when none is set.
         SUDO_EDITOR=${SUDO_EDITOR:-${VISUAL:-${EDITOR:-nano}}} sudo --edit "$INSTALL/.env"
-        echo "Run 'bilskirnir restart' to apply the settings."
+        echo "Run 'thoric restart' to apply the settings."
         ;;
     apply-settings)
-        # bilskirnir-settings.service runs this as root with the request the dashboard left; see
+        # thoric-settings.service runs this as root with the request the dashboard left; see
         # core/manager/src/config/changes.rs.
         require_settings
         if [[ $# -ne 2 || ! -f $2 ]]; then
-            echo "Usage: bilskirnir apply-settings <request>, as bilskirnir-settings.service runs it" >&2
+            echo "Usage: thoric apply-settings <request>, as thoric-settings.service runs it" >&2
             exit 2
         fi
         ensure_docker

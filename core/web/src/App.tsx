@@ -118,7 +118,7 @@ function Authenticated() {
   // A dialog belongs to the page it was opened on.
   React.useEffect(() => closeDialog(), [key])
   React.useEffect(() => {
-    document.title = `${route.page === "desktop" ? t("nav.desktop") : pageTitle(route.page)} · Bilskirnir`
+    document.title = `${route.page === "desktop" ? t("nav.desktop") : pageTitle(route.page)} · Thoric`
   }, [route.page, locale])
 
   if (settings.isPending) return <Loading />

@@ -53,7 +53,7 @@ function exported(metadata: unknown = info) {
     seed ^= seed << 5
     return seed & 0xff
   })
-  const parts = [entry("bilskirnir.json", json(metadata)), entry("layer", layer)]
+  const parts = [entry("thoric.json", json(metadata)), entry("layer", layer)]
   const out = new Uint8Array(parts[0].length + parts[1].length)
   out.set(parts[0])
   out.set(parts[1], parts[0].length)
@@ -69,10 +69,10 @@ test("archive names and download URLs", () => {
 })
 
 test("the metadata entry is read only when it opens the archive", () => {
-  assert.deepEqual(parseArchiveInfo(entry("bilskirnir.json", json(info))), info)
+  assert.deepEqual(parseArchiveInfo(entry("thoric.json", json(info))), info)
   assert.equal(parseArchiveInfo(entry("manifest.json", json(info))), null)
-  assert.equal(parseArchiveInfo(entry("bilskirnir.json", json({ ...info, format: 2 }))), null)
-  assert.equal(parseArchiveInfo(entry("bilskirnir.json", new TextEncoder().encode("{"))), null)
+  assert.equal(parseArchiveInfo(entry("thoric.json", json({ ...info, format: 2 }))), null)
+  assert.equal(parseArchiveInfo(entry("thoric.json", new TextEncoder().encode("{"))), null)
   assert.equal(parseArchiveInfo(new Uint8Array(100)), null)
 })
 
@@ -144,7 +144,7 @@ test("an archive uploads with its details and resolves with the job", async () =
   assert.equal(request.url.searchParams.get("size"), "10")
   assert.equal(request.url.searchParams.get("name"), details.name)
   assert.equal(request.url.searchParams.get("description"), details.description)
-  assert.equal(request.headers["X-Bilskirnir-Request"], "1")
+  assert.equal(request.headers["X-Thoric-Request"], "1")
   assert.equal(request.headers["Content-Type"], "application/octet-stream")
   request.upload.onprogress({ loaded: 4 })
   assert.equal(upload.loaded, 4)

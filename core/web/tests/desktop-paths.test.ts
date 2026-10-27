@@ -206,7 +206,7 @@ test("recent folders are kept per container, newest first, and survive missing s
       "/home/desktop/2",
     ])
     assert.deepEqual(recentFolders("b"), ["/shared"])
-    saved.set("bilskirnir.upload-folders", "not json")
+    saved.set("thoric.upload-folders", "not json")
     assert.deepEqual(recentFolders("a"), [])
   } finally {
     Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage })

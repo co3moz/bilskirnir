@@ -31,10 +31,10 @@ COPY core/manager/helpers core/manager/helpers
 COPY images/desktop/profiles.json images/desktop/profiles.json
 # A release build names its version, and the manager then downloads the desktop images published
 # with it. Without it, the manager downloads each catalog image's reference.
-ARG BILSKIRNIR_RELEASE
+ARG THORIC_RELEASE
 # Only the binary is left in this layer, so the build cache keeps one copy of the compiled
 # dependencies, the one above, instead of one with every commit.
-RUN cargo build --release --locked && mv target/release/bilskirnir /bilskirnir && rm -rf target
+RUN cargo build --release --locked && mv target/release/thoric /thoric && rm -rf target
 
 # The list of the Dependencies page, from this build's lockfiles, installed interface packages,
 # Dockerfiles, Compose manifests and workflows, so it cannot fall behind them. It fails when a
@@ -52,31 +52,31 @@ RUN --mount=type=bind,from=ui,source=/build/core/web,target=/build/core/web \
 
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
-LABEL org.opencontainers.image.title="Bilskirnir" org.opencontainers.image.licenses="GPL-3.0-or-later"
+LABEL org.opencontainers.image.title="Thoric" org.opencontainers.image.licenses="GPL-3.0-or-later"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
-COPY --from=backend /bilskirnir /usr/local/bin/bilskirnir
+COPY --from=backend /thoric /usr/local/bin/thoric
 COPY --from=ui /build/core/web/dist /app/web
 COPY images/desktop /app/desktop
 COPY core/bridge/mcp_bridge.py /app/mcp_bridge.py
 COPY compose.ghcr.yml /app/install/compose.yml
 COPY .env.example /app/install/.env.example
 COPY deploy/Caddyfile /app/install/deploy/Caddyfile
-COPY packaging/wsl/bilskirnir /app/install/bilskirnir
-COPY packaging/wsl/bilskirnir-update.path /app/install/systemd/bilskirnir-update.path
-COPY packaging/wsl/bilskirnir-update.service /app/install/systemd/bilskirnir-update.service
-COPY packaging/wsl/bilskirnir-settings.path /app/install/systemd/bilskirnir-settings.path
-COPY packaging/wsl/bilskirnir-settings.service /app/install/systemd/bilskirnir-settings.service
-COPY LICENSE /usr/share/doc/bilskirnir/LICENSE
-COPY --from=dependencies /dependencies.json /usr/share/doc/bilskirnir/dependencies.json
+COPY packaging/wsl/thoric /app/install/thoric
+COPY packaging/wsl/thoric-update.path /app/install/systemd/thoric-update.path
+COPY packaging/wsl/thoric-update.service /app/install/systemd/thoric-update.service
+COPY packaging/wsl/thoric-settings.path /app/install/systemd/thoric-settings.path
+COPY packaging/wsl/thoric-settings.service /app/install/systemd/thoric-settings.service
+COPY LICENSE /usr/share/doc/thoric/LICENSE
+COPY --from=dependencies /dependencies.json /usr/share/doc/thoric/dependencies.json
 ENV DATA_DIR=/data WEB_DIR=/app/web DESKTOP_CONTEXT=/app/desktop LISTEN_ADDR=0.0.0.0:8080
 WORKDIR /app
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=3s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/bilskirnir"]
-# The same release as a label, which `bilskirnir update` in the WSL package reads to download the
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/thoric"]
+# The same release as a label, which `thoric update` in the WSL package reads to download the
 # desktop images this manager would. Declared last so it leaves the cache of the layers above alone.
-ARG BILSKIRNIR_RELEASE
-LABEL bilskirnir.release="${BILSKIRNIR_RELEASE}"
+ARG THORIC_RELEASE
+LABEL thoric.release="${THORIC_RELEASE}"
 
