@@ -291,6 +291,8 @@ A saved image can have an icon, a PNG of at most 256 by 256 pixels and 300 KiB t
 
 The dashboard's **Templates** page lists ready-made images. It reads the list in the browser from `templates_url` in `/api/settings`, by default `templates/index.json` on the project's GitHub wiki; `TEMPLATES_URL` points it elsewhere or turns it off. A template is a build request, the same JSON `/api/images/{id}/config` returns, beside the list as `<id>.json` with its icon as `<id>.png`; installing one fills in the **Build image** form, and the build sets `template_id` so the page can tell which templates are installed. The manager itself never fetches a template, and the content security policy allows the list's host for these requests and pictures only. [The development guide](DEVELOPMENT.md#add-a-template) describes the list format.
 
+A template may have `options`, choices the install form shows, such as an optional tool. They are resolved in the browser, and a build request never carries them: the request has the script with each value written at its top, after its `#!` line, as `NAME=true` or `NAME=false`, and leaves out the desktop MCP servers an option that is off names. The image's record, and so its exported configuration, keeps that resolved script. A merged build writes each template's values into its own part.
+
 ### Merged templates
 
 **Merge and install** builds several templates into one image, such as VS Code with the Node.js environment. The page merges them in the browser into one build request with `parts` instead of a `script`, a compose with one [step](#steps) for every template that has one, and their ids in `template_ids`, in the order they were chosen:

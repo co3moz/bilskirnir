@@ -47,8 +47,15 @@ import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/f
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { composeBody, composeDraft, orderSteps, type ComposeDraft } from "@/lib/compose"
-import type { BuildPart } from "@/lib/types"
+import {
+  optionGroups,
+  resolveOptions,
+  serversKept,
+  type OptionValues,
+} from "@/lib/template-options"
+import type { DraftPart } from "@/lib/types"
 import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
+import { BuildOptions } from "./build-options"
 import { BuildParts } from "./build-parts"
 import { BuildServers } from "./build-servers"
 import { BuildSummary } from "./build-summary"
@@ -236,13 +243,21 @@ export function BuildImageDialog({
   )
   // Desktop MCP servers the configuration declares; they are shown, never typed in here.
   const [servers, setServers] = React.useState(config?.mcp ?? [])
+  // A template's options, or those of each merged part, and the values chosen for them, which
+  // are written into the scripts only when the request is sent.
+  const [options, setOptions] = React.useState(config?.options ?? [])
+  const [values, setValues] = React.useState<OptionValues>({})
   const [importing, setImporting] = React.useState(false)
   const [advanced, setAdvanced] = React.useState(!simple)
   const parameterCount =
     compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
+  const groups = optionGroups(options, parts)
+  const choose = (key: string, on: boolean) => setValues((current) => ({ ...current, [key]: on }))
+  // The servers the image gets: an option that is off leaves its own out.
+  const kept = serversKept(servers, groups, values)
 
   // A part's setup step goes with it: it moves along, and leaves when the part does.
-  const moveParts = (next: BuildPart[]) => {
+  const moveParts = (next: DraftPart[]) => {
     setParts(next)
     setCompose(
       (current) =>
@@ -282,6 +297,8 @@ export function BuildImageDialog({
     if (config.script !== undefined) setScript(config.script)
     setCompose(config.compose ? composeDraft(config.compose) : null)
     setServers(config.mcp ?? [])
+    setOptions(config.options ?? [])
+    setValues({})
     if (config.base_image !== undefined) {
       setWanted(config.base_image)
       setBase(undefined)
@@ -298,15 +315,17 @@ export function BuildImageDialog({
         ) : (
           <form
             className="flex min-h-0 flex-col gap-4"
-            onSubmit={submit(() =>
-              runJob("images/build", {
+            onSubmit={submit(() => {
+              // The options go as values in the scripts; the request never names them.
+              const build = resolveOptions({ script, parts, options, servers }, values)
+              return runJob("images/build", {
                 name,
                 ...(description.trim() ? { description } : {}),
                 base_image: chosen,
-                ...(parts ? { parts } : { script }),
+                ...(build.parts ? { parts: build.parts } : { script: build.script }),
                 internet,
                 ...(compose ? { compose: composeBody(compose) } : {}),
-                ...(servers.length ? { mcp: servers } : {}),
+                ...(build.mcp.length ? { mcp: build.mcp } : {}),
                 ...(icon ? { icon } : {}),
                 ...(templateIds.length
                   ? parts
@@ -314,7 +333,7 @@ export function BuildImageDialog({
                     : { template_id: templateIds[0] }
                   : {}),
               })
-            )}
+            })}
           >
             <DialogHeader>
               <DialogTitle>{t("images.build")}</DialogTitle>
@@ -393,7 +412,12 @@ export function BuildImageDialog({
                   </Field>
                 </>
               ) : (
-                <BuildSummary description={description} icon={icon} servers={servers} />
+                <>
+                  <BuildSummary description={description} icon={icon} servers={kept} />
+                  {groups.length > 0 && (
+                    <BuildOptions groups={groups} values={values} onChange={choose} />
+                  )}
+                </>
               )}
               {missingBase && (
                 <Alert>
@@ -411,9 +435,9 @@ export function BuildImageDialog({
                   <AlertDescription>{warning}</AlertDescription>
                 </Alert>
               ))}
-              {advanced && servers.length > 0 && (
+              {advanced && kept.length > 0 && (
                 <BuildServers
-                  servers={servers}
+                  servers={kept}
                   onRemove={(name) => setServers(servers.filter((server) => server.name !== name))}
                 />
               )}
@@ -431,6 +455,9 @@ export function BuildImageDialog({
                   </TabsList>
                   <TabsContent value="build">
                     <FieldGroup>
+                      {groups.length > 0 && (
+                        <BuildOptions groups={groups} values={values} onChange={choose} hint />
+                      )}
                       {parts ? (
                         <BuildParts
                           parts={parts}

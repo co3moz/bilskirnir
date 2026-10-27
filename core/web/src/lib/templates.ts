@@ -14,7 +14,7 @@ import { readBuildConfig, TEMPLATE_ID, type ImportedBuild } from "./build-config
 import { composeSteps } from "./compose"
 import { iconFromBlob } from "./icons"
 import { t } from "./i18n"
-import type { BuildPart, ComposeStep, ServerDeclaration } from "./types"
+import type { ComposeStep, DraftPart, ServerDeclaration } from "./types"
 
 /**
  * What a template brings: an application for the desktop, or an environment, such as a language
@@ -223,10 +223,10 @@ function clipBytes(text: string, limit: number) {
  * built on the first template's base; a template made for another one is a warning, since its
  * script may expect that desktop. A template merged from others brings its parts and steps.
  * The desktop MCP servers they declare are all written into the image, so two templates may not
- * declare one name.
+ * declare one name. A template's options stay with its part, whose script gets their values.
  */
 export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
-  const parts: BuildPart[] = []
+  const parts: DraftPart[] = []
   const steps: ComposeStep[] = []
   const servers: ServerDeclaration[] = []
   // Which template brought each server, to name both when another declares it again.
@@ -240,7 +240,12 @@ export function mergeTemplates(loaded: LoadedTemplate[]): ImportedBuild {
   }
   for (const { template, config } of loaded) {
     for (const part of config.parts ?? [
-      { id: template.id, name: template.name, script: config.script ?? "" },
+      {
+        id: template.id,
+        name: template.name,
+        script: config.script ?? "",
+        ...(config.options?.length ? { options: config.options } : {}),
+      },
     ])
       add(parts, part)
     const own = config.compose ? composeSteps(config.compose) : []

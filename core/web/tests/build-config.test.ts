@@ -148,6 +148,74 @@ test("a configuration carries the image's compose both ways", () => {
   )
 })
 
+test("a template's options are read for the install form, and refused when malformed", () => {
+  const mcp = [{ name: "radare2", command: "r2mcp" }]
+  const options = [
+    {
+      name: "RADARE2",
+      label: " radare2 and r2mcp ",
+      description: " Reverse engineering on the command line. ",
+      default: true,
+      mcp: ["radare2", "radare2"],
+    },
+    { name: "WINE", label: "Wine", default: false, description: null, mcp: null },
+  ]
+  assert.deepEqual(parseBuildConfig(JSON.stringify({ ...config, mcp, options })), {
+    ...config,
+    mcp,
+    options: [
+      {
+        name: "RADARE2",
+        label: "radare2 and r2mcp",
+        description: "Reverse engineering on the command line.",
+        default: true,
+        mcp: ["radare2"],
+      },
+      { name: "WINE", label: "Wine", default: false },
+    ],
+  })
+  // An empty list is no list, and the build request never carries one.
+  assert.equal("options" in parseBuildConfig(JSON.stringify({ ...config, options: [] })), false)
+  const option = (fields: Record<string, unknown>) => ({
+    ...config,
+    options: [{ ...options[1], ...fields }],
+  })
+  const cases: [unknown, RegExp][] = [
+    [{ ...config, options: { name: "WINE" } }, /list of at most 16/],
+    [
+      {
+        ...config,
+        options: Array.from({ length: 17 }, (_, index) => ({ ...options[1], name: `O${index}` })),
+      },
+      /at most 16/,
+    ],
+    [{ ...config, options: ["WINE"] }, /Each option needs a name/],
+    [option({ name: "wine" }), /Each option needs a name/],
+    [option({ name: "1WINE" }), /Each option needs a name/],
+    [option({ name: "W".repeat(33) }), /Each option needs a name/],
+    [{ ...config, options: [options[1], options[1]] }, /WINE is declared twice/],
+    [option({ label: " " }), /WINE needs a label/],
+    [option({ label: "Wine\nand more" }), /WINE needs a label/],
+    [option({ label: "x".repeat(101) }), /WINE needs a label/],
+    [option({ description: "x".repeat(501) }), /description of the option WINE/],
+    [option({ default: "false" }), /default of the option WINE/],
+    [option({ default: undefined }), /default of the option WINE/],
+    [option({ mcp: ["radare2"] }), /WINE can list only/],
+    [option({ mcp: "radare2" }), /WINE can list only/],
+    [
+      { ...config, script: undefined, parts: [{ id: "re", name: "RE", script: "x" }], options },
+      /configuration with a script/,
+    ],
+  ]
+  for (const [value, message] of cases)
+    assert.throws(() => parseBuildConfig(JSON.stringify(value)), message, JSON.stringify(value))
+  // The longest name and label still fit.
+  const longest = parseBuildConfig(
+    JSON.stringify(option({ name: `A${"_".repeat(31)}`, label: "🖥".repeat(100) }))
+  )
+  assert.equal(longest.options?.[0].name.length, 32)
+})
+
 test("a configuration carries the desktop MCP servers it writes into the image", () => {
   const mcp = [
     {

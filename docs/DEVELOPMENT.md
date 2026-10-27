@@ -175,6 +175,23 @@ An image can bring [MCP servers that run inside its desktops](MCP.md#mcp-servers
 
 The script installs the program the command names; the manager runs it as the desktop user only when an endpoint needs its tools, never on a port. **Install** shows the declarations under the script, where the user can leave one out before building. To say on the card which servers a template provides, list their names in its `index.json` entry, as `"mcp": ["playwright"]`.
 
+A template can let the user choose part of what it installs with `options`, which **Install** lists as checkboxes. Each has a `name`, the shell variable its script reads: an uppercase letter followed by up to 31 uppercase letters, digits or underscores. It has a `label` of one line and at most 100 characters, an optional `description` of at most 500, its `default`, `true` or `false`, and optionally in `mcp` the names of the template's own servers that are left out of the image while it is off. A template has at most 16, each name once, and only beside a `script`, never `parts`:
+
+```json
+{
+  "name": "Reverse engineering",
+  "base_image": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
+  "script": "#!/usr/bin/env bash\nset -euo pipefail\n: \"${RADARE2:=true}\"\n: \"${WINE:=false}\"\nif [ \"$RADARE2\" = true ]; then\n  apt-get install -y radare2\nfi\n...",
+  "mcp": [{"name": "radare2", "command": "r2mcp"}],
+  "options": [
+    {"name": "RADARE2", "label": "radare2 and r2mcp", "description": "Command line reverse engineering with an MCP server.", "default": true, "mcp": ["radare2"]},
+    {"name": "WINE", "label": "Wine", "description": "Runs Windows programs to watch them.", "default": false}
+  ]
+}
+```
+
+The dashboard resolves options in the browser and never sends them. When the image builds, it writes the values at the top of the script, after its `#!` line, as `RADARE2=true` and `WINE=false`, and leaves out the servers of the options that are off. So the script sets its own defaults with `: "${NAME:=default}"`, each the same as its option's `default`: a release from before options, an agent calling `build_image` and a pasted configuration send the script as it is, and it then installs the default set. Give an option a name of the template's own, such as `RADARE2`, never a variable the script or its tools read, such as `PATH` or `HOME`. The image's record keeps the script with the values in it, so its **Export configuration** builds the same image again and has no `options`. In a merged build each template's options stay with its part, and its values go into its own script.
+
 ```bash
 git clone https://github.com/co3moz/thoric.wiki.git
 cd thoric.wiki

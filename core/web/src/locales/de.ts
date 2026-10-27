@@ -723,6 +723,22 @@ export const de: Messages = {
   "build.simpleMerged":
     "Erstellt ein Image aus {names}, deren Skripte in dieser Reihenfolge laufen. Die erweiterte Bearbeitung zeigt jedes Skript, das als root läuft, und lässt Sie es vorher ändern.",
   "build.advanced": "Erweiterte Bearbeitung",
+  "build.options": "Optionen",
+  "build.optionsHint":
+    "Jeder Wert wird beim Erstellen des Images oben in das Skript seiner Vorlage geschrieben, als Zeile wie {line}.",
+  "build.config.options": "Optionen müssen eine Liste mit höchstens {count} Einträgen sein.",
+  "build.config.optionsParts":
+    "Optionen gehören zu einer Konfiguration mit einem Skript; eine mit Teilen darf keine haben.",
+  "build.config.optionName":
+    "Jede Option braucht einen Namen aus einem Großbuchstaben, gefolgt von bis zu 31 Großbuchstaben, Ziffern oder Unterstrichen.",
+  "build.config.optionTwice": "Die Option {name} ist doppelt angegeben.",
+  "build.config.optionLabel":
+    "Die Option {name} braucht eine Bezeichnung aus einer Zeile mit höchstens 100 Zeichen.",
+  "build.config.optionDescription":
+    "Die Beschreibung der Option {name} muss ein Text mit höchstens 500 Zeichen sein.",
+  "build.config.optionDefault": "Der Standardwert der Option {name} muss true oder false sein.",
+  "build.config.optionMcp":
+    "Die Option {name} darf nur Desktop-MCP-Server nennen, die die Konfiguration angibt.",
 
   "icons.label": "Symbol",
   "icons.choose": "Symbol wählen",

@@ -721,6 +721,22 @@ export const fr: Messages = {
   "build.simpleMerged":
     "Construit une seule image à partir de {names}, dont les scripts s'exécutent dans cet ordre. L'édition avancée montre chaque script, qui s'exécute en root, et permet de le modifier avant.",
   "build.advanced": "Édition avancée",
+  "build.options": "Options",
+  "build.optionsHint":
+    "Chaque valeur est écrite en tête du script de son modèle lors de la création de l'image, sur une ligne comme {line}.",
+  "build.config.options": "Les options doivent être une liste de {count} au plus.",
+  "build.config.optionsParts":
+    "Les options appartiennent à une configuration avec un script ; une configuration avec des parties ne peut pas en avoir.",
+  "build.config.optionName":
+    "Chaque option a besoin d'un nom fait d'une majuscule suivie d'au plus 31 majuscules, chiffres ou tirets bas.",
+  "build.config.optionTwice": "L'option {name} est déclarée deux fois.",
+  "build.config.optionLabel":
+    "L'option {name} a besoin d'un libellé d'une seule ligne et de 100 caractères au plus.",
+  "build.config.optionDescription":
+    "La description de l'option {name} doit être un texte de 500 caractères au plus.",
+  "build.config.optionDefault": "La valeur par défaut de l'option {name} doit être true ou false.",
+  "build.config.optionMcp":
+    "L'option {name} ne peut nommer que des serveurs MCP de bureau que la configuration déclare.",
 
   "icons.label": "Icône",
   "icons.choose": "Choisir une icône",
