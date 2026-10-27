@@ -711,6 +711,22 @@ export const tr: Messages = {
   "build.simpleMerged":
     "{names} şablonlarından tek bir imaj oluşturur; betikleri bu sırayla çalışır. Gelişmiş düzenleme, root olarak çalışan her betiği gösterir ve önce değiştirmenize izin verir.",
   "build.advanced": "Gelişmiş düzenleme",
+  "build.options": "Seçenekler",
+  "build.optionsHint":
+    "İmaj oluşturulurken her değer, şablonunun betiğinin en üstüne {line} gibi bir satır olarak yazılır.",
+  "build.config.options": "Seçenekler en fazla {count} öğelik bir liste olmalı.",
+  "build.config.optionsParts":
+    "Seçenekler betiği olan bir yapılandırmaya aittir; parçaları olan bir yapılandırmada bulunamaz.",
+  "build.config.optionName":
+    "Her seçeneğin, bir büyük harfle başlayıp en fazla 31 büyük harf, rakam veya alt çizgiyle devam eden bir adı olmalı.",
+  "build.config.optionTwice": "{name} seçeneği iki kez tanımlanmış.",
+  "build.config.optionLabel":
+    "{name} seçeneğinin tek satırlık ve en fazla 100 karakterlik bir etiketi olmalı.",
+  "build.config.optionDescription":
+    "{name} seçeneğinin açıklaması en fazla 500 karakterlik bir metin olmalı.",
+  "build.config.optionDefault": "{name} seçeneğinin varsayılanı true veya false olmalı.",
+  "build.config.optionMcp":
+    "{name} seçeneği yalnızca yapılandırmanın tanımladığı masaüstü MCP sunucularını listeleyebilir.",
 
   "icons.label": "Simge",
   "icons.choose": "Simge seç",

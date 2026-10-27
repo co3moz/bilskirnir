@@ -218,6 +218,24 @@ export type ImageLayers = {
 export type BuildPart = { id: string; name: string; script: string }
 
 /**
+ * A choice a template offers when it is installed, such as an optional tool: on or off, written
+ * as `NAME=true` or `NAME=false` at the top of its script when it builds. The manager never sees
+ * options; a request carries the script with the values in it.
+ */
+export type TemplateOption = {
+  /** A shell variable name the script reads, such as `RADARE2`. */
+  name: string
+  label: string
+  description?: string
+  default: boolean
+  /** Desktop MCP servers of the template that are left out of the image while it is off. */
+  mcp?: string[]
+}
+
+/** A part as the build form holds it, with its template's options, which are never sent. */
+export type DraftPart = BuildPart & { options?: TemplateOption[] }
+
+/**
  * A build request, which is also what an image's exported configuration holds and what a
  * template on the templates page is. It runs a script, or the parts of templates merged into
  * one image.

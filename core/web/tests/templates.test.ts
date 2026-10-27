@@ -341,6 +341,29 @@ test("a merge writes every template's desktop MCP servers into the image, each n
   )
 })
 
+test("a merge keeps each template's options with its part, for its own script", () => {
+  const wine = { name: "WINE", label: "Wine", default: false }
+  const radare2 = { name: "RADARE2", label: "radare2", default: true, mcp: ["chrome"] }
+  const merged = mergeTemplates([
+    { template: chrome, config: { script: "a", mcp: [chromeServer], options: [radare2, wine] } },
+    { template: unity, config: { script: "b" } },
+    { template: vscode, config: { script: "c", options: [wine] } },
+  ])
+  assert.deepEqual(merged.parts, [
+    { id: "chrome", name: "Google Chrome", script: "a", options: [radare2, wine] },
+    { id: "unity", name: "Unity Hub", script: "b" },
+    { id: "vscode", name: "VS Code", script: "c", options: [wine] },
+  ])
+  // The merge has no options of its own; each part's go to its script when it builds.
+  assert.equal("options" in merged, false)
+})
+
+test("installing a template brings its options to the form", async () => {
+  const options = [{ name: "WINE", label: "Wine", default: false }]
+  serve({ [templateFile(LIST, "unity", "json")]: { script: "set -eu\n", options } })
+  assert.deepEqual((await loadTemplate(LIST, unity)).options, options)
+})
+
 test("a list entry names the desktop MCP servers its image declares, and nothing else", () => {
   const [entry] = readTemplateList({
     templates: [{ ...unity, mcp: ["chrome", "x", "Not A Name", 5] }],

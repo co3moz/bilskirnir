@@ -724,6 +724,22 @@ export const en = {
   "build.simpleMerged":
     "Builds one image from {names}, their scripts running in this order. Advanced editing shows each script, which runs as root, and lets you change it first.",
   "build.advanced": "Advanced editing",
+  "build.options": "Options",
+  "build.optionsHint":
+    "Each value is written at the top of its template's script when the image builds, as a line such as {line}.",
+  "build.config.options": "Options must be a list of at most {count}.",
+  "build.config.optionsParts":
+    "Options belong to a configuration with a script; one with parts cannot have them.",
+  "build.config.optionName":
+    "Each option needs a name of an uppercase letter followed by up to 31 uppercase letters, digits or underscores.",
+  "build.config.optionTwice": "The option {name} is declared twice.",
+  "build.config.optionLabel":
+    "The option {name} needs a label of one line and at most 100 characters.",
+  "build.config.optionDescription":
+    "The description of the option {name} must be text of at most 500 characters.",
+  "build.config.optionDefault": "The default of the option {name} must be true or false.",
+  "build.config.optionMcp":
+    "The option {name} can list only desktop MCP servers the configuration declares.",
 
   "icons.label": "Icon",
   "icons.choose": "Choose icon",
