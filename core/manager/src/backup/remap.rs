@@ -1,6 +1,6 @@
 //! A backup's records as this installation keeps them. Docker gives a loaded image the ID its own
 //! image store computes, which need not be the one the backup's installation had, so every record
-//! that names an image ID is moved to the image here; the restored images go by Bilskirnir's own
+//! that names an image ID is moved to the image here; the restored images go by Thoric's own
 //! tags; and the names of a container's Docker objects are made from its id again rather than
 //! taken from the file.
 use super::{

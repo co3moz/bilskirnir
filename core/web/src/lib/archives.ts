@@ -2,7 +2,7 @@ import { t } from "./i18n"
 import { fileSize, type UploadRequest } from "./uploads"
 import type { DesktopInfo } from "./types"
 
-/** Bilskirnir's description of an exported image, the first entry of its archives. */
+/** Thoric's description of an exported image, the first entry of its archives. */
 export type ArchiveInfo = {
   format: number
   name: string
@@ -11,7 +11,7 @@ export type ArchiveInfo = {
   desktop?: DesktopInfo | null
 }
 
-const METADATA = "bilskirnir.json"
+const METADATA = "thoric.json"
 const BLOCK = 512
 
 export const archiveUrl = (id: string) => `/api/images/${encodeURIComponent(id)}/archive`
@@ -165,7 +165,7 @@ export class ArchiveImport {
       const query = new URLSearchParams({ size: String(file.size), ...details })
       request.open("POST", `/api/${this.path}?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
-      request.setRequestHeader("X-Bilskirnir-Request", "1")
+      request.setRequestHeader("X-Thoric-Request", "1")
       request.withCredentials = true
       // Docker reads the archive as it arrives, so a large one takes as long as Docker needs.
       request.timeout = 4 * 3_600_000

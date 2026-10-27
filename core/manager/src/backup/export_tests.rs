@@ -14,12 +14,12 @@ use crate::backup::{
 fn installation() -> (Arc<App>, std::path::PathBuf) {
     let (app, dir) = fake_docker(
         r#"  'image ls -a --no-trunc --format {{.ID}}') echo sha256:image-i1 ;;
-  'ps -a --format {{.Names}}') echo bilskirnir-c1 ;;
-  'container inspect bilskirnir-c1') cat c1.json ;;
-  'volume ls --format {{.Name}}') printf 'projects\nbilskirnir-data\n' ;;
-  'volume ls --format {{json .}}') printf '{"Name":"projects"}\n{"Name":"bilskirnir-data"}\n' ;;
-  'volume ls --filter label=bilskirnir.managed=true --format {{.Name}}') printf 'projects\nbilskirnir-data\n' ;;
-  'volume inspect projects') echo '[{"Name":"projects","Labels":{"bilskirnir.managed":"true"}}]' ;;
+  'ps -a --format {{.Names}}') echo thoric-c1 ;;
+  'container inspect thoric-c1') cat c1.json ;;
+  'volume ls --format {{.Name}}') printf 'projects\nthoric-data\n' ;;
+  'volume ls --format {{json .}}') printf '{"Name":"projects"}\n{"Name":"thoric-data"}\n' ;;
+  'volume ls --filter label=thoric.managed=true --format {{.Name}}') printf 'projects\nthoric-data\n' ;;
+  'volume inspect projects') echo '[{"Name":"projects","Labels":{"thoric.managed":"true"}}]' ;;
   'save sha256:image-i1') head -c 5000000 /dev/zero | tr '\0' 'i' ;;
   'commit '*) echo sha256:commit-c1 ;;
   'save sha256:commit-c1') printf 'files of c1' ;;
@@ -30,7 +30,7 @@ fn installation() -> (Arc<App>, std::path::PathBuf) {
         dir.join("c1.json"),
         serde_json::json!([{
             "Id": "cid1",
-            "Config": {"Hostname": "host-c1", "Labels": {"bilskirnir.managed": "true", "bilskirnir.environment": "c1"}},
+            "Config": {"Hostname": "host-c1", "Labels": {"thoric.managed": "true", "thoric.environment": "c1"}},
             "State": {"Running": true},
             "NetworkSettings": {"Networks": {}},
         }])
@@ -41,7 +41,7 @@ fn installation() -> (Arc<App>, std::path::PathBuf) {
         .put(
             CONTAINERS,
             "c1",
-            &container("c1", "Desk", "bilskirnir/custom:i1", &["projects"]),
+            &container("c1", "Desk", "thoric/custom:i1", &["projects"]),
         )
         .unwrap();
     app.db
@@ -176,7 +176,7 @@ async fn a_backup_streams_every_part_with_its_length_and_digest() {
     // The commit made for the backup goes again; the volume is read on a read-only mount.
     assert!(
         calls.contains(
-            "commit --change LABEL bilskirnir.managed=true --message Bilskirnir backup of Desk cid1"
+            "commit --change LABEL thoric.managed=true --message Thoric backup of Desk cid1"
         ),
         "{calls}"
     );
@@ -189,7 +189,7 @@ async fn a_backup_streams_every_part_with_its_length_and_digest() {
     ] {
         assert!(helper.contains(flag), "{helper}");
     }
-    assert!(!calls.contains("src=bilskirnir-data"), "{calls}");
+    assert!(!calls.contains("src=thoric-data"), "{calls}");
     let job: crate::model::Job = app.db.get("job", "backup-job").unwrap();
     assert!(!job.log.contains(SECRET));
     let stages = job

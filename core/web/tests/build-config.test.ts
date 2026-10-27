@@ -7,7 +7,7 @@ const PNG = "data:image/png;base64,"
 
 const config = {
   name: "Unity tools",
-  base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+  base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
   internet: false,
   script: "#!/usr/bin/env bash\nset -euo pipefail\napt-get install -y git\n",
 }

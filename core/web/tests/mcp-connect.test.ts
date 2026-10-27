@@ -19,8 +19,8 @@ const endpoint: ConnectTarget = {
 }
 const tokenless: ConnectTarget = { ...endpoint, token: null }
 const admin: ConnectTarget = {
-  name: "bilskirnir",
-  url: "https://bilskirnir.lan/mcp",
+  name: "thoric",
+  url: "https://thoric.lan/mcp",
   path: "/mcp",
   token: "admin",
 }
@@ -142,12 +142,12 @@ test("install links carry the same server the settings do", () => {
 test("the WSL bridge reaches the endpoint by its path and never carries a token", () => {
   assert.deepEqual(wslBridge(admin).args, [
     "-d",
-    "Bilskirnir",
+    "Thoric",
     "--",
     "docker",
     "exec",
     "-i",
-    "bilskirnir-manager",
+    "thoric-manager",
     "python3",
     "/app/mcp_bridge.py",
   ])

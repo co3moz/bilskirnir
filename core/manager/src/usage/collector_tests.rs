@@ -133,14 +133,12 @@ mod engine_socket {
 
     #[tokio::test]
     async fn a_container_is_followed_while_it_runs_and_remembered_once_deleted() {
-        let dir = std::env::temp_dir().join(format!(
-            "bilskirnir-usage-{}",
-            uuid::Uuid::new_v4().simple()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("thoric-usage-{}", uuid::Uuid::new_v4().simple()));
         std::fs::create_dir_all(&dir).unwrap();
         let socket = dir.join("docker.sock");
         let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-        let entry = json!({"Id": DOCKER_ID, "Names": ["/bilskirnir-a"], "Labels": {"bilskirnir.managed": "true", "bilskirnir.environment": "a"}});
+        let entry = json!({"Id": DOCKER_ID, "Names": ["/thoric-a"], "Labels": {"thoric.managed": "true", "thoric.environment": "a"}});
         let listed = Arc::new(Mutex::new(json!([entry])));
         let streams = Arc::new(AtomicUsize::new(0));
         let server = tokio::spawn(engine(listener, listed.clone(), streams.clone()));
@@ -149,13 +147,13 @@ mod engine_socket {
         Arc::get_mut(&mut app).unwrap().config.docker_socket = Some(socket);
         let record = crate::model::Container {
             id: "a".into(),
-            container: "bilskirnir-a".into(),
-            private_network: "bilskirnir-a-private".into(),
-            egress_network: "bilskirnir-a-egress".into(),
+            container: "thoric-a".into(),
+            private_network: "thoric-a-private".into(),
+            egress_network: "thoric-a-egress".into(),
             source_image_id: "sha256:base".into(),
             created_at: 1,
             spec: serde_json::from_value::<ContainerSpec>(
-                json!({"name": "A", "image": "bilskirnir/ubuntu-xfce:24.04"}),
+                json!({"name": "A", "image": "thoric/ubuntu-xfce:24.04"}),
             )
             .unwrap(),
             last_error: None,

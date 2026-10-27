@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=MCP Servers
+GenericName=Thoric MCP servers
+Comment=See and change the MCP servers this desktop offers to Thoric's agents
+Exec=thoric-mcp-tray --show
+Icon=thoric-mcp
+Terminal=false
+StartupNotify=false
+StartupWMClass=thoric-mcp-tray
+Categories=Development;Utility;
+Keywords=MCP;Thoric;agent;server;tools;

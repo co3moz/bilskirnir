@@ -17,9 +17,9 @@ For an installation without a checkout, the manager image includes the same file
 
 ```bash
 mkdir -p deploy
-docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/compose.yml > compose.ghcr.yml
-docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/.env.example > .env
-docker run --rm --entrypoint cat ghcr.io/co3moz/bilskirnir:latest /app/install/deploy/Caddyfile > deploy/Caddyfile
+docker run --rm --entrypoint cat ghcr.io/co3moz/thoric:latest /app/install/compose.yml > compose.ghcr.yml
+docker run --rm --entrypoint cat ghcr.io/co3moz/thoric:latest /app/install/.env.example > .env
+docker run --rm --entrypoint cat ghcr.io/co3moz/thoric:latest /app/install/deploy/Caddyfile > deploy/Caddyfile
 ```
 
 Edit the exported `.env` before starting the manager. Run these export commands in a new directory so you do not overwrite settings from an existing installation.
@@ -30,14 +30,14 @@ The minimal README example keeps settings directly in Compose. The full manifest
 
 The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
 
-In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `bilskirnir settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
+In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `thoric settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
 | `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
-| `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.6.3: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `bilskirnir update` renames it. |
+| `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.6.3: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `thoric update` renames it. |
 | `MCP_TOKEN` | Empty | The administrator's bearer token, required when `ROOT_MCP_ENABLED=true` in `token` mode; 1 to 256 visible ASCII characters without spaces. It opens every MCP endpoint too, also while `/mcp` is off. Wrap it in single quotes when it contains `$` or `#`. |
 | `MCP_AUTH_MODE` | `token` | Use `none` to accept agent requests without a token, on `/mcp` and on every MCP endpoint, whether or not `/mcp` is on. Anyone who can reach the manager's address can then control every container that `/mcp` or an endpoint reaches, so keep it on localhost. |
 | `WSL_GPU` | `true` | Gives GPU containers the WSL GPU (`/dev/dxg` and `/usr/lib/wsl`) where the host has it. See [GPU on a Linux host](#gpu-on-a-linux-host) for how the routes are chosen. |
@@ -59,9 +59,9 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
-| `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Bilskirnir wiki, `https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
-| `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `bilskirnir.managed=true`, which Bilskirnir puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Bilskirnir adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
-| `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts, every six hours and when **Check now** on the **Management** page asks. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `bilskirnir update`. `false` turns both off, and the manager makes no request to GitHub. |
+| `TEMPLATES_URL` | Empty | The template list the **Templates** page reads. Empty uses the list on the Thoric wiki, `https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json`. Set the `http` or `https` address of another `index.json` for your own list or a mirror, with each template's `<id>.json` and `<id>.png` beside it, or `none` to turn the page off. The browser reads the list, so it needs to reach that address; the manager does not. |
+| `VOLUME_FILTER` | Empty | The Docker label a named volume needs to be listed, mounted, browsed, exported or copied, as `key` or `key=value`. Empty means `thoric.managed=true`, which Thoric puts on every volume it creates, imports or copies, so volumes made elsewhere on the same Docker Engine, such as the manager's own data volume or another Compose project's database, stay out of reach. A request that names such a volume is answered as if it did not exist. Thoric adds the label you set here to the volumes it creates. A container keeps a volume it mounted before the filter left it out, through resets and setting changes; only a new choice is held to the filter. Docker cannot add a label to an existing volume, so to bring one in, set `none` for a while and copy it from the **Volumes** page. `none` lists every volume. |
+| `UPDATE_CHECK` | `true` | Whether the manager asks GitHub for the newest release, when it starts, every six hours and when **Check now** on the **Management** page asks. The sidebar names a release newer than the manager and links to its notes; in the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) its **Update** button runs `thoric update`. `false` turns both off, and the manager makes no request to GitHub. |
 | `ALLOWED_HOSTS` | `localhost` in Compose | Extra DNS names accepted by the manager, separated by commas. `DESKTOP_HOST` is accepted as well; Compose passes it on its own. |
 | `SECURE_COOKIE` | `false` | Require HTTPS for the sign-in cookie. |
 
@@ -71,9 +71,9 @@ The full manifests also accept these Compose settings:
 | --- | --- | --- |
 | `BIND_ADDRESS` | `127.0.0.1` | Which host interfaces expose the manager and optional HTTPS service. |
 | `PORT` | `8080` | The manager's HTTP port on the host. |
-| `MANAGER_CONTAINER` | `bilskirnir-manager` | The manager container's name. |
-| `MANAGER_DATA_VOLUME` | `bilskirnir-data` | The volume holding the manager database and temporary uploads. |
-| `MANAGER_IMAGE` | `ghcr.io/co3moz/bilskirnir:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` follows `master`; the WSL package sets the release it belongs to. |
+| `MANAGER_CONTAINER` | `thoric-manager` | The manager container's name. |
+| `MANAGER_DATA_VOLUME` | `thoric-data` | The volume holding the manager database and temporary uploads. |
+| `MANAGER_IMAGE` | `ghcr.io/co3moz/thoric:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` follows `master`; the WSL package sets the release it belongs to. |
 | `DESKTOP_HOST` | `localhost` | The hostname for the optional HTTPS service; also added to accepted hosts. |
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
@@ -140,7 +140,7 @@ For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
 The sidebar names a newer release when one is out, unless `UPDATE_CHECK=false`. Only the WSL package updates itself from there; on other installations, run the commands above. `compose.ghcr.yml` mounts an `update` folder beside it into the manager for that, which stays empty elsewhere.
 
-This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To get a newer release of a catalog image you already have, select the update button on its row under **Images**. A release manager, such as `ghcr.io/co3moz/bilskirnir:1.2.0`, downloads the catalog image published with it (`ubuntu-xfce:1.2.0`) and tags it with the catalog reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `bilskirnir update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `bilskirnir` command.
+This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To get a newer release of a catalog image you already have, select the update button on its row under **Images**. A release manager, such as `ghcr.io/co3moz/thoric:1.2.0`, downloads the catalog image published with it (`ubuntu-xfce:1.2.0`) and tags it with the catalog reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `thoric update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `thoric` command.
 
 Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both catalog images at every start. They keep working. To download them only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
 
@@ -152,7 +152,7 @@ New containers use the updated catalog images. Existing containers and snapshots
 | --- | --- | --- |
 | Container settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
 | Installed software and unmounted home files | The desktop container's writable layer | Lost unless saved in an image or snapshot. |
-| Files carried over by a settings change | An image tagged `bilskirnir/container:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
+| Files carried over by a settings change | An image tagged `thoric/container:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |
 | Saved image and snapshot layers | The host Docker Engine's image store | Preserved. |
 
@@ -164,11 +164,11 @@ Uploads are temporarily staged in the manager data volume. The manager accepts t
 
 A manager restart marks unfinished jobs as interrupted. Build scripts are not replayed automatically. Inspect the job result before starting an operation again.
 
-Use **Retry setup** for a container that failed during creation or startup. If its container still exists, Bilskirnir keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
+Use **Retry setup** for a container that failed during creation or startup. If its container still exists, Thoric keeps the writable layer and completes missing networks or startup steps. If the container is missing, it can recreate it from the saved source image ID.
 
-A settings change that needs a new container saves its files to an image and renames the old one to `bilskirnir-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name, and the container record names the saved image. **Retry setup** then creates the container from that image with the new settings and removes the one set aside, as does the next settings change; a reset or a delete removes it with the container. Only a record written by a manager before 0.5.0 lacks the saved image, and then Retry setup and settings changes refuse to run while `bilskirnir-ID-previous` exists: rename it back with `docker rename bilskirnir-ID-previous bilskirnir-ID`, or remove it once its files are no longer needed.
+A settings change that needs a new container saves its files to an image and renames the old one to `thoric-ID-previous` until its replacement has started. If the manager stops during that job, the old container and its files are still there under that name, and the container record names the saved image. **Retry setup** then creates the container from that image with the new settings and removes the one set aside, as does the next settings change; a reset or a delete removes it with the container. Only a record written by a manager before 0.5.0 lacks the saved image, and then Retry setup and settings changes refuse to run while `thoric-ID-previous` exists: rename it back with `docker rename thoric-ID-previous thoric-ID`, or remove it once its files are no longer needed.
 
-Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Bilskirnir does not silently replace a missing volume with an empty one.
+Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Thoric does not silently replace a missing volume with an empty one.
 
 The manager checks container network connections every 20 seconds. A problem with one container does not prevent checks for the others. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
 
@@ -192,19 +192,19 @@ A backup moves an installation, A, to another computer or a fresh installation, 
 
 1. On A, open **Management** and, under **Backup and restore**, tick **Saved images**, **Containers' files** and **Volumes** to move everything. **Secret values** adds the values of the composes' secret parameters; without them, a reset on B runs those setups without the values. Select **Download backup**. Containers may keep running; Docker pauses each desktop briefly while it saves its files.
 2. Copy the file to B. It is not encrypted. It holds your files, the hashes of the MCP endpoints' tokens and, when ticked, secret values in plain text, so keep it where only you can read it, encrypt it with a tool such as `gpg --symmetric` or 7-Zip before it crosses a network share, and delete it once B works. Nothing is staged on either manager's disk: A streams the backup into your download, and B loads it into Docker as it uploads, so B needs room for the images, files and volumes themselves.
-3. Install Bilskirnir on B with a new data volume. Settings do not travel in the backup, since they live in `.env` outside the manager. In the WSL package, run `bilskirnir settings` on B and copy the values you changed in A's `/opt/bilskirnir/.env`, such as `ADMIN_PASSWORD`, `MCP_TOKEN` and `BIND_ADDRESS`, then `bilskirnir restart`; with Compose, copy `.env` and recreate the manager. A restore reads at most `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) after decompression, so raise it on B for a larger backup.
+3. Install Thoric on B with a new data volume. Settings do not travel in the backup, since they live in `.env` outside the manager. In the WSL package, run `thoric settings` on B and copy the values you changed in A's `/opt/thoric/.env`, such as `ADMIN_PASSWORD`, `MCP_TOKEN` and `BIND_ADDRESS`, then `thoric restart`; with Compose, copy `.env` and recreate the manager. A restore reads at most `IMAGE_ARCHIVE_MAX_MB` (64 GiB by default) after decompression, so raise it on B for a larger backup.
 4. On B, choose the file under **Restore a backup**. The dashboard lists what it creates and anything B already has under the same name; a restore never replaces anything, so a conflict stops it before it starts. Select **Restore** and keep the tab open until the upload ends. The job then saves the records and creates the containers.
 5. The containers come back stopped, with the same hostname, MAC address and machine ID, so node-locked licenses stay valid. Start them from **Containers**. A container restored without its files, or one that mounts a volume the backup did not carry, shows why. **Retry setup** creates the first from its image, downloading a catalog image when B has none yet, and runs its compose setup again, and the second once its volume is on B. Agents keep their endpoint tokens. While A stays in use, the same tokens open both installations, so give the endpoints on one side new ones with **Replace token** on the **MCP** page.
 
 ## Move an older installation
 
-Before replacing an older Compose deployment, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The current default is `bilskirnir-data`. Remove the old manager deployment without deleting that volume, then start Bilskirnir using it. Existing containers can keep running while the manager is replaced.
+Before replacing an older Compose deployment, set `MANAGER_DATA_VOLUME` to its existing manager data volume name. The current default is `thoric-data`. Remove the old manager deployment without deleting that volume, then start Thoric using it. Existing containers can keep running while the manager is replaced.
 
 If locally built desktop images still use older tags, retag them rather than rebuilding:
 
 ```bash
-docker image tag bilskirnir/ubuntu-xfce:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04
-docker image tag bilskirnir/ubuntu-gnome:24.04 ghcr.io/co3moz/bilskirnir/ubuntu-gnome:24.04
+docker image tag thoric/ubuntu-xfce:24.04 ghcr.io/co3moz/thoric/ubuntu-xfce:24.04
+docker image tag thoric/ubuntu-gnome:24.04 ghcr.io/co3moz/thoric/ubuntu-gnome:24.04
 ```
 
 Saved container image IDs do not change when you add a tag.

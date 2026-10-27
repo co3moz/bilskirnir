@@ -1,8 +1,8 @@
 import { quietWhileRestarting, refreshAll } from "./queries"
 
 /**
- * Following an update or a settings change across the manager's restart. `bilskirnir update` and
- * `bilskirnir apply-settings` replace the manager container on their way: requests fail while it
+ * Following an update or a settings change across the manager's restart. `thoric update` and
+ * `thoric apply-settings` replace the manager container on their way: requests fail while it
  * is away, and the new one keeps no sessions and may serve the interface of another release. So
  * the page reloads as soon as a new manager answers.
  */
@@ -26,7 +26,7 @@ export function next(answer: Answer, from: string, away: boolean): "follow" | "r
 }
 
 const LOOK_EVERY = 1500
-const UPDATED_FROM = "bilskirnir.updatedFrom"
+const UPDATED_FROM = "thoric.updatedFrom"
 let following = false
 
 /** What a restart is followed by: the update's status, or the configuration a settings change is on. */

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// The manifest's own kind, so another JSON file is not taken for a backup.
-pub(crate) const KIND: &str = "bilskirnir-backup";
+pub(crate) const KIND: &str = "thoric-backup";
 /// The layout this release writes and reads.
 pub(crate) const FORMAT: u32 = 1;
 
@@ -29,7 +29,7 @@ pub(crate) struct Included {
     /// the installation they return to downloads them when it needs them.
     #[serde(default)]
     pub images: bool,
-    /// The named volumes the containers mount and those Bilskirnir created.
+    /// The named volumes the containers mount and those Thoric created.
     #[serde(default)]
     pub volumes: bool,
     /// Each container's files: a commit of its container layer.
@@ -160,7 +160,7 @@ pub(crate) struct Installation {
     /// Containers whose files can be saved: their Docker container, or the commit a settings
     /// change left them, exists.
     pub with_files: HashSet<String>,
-    /// The volumes a backup may carry: those the containers mount and those Bilskirnir created
+    /// The volumes a backup may carry: those the containers mount and those Thoric created
     /// that the volume list shows, never the manager's own.
     pub volumes: BTreeMap<String, VolumeFacts>,
 }

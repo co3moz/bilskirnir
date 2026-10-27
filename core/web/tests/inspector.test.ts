@@ -155,7 +155,7 @@ test("the picker offers what can be opened, and says why the rest cannot", () =>
   )
   assert.deepEqual(
     groups.map((group) => group.label),
-    ["Bilskirnir", "Endpoints", "Desktop c1", "Desktop c2"]
+    ["Thoric", "Endpoints", "Desktop c1", "Desktop c2"]
   )
   // A container's servers sit under its icon and color, the endpoints under MCP's.
   assert.deepEqual(

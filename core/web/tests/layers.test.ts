@@ -19,7 +19,7 @@ const step = (overrides: Partial<ImageStep>): ImageStep => ({
 // A snapshot of a script build, newest first as the manager lists the steps.
 const steps: ImageStep[] = [
   step({ kind: "commit", size: 5000, layer: true, shared_with: ["child"] }),
-  step({ kind: "config", instruction: "LABEL bilskirnir.managed=true", from: "build" }),
+  step({ kind: "config", instruction: "LABEL thoric.managed=true", from: "build" }),
   step({ size: 2000, layer: true, from: "build", shared_with: ["build", "child"] }),
   step({ kind: "config", instruction: "USER root", from: "build" }),
   step({ kind: "config", instruction: "CMD bash", from: "ubuntu-xfce", shared_with: ["build"] }),

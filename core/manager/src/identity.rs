@@ -121,7 +121,7 @@ pub(crate) fn assign(spec: &mut ContainerSpec, container: &str) {
 pub(crate) fn adopt(env: &mut Container, info: Option<&Value>) {
     let info = info.filter(|info| {
         info["Config"]["Labels"][LABEL] == "true"
-            && info["Config"]["Labels"]["bilskirnir.environment"] == env.id.as_str()
+            && info["Config"]["Labels"]["thoric.environment"] == env.id.as_str()
     });
     if env.spec.hostname.is_none() {
         let current = info

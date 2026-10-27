@@ -17,10 +17,10 @@ fn manifest_sizes_give_a_total_before_any_layer_downloads() {
         sizes: HashMap::from([("aaaaaaaaaaaa".into(), 100), ("bbbbbbbbbbbb".into(), 300)]),
         ..Default::default()
     };
-    let opening = json!({"id": "24.04", "status": "Pulling from co3moz/bilskirnir/ubuntu-xfce"});
+    let opening = json!({"id": "24.04", "status": "Pulling from co3moz/thoric/ubuntu-xfce"});
     assert_eq!(
         progress.apply(&opening).unwrap().as_deref(),
-        Some("24.04: Pulling from co3moz/bilskirnir/ubuntu-xfce")
+        Some("24.04: Pulling from co3moz/thoric/ubuntu-xfce")
     );
     for message in [
         layer("cccccccccccc", "Already exists"),
@@ -59,10 +59,10 @@ fn manifest_sizes_give_a_total_before_any_layer_downloads() {
     );
     assert_eq!(
         progress
-            .apply(&json!({"status": "Status: Downloaded newer image for ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}))
+            .apply(&json!({"status": "Status: Downloaded newer image for ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}))
             .unwrap()
             .as_deref(),
-        Some("Status: Downloaded newer image for ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04")
+        Some("Status: Downloaded newer image for ghcr.io/co3moz/thoric/ubuntu-xfce:24.04")
     );
 }
 
@@ -192,8 +192,8 @@ fn the_engine_socket_follows_the_clis_docker_host() {
 #[test]
 fn image_references_are_encoded_for_the_query() {
     assert_eq!(
-        query_value("ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"),
-        "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"
+        query_value("ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"),
+        "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"
     );
     assert_eq!(query_value("a+b c&d"), "a%2Bb%20c%26d");
 }
@@ -214,7 +214,7 @@ async fn serve(mut server: tokio::io::DuplexStream, response: String) -> String 
 #[tokio::test]
 async fn engine_pull_reads_messages_split_across_chunks() {
     let (client, server) = tokio::io::duplex(8192);
-    let first = "{\"status\":\"Pulling from co3moz/bilskirnir/ubuntu-xfce\",\"id\":\"24.04\"}\r\n{\"status\":\"Downl";
+    let first = "{\"status\":\"Pulling from co3moz/thoric/ubuntu-xfce\",\"id\":\"24.04\"}\r\n{\"status\":\"Downl";
     let second = "oading\",\"id\":\"aaaaaaaaaaaa\",\"progressDetail\":{\"current\":5,\"total\":10}}\r\n{\"status\":\"Status: Image is up to date\"}";
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n{first}\r\n{:x}\r\n{second}\r\n0\r\n\r\n",
@@ -225,7 +225,7 @@ async fn engine_pull_reads_messages_split_across_chunks() {
     let mut messages = Vec::new();
     engine_pull(
         client,
-        "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+        "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
         |message| {
             messages.push(message);
             Ok(())
@@ -236,7 +236,7 @@ async fn engine_pull_reads_messages_split_across_chunks() {
     let request = server.await.unwrap();
     assert!(
         request.starts_with(
-            "POST /images/create?fromImage=ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04 HTTP/1.1\r\n"
+            "POST /images/create?fromImage=ghcr.io/co3moz/thoric/ubuntu-xfce:24.04 HTTP/1.1\r\n"
         ),
         "{request}"
     );
@@ -324,8 +324,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     let release = format!("{}:1.2.3", reference.rsplit_once(':').unwrap().0);
     // A Docker CLI stand-in that records its arguments and has no manifest to offer. It lists
     // every image except the release tag, which it lists only once `release-tag-here` exists.
-    let dir =
-        std::env::temp_dir().join(format!("bilskirnir-pull-{}", uuid::Uuid::new_v4().simple()));
+    let dir = std::env::temp_dir().join(format!("thoric-pull-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let calls = dir.join("calls");
     let docker = dir.join("docker");

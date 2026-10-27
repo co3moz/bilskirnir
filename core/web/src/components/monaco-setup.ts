@@ -53,7 +53,7 @@ globalThis.MonacoEnvironment = {
     label === "json" ? new JsonWorker() : new EditorWorker(),
 }
 
-export const THEME = "bilskirnir"
+export const THEME = "thoric"
 
 /** A rendered color as `#RRGGBB[AA]`: Monaco takes no oklch, which the interface's tokens use. */
 function rendered(color: string, canvas: CanvasRenderingContext2D) {

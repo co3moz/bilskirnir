@@ -39,7 +39,7 @@ async fn supervise(app: &Arc<App>) -> anyhow::Result<()> {
             "--filter",
             &format!("label={}=true", crate::model::LABEL),
             "--format",
-            "{{.ID}} {{.Label \"bilskirnir.environment\"}}",
+            "{{.ID}} {{.Label \"thoric.environment\"}}",
         ])
         .await?;
     for line in String::from_utf8_lossy(&output).lines() {

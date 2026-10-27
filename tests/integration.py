@@ -102,38 +102,38 @@ class WebSocket:
 
 
 tag = uuid.uuid4().hex[:12]
-manager = f"bilskirnir-test-{tag}"
-volume = f"bilskirnir-test-data-{tag}"
-share = f"bilskirnir-test-share-{tag}"
-clone_share = f"bilskirnir-test-clone-{tag}"
-files_volume = f"bilskirnir-test-files-{tag}"
-restored_volume = f"bilskirnir-test-restored-{tag}"
-streamed_volume = f"bilskirnir-test-streamed-{tag}"
-cut_volume = f"bilskirnir-test-cut-{tag}"
-interrupted_volume = f"bilskirnir-test-interrupted-{tag}"
-copied_volume = f"bilskirnir-test-copied-{tag}"
-mcp_copy_volume = f"bilskirnir-test-mcp-copy-{tag}"
-device_volume = f"bilskirnir-test-device-{tag}"
-device_copy_volume = f"bilskirnir-test-device-copy-{tag}"
-linked_volume = f"bilskirnir-test-linked-{tag}"
-installs_volume = f"bilskirnir-test-installs-{tag}"
+manager = f"thoric-test-{tag}"
+volume = f"thoric-test-data-{tag}"
+share = f"thoric-test-share-{tag}"
+clone_share = f"thoric-test-clone-{tag}"
+files_volume = f"thoric-test-files-{tag}"
+restored_volume = f"thoric-test-restored-{tag}"
+streamed_volume = f"thoric-test-streamed-{tag}"
+cut_volume = f"thoric-test-cut-{tag}"
+interrupted_volume = f"thoric-test-interrupted-{tag}"
+copied_volume = f"thoric-test-copied-{tag}"
+mcp_copy_volume = f"thoric-test-mcp-copy-{tag}"
+device_volume = f"thoric-test-device-{tag}"
+device_copy_volume = f"thoric-test-device-copy-{tag}"
+linked_volume = f"thoric-test-linked-{tag}"
+installs_volume = f"thoric-test-installs-{tag}"
 # A second manager backs up and restores, so its volume filter can keep other volumes out.
-backup_manager = f"bilskirnir-test-backup-{tag}"
-backup_data = f"bilskirnir-test-backup-data-{tag}"
-backup_volume = f"bilskirnir-test-backup-volume-{tag}"
+backup_manager = f"thoric-test-backup-{tag}"
+backup_data = f"thoric-test-backup-data-{tag}"
+backup_volume = f"thoric-test-backup-volume-{tag}"
 backup_ids = []
-cache_volume = f"bilskirnir-test-cache-{tag}"
-settings_volume = f"bilskirnir-test-settings-{tag}"
-absent_volume = f"bilskirnir-test-absent-{tag}"
-outside_volume = f"bilskirnir-test-outside-{tag}"
+cache_volume = f"thoric-test-cache-{tag}"
+settings_volume = f"thoric-test-settings-{tag}"
+absent_volume = f"thoric-test-absent-{tag}"
+outside_volume = f"thoric-test-outside-{tag}"
 password = uuid.uuid4().hex
 mcp_token = uuid.uuid4().hex + uuid.uuid4().hex
 container_ids = []
 image_refs = []
 # Volumes the manager names after this run's containers, which exist only once they are created.
 own_volumes = []
-foreign = f"bilskirnir-test-foreign-{tag}"
-holder = f"bilskirnir-test-holder-{tag}"
+foreign = f"thoric-test-foreign-{tag}"
+holder = f"thoric-test-holder-{tag}"
 port = None
 cookies = http.cookiejar.CookieJar()
 client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
@@ -146,7 +146,7 @@ def api(path, body=None, method=None, raw=False, anonymous=False):
         body = {**body, "parts": [{**first, "script": f"# acceptance run {tag}\n" + first["script"]}, *rest]}
     elif path == "images/build" and body:
         body = {**body, "script": f"# acceptance run {tag}\n" + body["script"]}
-    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{path}", data=None if body is None else json.dumps(body).encode(), method=method, headers={"Content-Type": "application/json", "X-Bilskirnir-Request": "1"})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{path}", data=None if body is None else json.dumps(body).encode(), method=method, headers={"Content-Type": "application/json", "X-Thoric-Request": "1"})
     opener = urllib.request.build_opener() if anonymous else client
     with opener.open(request, timeout=130) as response:
         data = response.read()
@@ -238,7 +238,7 @@ def job(response):
 
 
 def start_manager():
-    docker("run", "-d", "--name", manager, "--label", "bilskirnir.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "ROOT_MCP_ENABLED=true", "-e", "GPU_DEFAULT=false", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "bilskirnir/manager:local")
+    docker("run", "-d", "--name", manager, "--label", "thoric.manager=true", "-e", f"MANAGER_CONTAINER={manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", "ROOT_MCP_ENABLED=true", "-e", "GPU_DEFAULT=false", "-e", f"MCP_TOKEN={mcp_token}", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{volume}:/data", "-p", f"127.0.0.1:{port or ''}:8080", "thoric/manager:local")
     return int(docker("port", manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
 
 
@@ -364,7 +364,7 @@ def mcp_job(response, success=True):
 
 def upload(eid, name, data, destination="/home/desktop/Downloads", replace=False):
     query = urllib.parse.urlencode({"destination":destination,"name":name,"size":len(data),"replace":str(replace).lower()})
-    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{eid}/files?{query}",data=data,headers={"Content-Type":"application/octet-stream","X-Bilskirnir-Request":"1"})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{eid}/files?{query}",data=data,headers={"Content-Type":"application/octet-stream","X-Thoric-Request":"1"})
     with client.open(request,timeout=120) as response:
         return json.loads(response.read())
 
@@ -374,7 +374,7 @@ def transfer_link(arguments):
 
 
 def without_session(url, data=None, method=None):
-    """A request with no cookie, no X-Bilskirnir-Request and no bearer token, as a shell sends a link."""
+    """A request with no cookie, no X-Thoric-Request and no bearer token, as a shell sends a link."""
     request = urllib.request.Request(f"http://127.0.0.1:{port}{url}", data=data, method=method)
     return urllib.request.build_opener().open(request, timeout=130)
 
@@ -383,7 +383,7 @@ def import_archive(path, **query):
     size = os.path.getsize(path)
     query = urllib.parse.urlencode({"size": size, **query})
     with open(path, "rb") as body:
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/images/import?{query}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Bilskirnir-Request": "1"})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/images/import?{query}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Thoric-Request": "1"})
         with client.open(request, timeout=1800) as response:
             return json.loads(response.read())
 
@@ -393,7 +393,7 @@ def synthetic_archive(path, labels, names):
     layer_buffer = io.BytesIO()
     with tarfile.open(fileobj=layer_buffer, mode="w") as layer_tar:
         content = f"archive acceptance {tag} {sorted(labels.items())}".encode()
-        member = tarfile.TarInfo("bilskirnir-archive-test")
+        member = tarfile.TarInfo("thoric-archive-test")
         member.size = len(content)
         layer_tar.addfile(member, io.BytesIO(content))
     layer = layer_buffer.getvalue()
@@ -468,7 +468,7 @@ try:
     port = start_manager()
     login()
     # GPU usage helpers of another manager on this Docker are not this run's to judge.
-    foreign_helpers = set(docker("ps", "-q", "--filter", "label=bilskirnir.usage-helper=true").decode().split())
+    foreign_helpers = set(docker("ps", "-q", "--filter", "label=thoric.usage-helper=true").decode().split())
     try:
         api("containers", anonymous=True)
         raise AssertionError("anonymous API access accepted")
@@ -480,7 +480,7 @@ try:
         raise AssertionError("MCP accepted the wrong token")
     except urllib.error.HTTPError as error:
         assert error.code == 401
-    assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "bilskirnir"
+    assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
     assert len(mcp("tools/list")["tools"]) == 76
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
@@ -503,16 +503,16 @@ try:
     # is removed.
     xfce_ref = xfce["reference"]
     # A release manager downloads the catalog image published with it and tags that as the reference.
-    release = docker("inspect", "--format", '{{index .Config.Labels "bilskirnir.release"}}', manager).decode().strip()
+    release = docker("inspect", "--format", '{{index .Config.Labels "thoric.release"}}', manager).decode().strip()
     xfce_source = xfce_ref if release in ("", "<no value>") else f"{xfce_ref.rsplit(':', 1)[0]}:{release}"
     local_xfce = docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip()
     known_images = set(docker("image", "ls", "-a", "-q", "--no-trunc").decode().split())
-    xfce_backup = f"bilskirnir-test-xfce-backup:{tag}"
+    xfce_backup = f"thoric-test-xfce-backup:{tag}"
     docker("image", "tag", xfce_ref, xfce_backup)
     docker("image", "rm", xfce_ref)
     # A release tag already on the host is moved aside the same way, so the download is a real one.
     local_source = docker("image", "inspect", "--format", "{{.Id}}", xfce_source, check=False).decode().strip() if xfce_source != xfce_ref else ""
-    source_backup = f"bilskirnir-test-xfce-release-backup:{tag}"
+    source_backup = f"thoric-test-xfce-release-backup:{tag}"
     if local_source:
         docker("image", "tag", xfce_source, source_backup)
         docker("image", "rm", xfce_source)
@@ -570,9 +570,9 @@ try:
     api(f"{files}/write", {"path": "/notes/hello.txt", "data": "Hello volume\n"})
     assert refused(f"{files}/write", {"path": "/notes/hello.txt", "data": "again"}) == 409
     assert api(f"{files}/read", {"path": "/notes/hello.txt"})["data"] == "Hello volume\n"
-    owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={files_volume},dst=/v,readonly", "--entrypoint", "stat", "bilskirnir/manager:local", "-c", "%u:%g", "/v", "/v/notes", "/v/notes/hello.txt").decode().split()
+    owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={files_volume},dst=/v,readonly", "--entrypoint", "stat", "thoric/manager:local", "-c", "%u:%g", "/v", "/v/notes", "/v/notes/hello.txt").decode().split()
     assert owners == ["1001:1001"] * 3, owners
-    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{files}?" + urllib.parse.urlencode({"destination": "/notes", "name": "blob.bin", "size": 3}), data=b"\x00\x01\x02", method="POST", headers={"Content-Type": "application/octet-stream", "X-Bilskirnir-Request": "1"})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/{files}?" + urllib.parse.urlencode({"destination": "/notes", "name": "blob.bin", "size": 3}), data=b"\x00\x01\x02", method="POST", headers={"Content-Type": "application/octet-stream", "X-Thoric-Request": "1"})
     with client.open(request, timeout=130) as response:
         assert json.loads(response.read())["path"] == "/notes/blob.bin"
     with client.open(f"http://127.0.0.1:{port}/api/{files}/download?" + urllib.parse.urlencode({"path": "/notes/blob.bin"}), timeout=130) as response:
@@ -594,7 +594,7 @@ try:
     with tarfile.open(fileobj=io.BytesIO(exported_volume), mode="r:gz") as archive:
         assert {member.name for member in archive.getmembers()} >= {"./notes/renamed.txt", "./notes/blob.bin"}
     def import_volume(name, data):
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name, "size": len(data)}), data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Bilskirnir-Request": "1"})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name, "size": len(data)}), data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Thoric-Request": "1"})
         with client.open(request, timeout=130) as response:
             return json.loads(response.read())
     try:
@@ -603,10 +603,10 @@ try:
         assert error.code == 409
     assert job(import_volume(restored_volume, exported_volume))["name"] == restored_volume
     assert api(f"volumes/{restored_volume}/files/read", {"path": "/notes/renamed.txt"})["data"] == "Hello volume\n"
-    restored_owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={restored_volume},dst=/v,readonly", "--entrypoint", "stat", "bilskirnir/manager:local", "-c", "%u:%g", "/v", "/v/notes/blob.bin").decode().split()
+    restored_owners = docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={restored_volume},dst=/v,readonly", "--entrypoint", "stat", "thoric/manager:local", "-c", "%u:%g", "/v", "/v/notes/blob.bin").decode().split()
     assert restored_owners == ["1001:1001"] * 2, restored_owners
     # A broken archive leaves no volume behind.
-    broken = f"bilskirnir-test-broken-{tag}"
+    broken = f"thoric-test-broken-{tag}"
     try:
         started = import_volume(broken, exported_volume[: len(exported_volume) // 2])
     except urllib.error.HTTPError as error:
@@ -626,7 +626,7 @@ try:
                 yield sent[start:start + 4096]
             if cut:
                 raise ConnectionAbortedError("the acceptance test drops the upload")
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name}), data=chunks(), method="POST", headers={"Content-Type": "application/octet-stream", "X-Bilskirnir-Request": "1"})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/import?" + urllib.parse.urlencode({"name": name}), data=chunks(), method="POST", headers={"Content-Type": "application/octet-stream", "X-Thoric-Request": "1"})
         with client.open(request, timeout=130) as response:
             return json.loads(response.read())
     plain_volume = gzip.decompress(exported_volume)
@@ -658,18 +658,18 @@ try:
     # The volume's root cannot be escaped, a missing volume is not created and the manager's
     # own data volume stays closed.
     assert refused(f"{files}/list", {"path": "/../etc"}) == 400
-    missing = f"bilskirnir-test-missing-{tag}"
+    missing = f"thoric-test-missing-{tag}"
     assert refused(f"volumes/{missing}/files/list", {"path": "/"}) == 404
     assert json.loads(docker("volume", "inspect", missing, check=False) or b"[]") == []
     assert refused(f"volumes/{volume}/files/list", {"path": "/"}) == 403
-    assert not docker("ps", "-aq", "--filter", "label=bilskirnir.volume-helper=true").strip()
+    assert not docker("ps", "-aq", "--filter", "label=thoric.volume-helper=true").strip()
     print("PASS volume files and archives go through a removed helper as the desktop user", flush=True)
     # A copy pipes the export helper into the import helper. It has the source's tree, symlinks
     # and modes, a file only root may read included, and every file belongs to the desktop user.
     # An existing target, a missing source and the manager's own volume on either side are
     # refused, and a copy that fails, here on a device file, leaves no volume.
     def in_volume(name, *command):
-        return docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={name},dst=/v", "--entrypoint", command[0], "bilskirnir/manager:local", *command[1:])
+        return docker("run", "--rm", "--network", "none", "--mount", f"type=volume,src={name},dst=/v", "--entrypoint", command[0], "thoric/manager:local", *command[1:])
     def tree(name):
         return in_volume(name, "sh", "-c", "cd /v && find . -printf '%p %m %y %l\\n' | sort").decode()
     in_volume(restored_volume, "sh", "-c", "chmod 664 /v/notes/renamed.txt && ln -s notes/renamed.txt /v/link && printf secret > /v/root-only && chmod 600 /v/root-only")
@@ -680,7 +680,7 @@ try:
     assert in_volume(copied_volume, "cat", "/v/root-only") == b"secret"
     assert mcp_job(tool("copy_volume", {"volume": restored_volume, "name": mcp_copy_volume}))["result"]["name"] == mcp_copy_volume
     assert tree(mcp_copy_volume) == tree(restored_volume)
-    never = f"bilskirnir-test-never-{tag}"
+    never = f"thoric-test-never-{tag}"
     for source, target, status in [(restored_volume, copied_volume, 409), (missing, never, 404), (volume, never, 403), (restored_volume, volume, 403)]:
         assert refused(f"volumes/{source}/copy", {"name": target}) == status, (source, target)
     for name in [missing, never]:
@@ -691,7 +691,7 @@ try:
     failed_copy = wait_for(lambda: (j if (j := api(f"jobs/{failed_copy['job_id']}"))["status"] not in ("queued", "running") else None), 180)
     assert failed_copy["status"] == "failed" and "Removed the incomplete volume" in failed_copy["log"], failed_copy
     assert json.loads(docker("volume", "inspect", device_copy_volume, check=False) or b"[]") == []
-    assert not docker("ps", "-aq", "--filter", "label=bilskirnir.volume-helper=true").strip()
+    assert not docker("ps", "-aq", "--filter", "label=thoric.volume-helper=true").strip()
     print("PASS a volume copies into a new one owned by the desktop user, and never over one", flush=True)
     # An MCP client moves archives with one-time links, without the dashboard session.
     exported_link = transfer_link({"operation": "volume_export", "volume": restored_volume})
@@ -713,12 +713,12 @@ try:
     with without_session(transfer_link({"operation": "volume_download", "volume": linked_volume, "path": "/notes/blob.bin"})["url"]) as response:
         assert response.read() == b"\x00\x01\x02"
     # A link runs its own operation only: an upload link is no download link.
-    wrong_link = transfer_link({"operation": "volume_import", "name": f"bilskirnir-test-never-{tag}"})
+    wrong_link = transfer_link({"operation": "volume_import", "name": f"thoric-test-never-{tag}"})
     try:
         without_session(wrong_link["url"]); raise AssertionError("an import link downloaded")
     except urllib.error.HTTPError as error:
         assert error.code == 405
-    assert json.loads(docker("volume", "inspect", f"bilskirnir-test-never-{tag}", check=False) or b"[]") == []
+    assert json.loads(docker("volume", "inspect", f"thoric-test-never-{tag}", check=False) or b"[]") == []
     print("PASS transfer links export, import and download a volume without a session", flush=True)
     try:
         api("volumes", {"name": share}); raise AssertionError("duplicate volume accepted")
@@ -731,20 +731,20 @@ try:
         except urllib.error.HTTPError as error:
             assert error.code == 400
     # The manager's data volume holds its database and sessions, so no desktop mounts it. It
-    # carries no Bilskirnir label, so the default VOLUME_FILTER leaves it out of the list too.
+    # carries no Thoric label, so the default VOLUME_FILTER leaves it out of the list too.
     marked = {item["Name"]: item["manager"] for item in api("volumes")}
     assert volume not in marked and marked[share] is False, marked
-    assert json.loads(docker("volume", "inspect", share))[0]["Labels"].get("bilskirnir.managed") == "true"
+    assert json.loads(docker("volume", "inspect", share))[0]["Labels"].get("thoric.managed") == "true"
     before = len(api("containers"))
     manager_mount = api("containers", {"name": "manager-volume", "image": xfce["reference"], "internet": False, "mounts": [{"volume": volume, "target": "/workspace", "readonly": True}]})
     failed = wait_for(lambda: (j if (j := api(f"jobs/{manager_mount['job_id']}"))["status"] not in ("queued", "running") else None))
     assert failed["status"] == "failed" and f"{volume} is the manager's own volume" in failed["log"], failed
     assert len(api("containers")) == before
-    # A volume made outside Bilskirnir is out of reach: not listed, its files and copy answer as
+    # A volume made outside Thoric is out of reach: not listed, its files and copy answer as
     # for a missing volume, and no new container mounts it.
     docker("volume", "create", outside_volume)
     assert outside_volume not in {item["Name"] for item in api("volumes")}
-    for path, body in [(f"volumes/{outside_volume}/files/list", {"path": "/"}), (f"volumes/{outside_volume}/copy", {"name": f"bilskirnir-test-never-{tag}"})]:
+    for path, body in [(f"volumes/{outside_volume}/files/list", {"path": "/"}), (f"volumes/{outside_volume}/copy", {"name": f"thoric-test-never-{tag}"})]:
         try:
             api(path, body); raise AssertionError(f"{path} reached a filtered volume")
         except urllib.error.HTTPError as error:
@@ -759,8 +759,8 @@ try:
     failed = wait_for(lambda: (j if (j := api(f"jobs/{outside_mount['job_id']}"))["status"] not in ("queued", "running") else None))
     assert failed["status"] == "failed" and "Volume not found" in failed["log"], failed
     assert len(api("containers")) == before
-    assert json.loads(docker("volume", "inspect", f"bilskirnir-test-never-{tag}", check=False) or b"[]") == []
-    print("PASS VOLUME_FILTER hides and refuses volumes made outside Bilskirnir", flush=True)
+    assert json.loads(docker("volume", "inspect", f"thoric-test-never-{tag}", check=False) or b"[]") == []
+    print("PASS VOLUME_FILTER hides and refuses volumes made outside Thoric", flush=True)
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/session", headers={"Host":"evil.example","Origin":"http://evil.example"})
     try:
         client.open(request); raise AssertionError("untrusted Host accepted")
@@ -768,7 +768,7 @@ try:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
     # The templates page reads the wiki's list in the browser, so the policy allows that host.
-    assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/bilskirnir/templates/index.json"
+    assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json"
     # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
     # the defaults; the others keep what the create form chose before them.
     settings = api("settings")
@@ -835,7 +835,7 @@ try:
     created = api("containers", spec)
     env_id = job(created)["container_id"]
     container_ids.append(env_id)
-    container = f"bilskirnir-{env_id}"
+    container = f"thoric-{env_id}"
     ready(container)
     # The job ended after the script ran as the desktop user; the secret reached only the script.
     assert docker("exec", container, "cat", "/home/desktop/compose-setup") == f"hello|{secret}|vanilla|1001".encode()
@@ -867,10 +867,10 @@ try:
     created = api("containers", {**merged_base, "name": "Merged", "parameters": {"second.VERSION": "two", "TOKEN": merged_secret, "OTHER": "x"}})
     merged_id = job(created)["container_id"]
     container_ids.append(merged_id)
-    ready(f"bilskirnir-{merged_id}")
-    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/opt/merged-order") == b"first second"
-    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/home/desktop/first-step") == b"1|unset"
-    assert docker("exec", f"bilskirnir-{merged_id}", "cat", "/home/desktop/second-step") == b"two|unset"
+    ready(f"thoric-{merged_id}")
+    assert docker("exec", f"thoric-{merged_id}", "cat", "/opt/merged-order") == b"first second"
+    assert docker("exec", f"thoric-{merged_id}", "cat", "/home/desktop/first-step") == b"1|unset"
+    assert docker("exec", f"thoric-{merged_id}", "cat", "/home/desktop/second-step") == b"two|unset"
     merged_log = api(f"jobs/{created['job_id']}")["log"]
     # The second step never gets the first one's secret, and its output masks what the first saved.
     assert "step 1 of 2, First" in merged_log and "step 2 of 2, Second" in merged_log and "saved ***" in merged_log and merged_secret not in merged_log, merged_log
@@ -931,7 +931,7 @@ try:
     assert tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg"}, allow_error=True)["isError"]
     assert tool("save_screenshot", {"container_id":env_id,"path":"/etc/agent-shot.jpg"}, allow_error=True)["isError"]
     assert api(f"containers/{env_id}/screenshots", {"path":"/home/desktop/Downloads/agent-shot.jpg","replace":True,"capture":{"max_width":160}})["width"] == 160
-    request = urllib.request.Request(f"http://127.0.0.1:{port}{saved['download_url']}", headers={"X-Bilskirnir-Request":"1"})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{saved['download_url']}", headers={"X-Thoric-Request":"1"})
     with client.open(request, timeout=60) as response:
         assert response.headers["Content-Type"] == "image/jpeg" and response.read().startswith(b"\xff\xd8")
     assert tool("read_file", {"container_id":env_id,"path":"/home/desktop/../etc/passwd"}, allow_error=True)["isError"]
@@ -939,9 +939,9 @@ try:
     assert tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-link/blocked.txt","data":"blocked"}, allow_error=True)["isError"]
     assert tool("read_file", {"container_id":env_id,"path":"/home/desktop/agent-link/hello.txt"}, allow_error=True)["isError"]
     print("PASS MCP/HTTP execution, exit failures, timeout, bounded file read/write, upload and screenshot", flush=True)
-    docker("exec", "--detach", "--user", "desktop", "--env", "DISPLAY=:0", container, "bash", "-c", 'exec xev -geometry 320x180+80+80 -name "Bilskirnir input test" -event mouse -event keyboard > /home/desktop/input-events.log 2>&1')
+    docker("exec", "--detach", "--user", "desktop", "--env", "DISPLAY=:0", container, "bash", "-c", 'exec xev -geometry 320x180+80+80 -name "Thoric input test" -event mouse -event keyboard > /home/desktop/input-events.log 2>&1')
     def input_position():
-        info = docker("exec", "--env", "DISPLAY=:0",container,"xwininfo","-name","Bilskirnir input test").decode()
+        info = docker("exec", "--env", "DISPLAY=:0",container,"xwininfo","-name","Thoric input test").decode()
         import re
         x = int(re.search(r"Absolute upper-left X:\s+(-?\d+)", info)[1]) + 160
         y = int(re.search(r"Absolute upper-left Y:\s+(-?\d+)", info)[1]) + 120
@@ -984,7 +984,7 @@ try:
     # A GPU container runs, so the whole host GPU is sampled through a helper without a network.
     gpu = wait_for(lambda: (g if (g := api("usage")["gpu"])["state"] == "sampling" and g["devices"] and g["devices"][0]["samples"] else None), 90)
     assert gpu["scope"] == "host" and "NVIDIA" in gpu["devices"][0]["name"], gpu
-    helpers = set(docker("ps", "-q", "--filter", "label=bilskirnir.usage-helper=true").decode().split()) - foreign_helpers
+    helpers = set(docker("ps", "-q", "--filter", "label=thoric.usage-helper=true").decode().split()) - foreign_helpers
     assert len(helpers) == 1, helpers
     for helper in helpers:
         info = json.loads(docker("inspect", helper))[0]
@@ -997,12 +997,12 @@ try:
     # Script stdin is closed: a command reading input cannot consume the rest of the script.
     isolated = mcp_job(tool("exec_container", {"container_id":env_id,"script":"consumed=$(cat); echo \"stdin-bytes=${#consumed}\"\necho AFTER_STDIN\n"}))
     assert "stdin-bytes=0" in isolated["log"] and "AFTER_STDIN" in isolated["log"], isolated["log"]
-    launched = tool("launch_application", {"container_id":env_id,"command":"bash","args":["-c","echo APP_LOG_LINE; exec xlogo -title 'Bilskirnir app test' -geometry 200x150+600+300"],"name":"xlogo test"})["structuredContent"]
+    launched = tool("launch_application", {"container_id":env_id,"command":"bash","args":["-c","echo APP_LOG_LINE; exec xlogo -title 'Thoric app test' -geometry 200x150+600+300"],"name":"xlogo test"})["structuredContent"]
     app_id = launched["application_id"]
     assert launched["state"] in ("running","starting"), launched
     running_app = wait_for(lambda: (s if (s := tool("get_application", {"container_id":env_id,"application_id":app_id})["structuredContent"])["state"] == "running" else None))
     assert running_app["pid"], running_app
-    window = wait_for(lambda: next((w for w in tool("list_windows", {"container_id":env_id})["structuredContent"]["items"] if w["title"] == "Bilskirnir app test"), None))
+    window = wait_for(lambda: next((w for w in tool("list_windows", {"container_id":env_id})["structuredContent"]["items"] if w["title"] == "Thoric app test"), None))
     tool("focus_window", {"container_id":env_id,"window_id":window["window_id"]})
     geometry = tool("set_window_geometry", {"container_id":env_id,"window_id":window["window_id"],"x":100,"y":120,"width":320,"height":240})["structuredContent"]
     assert geometry["width"] == 320 and geometry["height"] == 240, geometry
@@ -1010,7 +1010,7 @@ try:
     assert moved["active"], moved
     full = tool("screenshot", {"container_id":env_id})["structuredContent"]
     assert full["width"] == 1280 and full["height"] == 720, full
-    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{env_id}/screenshot?max_width=640", headers={"X-Bilskirnir-Request":"1"})
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{env_id}/screenshot?max_width=640", headers={"X-Thoric-Request":"1"})
     with client.open(request, timeout=60) as response:
         assert response.headers["X-Image-Width"] == "640" and response.read().startswith(b"\xff\xd8")
     region = tool("screenshot", {"container_id":env_id,"region":"100,120,320,240","max_width":160})["structuredContent"]
@@ -1033,9 +1033,9 @@ try:
     missing_program = tool("launch_application", {"container_id":env_id,"command":"/nonexistent/program"})["structuredContent"]
     assert missing_program["state"] == "failed", missing_program
     print("PASS application lifecycle, window management, sized screenshots, held keys and relative pointer", flush=True)
-    second = tool("launch_application", {"container_id":env_id,"command":"bash","args":["-c","echo READY_MARKER; exec xlogo -title 'Bilskirnir wait test'"]})["structuredContent"]["application_id"]
-    waited = tool("wait_for_condition", {"container_id":env_id,"window_title":"Bilskirnir wait test","application_id":second,"application_state":"running","log_contains":"READY_MARKER","timeout_ms":15000})["structuredContent"]
-    assert waited["satisfied"] and waited["window"]["title"] == "Bilskirnir wait test" and waited["log_found"], waited
+    second = tool("launch_application", {"container_id":env_id,"command":"bash","args":["-c","echo READY_MARKER; exec xlogo -title 'Thoric wait test'"]})["structuredContent"]["application_id"]
+    waited = tool("wait_for_condition", {"container_id":env_id,"window_title":"Thoric wait test","application_id":second,"application_state":"running","log_contains":"READY_MARKER","timeout_ms":15000})["structuredContent"]
+    assert waited["satisfied"] and waited["window"]["title"] == "Thoric wait test" and waited["log_found"], waited
     stable = api(f"containers/{env_id}/wait", {"screen_stable_ms":600,"region":"900,500,200,120","timeout_ms":10000,"interval_ms":200})
     assert stable["satisfied"] and stable["screen_stable_for_ms"] >= 600, stable
     unmet = tool("wait_for_condition", {"container_id":env_id,"window_title":"no such window","timeout_ms":600,"interval_ms":200})["structuredContent"]
@@ -1143,8 +1143,8 @@ try:
         assert closed["state"] == "exited", closed
     assert len(tool("list_terminals", {"container_id":env_id})["structuredContent"]["items"]) == 2
     print("PASS interactive terminals as the desktop user and root", flush=True)
-    gtk = tool("launch_application", {"container_id":env_id,"command":"xfce4-terminal","args":["--title","Bilskirnir a11y test","--disable-server"],"env":{"GTK_MODULES":"atk-bridge"}})["structuredContent"]
-    assert wait_for(lambda: tool("wait_for_condition", {"container_id":env_id,"window_title":"Bilskirnir a11y test","timeout_ms":20000})["structuredContent"]["satisfied"] or None)
+    gtk = tool("launch_application", {"container_id":env_id,"command":"xfce4-terminal","args":["--title","Thoric a11y test","--disable-server"],"env":{"GTK_MODULES":"atk-bridge"}})["structuredContent"]
+    assert wait_for(lambda: tool("wait_for_condition", {"container_id":env_id,"window_title":"Thoric a11y test","timeout_ms":20000})["structuredContent"]["satisfied"] or None)
     gtk_pid = tool("get_application", {"container_id":env_id,"application_id":gtk["application_id"]})["structuredContent"]["pid"]
     tree = wait_for(lambda: (t if (t := tool("inspect_ui", {"container_id":env_id,"pid":gtk_pid,"max_depth":8})["structuredContent"])["applications"] else None), 30)
     assert tree["nodes"] > 1 and tree["applications"][0]["role"] == "application", tree
@@ -1213,14 +1213,14 @@ try:
     mcp_job(tool("update_container",{"container_id":env_id,"ports":[]}))
     print("PASS a listed port of a running desktop is proxied for the MCP token, not the session", flush=True)
     # MCP servers inside the desktop: a stdio program registered through the administrator's tool,
-    # an HTTP server on the desktop's loopback registered with bilskirnir-mcp, both reached through
+    # an HTTP server on the desktop's loopback registered with thoric-mcp, both reached through
     # a scoped endpoint whose token opens nothing else.
     tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo.py","data":ECHO_SERVER})
     tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo_http.py","data":ECHO_HTTP_SERVER})
     http_server = tool("launch_application",{"container_id":env_id,"command":"python3","args":["/home/desktop/mcp/echo_http.py"],"name":"mcp http test"})["structuredContent"]["application_id"]
     registered = tool("register_mcp_server",{"container_id":env_id,"name":"echo","command":"python3","args":["/home/desktop/mcp/echo.py"]})["structuredContent"]
     assert registered["state"] == "ready" and [t["name"] for t in registered["tools"]] == ["echo"], registered
-    docker("exec","--user","1001:1001",container,"bilskirnir-mcp","add","api","--url","http://127.0.0.1:8931/mcp","--header","X-Test: yes")
+    docker("exec","--user","1001:1001",container,"thoric-mcp","add","api","--url","http://127.0.0.1:8931/mcp","--header","X-Test: yes")
     def server_ready(name):
         servers = tool("list_mcp_servers",{"container_id":env_id})["structuredContent"]["items"]
         found = next((s for s in servers if s["name"] == name), None)
@@ -1232,10 +1232,10 @@ try:
     assert own and own[0]["has_token"] is False, endpoints
     created = tool("create_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all"}]})["structuredContent"]
     scoped = created["token"]
-    # The desktop hears the same: bilskirnir-mcp reads the manager's report of its servers and of
+    # The desktop hears the same: thoric-mcp reads the manager's report of its servers and of
     # the endpoints that reach it, never a token, and the tray that shows them runs in its session.
     def reported():
-        listing = json.loads(docker("exec","--user","1001:1001",container,"bilskirnir-mcp","list","--json"))
+        listing = json.loads(docker("exec","--user","1001:1001",container,"thoric-mcp","list","--json"))
         states = {s["name"]: (s.get("status") or {}).get("state") for s in listing["servers"] if s["active"]}
         reached = {e["name"]: e for e in listing.get("endpoints", [])}
         if listing["watched"] and states.get("echo") == states.get("api") == "ready" and "acceptance-mcp" in reached:
@@ -1244,8 +1244,8 @@ try:
     listing, reached = wait_for(reported, 60)
     assert reached["acceptance-mcp"]["has_token"] is True and reached["acceptance-mcp"]["scopes"] == ["view"], reached
     assert reached[own[0]["name"]]["has_token"] is False and scoped not in json.dumps(listing) and "token_hash" not in json.dumps(listing), listing
-    assert docker("exec",container,"stat","-c","%a %U","/run/desktop/bilskirnir/mcp-status.json").strip() == b"600 desktop"
-    assert docker("exec",container,"pgrep","-u","1001","-f","bilskirnir-mcp-tray",check=False).strip(), "the MCP tray does not run in the session"
+    assert docker("exec",container,"stat","-c","%a %U","/run/desktop/thoric/mcp-status.json").strip() == b"600 desktop"
+    assert docker("exec",container,"pgrep","-u","1001","-f","thoric-mcp-tray",check=False).strip(), "the MCP tray does not run in the session"
     print("PASS the desktop reads its servers' states and endpoints, and the MCP tray runs", flush=True)
     session = endpoint_session("acceptance-mcp", scoped)
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
@@ -1400,7 +1400,7 @@ try:
     # no folder.
     def extract(name, path, data):
         query = urllib.parse.urlencode({"path": path, "size": len(data)})
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/{name}/extract?{query}", data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Bilskirnir-Request": "1"})
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/volumes/{name}/extract?{query}", data=data, method="POST", headers={"Content-Type": "application/octet-stream", "X-Thoric-Request": "1"})
         with client.open(request, timeout=130) as response:
             return json.loads(response.read())
     project = io.BytesIO()
@@ -1414,7 +1414,7 @@ try:
     assert extracted == {"volume": share, "path": "/worktree", "bytes": len(project)}, extracted
     assert docker("exec", container, "cat", "/shared/worktree/src/main.cs") == b"class Main {}\n"
     assert docker("exec", container, "stat", "-c", "%U", "/shared/worktree", "/shared/worktree/src", "/shared/worktree/README.md") == b"desktop\ndesktop\ndesktop\n"
-    missing_volume = f"bilskirnir-test-missing-{tag}"
+    missing_volume = f"thoric-test-missing-{tag}"
     for name, path, status in [(share, "/worktree", 409), (share, "/", 409), (share, "/absent/worktree", 400), (missing_volume, "/worktree", 404), (volume, "/worktree", 403)]:
         try:
             extract(name, path, project); raise AssertionError(f"extract into {name}:{path} accepted")
@@ -1436,7 +1436,7 @@ try:
         finished = wait_for(lambda: (j if (j := api(f"jobs/{started['job_id']}"))["status"] not in ("queued", "running") else None), 180)
         assert finished["status"] == "failed", finished
     assert subprocess.run(["docker", "exec", container, "test", "-e", "/shared/broken"]).returncode != 0
-    assert not docker("ps", "-aq", "--filter", "label=bilskirnir.volume-helper=true").strip()
+    assert not docker("ps", "-aq", "--filter", "label=thoric.volume-helper=true").strip()
     print("PASS archives unpack into a new folder of a mounted volume as the desktop user, also through a link, never over one", flush=True)
     # Anywhere in the home will do, and the upload creates the folders it needs; a folder can also
     # be made first, as the dashboard's folder browser does.
@@ -1461,7 +1461,7 @@ try:
     transfer.putrequest("POST",f"/api/containers/{env_id}/files?{query}")
     transfer.putheader("Content-Type","application/octet-stream")
     transfer.putheader("Content-Length",10*1024*1024)
-    transfer.putheader("X-Bilskirnir-Request","1")
+    transfer.putheader("X-Thoric-Request","1")
     transfer.putheader("Cookie","; ".join(f"{c.name}={c.value}" for c in cookies))
     transfer.endheaders()
     transfer.send(b"x" * 128000)
@@ -1573,14 +1573,14 @@ try:
     spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}], "parameters": {"GREETING": "again", "TOKEN": "other", "FLAVOR": ""}})
     clone_id = job(api("containers", spec))["container_id"]
     container_ids.append(clone_id)
-    clone = f"bilskirnir-{clone_id}"
+    clone = f"thoric-{clone_id}"
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
     assert docker("exec", clone, "cat", "/home/desktop/compose-setup") == b"again|other||1001"
     assert subprocess.run(["docker", "exec", clone, "test", "-e", "/shared/volume-marker"]).returncode != 0
     print("PASS layered snapshot, immutable ancestry and independent volume clone", flush=True)
     # The snapshot leaves as a gzip-compressed docker save stream and comes back under a new name.
-    archive_dir = tempfile.mkdtemp(prefix=f"bilskirnir-archive-{tag}-")
+    archive_dir = tempfile.mkdtemp(prefix=f"thoric-archive-{tag}-")
     exported = os.path.join(archive_dir, "snapshot.tar.gz")
     with client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/images/{snap['id']}/archive"), timeout=1800) as response, open(exported, "wb") as out:
         assert response.headers["Content-Type"] == "application/gzip"
@@ -1590,14 +1590,14 @@ try:
     assert job({"job_id": export_job})["bytes"] == os.path.getsize(exported)
     with tarfile.open(exported, "r|gz") as saved:
         first = saved.next()
-        assert first.name == "bilskirnir.json", first.name
+        assert first.name == "thoric.json", first.name
         metadata = json.load(saved.extractfile(first))
         assert (metadata["name"], metadata["kind"], metadata["image_id"]) == ("snapshot-test", "snapshot", snap["image_id"]), metadata
         manifest = next(json.load(saved.extractfile(member)) for member in saved if member.name == "manifest.json")
         assert len(manifest) == 1 and not manifest[0].get("RepoTags"), manifest
     imported = job(import_archive(exported))
     assert (imported["kind"], imported["name"], imported["image_id"]) == ("archive", "snapshot-test", snap["image_id"]), imported
-    assert imported["reference"] == f"bilskirnir/imported:{imported['id']}" and imported["desktop"] == snap["desktop"], imported
+    assert imported["reference"] == f"thoric/imported:{imported['id']}" and imported["desktop"] == snap["desktop"], imported
     assert imported["parent_image_id"] == snap["parent_image_id"], imported
     assert json.loads(docker("image", "inspect", imported["reference"]))[0]["Id"] == snap["image_id"]
     renamed = job(import_archive(exported, name="Renamed archive", description="From acceptance"))
@@ -1614,26 +1614,26 @@ try:
     assert api(f"images/{moved['id']}/config") == api(f"images/{built['id']}/config")
     # Names inside an archive never reach Docker: an existing tag keeps pointing at its image. The
     # target is this run's own copy of the catalog tag, so a regression cannot break the catalog image.
-    guard = f"bilskirnir-archive-guard:{tag}"
+    guard = f"thoric-archive-guard:{tag}"
     docker("tag", xfce["reference"], guard)
     image_refs.append(guard)
     guard_id = json.loads(docker("image", "inspect", guard))[0]["Id"]
     hostile = os.path.join(archive_dir, "hostile.tar.gz")
-    synthetic_archive(hostile, {"bilskirnir.desktop": "true", "bilskirnir.managed": "true", "bilskirnir.test": tag}, [guard, f"bilskirnir-archive-victim:{tag}"])
+    synthetic_archive(hostile, {"thoric.desktop": "true", "thoric.managed": "true", "thoric.test": tag}, [guard, f"thoric-archive-victim:{tag}"])
     loaded = job(import_archive(hostile, name="Hostile names"))
     assert json.loads(docker("image", "inspect", guard))[0]["Id"] == guard_id
-    assert json.loads(docker("image", "inspect", f"bilskirnir-archive-victim:{tag}", check=False) or b"[]") == []
+    assert json.loads(docker("image", "inspect", f"thoric-archive-victim:{tag}", check=False) or b"[]") == []
     tagged = json.loads(docker("image", "inspect", loaded["reference"]))[0]
-    assert tagged["RepoTags"] == [loaded["reference"]] and tagged["Config"]["Labels"]["bilskirnir.test"] == tag, tagged["RepoTags"]
+    assert tagged["RepoTags"] == [loaded["reference"]] and tagged["Config"]["Labels"]["thoric.test"] == tag, tagged["RepoTags"]
     # An archive without a desktop image is refused before Docker may register anything.
     refused_archive = os.path.join(archive_dir, "refused.tar.gz")
-    synthetic_archive(refused_archive, {"bilskirnir.test-refused": tag}, [f"bilskirnir-archive-refused:{tag}"])
+    synthetic_archive(refused_archive, {"thoric.test-refused": tag}, [f"thoric-archive-refused:{tag}"])
     try:
         import_archive(refused_archive)
         raise AssertionError("an archive without a desktop image was accepted")
     except urllib.error.HTTPError as error:
         assert error.code == 400 and "desktop image" in json.loads(error.read())["error"]
-    assert not docker("image", "ls", "-q", "--filter", f"label=bilskirnir.test-refused={tag}").strip()
+    assert not docker("image", "ls", "-q", "--filter", f"label=thoric.test-refused={tag}").strip()
     shutil.rmtree(archive_dir)
     print("PASS snapshot archive export/import keeps metadata and never applies names from an archive", flush=True)
     # An image goes by itself only while no container starts from it. The archives of the snapshot
@@ -1675,7 +1675,7 @@ try:
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
     # Delete preflight must leave the writable layer intact when a network has a foreign endpoint.
-    docker("run","-d","--name",foreign,"--label",f"bilskirnir.test={tag}","--network",f"bilskirnir-{clone_id}-egress","--entrypoint","sleep",xfce["reference"],"300")
+    docker("run","-d","--name",foreign,"--label",f"thoric.test={tag}","--network",f"thoric-{clone_id}-egress","--entrypoint","sleep",xfce["reference"],"300")
     deletion = api(f"containers/{clone_id}", method="DELETE")
     failed = wait_for(lambda: (j if (j := api(f"jobs/{deletion['job_id']}"))["status"] not in ("queued","running") else None))
     assert failed["status"] == "failed",failed
@@ -1697,9 +1697,9 @@ try:
     assert api(f"containers/{clone_id}")["setup"]["status"] == "completed"
     print("PASS missing container retry reuses container identity and immutable image",flush=True)
     # One malformed container must not prevent other desktops from reconnecting after restart.
-    corrupt_network=f"bilskirnir-{clone_id}-egress"
+    corrupt_network=f"thoric-{clone_id}-egress"
     docker("network","rm",corrupt_network)
-    docker("network","create","--label",f"bilskirnir.test={tag}",corrupt_network)
+    docker("network","create","--label",f"thoric.test={tag}",corrupt_network)
     records = {record["id"] for record in api("containers")}
     assert {env_id, clone_id, merged_id} <= records, records
     docker("rm", "--force", manager)
@@ -1713,7 +1713,7 @@ try:
     gnome_spec = {"name":"GNOME GPU test","image":gnome["reference"],"gpu":True,"internet":False,"memory_mb":3072,"cpus":2,"audio":True,"microphone":True,"resolution":"1280x720"}
     gnome_id=job(api("containers",gnome_spec))["container_id"]
     container_ids.append(gnome_id)
-    gnome_container=f"bilskirnir-{gnome_id}"
+    gnome_container=f"thoric-{gnome_id}"
     ready(gnome_container)
     assert b"GNOME Shell 46" in docker("exec",gnome_container,"gnome-shell","--version")
     assert subprocess.run(["docker","exec",gnome_container,"pgrep","-x","gnome-shell"],capture_output=True).returncode==0
@@ -1729,19 +1729,19 @@ try:
     gnome_spec.update({"name":"GNOME CPU clone","image":gnome_snapshot["image_id"],"gpu":False,"audio":False,"microphone":False})
     gnome_clone_id=job(api("containers",gnome_spec))["container_id"]
     container_ids.append(gnome_clone_id)
-    ready(f"bilskirnir-{gnome_clone_id}")
-    assert subprocess.run(["docker","exec",f"bilskirnir-{gnome_clone_id}","pgrep","-x","gnome-shell"],capture_output=True).returncode==0
-    assert subprocess.run(["docker","exec",f"bilskirnir-{gnome_clone_id}","pgrep","-f","^/usr/libexec/gnome-session-failed"],capture_output=True).returncode!=0
-    docker("exec","-d","--user","desktop",f"bilskirnir-{gnome_clone_id}","bash","-c","exec -a /usr/libexec/gnome-session-failed sleep 30")
-    assert subprocess.run(["docker","exec",f"bilskirnir-{gnome_clone_id}","/usr/local/bin/desktop-healthcheck"],capture_output=True).returncode!=0
+    ready(f"thoric-{gnome_clone_id}")
+    assert subprocess.run(["docker","exec",f"thoric-{gnome_clone_id}","pgrep","-x","gnome-shell"],capture_output=True).returncode==0
+    assert subprocess.run(["docker","exec",f"thoric-{gnome_clone_id}","pgrep","-f","^/usr/libexec/gnome-session-failed"],capture_output=True).returncode!=0
+    docker("exec","-d","--user","desktop",f"thoric-{gnome_clone_id}","bash","-c","exec -a /usr/libexec/gnome-session-failed sleep 30")
+    assert subprocess.run(["docker","exec",f"thoric-{gnome_clone_id}","/usr/local/bin/desktop-healthcheck"],capture_output=True).returncode!=0
     print("PASS GNOME Shell GPU desktop, preview, snapshot metadata and CPU clone",flush=True)
     # An OCI start failure leaves a discoverable container/intent that retry can repair in place.
-    broken_reference=f"bilskirnir/test-broken:{tag}"
-    fixture_container=f"bilskirnir-test-image-{tag}"
-    docker("create","--name",fixture_container,"--label",f"bilskirnir.test={tag}",xfce["reference"])
+    broken_reference=f"thoric/test-broken:{tag}"
+    fixture_container=f"thoric-test-image-{tag}"
+    docker("create","--name",fixture_container,"--label",f"thoric.test={tag}",xfce["reference"])
     docker("commit","--change",'ENTRYPOINT ["/usr/local/bin/desktop-missing-entrypoint"]',fixture_container,broken_reference)
     image_refs.append(broken_reference)
-    volume_reference=f"bilskirnir/test-volume:{tag}"
+    volume_reference=f"thoric/test-volume:{tag}"
     docker("commit","--change",'VOLUME ["/home/desktop"]',fixture_container,volume_reference)
     image_refs.append(volume_reference);docker("rm",fixture_container)
     before=len(api("containers"))
@@ -1773,7 +1773,7 @@ try:
     job(noisy)
     assert len(api(f"jobs/{noisy['job_id']}")["log"].encode())<=262144
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{noisy['job_id']}")==b""
-    assert not docker("image","ls","-q",f"bilskirnir/build-base:{noisy['job_id']}")
+    assert not docker("image","ls","-q",f"thoric/build-base:{noisy['job_id']}")
     print("PASS bounded binary build logs and temporary script/tag cleanup",flush=True)
     bad=api("images/build",{"name":"failed-script","base_image":xfce["reference"],"internet":False,"script":"echo EXPECTED_SCRIPT_FAILURE\nexit 17\n"})
     failed=wait_for(lambda: (j if (j := api(f"jobs/{bad['job_id']}"))["status"] not in ("queued","running") else None))
@@ -1782,17 +1782,17 @@ try:
     assert [s["name"] for s in failed["stages"] if "started_at" in s]==["base","script"],failed["stages"]
     assert "Stage 2/5: Running the setup script\n" in failed["log"],failed["log"]
     assert docker("exec",manager,"test","!","-e",f"/data/builds/{bad['job_id']}")==b""
-    assert not docker("image","ls","-q",f"bilskirnir/build-base:{bad['job_id']}")
+    assert not docker("image","ls","-q",f"thoric/build-base:{bad['job_id']}")
     print("PASS failed build also removes temporary scripts and pinned base tag",flush=True)
     agent_image = mcp_job(tool("build_image", {"name":"agent-build","base_image":xfce["reference"],"internet":False,"script":f"# acceptance {tag}\nprintf mcp-built > /opt/mcp-built"}))["result"]
     agent_env = mcp_job(tool("create_container", {"name":"Agent lifecycle","image":agent_image["image_id"],"internet":False,"gpu":False}))["result"]["container_id"]
     container_ids.append(agent_env)
-    ready(f"bilskirnir-{agent_env}")
+    ready(f"thoric-{agent_env}")
     assert tool("get_container", {"container_id":agent_env})["structuredContent"]["state"] == "running"
     # The container's machine identity is its record's, from the files the image carried too.
     identity = tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"]
-    assert identity["hostname"] == f"bilskirnir-{agent_env}", identity
-    assert machine(f"bilskirnir-{agent_env}") == recorded(identity), (machine(f"bilskirnir-{agent_env}"), identity)
+    assert identity["hostname"] == f"thoric-{agent_env}", identity
+    assert machine(f"thoric-{agent_env}") == recorded(identity), (machine(f"thoric-{agent_env}"), identity)
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     tool("write_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt","data":"snapshot from MCP"})
     agent_snapshot = mcp_job(tool("snapshot", {"container_id":agent_env,"name":"Agent snapshot"}))["result"]
@@ -1800,16 +1800,16 @@ try:
     assert any(image["id"] == agent_snapshot["id"] for image in tool("list_images")["structuredContent"]["items"])
     reset_job = mcp_job(tool("reset_container", {"container_id":agent_env}))
     assert reset_job["result"]["volumes_preserved"] and "Recreated the container from its saved source image" in reset_job["log"], reset_job
-    ready(f"bilskirnir-{agent_env}")
+    ready(f"thoric-{agent_env}")
     assert tool("read_file", {"container_id":agent_env,"path":"/home/desktop/from-agent.txt"}, allow_error=True)["isError"]
     assert tool("read_file", {"container_id":agent_env,"path":"/opt/mcp-built"})["structuredContent"]["data"] == "mcp-built"
     print("PASS container reset discards the container layer and keeps the pinned image", flush=True)
     assert tool("get_container", {"container_id":agent_env})["structuredContent"]["spec"] == identity
-    assert machine(f"bilskirnir-{agent_env}") == recorded(identity)
+    assert machine(f"thoric-{agent_env}") == recorded(identity)
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":True}))
     # The internet interface gets the same address where the Engine API uses one given on connect.
     engine_api = tuple(int(part) for part in docker("version", "--format", "{{.Server.APIVersion}}").decode().split("."))
-    online = machine(f"bilskirnir-{agent_env}")
+    online = machine(f"thoric-{agent_env}")
     if engine_api >= (1, 54):
         assert online == recorded(identity, interfaces=2), (online, identity)
     else:
@@ -1817,13 +1817,13 @@ try:
     mcp_job(tool("set_internet", {"container_id":agent_env,"enabled":False}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"stop"}))
     mcp_job(tool("container_action", {"container_id":agent_env,"action":"start"}))
-    ready(f"bilskirnir-{agent_env}")
-    assert machine(f"bilskirnir-{agent_env}") == recorded(identity)
+    ready(f"thoric-{agent_env}")
+    assert machine(f"thoric-{agent_env}") == recorded(identity)
     # A retry that has to create the container again keeps the identity as well.
-    docker("rm", "--force", f"bilskirnir-{agent_env}")
+    docker("rm", "--force", f"thoric-{agent_env}")
     mcp_job(tool("retry_container", {"container_id":agent_env}))
-    ready(f"bilskirnir-{agent_env}")
-    assert machine(f"bilskirnir-{agent_env}") == recorded(identity)
+    ready(f"thoric-{agent_env}")
+    assert machine(f"thoric-{agent_env}") == recorded(identity)
     print("PASS machine identity survives reset, internet changes, restart and a recreating retry", flush=True)
     deleted = mcp_job(tool("delete_container", {"container_id":agent_env}))
     assert deleted["result"]["volumes_preserved"] and deleted["result"]["images_preserved"]
@@ -1831,12 +1831,12 @@ try:
     container_ids.remove(agent_env)
     clone = mcp_job(tool("create_container", {"name":"Agent snapshot clone","image":agent_snapshot["image_id"],"gpu":False,"internet":False}))["result"]["container_id"]
     container_ids.append(clone)
-    ready(f"bilskirnir-{clone}")
+    ready(f"thoric-{clone}")
     assert tool("read_file", {"container_id":clone,"path":"/home/desktop/from-agent.txt"})["structuredContent"]["data"] == "snapshot from MCP"
     # The snapshot carries the source's machine ID; the clone is another machine all the same.
     clone_identity = tool("get_container", {"container_id":clone})["structuredContent"]["spec"]
     assert all(clone_identity[key] != identity[key] for key in ("hostname", "mac_address", "machine_id")), clone_identity
-    assert machine(f"bilskirnir-{clone}") == recorded(clone_identity)
+    assert machine(f"thoric-{clone}") == recorded(clone_identity)
     mcp_job(tool("delete_container", {"container_id":clone}))
     container_ids.remove(clone)
     print("PASS complete MCP image build, desktop create, snapshot, clone, internet, lifecycle and deletion", flush=True)
@@ -1874,7 +1874,7 @@ try:
         return {m["Destination"]: m["Name"] for m in json.loads(docker("inspect", container))[0]["Mounts"] if m["Type"] == "volume"}
     kept = job(api("containers", {**base, "name": "Volume parameter", "parameters": {"UNITY_HOME": installs_volume}}))["container_id"]
     container_ids.append(kept)
-    kept_container = f"bilskirnir-{kept}"
+    kept_container = f"thoric-{kept}"
     ready(kept_container)
     assert docker("exec", kept_container, "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache||1001".encode()
     assert volume_mounts(kept_container) == {"/unity-install-location": installs_volume}
@@ -1915,11 +1915,11 @@ try:
     api("volumes", {"name": settings_volume})
     shared = job(api("containers", {**base, "name": "Shared installs", "parameters": {"UNITY_HOME": installs_volume, "UNITY_CACHE": cache_volume, "UNITY_SETTINGS": settings_volume}}))["container_id"]
     container_ids.append(shared)
-    ready(f"bilskirnir-{shared}")
-    assert volume_mounts(f"bilskirnir-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume, "/home/desktop/.config/unity3d": settings_volume}
-    assert docker("exec", f"bilskirnir-{shared}", "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache|{cache_volume}|1001".encode()
-    assert docker("exec", f"bilskirnir-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache", "/home/desktop/.config", "/home/desktop/.config/unity3d") == b"desktop\ndesktop\ndesktop\ndesktop\n"
-    assert docker("exec", f"bilskirnir-{shared}", "pgrep", "-u", "desktop", "-x", "xfconfd")
+    ready(f"thoric-{shared}")
+    assert volume_mounts(f"thoric-{shared}") == {"/unity-install-location": installs_volume, "/home/desktop/Unity/Cache": cache_volume, "/home/desktop/.config/unity3d": settings_volume}
+    assert docker("exec", f"thoric-{shared}", "cat", "/unity-install-location/unity_v1") == f"/unity-install-location|{installs_volume}|/home/desktop/Unity/Cache|{cache_volume}|1001".encode()
+    assert docker("exec", f"thoric-{shared}", "stat", "-c", "%U", "/home/desktop/Unity", "/home/desktop/Unity/Cache", "/home/desktop/.config", "/home/desktop/.config/unity3d") == b"desktop\ndesktop\ndesktop\ndesktop\n"
+    assert docker("exec", f"thoric-{shared}", "pgrep", "-u", "desktop", "-x", "xfconfd")
     for eid in [kept, shared]:
         job(api(f"containers/{eid}", method="DELETE"))
         container_ids.remove(eid)
@@ -1951,12 +1951,12 @@ try:
     created = api("containers", {**own_base, "name": "Own workspace"})
     own = job(created)["container_id"]
     container_ids.append(own)
-    own_volume = f"bilskirnir-{own}-work-space"
+    own_volume = f"thoric-{own}-work-space"
     own_volumes.append(own_volume)
     assert f"Created the volume {own_volume} for WORK_SPACE." in api(f"jobs/{created['job_id']}")["log"]
-    assert json.loads(docker("volume", "inspect", own_volume))[0]["Labels"] == {"bilskirnir.managed": "true", "bilskirnir.environment": own, "bilskirnir.parameter": "WORK_SPACE"}
-    ready(f"bilskirnir-{own}")
-    assert docker("exec", f"bilskirnir-{own}", "cat", "/home/desktop/Projects/owner") == f"/home/desktop/Projects|{own_volume}|1001".encode()
+    assert json.loads(docker("volume", "inspect", own_volume))[0]["Labels"] == {"thoric.managed": "true", "thoric.environment": own, "thoric.parameter": "WORK_SPACE"}
+    ready(f"thoric-{own}")
+    assert docker("exec", f"thoric-{own}", "cat", "/home/desktop/Projects/owner") == f"/home/desktop/Projects|{own_volume}|1001".encode()
     assert api(f"containers/{own}")["setup"]["mounts"] == [{"volume": own_volume, "target": "/home/desktop/Projects", "readonly": False}]
     owner = {"container_id": own, "parameter": "WORK_SPACE", "name": "Own workspace", "deleted": False}
     assert next(v for v in api("volumes") if v["Name"] == own_volume)["owner"] == owner
@@ -1965,23 +1965,23 @@ try:
     # Its owner's record mounts it for the compose, so it cannot be deleted by itself.
     status, message = deletion_refused(f"volumes/{own_volume}")
     assert status == 409 and message == '"Own workspace" mounts this volume for its compose; delete that container first', (status, message)
-    docker("exec", "--user", "desktop", f"bilskirnir-{own}", "sh", "-c", "printf kept > /home/desktop/Projects/extra")
+    docker("exec", "--user", "desktop", f"thoric-{own}", "sh", "-c", "printf kept > /home/desktop/Projects/extra")
     job(api(f"containers/{own}/reset", {}))
-    ready(f"bilskirnir-{own}")
+    ready(f"thoric-{own}")
     job(api(f"containers/{own}/settings", {"resolution": "1280x720"}))
     image_refs.append(api(f"containers/{own}")["working_image"]["reference"])
-    ready(f"bilskirnir-{own}")
-    assert volume_mounts(f"bilskirnir-{own}") == {"/home/desktop/Projects": own_volume}
-    assert docker("exec", f"bilskirnir-{own}", "cat", "/home/desktop/Projects/extra") == b"kept"
+    ready(f"thoric-{own}")
+    assert volume_mounts(f"thoric-{own}") == {"/home/desktop/Projects": own_volume}
+    assert docker("exec", f"thoric-{own}", "cat", "/home/desktop/Projects/extra") == b"kept"
     # A container from a snapshot gets a volume of its own. Deleted without the option, it
     # leaves that volume, which the list then shows with a deleted owner.
     own_snapshot = job(api(f"containers/{own}/snapshot", {"name": f"own volume {tag}"}))
     clone = job(api("containers", {**own_base, "image": own_snapshot["image_id"], "name": "Own clone"}))["container_id"]
     container_ids.append(clone)
-    clone_volume = f"bilskirnir-{clone}-work-space"
+    clone_volume = f"thoric-{clone}-work-space"
     own_volumes.append(clone_volume)
-    ready(f"bilskirnir-{clone}")
-    assert volume_mounts(f"bilskirnir-{clone}") == {"/home/desktop/Projects": clone_volume}
+    ready(f"thoric-{clone}")
+    assert volume_mounts(f"thoric-{clone}") == {"/home/desktop/Projects": clone_volume}
     kept = job(api(f"containers/{clone}", method="DELETE"))
     container_ids.remove(clone)
     assert kept["volumes_preserved"] and "volumes_deleted" not in kept, kept
@@ -1990,7 +1990,7 @@ try:
     # owner with the option keeps it, and deleting the sharer never takes a volume it chose.
     sharer = job(api("containers", {**own_base, "name": "Own sharer", "parameters": {"WORK_SPACE": own_volume}}))["container_id"]
     container_ids.append(sharer)
-    assert json.loads(docker("volume", "inspect", f"bilskirnir-{sharer}-work-space", check=False) or b"[]") == []
+    assert json.loads(docker("volume", "inspect", f"thoric-{sharer}-work-space", check=False) or b"[]") == []
     owner_deleted = mcp_job(tool("delete_container", {"container_id": own, "delete_volumes": True}))
     container_ids.remove(own)
     assert owner_deleted["result"]["volumes_kept"] == [own_volume] and owner_deleted["result"]["volumes_deleted"] == [], owner_deleted["result"]
@@ -2002,7 +2002,7 @@ try:
     # Alone, its own volume goes with it when asked, and the volumes it did not own stay.
     alone = job(api("containers", {**own_base, "name": "Own alone"}))["container_id"]
     container_ids.append(alone)
-    alone_volume = f"bilskirnir-{alone}-work-space"
+    alone_volume = f"thoric-{alone}-work-space"
     own_volumes.append(alone_volume)
     removed = job(api(f"containers/{alone}?delete_volumes=true", method="DELETE"))
     container_ids.remove(alone)
@@ -2021,8 +2021,8 @@ try:
     assert deletion_refused(f"volumes/{absent_volume}")[0] == 404
     assert json.loads(docker("volume", "inspect", absent_volume, check=False) or b"[]") == []
     assert deletion_refused("volumes/-bad")[0] == 400
-    # Docker refuses a volume a container outside Bilskirnir uses, even a stopped one.
-    docker("create", "--name", holder, "--label", f"bilskirnir.test={tag}", "--mount", f"type=volume,src={clone_volume},dst=/held", "--entrypoint", "true", xfce["reference"])
+    # Docker refuses a volume a container outside Thoric uses, even a stopped one.
+    docker("create", "--name", holder, "--label", f"thoric.test={tag}", "--mount", f"type=volume,src={clone_volume},dst=/held", "--entrypoint", "true", xfce["reference"])
     status, message = deletion_refused(f"volumes/{clone_volume}")
     assert status == 409 and "volume is in use" in message, (status, message)
     docker("rm", holder)
@@ -2038,7 +2038,7 @@ try:
     # audio and removing a limit need a new container that keeps the old one's files.
     edit = job(api("containers", {"name": "Settings edit", "image": xfce["reference"], "gpu": False, "internet": False, "cpus": 1, "memory_mb": 1024}))["container_id"]
     container_ids.append(edit)
-    edit_container = f"bilskirnir-{edit}"
+    edit_container = f"thoric-{edit}"
     ready(edit_container)
     edit_identity = api(f"containers/{edit}")["spec"]
     first_id = docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip()
@@ -2099,7 +2099,7 @@ try:
     # the volumes it creates: a container with its files and a volume, and the snapshot it saved,
     # come back from the backup after they were deleted, with the same files and machine identity.
     main_port, main_client = port, client
-    docker("run", "-d", "--name", backup_manager, "--label", "bilskirnir.manager=true", "--label", f"bilskirnir.test={tag}", "-e", f"MANAGER_CONTAINER={backup_manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", f"VOLUME_FILTER=bilskirnir.backup-test={tag}", "-e", "UPDATE_CHECK=false", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{backup_data}:/data", "-p", "127.0.0.1::8080", "bilskirnir/manager:local")
+    docker("run", "-d", "--name", backup_manager, "--label", "thoric.manager=true", "--label", f"thoric.test={tag}", "-e", f"MANAGER_CONTAINER={backup_manager}", "-e", "AUTH_MODE=password", "-e", f"ADMIN_PASSWORD={password}", "-e", f"VOLUME_FILTER=thoric.backup-test={tag}", "-e", "UPDATE_CHECK=false", "-e", "GPU_ADAPTER=NVIDIA", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{backup_data}:/data", "-p", "127.0.0.1::8080", "thoric/manager:local")
     try:
         port = int(docker("port", backup_manager, "8080/tcp").decode().strip().rsplit(":", 1)[1])
         client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -2108,7 +2108,7 @@ try:
         api(f"volumes/{backup_volume}/files/write", {"path": "/kept.txt", "data": "kept in a volume\n"})
         backed = job(api("containers", {"name": "Backed up", "image": xfce["reference"], "gpu": False, "internet": False, "mounts": [{"volume": backup_volume, "target": "/home/desktop/Kept"}]}))["container_id"]
         backup_ids.append(backed)
-        backed_container = f"bilskirnir-{backed}"
+        backed_container = f"thoric-{backed}"
         ready(backed_container)
         docker("exec", "--user", "desktop", backed_container, "sh", "-c", "printf layer > /home/desktop/layer-marker")
         backed_spec = api(f"containers/{backed}")["spec"]
@@ -2125,14 +2125,14 @@ try:
         assert [stage["name"] for stage in made["stages"] if "started_at" in stage] == ["plan", "images", "files", "volumes"], made["stages"]
         with tarfile.open(archive, "r:gz") as backup:
             first = backup.next()
-            assert first.name == "bilskirnir-backup.json", first.name
+            assert first.name == "thoric-backup.json", first.name
             manifest = json.load(backup.extractfile(first))
             # An ordinary tar: a part's chunks are the docker save stream, as tar lists them.
             names = backup.getnames()
         assert [(c["id"], c["files"]) for c in manifest["containers"]] == [(backed, True)], manifest
         assert [(i["id"], i["image"]) for i in manifest["images"]] == [(saved["id"], True)], manifest
         assert [v["name"] for v in manifest["volumes"] if v["included"]] == [backup_volume], manifest
-        assert names[-1] == "bilskirnir-backup-end.json" and "parts/0002/end" in names, names[-5:]
+        assert names[-1] == "thoric-backup-end.json" and "parts/0002/end" in names, names[-5:]
         # While the names are in use, the check names them and nothing is restored.
         conflicts = api("backup/check", manifest)["conflicts"]
         assert {"kind": "container", "name": "Backed up"} in conflicts and {"kind": "volume", "name": backup_volume} in conflicts, conflicts
@@ -2143,19 +2143,19 @@ try:
         assert api("backup/check", manifest) == {"conflicts": [], "missing_volumes": []}
         size = os.path.getsize(archive)
         with open(archive, "rb") as body:
-            request = urllib.request.Request(f"http://127.0.0.1:{port}/api/backup/restore?size={size}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Bilskirnir-Request": "1"})
+            request = urllib.request.Request(f"http://127.0.0.1:{port}/api/backup/restore?size={size}", data=body, method="POST", headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "X-Thoric-Request": "1"})
             with client.open(request, timeout=3600) as response:
                 restoring = json.loads(response.read())
         restored = job(restoring)
-        image_refs.append(f"bilskirnir/container:restored-{backed}")
+        image_refs.append(f"thoric/container:restored-{backed}")
         assert restored["created"] == [backed] and restored["volumes"] == [backup_volume] and restored["not_created"] == [], restored
         assert [s["name"] for s in api(f"jobs/{restoring['job_id']}")["stages"]] == ["verify", "images", "files", "volumes", "records", "containers"]
         # Created stopped, from its files, with its settings and identity.
         assert docker("inspect", "--format", "{{.State.Status}}", backed_container).decode().strip() == "created"
         back = api(f"containers/{backed}")
-        assert back["spec"] == backed_spec and back["working_image"]["reference"] == f"bilskirnir/container:restored-{backed}", back
+        assert back["spec"] == backed_spec and back["working_image"]["reference"] == f"thoric/container:restored-{backed}", back
         image = next(i for i in api("images") if i["id"] == saved["id"])
-        assert image["reference"] == f"bilskirnir/snapshot:{saved['id']}" and image["available"], image
+        assert image["reference"] == f"thoric/snapshot:{saved['id']}" and image["available"], image
         job(api(f"containers/{backed}/action", {"action": "start"}))
         ready(backed_container)
         assert docker("exec", backed_container, "cat", "/home/desktop/layer-marker") == b"layer"
@@ -2170,7 +2170,7 @@ try:
     finally:
         port, client = main_port, main_client
         info = json.loads(docker("inspect", backup_manager, check=False) or b"[]")
-        if info and info[0]["Config"]["Labels"].get("bilskirnir.test") == tag:
+        if info and info[0]["Config"]["Labels"].get("thoric.test") == tag:
             docker("rm", "--force", backup_manager, check=False)
     for eid in list(container_ids):
         deletion = api(f"containers/{eid}", method="DELETE")
@@ -2188,7 +2188,7 @@ try:
     assert tool("get_usage", {"container_id": env_id, "seconds": 1800})["structuredContent"]["containers"][0]["removed"] is True
     assert docker("volume", "inspect", share)
     # Without a GPU container the manager stops sampling the GPU, and its helper goes.
-    wait_for(lambda: not set(docker("ps", "-aq", "--filter", "label=bilskirnir.usage-helper=true").decode().split()) - foreign_helpers, 30)
+    wait_for(lambda: not set(docker("ps", "-aq", "--filter", "label=thoric.usage-helper=true").decode().split()) - foreign_helpers, 30)
     assert api("usage")["gpu"]["state"] == "idle"
     print("PASS container cleanup preserves volumes and the deleted containers' usage history", flush=True)
     print("ALL DOCKER ACCEPTANCE CHECKS PASSED", flush=True)
@@ -2206,35 +2206,35 @@ finally:
         return values[0] if values else None
     # Remove only this test's known resources, after verifying ownership.
     info=inspect_cleanup("container",foreign)
-    if info and info["Config"]["Labels"].get("bilskirnir.test")==tag:
+    if info and info["Config"]["Labels"].get("thoric.test")==tag:
         docker("rm","--force",foreign,check=False)
     info=inspect_cleanup("container",holder)
-    if info and info["Config"]["Labels"].get("bilskirnir.test")==tag:
+    if info and info["Config"]["Labels"].get("thoric.test")==tag:
         docker("rm","--force",holder,check=False)
     # The backup manager goes first, so the networks of its containers have no member left.
     info=inspect_cleanup("container",backup_manager)
-    if info and info["Config"]["Labels"].get("bilskirnir.test")==tag:
+    if info and info["Config"]["Labels"].get("thoric.test")==tag:
         docker("rm","--force",backup_manager,check=False)
     for eid in backup_ids:
-        info=inspect_cleanup("container",f"bilskirnir-{eid}")
-        if info and info["Config"]["Labels"].get("bilskirnir.environment")==eid:
+        info=inspect_cleanup("container",f"thoric-{eid}")
+        if info and info["Config"]["Labels"].get("thoric.environment")==eid:
             docker("rm","--force",info["Id"],check=False)
-        for network in [f"bilskirnir-{eid}-private",f"bilskirnir-{eid}-egress"]:
+        for network in [f"thoric-{eid}-private",f"thoric-{eid}-egress"]:
             info=inspect_cleanup("network",network)
-            if info and info["Labels"].get("bilskirnir.environment")==eid:
+            if info and info["Labels"].get("thoric.environment")==eid:
                 docker("network","rm",info["Id"],check=False)
-    image_fixture=inspect_cleanup("container",f"bilskirnir-test-image-{tag}")
-    if image_fixture and image_fixture["Config"]["Labels"].get("bilskirnir.test")==tag:
-        docker("rm","--force",f"bilskirnir-test-image-{tag}",check=False)
+    image_fixture=inspect_cleanup("container",f"thoric-test-image-{tag}")
+    if image_fixture and image_fixture["Config"]["Labels"].get("thoric.test")==tag:
+        docker("rm","--force",f"thoric-test-image-{tag}",check=False)
     for eid in container_ids:
         # A settings change interrupted by a failure can leave the replaced container renamed aside.
-        for name in [f"bilskirnir-{eid}",f"bilskirnir-{eid}-previous"]:
+        for name in [f"thoric-{eid}",f"thoric-{eid}-previous"]:
             info=inspect_cleanup("container",name)
-            if info and info["Config"]["Labels"].get("bilskirnir.environment")==eid:
+            if info and info["Config"]["Labels"].get("thoric.environment")==eid:
                 docker("rm","--force",info["Id"],check=False)
-        for network in [f"bilskirnir-{eid}-private",f"bilskirnir-{eid}-egress"]:
+        for network in [f"thoric-{eid}-private",f"thoric-{eid}-egress"]:
             info=inspect_cleanup("network",network)
-            if info and (info["Labels"].get("bilskirnir.environment")==eid or info["Labels"].get("bilskirnir.test")==tag):
+            if info and (info["Labels"].get("thoric.environment")==eid or info["Labels"].get("thoric.test")==tag):
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
@@ -2242,6 +2242,6 @@ finally:
     # A volume created for one of this run's containers goes only while its label names that container.
     for name in own_volumes:
         info=inspect_cleanup("volume",name)
-        if info and (info["Labels"] or {}).get("bilskirnir.environment")==name.split("-")[1]:
+        if info and (info["Labels"] or {}).get("thoric.environment")==name.split("-")[1]:
             docker("volume","rm",name,check=False)
     for reference in reversed(image_refs): docker("image","rm",reference,check=False)

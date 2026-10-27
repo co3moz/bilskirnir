@@ -13,7 +13,7 @@ RUN curl -fL --retry 3 "https://github.com/VirtualGL/virtualgl/releases/download
 RUN useradd --create-home --shell /bin/bash --uid 1001 desktop \
     && mkdir -p /shared /workspace && chown desktop:desktop /shared /workspace \
     && mkdir -p /usr/local/share/applications
-LABEL bilskirnir.desktop=true
+LABEL thoric.desktop=true
 ENV LANG=en_US.UTF-8 DISPLAY=:0 DESKTOP_RESOLUTION=1920x1080 \
     DESKTOP_AUDIO=false DESKTOP_MICROPHONE=false DESKTOP_GPU=false DESKTOP_SUDO=true \
     PULSE_SERVER=unix:/run/desktop/pulse/native
@@ -43,24 +43,24 @@ COPY desktop-diagnostics.sh /usr/local/bin/desktop-diagnostics
 COPY gpu-run.sh /usr/local/bin/gpu-run
 COPY desktop-gnome.sh /usr/local/bin/desktop-gnome
 COPY desktop-healthcheck.sh /usr/local/bin/desktop-healthcheck
-COPY bilskirnir-mcp.py /usr/local/bin/bilskirnir-mcp
-COPY bilskirnir-mcp-tray.py /usr/local/bin/bilskirnir-mcp-tray
+COPY thoric-mcp.py /usr/local/bin/thoric-mcp
+COPY thoric-mcp-tray.py /usr/local/bin/thoric-mcp-tray
 # The tray of both sessions: its menu entry, icons and autostart entry.
-COPY mcp-tray/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY mcp-tray/thoric-mcp.desktop /usr/local/share/applications/
 COPY mcp-tray/icons/ /usr/local/share/icons/hicolor/
-COPY mcp-tray/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
-# What the Bilskirnir programs above are licensed under, beside every Ubuntu package's copyright.
-COPY copyright /usr/share/doc/bilskirnir/copyright
+COPY mcp-tray/thoric-mcp-tray.desktop /etc/xdg/autostart/
+# What the Thoric programs above are licensed under, beside every Ubuntu package's copyright.
+COPY copyright /usr/share/doc/thoric/copyright
 # NVIDIA's EGL library for GPU desktops on a Linux host. The NVIDIA Container Toolkit's hook adds
 # the library without this file, and glvnd skips the entry where the library is missing, as in WSL.
 # The final stages copy it after their packages, so a change here keeps those layers cached.
 RUN printf '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}\n' \
     > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
-RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/bilskirnir-mcp \
-        /usr/local/bin/bilskirnir-mcp-tray \
+RUN chmod +x /usr/local/bin/desktop-* /usr/local/bin/gpu-run /usr/local/bin/thoric-mcp \
+        /usr/local/bin/thoric-mcp-tray \
     && chmod -R u=rwX,go=rX /usr/local/share/icons/hicolor \
-    && chmod 644 /usr/local/share/applications/bilskirnir-mcp.desktop \
-        /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /usr/share/doc/bilskirnir/copyright
+    && chmod 644 /usr/local/share/applications/thoric-mcp.desktop \
+        /etc/xdg/autostart/thoric-mcp-tray.desktop /usr/share/doc/thoric/copyright
 
 FROM common AS xfce-packages
 # librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon
@@ -72,15 +72,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-ter
     && rm -rf /var/lib/apt/lists/*
 FROM xfce-packages AS xfce
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
-COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY --from=scripts /usr/local/share/applications/thoric-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
-COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
-COPY --from=scripts /usr/share/doc/bilskirnir/ /usr/share/doc/bilskirnir/
+COPY --from=scripts /etc/xdg/autostart/thoric-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/doc/thoric/ /usr/share/doc/thoric/
 COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvnd/egl_vendor.d/
-COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
+COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/thoric/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
-LABEL bilskirnir.profile=ubuntu-xfce bilskirnir.session=xfce \
+LABEL thoric.profile=ubuntu-xfce thoric.session=xfce \
     org.opencontainers.image.title="Ubuntu 24.04 · Lightweight XFCE" \
     org.opencontainers.image.description="Ubuntu LTS with a lightweight XFCE desktop, independent VNC display and optional GPU/audio" \
     org.opencontainers.image.version="24.04"
@@ -98,15 +98,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends ubuntu-wallpape
     && rm -rf /var/lib/apt/lists/*
 FROM gnome-packages AS gnome
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
-COPY --from=scripts /usr/local/share/applications/bilskirnir-mcp.desktop /usr/local/share/applications/
+COPY --from=scripts /usr/local/share/applications/thoric-mcp.desktop /usr/local/share/applications/
 COPY --from=scripts /usr/local/share/icons/ /usr/local/share/icons/
-COPY --from=scripts /etc/xdg/autostart/bilskirnir-mcp-tray.desktop /etc/xdg/autostart/
-COPY --from=scripts /usr/share/doc/bilskirnir/ /usr/share/doc/bilskirnir/
+COPY --from=scripts /etc/xdg/autostart/thoric-mcp-tray.desktop /etc/xdg/autostart/
+COPY --from=scripts /usr/share/doc/thoric/ /usr/share/doc/thoric/
 COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvnd/egl_vendor.d/
-COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/bilskirnir/chromium-gpu.so
-COPY gnome-container.session /usr/share/gnome-session/sessions/bilskirnir-ubuntu.session
+COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/thoric/chromium-gpu.so
+COPY gnome-container.session /usr/share/gnome-session/sessions/thoric-ubuntu.session
 ENV DESKTOP_SESSION=gnome
-LABEL bilskirnir.profile=ubuntu-gnome bilskirnir.session=gnome \
+LABEL thoric.profile=ubuntu-gnome thoric.session=gnome \
     org.opencontainers.image.title="Ubuntu 24.04 · GNOME" \
     org.opencontainers.image.description="Ubuntu GNOME Shell with Ubuntu session and Yaru appearance, independent VNC display and optional GPU/audio" \
     org.opencontainers.image.version="24.04"

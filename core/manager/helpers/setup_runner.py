@@ -77,7 +77,7 @@ def main():
     environment.update(values)
     # An unlinked copy: a command that reads stdin cannot consume the script, and nothing of it
     # stays behind in the desktop.
-    with tempfile.NamedTemporaryFile("wb", prefix="bilskirnir-setup.", delete=False) as handle:
+    with tempfile.NamedTemporaryFile("wb", prefix="thoric-setup.", delete=False) as handle:
         handle.write(request["script"].encode())
         path = handle.name
     try:

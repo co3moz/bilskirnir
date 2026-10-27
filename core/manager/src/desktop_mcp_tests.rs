@@ -30,9 +30,9 @@ const ADMIN: &str = "test-token-with-at-least-32-characters";
 pub(super) fn container(id: &str, name: &str) -> Container {
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: "sha256:chrome".into(),
         created_at: 1,
         spec: serde_json::from_value(json!({"name": name, "image": "sha256:chrome"})).unwrap(),
@@ -406,7 +406,7 @@ fn an_endpoint_offers_its_scopes_tools_and_never_the_administrators() {
     for name in Scope::ALL.iter().flat_map(|scope| scope.tools()) {
         assert!(
             crate::mcp::listed_tool(name).is_some(),
-            "{name} is in a scope but not a Bilskirnir tool"
+            "{name} is in a scope but not a Thoric tool"
         );
     }
 }
@@ -560,7 +560,7 @@ fn a_grant_leaves_single_tools_out_under_the_names_the_endpoint_gives_them() {
     );
     assert_eq!(
         screenshot.target,
-        Target::Bilskirnir {
+        Target::Thoric {
             tool: "screenshot",
             containers: vec![("unity".into(), "c2".into())]
         }
@@ -984,7 +984,7 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
                     .uri(uri)
                     .header("host", "localhost:8080")
                     .header("authorization", format!("Bearer {token}"))
-                    .header("x-bilskirnir-request", "1")
+                    .header("x-thoric-request", "1")
                     .body(Body::empty())
                     .unwrap(),
             )

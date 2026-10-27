@@ -30,8 +30,8 @@ export type BackupConflict = { kind: "container" | "image" | "endpoint" | "volum
 /** What `POST /api/backup/check` says a restore would meet here. */
 export type BackupReview = { conflicts: BackupConflict[]; missing_volumes: string[] }
 
-export const MANIFEST = "bilskirnir-backup.json"
-const KIND = "bilskirnir-backup"
+export const MANIFEST = "thoric-backup.json"
+const KIND = "thoric-backup"
 /** The manifest layout this release reads; the manager refuses any other one too. */
 export const BACKUP_FORMAT = 1
 const BLOCK = 512
@@ -145,7 +145,7 @@ function changed() {
 
 /**
  * The restore upload, kept outside the page so that it goes on while the dashboard shows another
- * page; leaving or reloading Bilskirnir ends it.
+ * page; leaving or reloading Thoric ends it.
  */
 export function restoreUpload(
   createRequest: () => UploadRequest = () => new XMLHttpRequest(),

@@ -11,7 +11,7 @@
 //! A restore reads the upload as it arrives. The manifest and records come first and are checked
 //! before anything is created (see `review`): a backup whose names this installation already uses
 //! is refused whole. Images are loaded through the same checks an image import uses and tagged
-//! with Bilskirnir's own names, volumes are unpacked into new volumes as the desktop user, and
+//! with Thoric's own names, volumes are unpacked into new volumes as the desktop user, and
 //! anything this restore created is removed again when the upload fails. Once the upload has
 //! ended the records are saved together, and each container whose files came along is created
 //! from them with its machine identity, and left stopped.
@@ -66,7 +66,7 @@ fn file_name(seconds: u64) -> String {
     let year = year_of_era + era * 400 + i64::from(month <= 2);
     let time = seconds % 86_400;
     format!(
-        "bilskirnir-backup-{year:04}{month:02}{day:02}-{:02}{:02}{:02}.tar.gz",
+        "thoric-backup-{year:04}{month:02}{day:02}-{:02}{:02}{:02}.tar.gz",
         time / 3600,
         time / 60 % 60,
         time % 60

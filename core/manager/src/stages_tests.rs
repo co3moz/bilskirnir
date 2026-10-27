@@ -82,13 +82,13 @@ const CLASSIC: &str = "#0 building with \"default\" instance using docker driver
 #1 transferring dockerfile: 247B done
 #1 DONE 0.0s
 
-#4 [1/3] FROM docker.io/bilskirnir/build-base:0f3a
+#4 [1/3] FROM docker.io/thoric/build-base:0f3a
 #4 DONE 0.1s
 
-#6 [2/3] COPY setup.sh /tmp/bilskirnir-setup.sh
+#6 [2/3] COPY setup.sh /tmp/thoric-setup.sh
 #6 DONE 0.1s
 
-#7 [3/3] RUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh
+#7 [3/3] RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh
 #7 0.231 exporting to image
 #7 0.232 #9 naming to nowhere
 #7 2.004 Setting up python3 (3.12.3-0ubuntu2) ...
@@ -98,7 +98,7 @@ const CLASSIC: &str = "#0 building with \"default\" instance using docker driver
 #8 exporting layers
 #8 exporting layers 171.4s done
 #8 writing image sha256:5f1d2c done
-#8 naming to docker.io/bilskirnir/custom:0f3a done
+#8 naming to docker.io/thoric/custom:0f3a done
 #8 DONE 171.6s
 ";
 const CONTAINERD: &str = "#8 exporting to image
@@ -107,8 +107,8 @@ const CONTAINERD: &str = "#8 exporting to image
 #8 exporting config sha256:bb done
 #8 exporting attestation manifest sha256:cc done
 #8 exporting manifest list sha256:dd done
-#8 naming to docker.io/bilskirnir/custom:0f3a done
-#8 unpacking to docker.io/bilskirnir/custom:0f3a 4.1s done
+#8 naming to docker.io/thoric/custom:0f3a done
+#8 unpacking to docker.io/thoric/custom:0f3a 4.1s done
 #8 DONE 16.5s
 ";
 
@@ -127,7 +127,7 @@ fn buildkit_progress_lines_start_the_layer_and_image_stages() {
             ("#8 exporting layers 171.4s done".into(), "layer"),
             ("#8 writing image sha256:5f1d2c done".into(), "image"),
             (
-                "#8 naming to docker.io/bilskirnir/custom:0f3a done".into(),
+                "#8 naming to docker.io/thoric/custom:0f3a done".into(),
                 "image"
             ),
         ]
@@ -144,7 +144,7 @@ fn buildkit_progress_lines_start_the_layer_and_image_stages() {
     );
     // The legacy builder's steps and anything that is not a step line start nothing.
     for line in [
-        "Step 4/6 : RUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh",
+        "Step 4/6 : RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh",
         "exporting to image",
         "# exporting to image",
         "#x exporting to image",
@@ -274,10 +274,7 @@ fn begun(job: &Job) -> Vec<(&str, bool)> {
 #[cfg(unix)]
 fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-stages-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-stages-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
     std::fs::write(
@@ -305,14 +302,14 @@ async fn finished(app: &App, started: axum::Json<serde_json::Value>) -> Job {
     }
 }
 
-/// The container `e` as the manager records it, running in Docker as `bilskirnir-e`.
+/// The container `e` as the manager records it, running in Docker as `thoric-e`.
 #[cfg(unix)]
 fn container(app: &App) {
     let env = crate::model::Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(
@@ -328,7 +325,7 @@ fn container(app: &App) {
 }
 
 #[cfg(unix)]
-const CONTAINER_JSON: &str = r#"{"Id":"c0ffee","Config":{"Labels":{"bilskirnir.managed":"true","bilskirnir.environment":"e"}},"State":{"Running":RUNNING}}"#;
+const CONTAINER_JSON: &str = r#"{"Id":"c0ffee","Config":{"Labels":{"thoric.managed":"true","thoric.environment":"e"}},"State":{"Running":RUNNING}}"#;
 
 #[cfg(unix)]
 #[tokio::test]
@@ -339,7 +336,7 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
   build) cat build-output >&2; exit $(cat build-status) ;;
 esac
 case "$1 $2" in
-  'image inspect') echo '[{"Id":"sha256:feed","Config":{"Labels":{"bilskirnir.desktop":"true"}}}]' ;;
+  'image inspect') echo '[{"Id":"sha256:feed","Config":{"Labels":{"thoric.desktop":"true"}}}]' ;;
 esac
 "#,
     );
@@ -380,7 +377,7 @@ esac
 
     // A failed script leaves its own stage as the last one started; cleanup still runs unlisted.
     let failed = run(
-        "#7 [3/3] RUN bash /tmp/bilskirnir-setup.sh && rm /tmp/bilskirnir-setup.sh\n#7 0.1 nope\n#7 ERROR: exit code: 17\n",
+        "#7 [3/3] RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh\n#7 0.1 nope\n#7 ERROR: exit code: 17\n",
         1,
     )
     .await;
@@ -480,7 +477,7 @@ async fn a_recreating_settings_change_reports_its_stages_and_where_it_failed() {
     let (app, dir) = fake_docker(
         r#"echo "$*" >> calls
 case "$1 $2 $3" in
-  'container inspect bilskirnir-e') printf '[%s]' "$(cat container.json)"; exit ;;
+  'container inspect thoric-e') printf '[%s]' "$(cat container.json)"; exit ;;
   'container inspect '*) exit 1 ;;
   'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
 esac
@@ -582,11 +579,7 @@ esac
         ]
     );
     assert_eq!(failed.stages[2].finished_at, failed.finished_at);
-    assert!(
-        calls().contains("rename c0ffee bilskirnir-e\n"),
-        "{}",
-        calls()
-    );
+    assert!(calls().contains("rename c0ffee thoric-e\n"), "{}", calls());
 
     // A change that applies in place lists no stages.
     let live = finished(

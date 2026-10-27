@@ -71,7 +71,7 @@ export const en = {
   "job.volume-import": "Import volume",
   "job.volume-extract": "Extract into volume",
   "job.volume-copy": "Copy volume",
-  "job.update": "Update Bilskirnir",
+  "job.update": "Update Thoric",
   "job.backup": "Back up installation",
   "job.restore": "Restore backup",
 
@@ -137,7 +137,7 @@ export const en = {
   "activity.filter.errors": "Errors only",
   "activity.filter.destructive": "Destructive only",
   "activity.filter.clear": "Clear filters",
-  "activity.caller.administrator": "Bilskirnir MCP",
+  "activity.caller.administrator": "Thoric MCP",
   "activity.credential.endpoint_token": "The endpoint's token",
   "activity.credential.mcp_token": "The MCP token",
   "activity.credential.none": "No token",
@@ -280,7 +280,7 @@ export const en = {
   "images.deleteSaved":
     "The image and its record are deleted. This cannot be undone; export an archive first if you may need it again.",
   "images.deleteImport":
-    "Bilskirnir forgets this image. Docker keeps it, since it was on the host before it was registered.",
+    "Thoric forgets this image. Docker keeps it, since it was on the host before it was registered.",
   "images.deleteCatalog":
     "The download is deleted. The image stays in the list and downloads again when a container or a build needs it.",
   "images.deleteUsed":
@@ -450,7 +450,7 @@ export const en = {
   "volumes.ownerDeletedHint": "Created for a container that was deleted without it.",
   "volumes.manager": "Manager data",
   "volumes.managerHint":
-    "Bilskirnir's own database and sessions. It cannot be opened, exported or mounted.",
+    "Thoric's own database and sessions. It cannot be opened, exported or mounted.",
   "volumes.driver": "Driver",
   "volumes.scope": "Scope",
   "volumes.browse": "Browse files",
@@ -609,17 +609,17 @@ export const en = {
     "A restore only adds what the backup holds, and stops before it starts if a name is already in use.",
   "backup.choose": "Drop a backup here or choose a file",
   "backup.reading": "Reading the backup…",
-  "backup.notBackup": "This file is not a Bilskirnir backup.",
+  "backup.notBackup": "This file is not a Thoric backup.",
   "backup.newer":
-    "Bilskirnir {version} wrote this backup in a layout this release cannot read. Update first.",
+    "Thoric {version} wrote this backup in a layout this release cannot read. Update first.",
   "backup.finishing": "Uploaded. Finishing the restore…",
-  "backup.keepOpen": "Keep Bilskirnir open until the upload ends.",
+  "backup.keepOpen": "Keep Thoric open until the upload ends.",
   "backup.cancel": "Cancel restore",
   "backup.restoring": "Restoring the backup",
   "backup.restoringDetail":
     "The upload has ended. The job saves the records and creates the containers.",
   "backup.confirmTitle": "Restore this backup?",
-  "backup.confirmFrom": "Made by Bilskirnir {version} on {date}.",
+  "backup.confirmFrom": "Made by Thoric {version} on {date}.",
   "backup.stopped":
     "Containers come back stopped, with their hostname, MAC address and machine ID.",
   "backup.nothing": "The backup holds no containers, images, volumes or endpoints.",
@@ -772,7 +772,7 @@ export const en = {
   "templates.installOf": "Install {name}",
   "templates.installed.one": "Installed",
   "templates.installed.other": "Installed {count} times",
-  "templates.requires": "Needs Bilskirnir {version}",
+  "templates.requires": "Needs Thoric {version}",
   "templates.broken.one": "{count} template in the list cannot be offered",
   "templates.broken.other": "{count} templates in the list cannot be offered",
   "templates.broken.entry": "the entry is not an object",
@@ -798,7 +798,7 @@ export const en = {
   "templates.merge.mcpTwice":
     "{first} and {second} both declare the desktop MCP server {name}; choose only one of them.",
 
-  "dependencies.heading": "Bilskirnir {version}",
+  "dependencies.heading": "Thoric {version}",
   "dependencies.description":
     "Everything this release is built from, as the build of its manager image listed it.",
   "dependencies.group.ui": "Interface",
@@ -892,25 +892,25 @@ export const en = {
   "account.language": "Language",
   "account.languageAutomatic": "Browser language",
 
-  "update.available": "Bilskirnir {version} is available",
+  "update.available": "Thoric {version} is available",
   "update.current": "This installation runs {version}.",
   "update.manual":
-    "This installation runs {version}. Run bilskirnir update in WSL, or pull the new manager image.",
+    "This installation runs {version}. Run thoric update in WSL, or pull the new manager image.",
   "update.install": "Update",
   "update.notes": "What's new",
-  "update.confirmTitle": "Update Bilskirnir to {version}?",
+  "update.confirmTitle": "Update Thoric to {version}?",
   "update.confirmText":
-    "The WSL distribution runs bilskirnir update: it sets MANAGER_IMAGE in /opt/bilskirnir/.env to {version}, downloads that release and recreates the manager. Containers keep running, and the dashboard reloads once the new manager answers.",
-  "update.running": "Updating Bilskirnir",
+    "The WSL distribution runs thoric update: it sets MANAGER_IMAGE in /opt/thoric/.env to {version}, downloads that release and recreates the manager. Containers keep running, and the dashboard reloads once the new manager answers.",
+  "update.running": "Updating Thoric",
   "update.runningDetail": "The dashboard reloads once the new manager answers.",
   "update.finishing": "The new manager is finishing the update.",
   "update.showLog": "Show log",
-  "update.done": "Bilskirnir was updated to {version}.",
+  "update.done": "Thoric was updated to {version}.",
 
   "settings.version": "Version",
-  "settings.versionHint": "Bilskirnir looks for a new release when it starts and every six hours.",
-  "settings.release": "Bilskirnir {version}",
-  "settings.notice": "Bilskirnir is built from open-source packages, each under its own license.",
+  "settings.versionHint": "Thoric looks for a new release when it starts and every six hours.",
+  "settings.release": "Thoric {version}",
+  "settings.notice": "Thoric is built from open-source packages, each under its own license.",
   "settings.noticeLink": "Dependencies and licenses",
   "settings.state.current": "Up to date",
   "settings.state.available": "Update available",
@@ -925,7 +925,7 @@ export const en = {
   "settings.checksOff":
     "Release checks are turned off with UPDATE_CHECK=false, so the manager makes no request to GitHub.",
   "settings.check": "Check now",
-  "settings.upToDate": "Bilskirnir {version} is the newest release.",
+  "settings.upToDate": "Thoric {version} is the newest release.",
   "settings.updateTo": "Update to {version}",
   "settings.configuration": "Configuration",
   "settings.configurationHint":
@@ -945,10 +945,10 @@ export const en = {
   "settings.edit.readOnly":
     "On this installation the settings change in .env: edit it and recreate the manager, such as with docker compose up -d. In the WSL package this page changes most of them.",
   "settings.edit.editableHint":
-    "Change a setting with its control, then choose Apply and restart: the WSL package writes it to .env and recreates the manager. A setting marked CLI only changes with bilskirnir settings in a Bilskirnir terminal, then bilskirnir restart.",
+    "Change a setting with its control, then choose Apply and restart: the WSL package writes it to .env and recreates the manager. A setting marked CLI only changes with thoric settings in a Thoric terminal, then thoric restart.",
   "settings.edit.cliOnly": "CLI only",
   "settings.edit.cliOnlyHint":
-    "Change it with bilskirnir settings in a Bilskirnir terminal, then run bilskirnir restart.",
+    "Change it with thoric settings in a Thoric terminal, then run thoric restart.",
   "settings.edit.changed": "Changed",
   "settings.edit.reset": "Undo the change to {name}",
   "settings.edit.mib": "MiB",
@@ -973,9 +973,9 @@ export const en = {
     "Use one line of printable ASCII, without quotes, $, #, backslashes, backquotes or spaces at either end.",
   "settings.edit.problem.number": "Enter a whole number from {min} to {max}.",
   "settings.choice.automatic": "Automatic",
-  "settings.choice.wiki": "Bilskirnir wiki",
+  "settings.choice.wiki": "Thoric wiki",
   "settings.choice.off": "Turned off",
-  "settings.choice.ownLabel": "Bilskirnir's own label",
+  "settings.choice.ownLabel": "Thoric's own label",
   "settings.choice.everyVolume": "Every volume",
   "settings.choice.custom": "Other",
   "settings.about.AUTH_MODE":
@@ -1037,7 +1037,7 @@ export const en = {
   "settings.about.TEMPLATES_URL": "The list the Templates page reads; none turns the page off.",
   "settings.about.VOLUME_FILTER":
     "The label a volume needs to be listed and mounted; none lists every volume.",
-  "settings.about.MANAGER_CONTAINER": "The manager's own container, which Bilskirnir leaves alone.",
+  "settings.about.MANAGER_CONTAINER": "The manager's own container, which Thoric leaves alone.",
   "settings.about.UPDATE_CHECK": "Looks for new releases on GitHub every six hours.",
 
   "dashboard.running": "{count} running",
@@ -1102,7 +1102,7 @@ export const en = {
   "usage.stopped": "Not running",
   "usage.deleted": "Deleted",
   "usage.deletedName": "{name} (deleted)",
-  "usage.empty": "No container has run since Bilskirnir started. Start one to see its use here.",
+  "usage.empty": "No container has run since Thoric started. Start one to see its use here.",
   "usage.noSamples": "No samples yet. They start once the container runs.",
   "usage.waiting": "Waiting for the first samples…",
   "usage.unavailable": "Usage cannot be read",
@@ -1175,7 +1175,7 @@ export const en = {
   "spec.mountsHint": "Mounted volumes are excluded from snapshots.",
   "spec.proxiedPorts": "Proxied ports",
   "spec.proxiedPortsHint":
-    "Ports of programs in the desktop that agents with the MCP token reach through Bilskirnir, separated by commas.",
+    "Ports of programs in the desktop that agents with the MCP token reach through Thoric, separated by commas.",
   "spec.ports.one": "{count} proxied port",
   "spec.ports.other": "{count} proxied ports",
 
@@ -1297,7 +1297,7 @@ export const en = {
   "parameter.volume.newMounted": "Created with the container and mounted at {path}.",
 
   "import.archive.description":
-    "Loads an archive exported from Bilskirnir, or saved with docker save, into Docker.",
+    "Loads an archive exported from Thoric, or saved with docker save, into Docker.",
   "import.docker.description":
     "Registers a desktop-compatible image that is already on this Docker host.",
   "import.archive.arrived": "The archive arrived. Docker is loading the image.",
@@ -1317,7 +1317,7 @@ export const en = {
   "mcp.view.inspector": "Inspector",
   "mcp.namePattern": "Lowercase letters, digits and dashes, starting with a letter or digit",
   "mcp.endpoints.description":
-    "Each endpoint gives an agent part of the container tools and the tools of chosen desktop MCP servers, with a token of its own. Bilskirnir MCP at {admin} keeps administrator access to everything.",
+    "Each endpoint gives an agent part of the container tools and the tools of chosen desktop MCP servers, with a token of its own. Thoric MCP at {admin} keeps administrator access to everything.",
   "mcp.endpoints.loading": "Loading endpoints…",
   "mcp.endpoints.none":
     "No MCP endpoints yet. New containers get one, and an endpoint of your own can cover several containers.",
@@ -1422,11 +1422,11 @@ export const en = {
   "mcp.connect.actionOf": "Add {name} to a client",
   "mcp.connect.admin": "Add /mcp to a client",
   "mcp.connect.titleOf": "Add {name} to an MCP client",
-  "mcp.connect.titleAdmin": "Add Bilskirnir MCP to an MCP client",
+  "mcp.connect.titleAdmin": "Add Thoric MCP to an MCP client",
   "mcp.connect.description":
     "Pick the client and copy its settings. The token only fills in the text below and is not sent anywhere.",
   "mcp.connect.adminWarning":
-    "Bilskirnir MCP has administrator access to every container, including root commands and deletion. Give an agent that needs less an endpoint instead.",
+    "Thoric MCP has administrator access to every container, including root commands and deletion. Give an agent that needs less an endpoint instead.",
   "mcp.connect.header": "Authorization header",
   "mcp.connect.tokenEndpoint":
     "The endpoint's token, shown once when it was created, or the administrator's MCP token.",
@@ -1466,7 +1466,7 @@ export const en = {
   "mcp.connect.hint.amp":
     "Add the entry to Amp's settings, in your home or in a workspace, where Amp asks before using the server.",
   "mcp.connect.hint.claude-desktop":
-    "Claude Desktop's connectors reach servers from Anthropic's cloud, not this address, so it starts a local program instead. On Windows with Bilskirnir's WSL package, the bridge in the manager needs no token; elsewhere mcp-remote connects to the URL. Open the file from Settings, Developer, Edit Config, and restart Claude Desktop after saving it.",
+    "Claude Desktop's connectors reach servers from Anthropic's cloud, not this address, so it starts a local program instead. On Windows with Thoric's WSL package, the bridge in the manager needs no token; elsewhere mcp-remote connects to the URL. Open the file from Settings, Developer, Edit Config, and restart Claude Desktop after saving it.",
   "mcp.connect.hint.generic":
     "A client that speaks Streamable HTTP needs the URL and an Authorization header with the bearer token. One that starts only local programs can use the bridge through WSL.",
   "mcp.servers.description":
@@ -1494,7 +1494,7 @@ export const en = {
   "mcp.server.testSaved": "It ran once and stopped; nothing is saved until you add it.",
   "mcp.server.startFirst": "Start the container to add a server.",
   "mcp.server.formDescription":
-    "An MCP server inside the desktop: a command Bilskirnir starts there, or the URL of one that already listens inside it. Its tools are read when it is added.",
+    "An MCP server inside the desktop: a command Thoric starts there, or the URL of one that already listens inside it. Its tools are read when it is added.",
   "mcp.server.transport": "Transport",
   "mcp.server.stdio": "Command",
   "mcp.server.http": "HTTP URL",
@@ -1509,7 +1509,7 @@ export const en = {
   "mcp.server.headers": "Headers",
   "mcp.server.headersHint": "One Name: value per line.",
   "mcp.server.valuesHint":
-    "Arguments, environment, URL and headers can use the container's compose values as {value}, or {stepValue} when its compose has several steps. Bilskirnir fills them in when it connects.",
+    "Arguments, environment, URL and headers can use the container's compose values as {value}, or {stepValue} when its compose has several steps. Thoric fills them in when it connects.",
   "mcp.server.insideHint": "Inside the desktop, {command} does the same.",
   "mcp.server.added.one": "Added {name} with {count} tool.",
   "mcp.server.added.other": "Added {name} with {count} tools.",
@@ -1549,23 +1549,22 @@ export const en = {
   "mcp.read.twice": "The desktop MCP server {name} is declared twice.",
 
   "inspector.description":
-    "Open an MCP server to see what it offers and try its tools, prompts and resources. A desktop server runs in a process of its own for the inspector; an endpoint and Bilskirnir MCP answer as they answer an agent.",
+    "Open an MCP server to see what it offers and try its tools, prompts and resources. A desktop server runs in a process of its own for the inspector; an endpoint and Thoric MCP answer as they answer an agent.",
   "inspector.open": "Test in the inspector",
   "inspector.openOf": "Test {name} in the inspector",
   "inspector.connection.title": "Server",
   "inspector.connection.connect": "Connect",
   "inspector.connection.reconnect": "Reconnect",
   "inspector.connection.disconnect": "Disconnect",
-  "inspector.connection.hint":
-    "Choose a desktop server, an endpoint or Bilskirnir MCP, then connect.",
+  "inspector.connection.hint": "Choose a desktop server, an endpoint or Thoric MCP, then connect.",
   "inspector.connection.server": "{name} {version}",
   "inspector.connection.protocol": "protocol {version}",
   "inspector.connection.closed": "The connection ended",
   "inspector.connection.instructions": "Instructions from the server",
   "inspector.target.label": "Server to inspect",
   "inspector.target.placeholder": "Choose a server…",
-  "inspector.target.bilskirnir": "Bilskirnir",
-  "inspector.target.administrator": "Bilskirnir MCP (/mcp)",
+  "inspector.target.thoric": "Thoric",
+  "inspector.target.administrator": "Thoric MCP (/mcp)",
   "inspector.target.rootOff": "Root /mcp is turned off",
   "inspector.target.stopped": "container stopped",
   "inspector.status.connecting": "Starting the server…",

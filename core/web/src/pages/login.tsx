@@ -39,7 +39,7 @@ export function LoginPage() {
           className="flex items-center gap-3 self-center text-lg font-semibold tracking-wide"
         >
           <img src="/mark.svg" alt="" className="size-10" />
-          Bilskirnir
+          Thoric
         </a>
         <Card>
           <CardHeader className="text-center">

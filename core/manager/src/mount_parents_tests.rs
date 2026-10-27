@@ -155,7 +155,7 @@ fn a_handed_over_folder_keeps_its_mode_and_time() {
 #[cfg(unix)]
 fn docker(app: &mut std::sync::Arc<App>, tars: &[(&str, Vec<u8>)]) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("bilskirnir-parents-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("thoric-parents-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut cases = String::new();
     for (index, (folder, tar)) in tars.iter().enumerate() {
@@ -167,7 +167,7 @@ fn docker(app: &mut std::sync::Arc<App>, tars: &[(&str, Vec<u8>)]) -> std::path:
             ""
         };
         cases += &format!(
-            "  'cp bilskirnir-e:/home/desktop/{folder} -') cat '{}/{index}.tar'{rest} ;;\n",
+            "  'cp thoric-e:/home/desktop/{folder} -') cat '{}/{index}.tar'{rest} ;;\n",
             dir.display()
         );
     }
@@ -175,7 +175,7 @@ fn docker(app: &mut std::sync::Arc<App>, tars: &[(&str, Vec<u8>)]) -> std::path:
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{dir}/calls'\ncase \"$*\" in\n{cases}  'cp - bilskirnir-e:/home/desktop') cat > '{dir}/written.tar' ;;\n  *) echo \"Error response from daemon: unexpected $*\" >&2; exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$*\" >> '{dir}/calls'\ncase \"$*\" in\n{cases}  'cp - thoric-e:/home/desktop') cat > '{dir}/written.tar' ;;\n  *) echo \"Error response from daemon: unexpected $*\" >&2; exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
     )
@@ -192,9 +192,9 @@ fn container(targets: &[&str]) -> Container {
     spec.mounts = targets.iter().map(|target| mount(target)).collect();
     Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:a".into(),
         created_at: 0,
         spec,
@@ -234,13 +234,13 @@ async fn roots_folders_above_mount_points_go_to_the_desktop_user_before_the_star
     assert_eq!(
         calls.lines().collect::<Vec<_>>(),
         [
-            "cp bilskirnir-e:/home/desktop/.config -",
-            "cp bilskirnir-e:/home/desktop/Unity -",
-            "cp bilskirnir-e:/home/desktop/Unity/Cache -",
-            "cp bilskirnir-e:/home/desktop/link -",
+            "cp thoric-e:/home/desktop/.config -",
+            "cp thoric-e:/home/desktop/Unity -",
+            "cp thoric-e:/home/desktop/Unity/Cache -",
+            "cp thoric-e:/home/desktop/link -",
             // Never `--archive`, which gives the folders the image's user: root in the images
-            // Bilskirnir builds.
-            "cp - bilskirnir-e:/home/desktop",
+            // Thoric builds.
+            "cp - thoric-e:/home/desktop",
         ]
     );
     let written = std::fs::read(dir.join("written.tar")).unwrap();
@@ -267,7 +267,7 @@ async fn nothing_is_written_when_the_desktop_user_owns_the_way() {
         .unwrap();
     assert_eq!(
         std::fs::read_to_string(dir.join("calls")).unwrap(),
-        "cp bilskirnir-e:/home/desktop/.config -\n"
+        "cp thoric-e:/home/desktop/.config -\n"
     );
     // Without a way there is nothing to read either.
     let mut app = crate::tests::app(false);
@@ -284,7 +284,7 @@ async fn nothing_is_written_when_the_desktop_user_owns_the_way() {
     assert!(
         error
             .to_string()
-            .contains("unexpected cp bilskirnir-e:/home/desktop/.config -"),
+            .contains("unexpected cp thoric-e:/home/desktop/.config -"),
         "{error}"
     );
     std::fs::remove_dir_all(dir).unwrap();

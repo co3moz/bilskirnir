@@ -290,7 +290,7 @@ export class InspectorClient {
               id: message.id,
               error: {
                 code: -32601,
-                message: `The Bilskirnir inspector does not support ${message.method}`,
+                message: `The Thoric inspector does not support ${message.method}`,
               },
             }
       )
@@ -412,7 +412,7 @@ export class InspectorClient {
       const result = (await this.request("initialize", {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "bilskirnir-inspector", version: this.deps.version },
+        clientInfo: { name: "thoric-inspector", version: this.deps.version },
       })) as Record<string, unknown>
       this.notify("notifications/initialized")
       const capabilities = isRecord(result?.capabilities) ? result.capabilities : {}

@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Every image is published to Docker Hub too, under this account with the `DOCKER_HUB_TOKEN`
-# secret. Docker Hub has no nested repositories, so a desktop image is `bilskirnir-ubuntu-xfce`
+# secret. Docker Hub has no nested repositories, so a desktop image is `thoric-ubuntu-xfce`
 # there. The catalog and the installation files keep naming GHCR.
 env:
   DOCKER_HUB_USER: co3moz
@@ -144,7 +144,7 @@ jobs:
           # The action labels the license GitHub detects, `GPL-3.0`, which drops "or later" and
           # overrides the Dockerfile's label, so each image names its license here.
           labels: |
-            org.opencontainers.image.title=Bilskirnir
+            org.opencontainers.image.title=Thoric
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=GPL-3.0-or-later
       - name: Build and publish
@@ -154,7 +154,7 @@ jobs:
           context: .
           file: core/manager/Dockerfile
           platforms: linux/amd64
-          build-args: BILSKIRNIR_RELEASE=${{ steps.names.outputs.release }}
+          build-args: THORIC_RELEASE=${{ steps.names.outputs.release }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -172,7 +172,7 @@ jobs:
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          printf '### %s\n\n```text\n%s\n```\n' 'Bilskirnir' "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+          printf '### %s\n\n```text\n%s\n```\n' 'Thoric' "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
   # Both desktop images build in one job on one builder, so the second takes the `common` stage of
   # images/desktop/Dockerfile from the first and the two publish the same layers for it, which a
@@ -352,11 +352,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the WSL distribution package
-        run: packaging/wsl/build.sh dist/bilskirnir.wsl
+        run: packaging/wsl/build.sh dist/thoric.wsl
       # The PowerShell helper goes with it: it installs and starts the package and opens it to other devices.
       - name: Attach the package and the PowerShell helper to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Bilskirnir $GITHUB_REF_NAME"
-          gh release upload "$GITHUB_REF_NAME" dist/bilskirnir.wsl packaging/windows/bilskirnir.ps1 --clobber
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Thoric $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/thoric.wsl packaging/windows/thoric.ps1 --clobber

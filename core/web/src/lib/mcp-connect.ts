@@ -1,4 +1,4 @@
-// How MCP clients add an endpoint of this manager, or Bilskirnir MCP at `/mcp`: a link, a command
+// How MCP clients add an endpoint of this manager, or Thoric MCP at `/mcp`: a link, a command
 // or a settings file for each client, made in the browser from the URL and the token typed into
 // the dialog. Nothing here reaches the manager. What a client writes is in its own format and
 // stays English, like everything else sent to another program.
@@ -6,7 +6,7 @@ import type { CodeLanguage } from "./highlight"
 
 /** What a client connects to. */
 export type ConnectTarget = {
-  /** The name the client lists the server by: the endpoint's, or `bilskirnir` for `/mcp`. */
+  /** The name the client lists the server by: the endpoint's, or `thoric` for `/mcp`. */
   name: string
   /** Where the dashboard reaches it, such as `http://localhost:8080/mcp/chrome-dev`. */
   url: string
@@ -110,13 +110,13 @@ export function wslBridge(target: ConnectTarget) {
     command: "wsl.exe",
     args: [
       "-d",
-      "Bilskirnir",
+      "Thoric",
       "--",
       "docker",
       "exec",
       "-i",
       ...inside,
-      "bilskirnir-manager",
+      "thoric-manager",
       "python3",
       "/app/mcp_bridge.py",
     ],

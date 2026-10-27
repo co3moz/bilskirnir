@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Register MCP servers of this desktop with Bilskirnir.
+"""Register MCP servers of this desktop with Thoric.
 
-Bilskirnir starts a registered server as the desktop user when an agent needs it, and offers its
+Thoric starts a registered server as the desktop user when an agent needs it, and offers its
 tools on the MCP endpoints that cover this container. The image's own servers are in
-/etc/bilskirnir/mcp.d; this command manages the desktop user's, in ~/.config/bilskirnir/mcp.
+/etc/thoric/mcp.d; this command manages the desktop user's, in ~/.config/thoric/mcp.
 The tray's MCP servers window runs this command too, and shows the command line it runs.
 """
 import argparse
@@ -12,22 +12,22 @@ import os
 import re
 import sys
 
-IMAGE = "/etc/bilskirnir/mcp.d"
-FOLDER = "/home/desktop/.config/bilskirnir/mcp"
+IMAGE = "/etc/thoric/mcp.d"
+FOLDER = "/home/desktop/.config/thoric/mcp"
 # What the manager last said about these servers and the endpoints that reach this desktop. It is
 # there only while the manager watches the desktop.
-STATUS = "/run/desktop/bilskirnir/mcp-status.json"
+STATUS = "/run/desktop/thoric/mcp-status.json"
 STATUS_LIMIT = 16 << 20
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 # The manager checks a declaration again; these catch the usual mistakes before it is written.
 LOOPBACK = re.compile(r"^https?://(?:127\.0\.0\.1|localhost|\[::1\]):(\d{1,5}|\$\{[^}/]+\})(?:/\S*)?$")
 VARIABLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 HEADER = re.compile(r"^[A-Za-z0-9-]{1,64}$")
-USAGE = """bilskirnir-mcp add NAME [--description TEXT] [--env KEY=VALUE]... [--cwd DIR] -- COMMAND [ARG]...
-       bilskirnir-mcp add NAME --url http://127.0.0.1:PORT/mcp [--header 'Name: value']... [--description TEXT]
-       bilskirnir-mcp remove NAME
-       bilskirnir-mcp list [--json]
-       bilskirnir-mcp show NAME"""
+USAGE = """thoric-mcp add NAME [--description TEXT] [--env KEY=VALUE]... [--cwd DIR] -- COMMAND [ARG]...
+       thoric-mcp add NAME --url http://127.0.0.1:PORT/mcp [--header 'Name: value']... [--description TEXT]
+       thoric-mcp remove NAME
+       thoric-mcp list [--json]
+       thoric-mcp show NAME"""
 
 
 def folder(path, create):
@@ -116,7 +116,7 @@ def add(arguments, target):
             raise
     finally:
         os.close(directory)
-    print("Registered %s. Bilskirnir reads its tools within a few seconds." % arguments.name)
+    print("Registered %s. Thoric reads its tools within a few seconds." % arguments.name)
 
 
 def remove(arguments, target):
@@ -226,7 +226,7 @@ def show(arguments, image, target):
 
 
 def main(argv, image=IMAGE, target=FOLDER, uid=None, status_path=STATUS):
-    parser = argparse.ArgumentParser(prog="bilskirnir-mcp", usage=USAGE, description=__doc__)
+    parser = argparse.ArgumentParser(prog="thoric-mcp", usage=USAGE, description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
     adding = commands.add_parser("add")
     adding.add_argument("name")
@@ -249,7 +249,7 @@ def main(argv, image=IMAGE, target=FOLDER, uid=None, status_path=STATUS):
     arguments = parser.parse_args(argv)
     arguments.command = program
     if (os.geteuid() if uid is None else uid) == 0 and arguments.action in ("add", "remove"):
-        raise ValueError("Run bilskirnir-mcp as the desktop user; the servers run as that user")
+        raise ValueError("Run thoric-mcp as the desktop user; the servers run as that user")
     if arguments.action == "add":
         add(arguments, target)
     elif arguments.action == "remove":
@@ -264,8 +264,8 @@ if __name__ == "__main__":
     try:
         main(sys.argv[1:])
     except FileNotFoundError:
-        sys.stderr.write("bilskirnir-mcp: no such server\n")
+        sys.stderr.write("thoric-mcp: no such server\n")
         sys.exit(1)
     except (OSError, ValueError) as error:
-        sys.stderr.write("bilskirnir-mcp: %s\n" % error)
+        sys.stderr.write("thoric-mcp: %s\n" % error)
         sys.exit(1)

@@ -16,7 +16,7 @@ use std::{sync::Arc, time::Duration};
 
 const DAEMON: &str = include_str!("../helpers/gamepad_daemon.py");
 const CONTROL: &str = include_str!("../helpers/gamepad_control.py");
-const DIRECTORY: &str = "/tmp/bilskirnir-gamepad";
+const DIRECTORY: &str = "/tmp/thoric-gamepad";
 const BUTTONS: [&str; 11] = [
     "a", "b", "x", "y", "lb", "rb", "back", "start", "guide", "ls", "rs",
 ];

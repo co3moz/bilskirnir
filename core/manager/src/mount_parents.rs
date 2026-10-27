@@ -130,7 +130,7 @@ impl App {
             return Ok(());
         }
         // Docker gives the folders the owner the archive names. Not with `--archive`: that gives
-        // them the image's user, and images Bilskirnir builds are left with root.
+        // them the image's user, and images Thoric builds are left with root.
         let args = ["cp".into(), "-".into(), format!("{}:{HOME}", env.container)];
         let out = capture_input(
             self.command(&args),

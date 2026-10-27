@@ -116,7 +116,7 @@ impl VolumeWriter {
 
 impl App {
     /// Start tar reading the volume `name` for a backup: one a container mounts, also when
-    /// `VOLUME_FILTER` leaves it out, or one Bilskirnir created, never the manager's own. The
+    /// `VOLUME_FILTER` leaves it out, or one Thoric created, never the manager's own. The
     /// volume's lock is held until Docker has the helper, as for an export.
     pub(crate) async fn read_volume_files(&self, name: &str) -> anyhow::Result<VolumeReader> {
         let _guard = self

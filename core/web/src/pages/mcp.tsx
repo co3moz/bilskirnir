@@ -520,7 +520,7 @@ function ServerRow({ server }: { server: DesktopServer }) {
   )
 }
 
-/** Reads a container's servers again from its desktop, such as ones added with bilskirnir-mcp. */
+/** Reads a container's servers again from its desktop, such as ones added with thoric-mcp. */
 function RereadServers({ id, name }: { id: string; name: string }) {
   const [busy, setBusy] = React.useState(false)
   return (

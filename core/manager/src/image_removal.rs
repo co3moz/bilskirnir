@@ -1,7 +1,7 @@
-//! Deleting an image. A saved image goes with its record: Docker removes the tag Bilskirnir gave
+//! Deleting an image. A saved image goes with its record: Docker removes the tag Thoric gave
 //! it, and the image itself once no other tag names it and no other image or container uses it.
 //! A catalog image loses only its download and stays listed, to be downloaded again. An image
-//! registered from the Docker host (kind `import`) was there before Bilskirnir, so only its record
+//! registered from the Docker host (kind `import`) was there before Thoric, so only its record
 //! goes. Never while a container record starts from it, unless another saved image's tag keeps
 //! the same Docker image: a reset, a retry and a recreation create the container from its source
 //! image again. Nothing is forced and nothing is pruned.
@@ -76,7 +76,7 @@ impl App {
             if !shares_image(&record, &records) {
                 self.refuse_used(&record.image_id)?;
             }
-            // Bilskirnir's own tag names the image. Once it is gone or names another image, the
+            // Thoric's own tag names the image. Once it is gone or names another image, the
             // image ID does, which Docker refuses while another tag still names it.
             let tagged = self
                 .inspect("image", &record.reference)
@@ -95,7 +95,7 @@ impl App {
 
     /// Drop the tags of snapshots and imports that got no record, which a manager stopped
     /// between tagging the image and saving the record leaves behind. Run at startup, before
-    /// any job runs, so a tag whose record is still to come is never seen. Only Bilskirnir's
+    /// any job runs, so a tag whose record is still to come is never seen. Only Thoric's
     /// own repositories are looked at, and the image goes with its last tag, which is this
     /// orphan's own.
     pub(crate) async fn drop_orphan_tags(&self) -> anyhow::Result<Vec<String>> {
@@ -105,7 +105,7 @@ impl App {
             .map(|record| record.reference.as_str())
             .collect();
         let mut dropped = Vec::new();
-        for repository in ["bilskirnir/snapshot", "bilskirnir/imported"] {
+        for repository in ["thoric/snapshot", "thoric/imported"] {
             let listed = self
                 .docker(&[
                     "image",

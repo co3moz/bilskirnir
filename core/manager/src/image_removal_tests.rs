@@ -13,9 +13,9 @@ fn container(id: &str, source: &str) -> Container {
         serde_json::from_value(json!({"name": format!("Desktop {id}"), "image": source})).unwrap();
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: source.into(),
         created_at: 0,
         spec,
@@ -75,10 +75,10 @@ fn the_containers_that_start_from_an_image_are_named_with_what_frees_it() {
 fn only_a_deleted_line_means_the_image_went() {
     // The image's last tag: Docker deletes the image and its layers no other image has.
     assert!(deleted_image(
-        "Untagged: bilskirnir/custom:a\nDeleted: sha256:c0ffee\n"
+        "Untagged: thoric/custom:a\nDeleted: sha256:c0ffee\n"
     ));
     // Another tag, a child image or a container still holds it.
-    assert!(!deleted_image("Untagged: bilskirnir/custom:a\n"));
+    assert!(!deleted_image("Untagged: thoric/custom:a\n"));
     assert!(!deleted_image(""));
 }
 
@@ -119,7 +119,7 @@ fn request(id: &str) -> Request<Body> {
         .method("DELETE")
         .uri(format!("/api/images/{id}"))
         .header("host", "localhost:8080")
-        .header("x-bilskirnir-request", "1")
+        .header("x-thoric-request", "1")
         .body(Body::empty())
         .unwrap()
 }
@@ -172,7 +172,7 @@ async fn a_busy_image_is_refused_instead_of_waited_for() {
         .put(
             "image",
             "a",
-            &record("a", "build", "sha256:a", "bilskirnir/custom:a"),
+            &record("a", "build", "sha256:a", "thoric/custom:a"),
         )
         .unwrap();
     // A download or a build of the image holds this lock for minutes.
@@ -195,7 +195,7 @@ async fn a_busy_image_is_refused_instead_of_waited_for() {
 fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-image-removal-{}",
+        "thoric-image-removal-{}",
         uuid::Uuid::new_v4().simple()
     ));
     std::fs::create_dir_all(&dir).unwrap();
@@ -229,44 +229,44 @@ fn inspected(reference: &str, id: &str) -> String {
 #[tokio::test]
 async fn a_saved_image_goes_by_its_own_tag_unless_a_container_starts_from_it() {
     let mut cases = [
-        ("bilskirnir/custom:used", "sha256:used"),
-        ("bilskirnir/custom:free", "sha256:free"),
-        ("bilskirnir/snapshot:shared", "sha256:shared"),
+        ("thoric/custom:used", "sha256:used"),
+        ("thoric/custom:free", "sha256:free"),
+        ("thoric/snapshot:shared", "sha256:shared"),
         // A tag that someone moved to another image no longer names this record's.
-        ("bilskirnir/snapshot:moved", "sha256:other"),
-        ("bilskirnir/imported:held", "sha256:held"),
-        ("bilskirnir/imported:copy", "sha256:used"),
-        ("bilskirnir/custom:parent", "sha256:parent"),
+        ("thoric/snapshot:moved", "sha256:other"),
+        ("thoric/imported:held", "sha256:held"),
+        ("thoric/imported:copy", "sha256:used"),
+        ("thoric/custom:parent", "sha256:parent"),
         // The containerd store keeps an image a snapshot names after saying it deleted it.
         ("sha256:parent", "sha256:parent"),
     ]
     .map(|(reference, id)| inspected(reference, id))
     .concat();
     cases.push_str(concat!(
-        "  'image rm bilskirnir/custom:parent') printf 'Untagged: bilskirnir/custom:parent\\nDeleted: sha256:parent\\n' ;;\n",
-        "  'image rm bilskirnir/imported:copy') echo 'Untagged: bilskirnir/imported:copy' ;;\n",
-        "  'image rm bilskirnir/custom:free') printf 'Untagged: bilskirnir/custom:free\\nDeleted: sha256:free\\n' ;;\n",
-        "  'image rm bilskirnir/snapshot:shared') echo 'Untagged: bilskirnir/snapshot:shared' ;;\n",
+        "  'image rm thoric/custom:parent') printf 'Untagged: thoric/custom:parent\\nDeleted: sha256:parent\\n' ;;\n",
+        "  'image rm thoric/imported:copy') echo 'Untagged: thoric/imported:copy' ;;\n",
+        "  'image rm thoric/custom:free') printf 'Untagged: thoric/custom:free\\nDeleted: sha256:free\\n' ;;\n",
+        "  'image rm thoric/snapshot:shared') echo 'Untagged: thoric/snapshot:shared' ;;\n",
         "  'image rm sha256:moved') printf 'Deleted: sha256:moved\\n' ;;\n",
         "  'image rm sha256:gone') echo 'Error response from daemon: No such image: sha256:gone' >&2; exit 1 ;;\n",
-        "  'image rm bilskirnir/imported:held') echo 'Error response from daemon: conflict: unable to remove repository reference \"bilskirnir/imported:held\" (must force) - container 1234 is using its referenced image held' >&2; exit 1 ;;\n",
+        "  'image rm thoric/imported:held') echo 'Error response from daemon: conflict: unable to remove repository reference \"thoric/imported:held\" (must force) - container 1234 is using its referenced image held' >&2; exit 1 ;;\n",
     ));
     let (app, dir) = fake_docker(&cases);
     for (id, kind, reference) in [
-        ("used", "build", "bilskirnir/custom:used"),
-        ("free", "build", "bilskirnir/custom:free"),
-        ("shared", "snapshot", "bilskirnir/snapshot:shared"),
-        ("moved", "snapshot", "bilskirnir/snapshot:moved"),
-        ("gone", "snapshot", "bilskirnir/snapshot:gone"),
-        ("held", "archive", "bilskirnir/imported:held"),
+        ("used", "build", "thoric/custom:used"),
+        ("free", "build", "thoric/custom:free"),
+        ("shared", "snapshot", "thoric/snapshot:shared"),
+        ("moved", "snapshot", "thoric/snapshot:moved"),
+        ("gone", "snapshot", "thoric/snapshot:gone"),
+        ("held", "archive", "thoric/imported:held"),
         ("host", "import", "someone/desktop:1"),
-        ("parent", "build", "bilskirnir/custom:parent"),
+        ("parent", "build", "thoric/custom:parent"),
     ] {
         let image = record(id, kind, &format!("sha256:{id}"), reference);
         app.db.put("image", id, &image).unwrap();
     }
     // An archive of the image `used`, imported on the host it came from.
-    let copy = record("copy", "archive", "sha256:used", "bilskirnir/imported:copy");
+    let copy = record("copy", "archive", "sha256:used", "thoric/imported:copy");
     app.db.put("image", "copy", &copy).unwrap();
     app.db
         .put(CONTAINERS, "a", &container("a", "sha256:used"))
@@ -288,7 +288,7 @@ async fn a_saved_image_goes_by_its_own_tag_unless_a_container_starts_from_it() {
         body["error"],
         "\"Desktop a\" was created from this image and needs it to reset; delete that container first"
     );
-    assert_eq!(removals(&dir), ["image rm bilskirnir/imported:copy"]);
+    assert_eq!(removals(&dir), ["image rm thoric/imported:copy"]);
 
     // Docker's refusal keeps the record.
     let (status, body) = answer(app.clone(), "held").await;
@@ -303,7 +303,7 @@ async fn a_saved_image_goes_by_its_own_tag_unless_a_container_starts_from_it() {
 
     for (id, removed) in [
         ("free", true),
-        // Another tag names the image, so only Bilskirnir's own tag goes.
+        // Another tag names the image, so only Thoric's own tag goes.
         ("shared", false),
         ("moved", true),
         // The image went already; the record is all that is left.
@@ -322,13 +322,13 @@ async fn a_saved_image_goes_by_its_own_tag_unless_a_container_starts_from_it() {
     assert_eq!(
         removals(&dir),
         [
-            "image rm bilskirnir/imported:copy",
-            "image rm bilskirnir/imported:held",
-            "image rm bilskirnir/custom:free",
-            "image rm bilskirnir/snapshot:shared",
+            "image rm thoric/imported:copy",
+            "image rm thoric/imported:held",
+            "image rm thoric/custom:free",
+            "image rm thoric/snapshot:shared",
             "image rm sha256:moved",
             "image rm sha256:gone",
-            "image rm bilskirnir/custom:parent",
+            "image rm thoric/custom:parent",
         ]
     );
     let mut left = app
@@ -385,12 +385,10 @@ async fn a_catalog_image_loses_only_its_download() {
 #[tokio::test]
 async fn tags_without_a_record_are_dropped_at_startup() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-orphans-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("thoric-orphans-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
-    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'image ls --format {{.Repository}}:{{.Tag}} bilskirnir/snapshot') printf 'bilskirnir/snapshot:kept\nbilskirnir/snapshot:lost\nbilskirnir/snapshot:<none>\n' ;;\n  'image ls --format {{.Repository}}:{{.Tag}} bilskirnir/imported') printf 'bilskirnir/imported:orphan\n' ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n"
+    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/snapshot') printf 'thoric/snapshot:kept\nthoric/snapshot:lost\nthoric/snapshot:<none>\n' ;;\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/imported') printf 'thoric/imported:orphan\n' ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n"
         .replace("@DIR@", &dir.display().to_string());
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
@@ -401,24 +399,16 @@ async fn tags_without_a_record_are_dropped_at_startup() {
         .put(
             "image",
             "kept",
-            &record(
-                "kept",
-                "snapshot",
-                "sha256:kept",
-                "bilskirnir/snapshot:kept",
-            ),
+            &record("kept", "snapshot", "sha256:kept", "thoric/snapshot:kept"),
         )
         .unwrap();
     let dropped = app.drop_orphan_tags().await.unwrap();
-    assert_eq!(
-        dropped,
-        ["bilskirnir/snapshot:lost", "bilskirnir/imported:orphan"]
-    );
+    assert_eq!(dropped, ["thoric/snapshot:lost", "thoric/imported:orphan"]);
     assert_eq!(
         removals(&dir),
         [
-            "image rm bilskirnir/snapshot:lost",
-            "image rm bilskirnir/imported:orphan"
+            "image rm thoric/snapshot:lost",
+            "image rm thoric/imported:orphan"
         ]
     );
     std::fs::remove_dir_all(&dir).unwrap();

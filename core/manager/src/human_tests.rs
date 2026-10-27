@@ -13,9 +13,9 @@ use tower::ServiceExt;
 fn container(id: &str, name: &str) -> Container {
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(json!({"name": name, "image": "sha256:desktop"})).unwrap(),
@@ -65,8 +65,8 @@ async fn dashboard(
         .method(method)
         .uri(uri)
         .header("host", "localhost:8080")
-        .header("cookie", "bilskirnir_session=person")
-        .header("x-bilskirnir-request", "1")
+        .header("cookie", "thoric_session=person")
+        .header("x-thoric-request", "1")
         .header("content-type", "application/json")
         .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
         .unwrap();

@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 
 const RUNNER: &str = include_str!("../helpers/terminal_runner.py");
 const CONTROL: &str = include_str!("../helpers/terminal_control.py");
-pub const ROOT: &str = "/tmp/bilskirnir-terminals";
+pub const ROOT: &str = "/tmp/thoric-terminals";
 
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

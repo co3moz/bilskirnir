@@ -12,9 +12,9 @@ use serde_json::json;
 fn container(id: &str, name: &str) -> Container {
     Container {
         id: id.into(),
-        container: format!("bilskirnir-{id}"),
-        private_network: format!("bilskirnir-{id}-private"),
-        egress_network: format!("bilskirnir-{id}-egress"),
+        container: format!("thoric-{id}"),
+        private_network: format!("thoric-{id}-private"),
+        egress_network: format!("thoric-{id}-egress"),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(json!({"name": name, "image": "example/desktop:1"})).unwrap(),
@@ -119,7 +119,7 @@ async fn every_call_on_mcp_is_recorded_with_its_caller_container_and_outcome() {
         (unknown.kind.as_str(), unknown.outcome.as_str()),
         ("change", "refused")
     );
-    assert_eq!(unknown.error.as_deref(), Some("Unknown Bilskirnir tool"));
+    assert_eq!(unknown.error.as_deref(), Some("Unknown Thoric tool"));
     // An argument the schema refuses is a refusal of a destructive tool.
     let refused = find(&rows, "delete_volume");
     assert_eq!(

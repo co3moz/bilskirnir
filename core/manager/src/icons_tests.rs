@@ -11,7 +11,7 @@ fn record(id: &str, icon: Option<Icon>) -> ImageRecord {
         id: id.into(),
         name: format!("{id} image"),
         image_id: format!("sha256:{id}"),
-        reference: format!("bilskirnir/custom:{id}"),
+        reference: format!("thoric/custom:{id}"),
         parent_image_id: None,
         source_container: None,
         kind: "build".into(),

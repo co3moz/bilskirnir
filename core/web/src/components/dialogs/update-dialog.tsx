@@ -19,7 +19,7 @@ import { followUpdate } from "@/lib/update"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 
-/** Asks before the WSL package runs `bilskirnir update`, which replaces the manager. */
+/** Asks before the WSL package runs `thoric update`, which replaces the manager. */
 export function UpdateDialog(props: DialogProps) {
   const update = useUpdate().data
   const version = update?.newest ?? ""

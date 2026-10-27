@@ -1,5 +1,5 @@
-# Root filesystem for the Bilskirnir WSL distribution: Ubuntu 24.04 with Docker Engine, Compose,
-# Buildx, the NVIDIA Container Toolkit and the Bilskirnir installation files. The image is
+# Root filesystem for the Thoric WSL distribution: Ubuntu 24.04 with Docker Engine, Compose,
+# Buildx, the NVIDIA Container Toolkit and the Thoric installation files. The image is
 # exported with `packaging/wsl/build.sh` into a `.wsl` package that `wsl --install --from-file`
 # accepts.
 FROM ubuntu:24.04
@@ -27,51 +27,51 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 RUN systemctl enable docker containerd \
     && systemctl mask systemd-firstboot.service kmod-static-nodes.service nftables.service \
     && userdel -r ubuntu \
-    && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/bilskirnir \
-    && chmod 0440 /etc/sudoers.d/bilskirnir \
-    && install -d -m 0755 /opt/bilskirnir /opt/bilskirnir/deploy /opt/bilskirnir/update /usr/lib/wsl /usr/share/doc/bilskirnir /etc/docker
+    && printf '%%sudo ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/thoric \
+    && chmod 0440 /etc/sudoers.d/thoric \
+    && install -d -m 0755 /opt/thoric /opt/thoric/deploy /opt/thoric/update /usr/lib/wsl /usr/share/doc/thoric /etc/docker
 # Every COPY names its mode, since a checkout on a Windows drive makes each file 0777. --chmod also
 # applies to a directory the COPY creates, so each destination directory exists beforehand.
 COPY --chmod=0644 packaging/wsl/daemon.json /etc/docker/daemon.json
-COPY --chmod=0644 compose.ghcr.yml /opt/bilskirnir/compose.yml
-COPY --chmod=0644 .env.example /opt/bilskirnir/.env.example
-COPY --chmod=0644 deploy/Caddyfile /opt/bilskirnir/deploy/Caddyfile
+COPY --chmod=0644 compose.ghcr.yml /opt/thoric/compose.yml
+COPY --chmod=0644 .env.example /opt/thoric/.env.example
+COPY --chmod=0644 deploy/Caddyfile /opt/thoric/deploy/Caddyfile
 COPY --chmod=0644 packaging/wsl/wsl.conf /etc/wsl.conf
 COPY --chmod=0644 packaging/wsl/wsl-distribution.conf /etc/wsl-distribution.conf
 COPY --chmod=0755 packaging/wsl/oobe.sh /usr/lib/wsl/oobe.sh
 COPY --chmod=0755 packaging/wsl/keepalive.sh /usr/lib/wsl/keepalive.sh
 COPY --chmod=0755 packaging/wsl/firewall-watch.sh /usr/lib/wsl/firewall-watch.sh
-COPY --chmod=0644 packaging/wsl/bilskirnir-firewall.service /etc/systemd/system/bilskirnir-firewall.service
-COPY --chmod=0644 packaging/wsl/bilskirnir-update.path /etc/systemd/system/bilskirnir-update.path
-COPY --chmod=0644 packaging/wsl/bilskirnir-update.service /etc/systemd/system/bilskirnir-update.service
-COPY --chmod=0644 packaging/wsl/bilskirnir-settings.path /etc/systemd/system/bilskirnir-settings.path
-COPY --chmod=0644 packaging/wsl/bilskirnir-settings.service /etc/systemd/system/bilskirnir-settings.service
-COPY --chmod=0755 packaging/wsl/bilskirnir /usr/local/bin/bilskirnir
-COPY --chmod=0644 packaging/wsl/bilskirnir-completion.bash /usr/share/bash-completion/completions/bilskirnir
-# b8r is a short name for the command, with the same completion. Both are links by name, so the
-# command an update installs answers to b8r as well.
-RUN ln -s bilskirnir /usr/local/bin/b8r \
-    && ln -s bilskirnir /usr/share/bash-completion/completions/b8r
-COPY --chmod=0644 LICENSE /usr/share/doc/bilskirnir/LICENSE
+COPY --chmod=0644 packaging/wsl/thoric-firewall.service /etc/systemd/system/thoric-firewall.service
+COPY --chmod=0644 packaging/wsl/thoric-update.path /etc/systemd/system/thoric-update.path
+COPY --chmod=0644 packaging/wsl/thoric-update.service /etc/systemd/system/thoric-update.service
+COPY --chmod=0644 packaging/wsl/thoric-settings.path /etc/systemd/system/thoric-settings.path
+COPY --chmod=0644 packaging/wsl/thoric-settings.service /etc/systemd/system/thoric-settings.service
+COPY --chmod=0755 packaging/wsl/thoric /usr/local/bin/thoric
+COPY --chmod=0644 packaging/wsl/thoric-completion.bash /usr/share/bash-completion/completions/thoric
+# thor is a short name for the command, with the same completion. Both are links by name, so the
+# command an update installs answers to thor as well.
+RUN ln -s thoric /usr/local/bin/thor \
+    && ln -s thoric /usr/share/bash-completion/completions/thor
+COPY --chmod=0644 LICENSE /usr/share/doc/thoric/LICENSE
 # A package installs the manager release it was built for, however many newer ones exist by then;
-# `bilskirnir update` moves an installation forward. The first start copies this file to .env.
+# `thoric update` moves an installation forward. The first start copies this file to .env.
 # The checksums let an update tell installation files edited by hand from the ones shipped here, and
 # the command records its release, so an update installs the command of a newer one only.
-ARG BILSKIRNIR_VERSION
-RUN test -n "$BILSKIRNIR_VERSION" \
-    && sed -i "s|^MANAGER_IMAGE=.*|MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:$BILSKIRNIR_VERSION|" /opt/bilskirnir/.env.example \
-    && grep -qFx "MANAGER_IMAGE=ghcr.io/co3moz/bilskirnir:$BILSKIRNIR_VERSION" /opt/bilskirnir/.env.example \
-    && sed -i "s|^CLI_VERSION=.*|CLI_VERSION=$BILSKIRNIR_VERSION|" /usr/local/bin/bilskirnir \
-    && grep -qFx "CLI_VERSION=$BILSKIRNIR_VERSION" /usr/local/bin/bilskirnir \
-    && cd /opt/bilskirnir && sha256sum compose.yml deploy/Caddyfile .env.example > .shipped.sha256
-# The package level counts changes to the package's own files that the bilskirnir command relies on.
+ARG THORIC_VERSION
+RUN test -n "$THORIC_VERSION" \
+    && sed -i "s|^MANAGER_IMAGE=.*|MANAGER_IMAGE=ghcr.io/co3moz/thoric:$THORIC_VERSION|" /opt/thoric/.env.example \
+    && grep -qFx "MANAGER_IMAGE=ghcr.io/co3moz/thoric:$THORIC_VERSION" /opt/thoric/.env.example \
+    && sed -i "s|^CLI_VERSION=.*|CLI_VERSION=$THORIC_VERSION|" /usr/local/bin/thoric \
+    && grep -qFx "CLI_VERSION=$THORIC_VERSION" /usr/local/bin/thoric \
+    && cd /opt/thoric && sha256sum compose.yml deploy/Caddyfile .env.example > .shipped.sha256
+# The package level counts changes to the package's own files that the thoric command relies on.
 # An update installs the command of a newer release only when its NEEDS_PACKAGE is at most this level,
 # so a change here that the command starts to rely on raises both. The update and settings units
 # rely on the command, not the other way round, and an update installs them where they are
 # missing. 'watched' and 'settings-watched' tell the manager that the path units take its update
 # requests and its settings changes.
 RUN dockerd --validate --config-file /etc/docker/daemon.json \
-    && systemctl enable bilskirnir-firewall.service bilskirnir-update.path bilskirnir-settings.path \
-    && touch /opt/bilskirnir/update/watched /opt/bilskirnir/update/settings-watched \
+    && systemctl enable thoric-firewall.service thoric-update.path thoric-settings.path \
+    && touch /opt/thoric/update/watched /opt/thoric/update/settings-watched \
     && printf '1\n' > /usr/lib/wsl/package-level \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id

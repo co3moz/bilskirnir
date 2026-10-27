@@ -1,5 +1,5 @@
 //! When the Settings page may change settings, how a change is checked before anything
-//! restarts, and how its job follows `bilskirnir apply-settings` through the folder the WSL
+//! restarts, and how its job follows `thoric apply-settings` through the folder the WSL
 //! package watches, also once the manager it started from has been replaced.
 use super::*;
 use crate::tests::DESKTOP_CONTEXT;
@@ -14,10 +14,8 @@ const FAST: Timing = Timing {
 };
 
 fn folder() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-settings-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("thoric-settings-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -48,7 +46,7 @@ async fn request(app: Arc<App>, method: &str, body: Option<Value>) -> (StatusCod
         .method(method)
         .uri("/api/configuration")
         .header("host", "localhost:8080")
-        .header("x-bilskirnir-request", "1");
+        .header("x-thoric-request", "1");
     if body.is_some() {
         builder = builder.header("content-type", "application/json");
     }
@@ -156,7 +154,7 @@ async fn a_change_is_checked_with_the_parser_the_manager_starts_with() {
         "IMAGE_ARCHIVE_MAX_MB": "lots",
         "SECURE_COOKIE": "yes",
         "TEMPLATES_URL": "ftp://example.com/index.json",
-        "VOLUME_FILTER": "bilskirnir.managed=false",
+        "VOLUME_FILTER": "thoric.managed=false",
         "DESKTOP_IMAGE": "Not An Image",
         "GPU_ADAPTER": "$HOME",
         "ALLOWED_HOSTS": " desktop.lan",
@@ -174,8 +172,8 @@ async fn a_change_is_checked_with_the_parser_the_manager_starts_with() {
         ("DESKTOP_IMAGE", "DESKTOP_IMAGE"),
         ("GPU_ADAPTER", "without quotes, $"),
         ("ALLOWED_HOSTS", "spaces at either end"),
-        ("ADMIN_PASSWORD", "bilskirnir settings"),
-        ("MANAGER_CONTAINER", "bilskirnir settings"),
+        ("ADMIN_PASSWORD", "thoric settings"),
+        ("MANAGER_CONTAINER", "thoric settings"),
     ] {
         let error = errors[key]
             .as_str()
@@ -360,22 +358,22 @@ fn the_package_takes_exactly_the_editable_settings_through_these_names() {
         )
         .unwrap()
     };
-    let cli = read("packaging/wsl/bilskirnir");
+    let cli = read("packaging/wsl/thoric");
     // The list the package's command accepts is the one the page edits.
     let line = cli
         .lines()
         .find(|line| line.starts_with("DASHBOARD_SETTINGS=("))
-        .expect("DASHBOARD_SETTINGS in packaging/wsl/bilskirnir");
+        .expect("DASHBOARD_SETTINGS in packaging/wsl/thoric");
     let accepted: Vec<&str> = line["DASHBOARD_SETTINGS=(".len()..line.len() - 1]
         .split_whitespace()
         .collect();
     assert_eq!(accepted, super::super::EDITABLE);
-    let folder = "/opt/bilskirnir/update";
+    let folder = "/opt/thoric/update";
     assert!(
-        read("packaging/wsl/bilskirnir-settings.path")
+        read("packaging/wsl/thoric-settings.path")
             .contains(&format!("\nPathExists={folder}/{SETTINGS_REQUEST}\n"))
     );
-    let service = read("packaging/wsl/bilskirnir-settings.service");
+    let service = read("packaging/wsl/thoric-settings.service");
     for written in [
         format!(" {folder}/{SETTINGS_REQUEST} {folder}/{SETTINGS_STARTED}\n"),
         format!(" apply-settings {folder}/{SETTINGS_STARTED} >{folder}/{SETTINGS_LOG} 2>&1'"),

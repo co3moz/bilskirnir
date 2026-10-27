@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """This desktop's MCP servers in the panel's tray, and a window to see and change them.
 
-The tray shows what `bilskirnir-mcp list --json` reports: every server the image or the desktop
-user declares, its state and tools as Bilskirnir last read them, and the endpoints that reach this
-desktop. It changes servers only by running `bilskirnir-mcp add` and `remove`, and shows that
+The tray shows what `thoric-mcp list --json` reports: every server the image or the desktop
+user declares, its state and tools as Thoric last read them, and the endpoints that reach this
+desktop. It changes servers only by running `thoric-mcp add` and `remove`, and shows that
 command line before it runs it, so whatever is done here can be done from a terminal or a script.
 """
 import json
@@ -13,14 +13,14 @@ import shlex
 import subprocess
 import sys
 
-COMMAND = "bilskirnir-mcp"
+COMMAND = "thoric-mcp"
 # The declarations and the manager's report; a change in any of these folders is read again.
-WATCHED = ("/etc/bilskirnir/mcp.d", "/home/desktop/.config/bilskirnir/mcp", "/run/desktop/bilskirnir")
+WATCHED = ("/etc/thoric/mcp.d", "/home/desktop/.config/thoric/mcp", "/run/desktop/thoric")
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
-APPLICATION_ID = "io.github.co3moz.Bilskirnir.McpServers"
-ICON = "bilskirnir-mcp"
-TRAY_ICON = "bilskirnir-mcp-symbolic"
-TRAY_ICON_ERROR = "bilskirnir-mcp-error-symbolic"
+APPLICATION_ID = "io.github.co3moz.Thoric.McpServers"
+ICON = "thoric-mcp"
+TRAY_ICON = "thoric-mcp-symbolic"
+TRAY_ICON_ERROR = "thoric-mcp-error-symbolic"
 TRAY_ICONS = "/usr/local/share/icons/hicolor/symbolic/apps"
 POLL_SECONDS = 2
 SCOPES = {"view": "View", "input": "Input", "applications": "Applications", "files_read": "Read files",
@@ -64,7 +64,7 @@ def signature(paths=WATCHED):
 
 
 def load(run=subprocess.run):
-    """What `bilskirnir-mcp list --json` reports."""
+    """What `thoric-mcp list --json` reports."""
     result = run([COMMAND, "list", "--json"], capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
         raise ValueError(result.stderr.strip() or COMMAND + " list failed")
@@ -75,7 +75,7 @@ def load(run=subprocess.run):
 
 
 def effective(document):
-    """One row per server, as Bilskirnir uses it: the desktop user's declaration of a name
+    """One row per server, as Thoric uses it: the desktop user's declaration of a name
     replaces the image's, which the row keeps as `image`."""
     entries = [entry for entry in document.get("servers") or [] if isinstance(entry, dict)]
     images = {entry.get("name"): entry for entry in entries if entry.get("source") == "image"}
@@ -105,7 +105,7 @@ def state(row, watched):
     if "error" in row:
         return "error", "Unreadable"
     if watched:
-        return "pending", "Waiting for Bilskirnir"
+        return "pending", "Waiting for Thoric"
     return "unknown", "Not checked"
 
 
@@ -149,7 +149,7 @@ def command_text(argv):
 
 
 def add_command(form):
-    """The `bilskirnir-mcp add` command line of a form, or a ValueError that says what to fix.
+    """The `thoric-mcp add` command line of a form, or a ValueError that says what to fix.
     The command checks the declaration again before it writes it."""
     name = form.get("name", "").strip()
     if not NAME.match(name):
@@ -255,7 +255,7 @@ def headed():
 
 class Editor:
     """The dialog that adds a server, edits the desktop user's or replaces the image's, by running
-    the `bilskirnir-mcp add` command line it shows."""
+    the `thoric-mcp add` command line it shows."""
 
     def __init__(self, parent, form, title, notice="", fixed_name=False):
         # The desktop's gtk-dialogs-use-header setting places the buttons, as in its own dialogs.
@@ -425,7 +425,7 @@ class Editor:
 
 
 def execute(argv):
-    """Run a bilskirnir-mcp command line; None when it worked, or what it said went wrong."""
+    """Run a thoric-mcp command line; None when it worked, or what it said went wrong."""
     try:
         result = subprocess.run(argv, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as error:
@@ -453,7 +453,7 @@ class Window:
             bar = Gtk.HeaderBar()
             bar.set_show_close_button(True)
             bar.set_title("MCP servers")
-            bar.set_subtitle("This desktop's servers for Bilskirnir")
+            bar.set_subtitle("This desktop's servers for Thoric")
             bar.pack_end(add)
             bar.show_all()
             self.window.set_titlebar(bar)
@@ -464,7 +464,7 @@ class Window:
         self.notice = Gtk.InfoBar()
         self.notice.set_message_type(Gtk.MessageType.WARNING)
         self.notice.get_content_area().add(label(
-            "Bilskirnir is not reading this desktop's servers right now, so their states are not "
+            "Thoric is not reading this desktop's servers right now, so their states are not "
             "known. MCP may be turned off, or the manager may be restarting. Changes are saved and "
             "read when it is back.", wrap=True))
         self.notice.set_no_show_all(True)
@@ -475,16 +475,16 @@ class Window:
         if not headed():
             heading.pack_end(add, False, False, 0)
         page.pack_start(heading, False, False, 0)
-        page.pack_start(label("Bilskirnir starts them as you when an agent needs their tools. Agents "
+        page.pack_start(label("Thoric starts them as you when an agent needs their tools. Agents "
                               "reach them through the endpoints below.", css=("dim-label",), wrap=True),
                         False, False, 0)
-        self.servers, frame = self.list_box("No MCP servers yet. Add one here, with bilskirnir-mcp add "
+        self.servers, frame = self.list_box("No MCP servers yet. Add one here, with thoric-mcp add "
                                             "in a terminal, or with a template that declares one.")
         self.servers.connect("row-activated", self.toggle)
         page.pack_start(frame, False, False, 0)
 
         page.pack_start(label("Endpoints that reach this desktop", css=("mcp-heading",)), False, False, 6)
-        page.pack_start(label("An agent connects to /mcp/NAME at the address you open Bilskirnir with. "
+        page.pack_start(label("An agent connects to /mcp/NAME at the address you open Thoric with. "
                               "Endpoints and their tokens are made on the dashboard's MCP page.",
                               css=("dim-label",), wrap=True), False, False, 0)
         self.endpoints, frame = self.list_box("")
@@ -538,7 +538,7 @@ class Window:
         endpoints = (document or {}).get("endpoints") or []
         self.endpoints.placeholder.set_text(
             "No endpoint reaches this desktop." if watched else
-            "Not known while Bilskirnir is not reading this desktop.")
+            "Not known while Thoric is not reading this desktop.")
         for endpoint in endpoints:
             self.endpoints.add(self.endpoint_row(endpoint))
         self.servers.show_all()
@@ -594,9 +594,9 @@ class Window:
             if spec.get("env"):
                 add("Variables", label(", ".join(spec["env"]), wrap=True))
         if row.get("source") == "image":
-            where = "/etc/bilskirnir/mcp.d/%s.json, from the image" % name
+            where = "/etc/thoric/mcp.d/%s.json, from the image" % name
         else:
-            where = "~/.config/bilskirnir/mcp/%s.json" % name
+            where = "~/.config/thoric/mcp/%s.json" % name
         add("File", label(where, css=("mcp-mono",), wrap=True, selectable=True))
         if row.get("error"):
             add("Problem", label(row["error"], css=("mcp-error",), wrap=True, selectable=True))
@@ -628,7 +628,7 @@ class Window:
             actions.pack_start(replace, False, False, 0)
         if "spec" in row:
             as_command = Gtk.Button(label="Copy command")
-            as_command.set_tooltip_text("The bilskirnir-mcp add command that registers this server")
+            as_command.set_tooltip_text("The thoric-mcp add command that registers this server")
             as_command.connect("clicked", lambda _button: copy(command_text(add_command(form_of(name, spec)))))
             actions.pack_start(as_command, False, False, 0)
             as_template = Gtk.Button(label="Copy for a template")
@@ -693,9 +693,9 @@ class Tray:
             gi.require_version("AyatanaAppIndicator3", "0.1")
             from gi.repository import AyatanaAppIndicator3 as indicator
         except (ImportError, ValueError) as error:
-            sys.stderr.write("bilskirnir-mcp-tray: no tray icon without AyatanaAppIndicator3: %s\n" % error)
+            sys.stderr.write("thoric-mcp-tray: no tray icon without AyatanaAppIndicator3: %s\n" % error)
         else:
-            self.indicator = indicator.Indicator.new("bilskirnir-mcp", TRAY_ICON,
+            self.indicator = indicator.Indicator.new("thoric-mcp", TRAY_ICON,
                                                      indicator.IndicatorCategory.APPLICATION_STATUS)
             self.indicator.set_icon_theme_path(TRAY_ICONS)
             self.indicator.set_title("MCP servers")
@@ -751,7 +751,7 @@ class Tray:
             item("%s: %s" % (name, state(row, self.watched)[1]),
                  lambda name=name: self.window.present(name))
         if not self.watched:
-            item("Bilskirnir is not reading them now")
+            item("Thoric is not reading them now")
         self.menu.append(Gtk.SeparatorMenuItem())
         manage = item("Manage MCP servers…", self.window.present)
         item("Add server…", self.add)
@@ -778,7 +778,7 @@ class Tray:
     def edit(self, row):
         name = row.get("name", "")
         if row.get("source") == "image":
-            notice = ("Saving keeps a copy in this desktop, which Bilskirnir uses instead of the "
+            notice = ("Saving keeps a copy in this desktop, which Thoric uses instead of the "
                       "image's %s. Use the image's again removes the copy." % name)
             title = "Change %s here" % name
         else:
@@ -825,10 +825,10 @@ class Tray:
 
 def main(argv):
     if Gtk is None:
-        sys.stderr.write("bilskirnir-mcp-tray needs GTK 3 and PyGObject; bilskirnir-mcp does the same "
+        sys.stderr.write("thoric-mcp-tray needs GTK 3 and PyGObject; thoric-mcp does the same "
                          "from a terminal.\n")
         return 1
-    GLib.set_prgname("bilskirnir-mcp-tray")
+    GLib.set_prgname("thoric-mcp-tray")
     GLib.set_application_name("MCP servers")
     return Tray().app.run(argv)
 

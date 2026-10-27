@@ -21,7 +21,7 @@ fn job(id: &str, finished: bool) -> Job {
 
 #[test]
 fn pruning_keeps_the_newest_jobs_and_the_unfinished_ones() {
-    let dir = std::env::temp_dir().join(format!("bilskirnir-db-{}", uuid::Uuid::new_v4().simple()));
+    let dir = std::env::temp_dir().join(format!("thoric-db-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = Db::open(&dir.join("state.sqlite")).unwrap();
     for (id, finished) in [("old", true), ("running", false), ("new", true)] {

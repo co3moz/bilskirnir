@@ -302,7 +302,7 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
 test("a running container shows its compose setup until the setup completes", () => {
   const item = (status?: ContainerSetup["status"], last_error?: string): ContainerItem => ({
     id: "e",
-    container: "bilskirnir-e",
+    container: "thoric-e",
     source_image_id: "sha256:a",
     created_at: 0,
     spec: {} as ContainerItem["spec"],

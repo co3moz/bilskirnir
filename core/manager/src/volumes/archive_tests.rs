@@ -141,7 +141,7 @@ async fn an_import_is_refused_before_anything_is_created() {
                     .uri(format!("/api/volumes/import?{query}"))
                     .header("host", "localhost:8080")
                     .header("content-type", content_type)
-                    .header("x-bilskirnir-request", "1")
+                    .header("x-thoric-request", "1")
                     .body(Body::from(vec![0; 10]))
                     .unwrap(),
             )
@@ -321,7 +321,7 @@ async fn an_extract_is_refused_before_anything_is_created() {
                     .uri(format!("/api/volumes/project/extract?{query}"))
                     .header("host", "localhost:8080")
                     .header("content-type", content_type)
-                    .header("x-bilskirnir-request", "1")
+                    .header("x-thoric-request", "1")
                     .body(Body::from(vec![0; 10]))
                     .unwrap(),
             )

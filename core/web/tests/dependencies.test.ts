@@ -94,8 +94,8 @@ describe("dependency search", () => {
 })
 
 test("the saved list is named after its release", () => {
-  expect(listFileName({ version: "0.6.3" })).toBe("bilskirnir-0.6.3-dependencies.json")
-  expect(listFileName({ version: "1.0/dev" })).toBe("bilskirnir-1.0_dev-dependencies.json")
+  expect(listFileName({ version: "0.6.3" })).toBe("thoric-0.6.3-dependencies.json")
+  expect(listFileName({ version: "1.0/dev" })).toBe("thoric-1.0_dev-dependencies.json")
 })
 
 test("the route the page uses is served and documented", () => {

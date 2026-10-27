@@ -135,7 +135,7 @@ fn typed_text_and_single_keys_are_masked_while_clicks_and_named_keys_stay() {
 
 #[test]
 fn a_desktop_servers_arguments_keep_their_keys_and_sizes_whatever_its_tool_is_called() {
-    // A server's tool may share a Bilskirnir tool's name; its arguments stay opaque.
+    // A server's tool may share a Thoric tool's name; its arguments stay opaque.
     for tool in ["browser_type", "exec_container", "write_file"] {
         let masked = mask(
             Source::Server,

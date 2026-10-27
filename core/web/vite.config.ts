@@ -8,7 +8,7 @@ import { gplCompatible } from "./src/lib/licenses.ts"
 
 const root = import.meta.dirname
 // `bun run dev` proxies the API to a running manager, by default the one Compose publishes.
-const manager = process.env.BILSKIRNIR_URL ?? "http://127.0.0.1:8080"
+const manager = process.env.THORIC_URL ?? "http://127.0.0.1:8080"
 const novncNotice =
   "/*! Includes noVNC 1.5.0 (MPL-2.0). License: /novnc-LICENSE.txt; notices: /third-party-notices.txt. */"
 
@@ -26,7 +26,7 @@ async function licenseText(license: string) {
 
 /**
  * The license of every package whose code is in the bundle, collected while building so a new
- * dependency cannot ship without its notice, and the packages whose license Bilskirnir's
+ * dependency cannot ship without its notice, and the packages whose license Thoric's
  * GPL-3.0-or-later cannot carry.
  */
 async function bundledLicenses(moduleIds: Iterable<string>) {
@@ -71,7 +71,7 @@ function notices(): Plugin {
     "LICENSE.txt": "../../LICENSE",
   }
   return {
-    name: "bilskirnir-notices",
+    name: "thoric-notices",
     apply: "build",
     async generateBundle(_options, bundle) {
       for (const [fileName, source] of Object.entries(files)) {
@@ -83,7 +83,7 @@ function notices(): Plugin {
       const licenses = await bundledLicenses(ids)
       if (licenses.refused.length)
         this.error(
-          `Bilskirnir is GPL-3.0-or-later, which cannot carry ${licenses.refused.join(", ")}. ` +
+          `Thoric is GPL-3.0-or-later, which cannot carry ${licenses.refused.join(", ")}. ` +
             "Use a release under a license in GPL_COMPATIBLE (src/lib/licenses.ts), or another package."
         )
       this.emitFile({ type: "asset", fileName: "third-party-licenses.txt", source: licenses.text })

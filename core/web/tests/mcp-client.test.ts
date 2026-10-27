@@ -102,7 +102,7 @@ test("the first frame names the server, and the handshake asks for the latest re
   const initialize = socket.request("initialize")
   assert.equal(initialize.params?.protocolVersion, PROTOCOL_VERSION)
   assert.deepEqual(initialize.params?.clientInfo, {
-    name: "bilskirnir-inspector",
+    name: "thoric-inspector",
     version: "9.9.9",
   })
   socket.message({

@@ -1,6 +1,6 @@
 """The MCP servers tray of the desktop images, without its window: the command line it runs for a
-form is one bilskirnir-mcp accepts and turns back into the same declaration, the rows it shows
-follow which declaration Bilskirnir uses, and the files the images install name each other."""
+form is one thoric-mcp accepts and turns back into the same declaration, the rows it shows
+follow which declaration Thoric uses, and the files the images install name each other."""
 
 import contextlib
 import importlib.machinery
@@ -27,8 +27,8 @@ def load(name, path):
     return module
 
 
-tray = load("bilskirnir_mcp_tray", DESKTOP / "bilskirnir-mcp-tray.py")
-command = load("bilskirnir_mcp_for_tray", DESKTOP / "bilskirnir-mcp.py")
+tray = load("thoric_mcp_tray", DESKTOP / "thoric-mcp-tray.py")
+command = load("thoric_mcp_for_tray", DESKTOP / "thoric-mcp.py")
 
 PROGRAM = {"description": "Browser automation", "command": "npx",
            "args": ["-y", "@playwright/mcp@latest", "--title", "two words"],
@@ -40,11 +40,11 @@ class CommandLineTest(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.root)
-        self.target = self.root / "home/desktop/.config/bilskirnir/mcp"
+        self.target = self.root / "home/desktop/.config/thoric/mcp"
 
     def saved(self, argv):
-        """What bilskirnir-mcp writes for the command line the tray would run."""
-        self.assertEqual(argv[0], "bilskirnir-mcp")
+        """What thoric-mcp writes for the command line the tray would run."""
+        self.assertEqual(argv[0], "thoric-mcp")
         with contextlib.redirect_stdout(io.StringIO()):
             command.main(argv[1:], image=str(self.root / "image"), target=str(self.target), uid=1001,
                          status_path=str(self.root / "status.json"))
@@ -68,12 +68,12 @@ class CommandLineTest(unittest.TestCase):
         argv = tray.add_command({"name": "pw", "kind": "command", "description": " Browser ",
                                  "command": "npx -y '@playwright/mcp' --title \"two words\"",
                                  "env": "\n  PORT=9  \n\nTOKEN=${API_TOKEN}\n", "cwd": " /home/desktop "})
-        self.assertEqual(argv, ["bilskirnir-mcp", "add", "pw", "--description", "Browser",
+        self.assertEqual(argv, ["thoric-mcp", "add", "pw", "--description", "Browser",
                                 "--env", "PORT=9", "--env", "TOKEN=${API_TOKEN}", "--cwd", "/home/desktop",
                                 "--", "npx", "-y", "@playwright/mcp", "--title", "two words"])
         argv = tray.add_command({"name": "api", "kind": "http", "url": "http://127.0.0.1:8931/mcp",
                                  "headers": "X-Test:yes\nAuthorization: Bearer a:b", "command": "ignored"})
-        self.assertEqual(argv, ["bilskirnir-mcp", "add", "api", "--url", "http://127.0.0.1:8931/mcp",
+        self.assertEqual(argv, ["thoric-mcp", "add", "api", "--url", "http://127.0.0.1:8931/mcp",
                                 "--header", "X-Test: yes", "--header", "Authorization: Bearer a:b"])
 
     def test_a_form_that_cannot_be_a_command_says_what_to_fix(self):
@@ -99,7 +99,7 @@ class RowsTest(unittest.TestCase):
         {"name": "new", "source": "container", "active": True, "spec": {"command": "node"}},
     ]}
 
-    def test_rows_follow_the_declaration_bilskirnir_uses(self):
+    def test_rows_follow_the_declaration_thoric_uses(self):
         rows = tray.effective(self.LISTING)
         self.assertEqual([(row["name"], row["source"]) for row in rows],
                          [("broken", "container"), ("chrome", "container"), ("new", "container"),
@@ -112,7 +112,7 @@ class RowsTest(unittest.TestCase):
         self.assertEqual(tray.state(rows["chrome"], True), ("ready", "Ready, 2 tools"))
         self.assertEqual(tray.state(rows["unity"], True), ("error", "Error"))
         self.assertEqual(tray.state(rows["broken"], True), ("error", "Unreadable"))
-        self.assertEqual(tray.state(rows["new"], True), ("pending", "Waiting for Bilskirnir"))
+        self.assertEqual(tray.state(rows["new"], True), ("pending", "Waiting for Thoric"))
         self.assertEqual(tray.state(rows["new"], False), ("unknown", "Not checked"))
         self.assertEqual(tray.summary(list(rows.values()), True), "4 MCP servers, 1 ready, 2 with errors")
         self.assertEqual(tray.summary([], False), "No MCP servers")
@@ -127,7 +127,7 @@ class RowsTest(unittest.TestCase):
 
     def test_the_listing_comes_from_the_command(self):
         def run(argv, **_options):
-            self.assertEqual(argv, ["bilskirnir-mcp", "list", "--json"])
+            self.assertEqual(argv, ["thoric-mcp", "list", "--json"])
             return types.SimpleNamespace(returncode=0, stdout=json.dumps(self.LISTING), stderr="")
         self.assertEqual(tray.load(run), self.LISTING)
         failed = lambda *_a, **_o: types.SimpleNamespace(returncode=1, stdout="", stderr="no such file")
@@ -153,15 +153,15 @@ class InstalledFilesTest(unittest.TestCase):
 
     def test_entries_run_the_installed_tray_with_installed_icons(self):
         dockerfile = (DESKTOP / "Dockerfile").read_text()
-        self.assertIn("COPY bilskirnir-mcp-tray.py /usr/local/bin/bilskirnir-mcp-tray", dockerfile)
+        self.assertIn("COPY thoric-mcp-tray.py /usr/local/bin/thoric-mcp-tray", dockerfile)
         self.assertIn("gir1.2-ayatanaappindicator3-0.1", dockerfile)
         for stage in ("FROM xfce-packages AS xfce", "FROM gnome-packages AS gnome"):
             section = dockerfile.split(stage, 1)[1].split("\nFROM ", 1)[0]
-            self.assertIn("/etc/xdg/autostart/bilskirnir-mcp-tray.desktop", section)
+            self.assertIn("/etc/xdg/autostart/thoric-mcp-tray.desktop", section)
             self.assertIn("/usr/local/share/icons/", section)
-        menu, autostart = self.entry("bilskirnir-mcp.desktop"), self.entry("bilskirnir-mcp-tray.desktop")
-        self.assertEqual(menu["Exec"], "bilskirnir-mcp-tray --show")
-        self.assertEqual(autostart["Exec"], "bilskirnir-mcp-tray")
+        menu, autostart = self.entry("thoric-mcp.desktop"), self.entry("thoric-mcp-tray.desktop")
+        self.assertEqual(menu["Exec"], "thoric-mcp-tray --show")
+        self.assertEqual(autostart["Exec"], "thoric-mcp-tray")
         icons = DESKTOP / "mcp-tray/icons"
         for icon in (menu["Icon"], autostart["Icon"], tray.ICON):
             self.assertTrue((icons / "scalable/apps" / (icon + ".svg")).is_file(), icon)
@@ -170,11 +170,11 @@ class InstalledFilesTest(unittest.TestCase):
         self.assertTrue(tray.TRAY_ICONS.endswith("/hicolor/symbolic/apps"))
 
     def test_the_icon_is_the_dashboards_mark(self):
-        self.assertEqual((DESKTOP / "mcp-tray/icons/scalable/apps/bilskirnir-mcp.svg").read_bytes(),
+        self.assertEqual((DESKTOP / "mcp-tray/icons/scalable/apps/thoric-mcp.svg").read_bytes(),
                          (ROOT / "core/web/public/mark.svg").read_bytes())
 
     def test_the_error_icon_marks_its_dot_for_the_panel_to_color(self):
-        svg = (DESKTOP / "mcp-tray/icons/symbolic/apps/bilskirnir-mcp-error-symbolic.svg").read_text()
+        svg = (DESKTOP / "mcp-tray/icons/symbolic/apps/thoric-mcp-error-symbolic.svg").read_text()
         self.assertRegex(svg, r'<circle class="error"')
 
     def test_the_tray_watches_the_folders_the_command_reads(self):

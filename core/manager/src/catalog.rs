@@ -1,14 +1,14 @@
-//! The images published with Bilskirnir. They are listed with the saved images as kind
+//! The images published with Thoric. They are listed with the saved images as kind
 //! `catalog`, and an installation downloads each one the first time a container or a build
 //! starts from it. The bundled list keeps the file name `desktop/profiles.json`, which the WSL
 //! package's update command reads from the manager.
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const DEFAULT_IMAGE: &str = "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04";
+pub const DEFAULT_IMAGE: &str = "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04";
 /// The release this manager was built as. Only the release build sets it, through the
-/// `BILSKIRNIR_RELEASE` build argument of the root Dockerfile.
-const RELEASE: Option<&str> = option_env!("BILSKIRNIR_RELEASE");
+/// `THORIC_RELEASE` build argument of the root Dockerfile.
+const RELEASE: Option<&str> = option_env!("THORIC_RELEASE");
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CatalogImage {
     pub id: String,
@@ -57,11 +57,11 @@ pub fn find(id: &str) -> Option<CatalogImage> {
 pub fn from_image(image: &Value) -> Option<DesktopInfo> {
     let labels = &image["Config"]["Labels"];
     Some(DesktopInfo {
-        catalog_id: labels["bilskirnir.profile"].as_str()?.to_owned(),
+        catalog_id: labels["thoric.profile"].as_str()?.to_owned(),
         title: labels["org.opencontainers.image.title"]
             .as_str()?
             .to_owned(),
-        session: labels["bilskirnir.session"].as_str()?.to_owned(),
+        session: labels["thoric.session"].as_str()?.to_owned(),
     })
 }
 /// A catalog image as the image list shows it, beside the saved images. `inspected` is Docker's

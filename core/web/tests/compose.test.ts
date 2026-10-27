@@ -71,17 +71,17 @@ const unity: Compose = {
 
 const record = (id: string, compose?: Compose) => ({
   image_id: `sha256:${id}`,
-  reference: `bilskirnir/snapshot:${id}`,
+  reference: `thoric/snapshot:${id}`,
   compose: compose ?? null,
 })
 
 test("the compose comes from a record of the chosen image, as the manager picks it", () => {
   const records = [record("plain"), record("unity", unity), record("again", unity)]
   assert.equal(composeFor(records, "sha256:unity"), unity)
-  assert.equal(composeFor(records, "bilskirnir/snapshot:again"), unity)
+  assert.equal(composeFor(records, "thoric/snapshot:again"), unity)
   // A catalog reference or an image without one asks for nothing.
   assert.equal(composeFor(records, "sha256:plain"), undefined)
-  assert.equal(composeFor(records, "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"), undefined)
+  assert.equal(composeFor(records, "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"), undefined)
   assert.equal(composeFor(records, undefined), undefined)
   // Two records of one image: the first, newest one with a compose wins.
   const shared = [

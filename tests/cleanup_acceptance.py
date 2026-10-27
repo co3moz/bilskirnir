@@ -13,40 +13,40 @@ def inspect(kind, name):
     return values[0] if values else None
 
 manager = sys.argv[1]
-match = re.fullmatch(r"bilskirnir-test-([a-f0-9]{12})", manager)
+match = re.fullmatch(r"thoric-test-([a-f0-9]{12})", manager)
 assert match, "Exact acceptance-test manager name required"
 tag = match[1]
 info = inspect("container", manager)
-assert info and info["Config"]["Labels"].get("bilskirnir.manager") == "true"
+assert info and info["Config"]["Labels"].get("thoric.manager") == "true"
 assert f"MANAGER_CONTAINER={manager}" in info["Config"]["Env"]
-volume = f"bilskirnir-test-data-{tag}"
+volume = f"thoric-test-data-{tag}"
 assert any(m.get("Name") == volume and m["Destination"] == "/data" for m in info["Mounts"])
-records = json.loads(docker("run", "--rm", "--entrypoint", "python3", "--mount", f"type=volume,src={volume},dst=/data", "bilskirnir/manager:local", "-c", "import sqlite3,json; c=sqlite3.connect('file:/data/state.sqlite?mode=ro',uri=True); print(json.dumps([(kind,json.loads(data)) for kind,data in c.execute(\"SELECT kind,data FROM records WHERE kind IN ('environment','image')\")]))"))
+records = json.loads(docker("run", "--rm", "--entrypoint", "python3", "--mount", f"type=volume,src={volume},dst=/data", "thoric/manager:local", "-c", "import sqlite3,json; c=sqlite3.connect('file:/data/state.sqlite?mode=ro',uri=True); print(json.dumps([(kind,json.loads(data)) for kind,data in c.execute(\"SELECT kind,data FROM records WHERE kind IN ('environment','image')\")]))"))
 for kind, record in records:
     if kind != "environment":
         continue
     eid = record["id"]
     assert re.fullmatch(r"[a-f0-9]{32}", eid)
-    container = inspect("container", f"bilskirnir-{eid}")
+    container = inspect("container", f"thoric-{eid}")
     if container:
-        assert container["Config"]["Labels"].get("bilskirnir.environment") == eid
-        assert container["Config"]["Labels"].get("bilskirnir.managed") == "true"
+        assert container["Config"]["Labels"].get("thoric.environment") == eid
+        assert container["Config"]["Labels"].get("thoric.managed") == "true"
         docker("rm", "--force", container["Id"])
     for suffix in ("private", "egress"):
-        network = inspect("network", f"bilskirnir-{eid}-{suffix}")
+        network = inspect("network", f"thoric-{eid}-{suffix}")
         if network:
-            assert network["Labels"].get("bilskirnir.environment") == eid or network["Labels"].get("bilskirnir.test") == tag
+            assert network["Labels"].get("thoric.environment") == eid or network["Labels"].get("thoric.test") == tag
             if info["Id"] in network.get("Containers", {}):
                 docker("network", "disconnect", "--force", network["Id"], info["Id"])
             docker("network", "rm", network["Id"])
 docker("rm", "--force", info["Id"])
-for name in (volume, f"bilskirnir-test-share-{tag}", f"bilskirnir-test-clone-{tag}"):
+for name in (volume, f"thoric-test-share-{tag}", f"thoric-test-clone-{tag}"):
     if inspect("volume", name):
         docker("volume", "rm", name)
 for kind, record in reversed(records):
     if kind == "image" and record["kind"] in ("build", "snapshot", "archive"):
         image = inspect("image", record["reference"])
         if image:
-            assert image["Id"] == record["image_id"] and image["Config"]["Labels"].get("bilskirnir.managed") == "true"
+            assert image["Id"] == record["image_id"] and image["Config"]["Labels"].get("thoric.managed") == "true"
             docker("image", "rm", record["reference"])
 print(f"Cleaned interrupted acceptance run {manager}")

@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 const RUNNER: &str = include_str!("../helpers/app_runner.py");
 const CONTROL: &str = include_str!("../helpers/app_control.py");
 /// Supervisor files live in the desktop's tmpfs; they do not survive a restart or enter snapshots.
-const ROOT: &str = "/tmp/bilskirnir-apps";
+const ROOT: &str = "/tmp/thoric-apps";
 pub const LOG_LIMIT: usize = 1024 * 1024;
 
 #[derive(Deserialize, JsonSchema)]

@@ -6,7 +6,7 @@ import { formatDate, formatNumber, formatRelative, has, plural, t } from "./i18n
 export type ActivityKind = "read" | "change" | "destructive"
 export type ActivityOutcome = "ok" | "error" | "refused"
 
-/** One recorded call; `endpoint` is null for Bilskirnir MCP itself at `/mcp`. */
+/** One recorded call; `endpoint` is null for Thoric MCP itself at `/mcp`. */
 export type ActivityEntry = {
   id: number
   /** When the call began, in Unix milliseconds. */
@@ -94,7 +94,7 @@ export function activityLabel(group: "kind" | "outcome" | "credential", value: s
 export const toolLabel = (entry: Pick<ActivityEntry, "tool" | "server">) =>
   entry.server ? `${entry.server} / ${entry.tool}` : entry.tool
 
-/** Who called: Bilskirnir MCP itself, or the endpoint by its name. */
+/** Who called: Thoric MCP itself, or the endpoint by its name. */
 export const callerLabel = (entry: Pick<ActivityEntry, "endpoint">) =>
   entry.endpoint ?? t("activity.caller.administrator")
 

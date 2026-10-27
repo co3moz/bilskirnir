@@ -19,7 +19,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             docker_bin: "definitely-not-a-docker-command".into(),
             docker_socket: None,
             manager: None,
-            base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
+            base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04".into(),
             desktop_context: DESKTOP_CONTEXT.into(),
             auth,
             username: "admin".into(),
@@ -76,7 +76,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
 }
 fn spec() -> model::ContainerSpec {
     serde_json::from_value(
-        serde_json::json!({"name":"Unity","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}),
+        serde_json::json!({"name":"Unity","image":"ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}),
     )
     .unwrap()
 }
@@ -135,7 +135,7 @@ fn templates_url_defaults_to_the_wiki_and_none_turns_the_page_off() {
         );
     }
     assert_eq!(config::templates_url(Some("none")).unwrap(), None);
-    let mirror = "http://10.0.0.5:8000/bilskirnir/index.json";
+    let mirror = "http://10.0.0.5:8000/thoric/index.json";
     assert_eq!(
         config::templates_url(Some(mirror)).unwrap().as_deref(),
         Some(mirror)
@@ -161,7 +161,7 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
     for unset in [None, Some(""), Some("  ")] {
         assert_eq!(
             config::volume_filter(unset).unwrap().as_deref(),
-            Some("bilskirnir.managed=true")
+            Some("thoric.managed=true")
         );
     }
     assert_eq!(config::volume_filter(Some("none")).unwrap(), None);
@@ -169,8 +169,8 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
         "team",
         "team=",
         "com.example.team=unity",
-        "bilskirnir.managed",
-        "bilskirnir.managed=true",
+        "thoric.managed",
+        "thoric.managed=true",
     ] {
         assert_eq!(
             config::volume_filter(Some(label)).unwrap().as_deref(),
@@ -184,8 +184,8 @@ fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
         "team=a b",
         "team=a,b",
         "team\n=a",
-        "bilskirnir.managed=false",
-        "bilskirnir.managed=",
+        "thoric.managed=false",
+        "thoric.managed=",
     ] {
         assert!(config::volume_filter(Some(refused)).is_err(), "{refused}");
     }
@@ -371,7 +371,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let app = mcp_app();
     let (status, body) = mcp_request(app.clone(), "initialize", serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["result"]["serverInfo"]["name"], "bilskirnir");
+    assert_eq!(body["result"]["serverInfo"]["name"], "thoric");
     let instructions = body["result"]["instructions"]
         .as_str()
         .unwrap_or_default()
@@ -712,7 +712,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
                 .header("host", "localhost")
                 .header("content-type", "application/json");
             if csrf {
-                request = request.header("x-bilskirnir-request", "1");
+                request = request.header("x-thoric-request", "1");
             }
             let response = router(app(auth))
                 .oneshot(request.body(Body::from("{}")).unwrap())
@@ -950,7 +950,7 @@ async fn uploads_enforce_authentication_origin_and_size_before_docker() {
             .header("host", "localhost:8080")
             .header("content-type", "application/octet-stream");
         if csrf {
-            request = request.header("x-bilskirnir-request", "1");
+            request = request.header("x-thoric-request", "1");
         }
         let response = router(app(auth))
             .oneshot(request.body(Body::empty()).unwrap())
@@ -1084,8 +1084,8 @@ async fn logout_revokes_waiting_media_lease_and_expiry_ends_it() {
                 .method("POST")
                 .uri("/api/logout")
                 .header("host", "localhost:8080")
-                .header("cookie", "bilskirnir_session=media")
-                .header("x-bilskirnir-request", "1")
+                .header("cookie", "thoric_session=media")
+                .header("x-thoric-request", "1")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1204,12 +1204,10 @@ fn image_catalog_is_unique_and_metadata_is_explicit() {
             .any(|p| p.id == "ubuntu-gnome" && p.session == "gnome")
     );
     assert!(
-        catalog::from_image(
-            &serde_json::json!({"Config":{"Labels":{"bilskirnir.desktop":"true"}}})
-        )
-        .is_none()
+        catalog::from_image(&serde_json::json!({"Config":{"Labels":{"thoric.desktop":"true"}}}))
+            .is_none()
     );
-    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"bilskirnir.profile":"ubuntu-gnome","bilskirnir.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
+    let info = catalog::from_image(&serde_json::json!({"Config":{"Labels":{"thoric.profile":"ubuntu-gnome","thoric.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
     assert_eq!(info.session, "gnome");
     assert_eq!(info.catalog_id, "ubuntu-gnome");
     // Records saved while catalog images were profiles still carry their desktop.
@@ -1222,7 +1220,7 @@ fn image_catalog_is_unique_and_metadata_is_explicit() {
 #[test]
 fn catalog_images_are_listed_with_the_saved_images() {
     let xfce = catalog::find("ubuntu-xfce").unwrap();
-    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"bilskirnir.profile":id,"bilskirnir.session":session,"org.opencontainers.image.title":"XFCE"}}});
+    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"thoric.profile":id,"thoric.session":session,"org.opencontainers.image.title":"XFCE"}}});
     // Not downloaded yet: still listed, so a container can start from it and download it.
     let missing = catalog::listed(&xfce, None, true);
     assert_eq!(missing["kind"], "catalog");
@@ -1241,7 +1239,7 @@ fn catalog_images_are_listed_with_the_saved_images() {
 }
 #[test]
 fn old_container_records_remain_readable_without_desktop_metadata() {
-    let value = serde_json::json!({"id":"old","container":"bilskirnir-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}});
+    let value = serde_json::json!({"id":"old","container":"thoric-old","private_network":"private","egress_network":"egress","source_image_id":"sha256:old","created_at":1,"spec":{"name":"Old XFCE","image":"ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}});
     let env: model::Container = serde_json::from_value(value).unwrap();
     assert!(env.desktop.is_none());
     assert_eq!(env.source_image_id, "sha256:old");
@@ -1249,7 +1247,7 @@ fn old_container_records_remain_readable_without_desktop_metadata() {
 #[test]
 fn records_saved_before_containers_were_renamed_keep_their_container() {
     // An installation keeps its database across the upgrade that renamed environments.
-    let image: model::ImageRecord = serde_json::from_value(serde_json::json!({"id":"snap","name":"Snapshot","image_id":"sha256:snap","reference":"bilskirnir/snapshot:snap","parent_image_id":"sha256:base","source_environment":"env","kind":"snapshot","created_at":1,"description":""})).unwrap();
+    let image: model::ImageRecord = serde_json::from_value(serde_json::json!({"id":"snap","name":"Snapshot","image_id":"sha256:snap","reference":"thoric/snapshot:snap","parent_image_id":"sha256:base","source_environment":"env","kind":"snapshot","created_at":1,"description":""})).unwrap();
     assert_eq!(image.source_container.as_deref(), Some("env"));
     assert!(serde_json::to_value(&image).unwrap()["source_container"] == "env");
     let application: model::Application = serde_json::from_value(serde_json::json!({"id":"app","environment_id":"env","name":"xlogo","command":"xlogo","args":[],"cwd":"/home/desktop","gpu":false,"created_at":1})).unwrap();
@@ -1275,7 +1273,7 @@ async fn only_catalog_images_are_built_or_pulled() {
                     .header("host", "localhost:8080")
                     .method("POST")
                     .uri(format!("/api/images/not-in-catalog/{action}"))
-                    .header("x-bilskirnir-request", "1")
+                    .header("x-thoric-request", "1")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1405,8 +1403,8 @@ async fn valid_session_still_rejects_cross_origin_mutation() {
                 .header("host", "localhost:8080")
                 .method("POST")
                 .uri("/api/logout")
-                .header("cookie", "bilskirnir_session=token")
-                .header("x-bilskirnir-request", "1")
+                .header("cookie", "thoric_session=token")
+                .header("x-thoric-request", "1")
                 .header("host", "localhost:8080")
                 .header("origin", "https://evil.example")
                 .body(Body::empty())
@@ -1428,7 +1426,7 @@ async fn expired_session_is_not_accepted() {
             Request::builder()
                 .header("host", "localhost:8080")
                 .uri("/api/jobs")
-                .header("cookie", "bilskirnir_session=expired")
+                .header("cookie", "thoric_session=expired")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1439,7 +1437,7 @@ async fn expired_session_is_not_accepted() {
 #[tokio::test]
 async fn the_interface_page_is_revalidated_while_its_hashed_assets_are_kept() {
     let web = std::env::temp_dir().join(format!(
-        "bilskirnir-web-{}-{}",
+        "thoric-web-{}-{}",
         std::process::id(),
         model::now()
     ));
@@ -1654,9 +1652,9 @@ async fn a_host_without_a_wsl_gpu_refuses_a_gpu_container_naming_wsl_gpu() {
     // A retry or reset of a GPU container that exists already stops before Docker too.
     let env = model::Container {
         id: "gpu-test".into(),
-        container: "bilskirnir-gpu-test".into(),
-        private_network: "bilskirnir-gpu-test-private".into(),
-        egress_network: "bilskirnir-gpu-test-egress".into(),
+        container: "thoric-gpu-test".into(),
+        private_network: "thoric-gpu-test-private".into(),
+        egress_network: "thoric-gpu-test-egress".into(),
         source_image_id: "sha256:base".into(),
         created_at: 1,
         spec,
@@ -1684,36 +1682,33 @@ async fn a_host_without_a_wsl_gpu_refuses_a_gpu_container_naming_wsl_gpu() {
     assert!(!app.config.feature_defaults().gpu);
 }
 
-/// A Docker CLI stand-in for a manager named `bilskirnir-manager` whose data volume is
-/// `bilskirnir-data`. It answers the manager's inspect, lists no containers, lists that volume
+/// A Docker CLI stand-in for a manager named `thoric-manager` whose data volume is
+/// `thoric-data`. It answers the manager's inspect, lists no containers, lists that volume
 /// and `project` as `GET /api/volumes` asks for them, or only `project` under the default
 /// `VOLUME_FILTER`, inspects `project`, which carries the manager's label, and `outside`, which
 /// carries none, fails everything else and records its arguments in the returned file.
 #[cfg(unix)]
 pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-docker-{}",
-        uuid::Uuid::new_v4().simple()
-    ));
+    let dir = std::env::temp_dir().join(format!("thoric-docker-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let calls = dir.join("calls");
     let manager = serde_json::json!([{
         "Id": "manager",
         "Image": "sha256:manager",
-        "Config": {"Labels": {"bilskirnir.manager": "true"}},
-        "Mounts": [{"Type": "volume", "Name": "bilskirnir-data", "Destination": "/data"}],
+        "Config": {"Labels": {"thoric.manager": "true"}},
+        "Mounts": [{"Type": "volume", "Name": "thoric-data", "Destination": "/data"}],
     }]);
     let docker = dir.join("docker");
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect bilskirnir-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=bilskirnir.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect thoric-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=thoric.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
             calls = calls.display(),
-            data = serde_json::json!({"Name": "bilskirnir-data", "Driver": "local"}),
+            data = serde_json::json!({"Name": "thoric-data", "Driver": "local"}),
             project = serde_json::json!({"Name": "project", "Driver": "local"}),
             labeled = serde_json::json!([
-                {"Name": "project", "Labels": {"bilskirnir.managed": "true"}}
+                {"Name": "project", "Labels": {"thoric.managed": "true"}}
             ]),
             outside = serde_json::json!([{"Name": "outside", "Labels": null}]),
         ),
@@ -1722,7 +1717,7 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config = &mut Arc::get_mut(app).unwrap().config;
     config.docker_bin = docker.display().to_string();
-    config.manager = Some("bilskirnir-manager".into());
+    config.manager = Some("thoric-manager".into());
     calls
 }
 
@@ -1733,14 +1728,14 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     let calls = manager_docker(&mut app);
     let mut spec = spec();
     spec.mounts.push(model::Mount {
-        volume: "bilskirnir-data".into(),
+        volume: "thoric-data".into(),
         target: "/workspace".into(),
         readonly: true,
     });
     let refused = |error: anyhow::Error| {
         let message = error.to_string();
         assert!(
-            message.contains("bilskirnir-data is the manager's own volume"),
+            message.contains("thoric-data is the manager's own volume"),
             "{message}"
         );
     };
@@ -1758,16 +1753,16 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     );
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\n"
+        "container inspect thoric-manager\n"
     );
 
     // A record saved before the manager refused it: a reset keeps its container, and a retry
     // does not recreate the missing one.
     let env = model::Container {
         id: "legacy".into(),
-        container: "bilskirnir-legacy".into(),
-        private_network: "bilskirnir-legacy-private".into(),
-        egress_network: "bilskirnir-legacy-egress".into(),
+        container: "thoric-legacy".into(),
+        private_network: "thoric-legacy-private".into(),
+        egress_network: "thoric-legacy-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec,
@@ -1785,7 +1780,7 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     );
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\n"
+        "container inspect thoric-manager\n"
     );
     std::fs::remove_file(&calls).unwrap();
     refused(
@@ -1796,7 +1791,7 @@ async fn no_desktop_is_created_with_the_managers_own_volume() {
     let made = std::fs::read_to_string(&calls).unwrap();
     assert_eq!(
         made.lines().last(),
-        Some("container inspect bilskirnir-manager"),
+        Some("container inspect thoric-manager"),
         "{made}"
     );
     assert!(
@@ -1818,14 +1813,14 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     let setup: crate::compose::Setup = serde_json::from_value(serde_json::json!({
         "status": "completed", "image": "img", "parameters": {"DATA": "/opt/data"},
         "secrets": [],
-        "mounts": [{"volume": "bilskirnir-data", "target": "/opt/data", "readonly": false}],
+        "mounts": [{"volume": "thoric-data", "target": "/opt/data", "readonly": false}],
     }))
     .unwrap();
     let env = model::Container {
         id: "composed".into(),
-        container: "bilskirnir-composed".into(),
-        private_network: "bilskirnir-composed-private".into(),
-        egress_network: "bilskirnir-composed-egress".into(),
+        container: "thoric-composed".into(),
+        private_network: "thoric-composed-private".into(),
+        egress_network: "thoric-composed-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -1838,7 +1833,7 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     let refused = |error: anyhow::Error| {
         let message = error.to_string();
         assert!(
-            message.contains("bilskirnir-data is the manager's own volume"),
+            message.contains("thoric-data is the manager's own volume"),
             "{message}"
         );
     };
@@ -1850,7 +1845,7 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     // Refused before the old container is removed.
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\n"
+        "container inspect thoric-manager\n"
     );
     std::fs::remove_file(&calls).unwrap();
     refused(
@@ -1861,7 +1856,7 @@ async fn a_compose_volume_parameter_cannot_bring_back_the_managers_own_volume() 
     let made = std::fs::read_to_string(&calls).unwrap();
     assert_eq!(
         made.lines().last(),
-        Some("container inspect bilskirnir-manager"),
+        Some("container inspect thoric-manager"),
         "{made}"
     );
     assert!(
@@ -1891,7 +1886,7 @@ async fn a_desktop_cannot_be_created_with_a_volume_the_filter_leaves_out() {
     // Refused before the image is looked at or downloaded, and nothing is saved.
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\nvolume inspect outside\n"
+        "container inspect thoric-manager\nvolume inspect outside\n"
     );
     assert!(
         app.db
@@ -1973,7 +1968,7 @@ fn file_tool_requests_are_validated() {
     );
     // A volume a compose parameter mounts is a root too, though the settings never list it.
     let composed = model::Mount {
-        volume: "bilskirnir-c-DATA".into(),
+        volume: "thoric-c-DATA".into(),
         target: "/home/desktop/Projects".into(),
         readonly: false,
     };
@@ -2218,9 +2213,9 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
     existing.gpu = true;
     let env = model::Container {
         id: "edit-id".into(),
-        container: "bilskirnir-edit-id".into(),
-        private_network: "bilskirnir-edit-id-private".into(),
-        egress_network: "bilskirnir-edit-id-egress".into(),
+        container: "thoric-edit-id".into(),
+        private_network: "thoric-edit-id-private".into(),
+        egress_network: "thoric-edit-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: existing,
@@ -2234,7 +2229,7 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
         let app = app.clone();
         let request = Request::builder()
             .header("host", "localhost:8080")
-            .header("x-bilskirnir-request", "1")
+            .header("x-thoric-request", "1")
             .header("content-type", "application/json")
             .method("POST")
             .uri(format!("/api/containers/{id}/settings"))
@@ -2268,7 +2263,7 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
             "Audio is disabled",
         ),
         (
-            serde_json::json!({"image": "bilskirnir/custom:other"}),
+            serde_json::json!({"image": "thoric/custom:other"}),
             "cannot change",
         ),
         (serde_json::json!({"dry_run": "yes"}), "dry_run"),
@@ -2305,9 +2300,9 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     }];
     let mut env = model::Container {
         id: "args-id".into(),
-        container: "bilskirnir-args-id".into(),
-        private_network: "bilskirnir-args-id-private".into(),
-        egress_network: "bilskirnir-args-id-egress".into(),
+        container: "thoric-args-id".into(),
+        private_network: "thoric-args-id-private".into(),
+        egress_network: "thoric-args-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec,
@@ -2322,7 +2317,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     let seccomp = format!("--security-opt seccomp={}", profile.display());
     for flag in [
         seccomp.as_str(),
-        "--name bilskirnir-args-id",
+        "--name thoric-args-id",
         "--shm-size 1024m",
         "--env DESKTOP_RESOLUTION=1280x720",
         "--env DESKTOP_AUDIO=true",
@@ -2333,14 +2328,14 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         "--gpus all",
         "--device /dev/dxg",
         "--device /dev/uinput",
-        "--label bilskirnir.environment=args-id",
+        "--label thoric.environment=args-id",
     ] {
         assert!(args.contains(flag), "{flag} missing from {args}");
     }
     assert!(args.ends_with(" sha256:source"), "{args}");
     env.working_image = Some(model::WorkingImage {
         image_id: "sha256:working".into(),
-        reference: "bilskirnir/container:job".into(),
+        reference: "thoric/container:job".into(),
     });
     assert!(joined(&env).ends_with(" sha256:working"));
     assert_eq!(env.source_image_id, "sha256:source");
@@ -2351,9 +2346,9 @@ fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_pla
     Arc::get_mut(&mut app).unwrap().config.user_namespaces = false;
     let env = model::Container {
         id: "plain-id".into(),
-        container: "bilskirnir-plain-id".into(),
-        private_network: "bilskirnir-plain-id-private".into(),
-        egress_network: "bilskirnir-plain-id-egress".into(),
+        container: "thoric-plain-id".into(),
+        private_network: "thoric-plain-id-private".into(),
+        egress_network: "thoric-plain-id-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -2435,9 +2430,9 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
         // Nor can a settings change turn one on.
         let env = model::Container {
             id: "off".into(),
-            container: "bilskirnir-off".into(),
-            private_network: "bilskirnir-off-private".into(),
-            egress_network: "bilskirnir-off-egress".into(),
+            container: "thoric-off".into(),
+            private_network: "thoric-off-private".into(),
+            egress_network: "thoric-off-egress".into(),
             source_image_id: "sha256:source".into(),
             created_at: 0,
             spec: without(),
@@ -2457,9 +2452,9 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
     kept.gamepad = true;
     let env = model::Container {
         id: "kept".into(),
-        container: "bilskirnir-kept".into(),
-        private_network: "bilskirnir-kept-private".into(),
-        egress_network: "bilskirnir-kept-egress".into(),
+        container: "thoric-kept".into(),
+        private_network: "thoric-kept-private".into(),
+        egress_network: "thoric-kept-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: kept,
@@ -2500,7 +2495,7 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
                         .method("POST")
                         .uri("/api/containers/kept/internet")
                         .header("host", "localhost:8080")
-                        .header("x-bilskirnir-request", "1")
+                        .header("x-thoric-request", "1")
                         .header("content-type", "application/json")
                         .body(Body::from(
                             serde_json::json!({ "enabled": enabled }).to_string(),

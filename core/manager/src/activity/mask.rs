@@ -1,6 +1,6 @@
 //! What the activity log keeps of a call's arguments.
 //!
-//! Every Bilskirnir tool has a policy: the argument keys whose values are kept, and how. Any other
+//! Every Thoric tool has a policy: the argument keys whose values are kept, and how. Any other
 //! argument, also one a later release adds before its policy says otherwise, is kept as its type
 //! and size only, `{"$masked": "string", "length": 12}`. That is how file contents, compose
 //! values, base64 payloads, headers, environment values and text typed into a desktop or a
@@ -50,7 +50,7 @@ use Keep::*;
 /// An argument a policy keeps, and whether the summary line leads with it.
 pub(super) type Rule = (&'static str, Keep, bool);
 
-/// The arguments every Bilskirnir tool keeps: the container, by ID on `/mcp` and by its alias on
+/// The arguments every Thoric tool keeps: the container, by ID on `/mcp` and by its alias on
 /// an endpoint of several.
 const COMMON: &[Rule] = &[("container_id", Text, false), ("container", Text, false)];
 
@@ -65,7 +65,7 @@ const TRANSFER: &[Rule] = &[
     ("description", Text, false),
 ];
 
-/// The policy of a Bilskirnir tool, `None` for a name `/mcp` does not offer.
+/// The policy of a Thoric tool, `None` for a name `/mcp` does not offer.
 pub(super) fn policy(tool: &str) -> Option<&'static [Rule]> {
     Some(match tool {
         "get_settings"

@@ -54,7 +54,7 @@ import type { ConfigVariable, ConfigurationCheck, Job, JobStarted } from "@/lib/
 import { followRestart } from "@/lib/update"
 
 /** The job of a settings change the page reloaded from, for the notice after the reload. */
-const SETTINGS_JOB = "bilskirnir.settingsJob"
+const SETTINGS_JOB = "thoric.settingsJob"
 
 function storeJob(id: string) {
   try {
@@ -386,7 +386,7 @@ function ApplyDialog({
 /**
  * The installation's settings by section. Where the WSL package takes changes, the editable ones
  * get a control, and **Apply and restart** has the package write them to `.env` and recreate
- * the manager; the rest are marked as changing with `bilskirnir settings`.
+ * the manager; the rest are marked as changing with `thoric settings`.
  */
 export function ConfigurationEditor() {
   const configuration = useConfiguration()

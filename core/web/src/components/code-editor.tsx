@@ -253,14 +253,14 @@ function Monaco({
     const changes = model.onDidChangeContent(() => latest.current.onChange?.(model.getValue()))
     if (first.onSubmit)
       created.addAction({
-        id: "bilskirnir.submit",
+        id: "thoric.submit",
         label: t("inspector.run.keys"),
         keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
         run: () => latest.current.onSubmit?.(),
       })
     if (first.onSave)
       created.addAction({
-        id: "bilskirnir.save",
+        id: "thoric.save",
         label: t("common.save"),
         keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
         run: () => latest.current.onSave?.(),

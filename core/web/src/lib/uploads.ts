@@ -139,7 +139,7 @@ export class FileUploads {
       })
       request.open("POST", `/api/${target}/files?${query}`)
       request.setRequestHeader("Content-Type", "application/octet-stream")
-      request.setRequestHeader("X-Bilskirnir-Request", "1")
+      request.setRequestHeader("X-Thoric-Request", "1")
       request.withCredentials = true
       request.timeout = 3_600_000
       request.upload.onprogress = (event) => {

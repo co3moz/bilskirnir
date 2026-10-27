@@ -15,13 +15,13 @@ fn download(path: &str) -> Operation {
     }
 }
 
-/// The container `e` as the manager records it, running in Docker as `bilskirnir-e`.
+/// The container `e` as the manager records it, running in Docker as `thoric-e`.
 fn container(app: &App) {
     let env = model::Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: serde_json::from_value(json!({"name": "Work", "image": "example/desktop:1"}))
@@ -416,7 +416,7 @@ async fn a_link_is_neither_a_session_nor_a_bearer_token() {
     let (status, _, _) = send(
         &app,
         request("GET", "/api/containers")
-            .header("cookie", format!("bilskirnir_session={token}"))
+            .header("cookie", format!("thoric_session={token}"))
             .body(Body::empty())
             .unwrap(),
     )
@@ -500,13 +500,13 @@ fn tracing_never_records_a_token() {
 #[cfg(unix)]
 fn docker(app: &mut Arc<App>) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("bilskirnir-transfers-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("thoric-transfers-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
     std::fs::write(
         &docker,
         format!(
-            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"bilskirnir.managed\":\"true\",\"bilskirnir.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ \"$8\" = stat ]; then echo '{{\"type\":\"file\",\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"thoric.managed\":\"true\",\"thoric.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ \"$8\" = stat ]; then echo '{{\"type\":\"file\",\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
     )

@@ -1,7 +1,7 @@
 """The desktop's MCP server declarations as the manager reads them: both folders listed, a bad
 file reported instead of hiding the others, writes atomic and private, and no symlink followed
 on the way in or out; the status the manager sends kept for the desktop while it watches. Also
-the bilskirnir-mcp command, which writes the same files and reads that status."""
+the thoric-mcp command, which writes the same files and reads that status."""
 
 import contextlib
 import importlib.machinery
@@ -30,7 +30,7 @@ def load(name, path):
 
 
 registry = load("mcp_registry", ROOT / "core/manager/helpers/mcp_registry.py")
-command = load("bilskirnir_mcp", ROOT / "images/desktop/bilskirnir-mcp.py")
+command = load("thoric_mcp", ROOT / "images/desktop/thoric-mcp.py")
 
 
 class Output:
@@ -49,8 +49,8 @@ class RegistryTest(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.root)
-        self.image = self.root / "etc/bilskirnir/mcp.d"
-        self.container = self.root / "home/desktop/.config/bilskirnir/mcp"
+        self.image = self.root / "etc/thoric/mcp.d"
+        self.container = self.root / "home/desktop/.config/thoric/mcp"
         self.image.mkdir(parents=True)
         for name, value in (("IMAGE", self.image), ("CONTAINER", self.container)):
             patch = mock.patch.object(registry, name, str(value))
@@ -143,9 +143,9 @@ class WatchTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root)
         self.runtime = self.root / "run/desktop"
         self.runtime.mkdir(parents=True)
-        self.status = self.runtime / "bilskirnir/mcp-status.json"
+        self.status = self.runtime / "thoric/mcp-status.json"
         for name, value in (("IMAGE", self.root / "image"), ("CONTAINER", self.root / "mine"),
-                            ("STATUS", self.runtime / "bilskirnir")):
+                            ("STATUS", self.runtime / "thoric")):
             patch = mock.patch.object(registry, name, str(value))
             patch.start()
             self.addCleanup(patch.stop)
@@ -226,7 +226,7 @@ class WatchTest(unittest.TestCase):
     def test_a_symlinked_status_folder_is_not_written_through(self):
         elsewhere = self.root / "elsewhere"
         elsewhere.mkdir()
-        (self.runtime / "bilskirnir").symlink_to(elsewhere)
+        (self.runtime / "thoric").symlink_to(elsewhere)
         self.start()
         self.send(b'{"status": {"leak": true}}\n')
         time.sleep(0.3)
@@ -239,13 +239,13 @@ class CommandTest(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.root)
         self.image = self.root / "image"
-        self.target = self.root / "home/desktop/.config/bilskirnir/mcp"
+        self.target = self.root / "home/desktop/.config/thoric/mcp"
 
     def run_command(self, *arguments, uid=1001):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             command.main(list(arguments), image=str(self.image), target=str(self.target), uid=uid,
-                         status_path=str(self.root / "run/bilskirnir/mcp-status.json"))
+                         status_path=str(self.root / "run/thoric/mcp-status.json"))
         return output.getvalue()
 
     def read(self, name):
@@ -302,7 +302,7 @@ class CommandTest(unittest.TestCase):
             self.run_command("add", "x", "--url", url)
             self.assertEqual(self.read("x")["url"], url)
 
-    def test_list_json_says_which_declaration_is_used_and_what_bilskirnir_knows(self):
+    def test_list_json_says_which_declaration_is_used_and_what_thoric_knows(self):
         self.image.mkdir()
         (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
         (self.image / "unity.json").write_text(json.dumps({"url": "http://127.0.0.1:8080/mcp"}))
@@ -315,7 +315,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(unknown["servers"][2]["spec"]["args"], ["--headless"])
         self.assertTrue(all("status" not in s for s in unknown["servers"]))
 
-        status = self.root / "run/bilskirnir/mcp-status.json"
+        status = self.root / "run/thoric/mcp-status.json"
         status.parent.mkdir(parents=True)
         endpoint = {"name": "desk", "path": "/mcp/desk", "has_token": False, "scopes": ["view"]}
         status.write_text(json.dumps({"status_at": 7, "endpoints": [endpoint], "servers": [

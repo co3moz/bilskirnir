@@ -3,7 +3,7 @@ settings the answers write to .env, above all who can reach the dashboard, and w
 about it, including the Windows step for the WSL networking mode in use.
 
 The script runs against a temporary installation directory and wsl.conf, with stand-ins on PATH for
-the commands that change the system (useradd, chpasswd, chown), for the bilskirnir command and for
+the commands that change the system (useradd, chpasswd, chown), for the thoric command and for
 wslinfo, which answers the networking mode from the NETWORKING variable.
 """
 
@@ -26,7 +26,7 @@ esac
 exit 0
 """
 
-LAN_ENABLE = "\n  irm https://github.com/co3moz/bilskirnir/releases/latest/download/bilskirnir.ps1 | iex\n"
+LAN_ENABLE = "\n  irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex\n"
 
 
 @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
@@ -41,13 +41,13 @@ class FirstStartTest(unittest.TestCase):
         self.wsl_conf.write_text("[boot]\nsystemd=true\n")
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
-        for name in ("getent", "useradd", "chpasswd", "chown", "runuser", "bilskirnir", "wslinfo"):
+        for name in ("getent", "useradd", "chpasswd", "chown", "runuser", "thoric", "wslinfo"):
             (bin_dir / name).write_text(STUB)
             (bin_dir / name).chmod(0o755)
         script = OOBE.read_text()
-        self.assertEqual(script.count("\nINSTALL=/opt/bilskirnir\n"), 1)
-        script = script.replace("\nINSTALL=/opt/bilskirnir\n", f"\nINSTALL={self.install}\n")
-        for path, replacement in (("/etc/wsl.conf", self.wsl_conf), ("/usr/local/bin/bilskirnir", bin_dir / "bilskirnir")):
+        self.assertEqual(script.count("\nINSTALL=/opt/thoric\n"), 1)
+        script = script.replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n")
+        for path, replacement in (("/etc/wsl.conf", self.wsl_conf), ("/usr/local/bin/thoric", bin_dir / "thoric")):
             self.assertIn(path, script)
             script = script.replace(path, str(replacement))
         self.script = self.dir / "oobe.sh"
@@ -76,7 +76,7 @@ class FirstStartTest(unittest.TestCase):
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
-        self.assertNotIn("bilskirnir.ps1", result.stdout)
+        self.assertNotIn("thoric.ps1", result.stdout)
 
     def test_other_devices_get_the_windows_step_of_the_networking_mode(self):
         env_example = self.install / ".env.example"

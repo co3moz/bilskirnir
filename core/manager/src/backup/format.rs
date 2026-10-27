@@ -14,11 +14,11 @@ use flate2::{Compression, write::GzEncoder, write::MultiGzDecoder};
 use std::io::Write;
 
 /// The manifest, what a backup holds: the first entry, so it can be read without the rest.
-pub(crate) const MANIFEST: &str = "bilskirnir-backup.json";
+pub(crate) const MANIFEST: &str = "thoric-backup.json";
 /// The records, the second entry.
 pub(crate) const RECORDS: &str = "records.json";
 /// The last entry, written once every part is complete.
-pub(crate) const END: &str = "bilskirnir-backup-end.json";
+pub(crate) const END: &str = "thoric-backup-end.json";
 /// The most a part's chunk holds.
 pub(crate) const CHUNK: usize = 4 << 20;
 pub(crate) const MANIFEST_LIMIT: u64 = 4 << 20;
@@ -201,7 +201,7 @@ impl Reader {
         match std::mem::replace(&mut self.mode, Mode::Plain) {
             Mode::Sniffing(head) => {
                 if !head.is_empty() {
-                    bail!("The upload is not a Bilskirnir backup");
+                    bail!("The upload is not a Thoric backup");
                 }
             }
             Mode::Plain => {}
@@ -309,7 +309,7 @@ impl Reader {
 /// The name and size of an entry as a backup writes it: a USTAR header of a regular file whose
 /// short name needs no prefix or extension header.
 fn entry_header(block: &[u8]) -> Result<(String, u64)> {
-    const DAMAGED: &str = "The upload is not a Bilskirnir backup, or the backup is damaged";
+    const DAMAGED: &str = "The upload is not a Thoric backup, or the backup is damaged";
     let stored = std::str::from_utf8(&block[148..156])
         .ok()
         .map(|field| field.trim_matches([' ', '\0']))

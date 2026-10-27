@@ -29,12 +29,12 @@ import type { Volume } from "@/lib/types"
 import { volumeUsers } from "@/lib/volume-files"
 
 // The ownership label the manager puts on what it creates; see core/manager/src/model.rs.
-const LABEL = "bilskirnir.managed"
+const LABEL = "thoric.managed"
 const MANAGED = `${LABEL}=true`
 
 type Row = Volume & {
   users: ReturnType<typeof volumeUsers>
-  /** Whether to mark the volume as one Bilskirnir created. */
+  /** Whether to mark the volume as one Thoric created. */
   managed: boolean
 }
 const column = columnHelper<Row>()
@@ -68,7 +68,7 @@ const columns: DataColumn<Row>[] = [
               )}
               {row.original.managed && (
                 <Badge variant="outline" className="text-muted-foreground">
-                  Bilskirnir
+                  Thoric
                 </Badge>
               )}
               {owner?.deleted && (
@@ -203,7 +203,7 @@ export function VolumesPage() {
   const containers = useContainers().data
   const settings = useSettings().data
   const filter = settings?.volume_filter
-  // A filter on the ownership label lists only Bilskirnir's volumes, so marking them adds nothing.
+  // A filter on the ownership label lists only Thoric's volumes, so marking them adds nothing.
   const marked = !!settings && filter?.split("=")[0] !== LABEL
   const data = React.useMemo<Row[]>(
     () =>

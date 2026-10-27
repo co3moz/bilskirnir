@@ -24,11 +24,11 @@ const EXCLUDED_KINDS: [&str; 5] = [
 fn installation() -> Installation {
     Installation {
         containers: vec![
-            container("c2", "Second", "bilskirnir/snapshot:i1", &["shared"]),
+            container("c2", "Second", "thoric/snapshot:i1", &["shared"]),
             container(
                 "c1",
                 "First",
-                "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04",
+                "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
                 &["projects", "gone"],
             ),
         ],
@@ -48,7 +48,7 @@ fn installation() -> Installation {
             ("projects".into(), VolumeFacts::default()),
             ("shared".into(), VolumeFacts::default()),
             (
-                "bilskirnir-c1-cache".into(),
+                "thoric-c1-cache".into(),
                 VolumeFacts {
                     owner: Some("c1".into()),
                     parameter: Some("CACHE".into()),
@@ -122,15 +122,15 @@ fn a_backup_carries_every_record_and_the_parts_docker_still_has() {
             },
             Part {
                 kind: PartKind::Volume,
-                target: "bilskirnir-c1-cache".into()
-            },
-            Part {
-                kind: PartKind::Volume,
                 target: "projects".into()
             },
             Part {
                 kind: PartKind::Volume,
                 target: "shared".into()
+            },
+            Part {
+                kind: PartKind::Volume,
+                target: "thoric-c1-cache".into()
             },
         ]
     );
@@ -143,10 +143,10 @@ fn a_backup_carries_every_record_and_the_parts_docker_still_has() {
     assert_eq!(
         volumes,
         [
-            ("bilskirnir-c1-cache", true, Some("c1")),
             ("gone", false, None),
             ("projects", true, None),
             ("shared", true, None),
+            ("thoric-c1-cache", true, Some("c1")),
         ]
     );
     assert_eq!(manifest.endpoints, ["desk"]);

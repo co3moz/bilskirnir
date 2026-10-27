@@ -9,7 +9,7 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
         id: id.into(),
         name: format!("{kind} image"),
         image_id: format!("sha256:{id}"),
-        reference: format!("bilskirnir/{kind}:{id}"),
+        reference: format!("thoric/{kind}:{id}"),
         parent_image_id: Some("sha256:base".into()),
         source_container: None,
         kind: kind.into(),
@@ -25,7 +25,7 @@ fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
 
 fn unity_tools() -> BuildConfig {
     BuildConfig {
-        base_image: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04".into(),
+        base_image: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04".into(),
         internet: false,
         script: "set -eu\napt-get install -y git\n".into(),
         parts: Vec::new(),

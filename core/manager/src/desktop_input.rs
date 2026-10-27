@@ -580,7 +580,7 @@ async fn connect(address: &str) -> anyhow::Result<(TcpStream, u16, u16)> {
     Ok((stream, width, height))
 }
 async fn fence(stream: &mut TcpStream) -> anyhow::Result<()> {
-    let marker = b"bilskirnir";
+    let marker = b"thoric";
     let mut request = vec![248, 0, 0, 0];
     request.extend(0x80000001u32.to_be_bytes());
     request.push(marker.len() as u8);

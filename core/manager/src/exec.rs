@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 // The script is copied to an unlinked temporary file first, so commands that read stdin see
 // end-of-file instead of consuming the rest of the script, and large scripts avoid argument limits.
-const WRAPPER: &str = "script=$(mktemp /tmp/bilskirnir-exec.XXXXXX) && cat >\"$script\" && exec 3<\"$script\" && rm -f -- \"$script\" && exec bash -e /dev/fd/3 </dev/null";
+const WRAPPER: &str = "script=$(mktemp /tmp/thoric-exec.XXXXXX) && cat >\"$script\" && exec 3<\"$script\" && rm -f -- \"$script\" && exec bash -e /dev/fd/3 </dev/null";
 
 /// `docker exec` arguments up to the container, for a script that reads its input from the
 /// manager and runs in the desktop session's environment.

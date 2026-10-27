@@ -1,5 +1,5 @@
 /**
- * The licenses Bilskirnir's own GPL-3.0-or-later can carry, by SPDX identifier, for the packages
+ * The licenses Thoric's own GPL-3.0-or-later can carry, by SPDX identifier, for the packages
  * the interface bundle combines with it. A package under any other, such as Remix Icon's own
  * license from @remixicon/react 4.9.0 on, cannot ship in the bundle.
  */

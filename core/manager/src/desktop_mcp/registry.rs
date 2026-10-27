@@ -11,7 +11,7 @@ pub(crate) const HELPER: &str = include_str!("../../helpers/mcp_registry.py");
 /// The database kind of the servers the manager knows, by `<container>:<name>`.
 pub(crate) const SERVERS: &str = "desktop-mcp-server";
 /// Where an image declares its servers, which a build writes.
-pub(crate) const IMAGE_FOLDER: &str = "/etc/bilskirnir/mcp.d";
+pub(crate) const IMAGE_FOLDER: &str = "/etc/thoric/mcp.d";
 const ARGUMENT_LIMIT: usize = 100;
 const VARIABLE_LIMIT: usize = 50;
 const HEADER_LIMIT: usize = 20;
@@ -123,7 +123,7 @@ pub(crate) async fn write_declarations(
         .await?;
     }
     Ok(format!(
-        "COPY mcp/ {IMAGE_FOLDER}/\nRUN chmod 755 /etc/bilskirnir {IMAGE_FOLDER} && chmod 644 {IMAGE_FOLDER}/*.json\n"
+        "COPY mcp/ {IMAGE_FOLDER}/\nRUN chmod 755 /etc/thoric {IMAGE_FOLDER} && chmod 644 {IMAGE_FOLDER}/*.json\n"
     ))
 }
 

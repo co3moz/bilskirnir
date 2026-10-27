@@ -1,10 +1,10 @@
-Bilskirnir desktop image
+Thoric desktop image
 
-The Bilskirnir programs in this image are free software: the desktop-* scripts, gpu-run,
-bilskirnir-mcp and bilskirnir-mcp-tray in /usr/local/bin, /usr/local/lib/bilskirnir/chromium-gpu.so
+The Thoric programs in this image are free software: the desktop-* scripts, gpu-run,
+thoric-mcp and thoric-mcp-tray in /usr/local/bin, /usr/local/lib/thoric/chromium-gpu.so
 and the tray's menu entries and icons.
 
-Copyright (C) 2026 Bilskirnir contributors
+Copyright (C) 2026 Thoric contributors
 
 This program is free software: you can redistribute it and/or modify it under the terms of the
 GNU General Public License as published by the Free Software Foundation, either version 3 of the
@@ -13,5 +13,5 @@ useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTA
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 The license is in /usr/share/common-licenses/GPL-3, and the source of every release is at
-https://github.com/co3moz/bilskirnir. The Ubuntu packages in this image keep their own licenses,
+https://github.com/co3moz/thoric. The Ubuntu packages in this image keep their own licenses,
 in /usr/share/doc/<package>/copyright.

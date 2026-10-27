@@ -87,7 +87,7 @@ export type Field =
 export const FIELDS: Record<string, Field> = {
   SECURE_COOKIE: { kind: "switch" },
   ALLOWED_HOSTS: { kind: "text", placeholder: "desktop.lan,nas.lan" },
-  DESKTOP_IMAGE: { kind: "text", placeholder: "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04" },
+  DESKTOP_IMAGE: { kind: "text", placeholder: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04" },
   DESKTOP_USER_NAMESPACES: { kind: "switch" },
   WSL_GPU: { kind: "switch" },
   NVIDIA_COMPUTE: { kind: "switch" },
@@ -160,7 +160,7 @@ export function initialText(variable: ConfigVariable): string {
 
 /**
  * What is wrong with a text before the manager is asked: the line `.env` keeps as it is, as the
- * manager and `bilskirnir apply-settings` check it, and a number's range. The manager says the
+ * manager and `thoric apply-settings` check it, and a number's range. The manager says the
  * rest when it checks the change.
  */
 export function textProblem(

@@ -7,7 +7,7 @@ use super::*;
 
 fn spec() -> ContainerSpec {
     serde_json::from_value(
-        json!({"name": "Work", "image": "ghcr.io/co3moz/bilskirnir/ubuntu-xfce:24.04"}),
+        json!({"name": "Work", "image": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}),
     )
     .unwrap()
 }
@@ -74,7 +74,7 @@ fn name_internet_and_limits_change_in_place_while_creation_settings_restart() {
 #[test]
 fn a_new_identity_recreates_the_container_and_none_cannot_replace_one() {
     let old = ContainerSpec {
-        hostname: Some("bilskirnir-e".into()),
+        hostname: Some("thoric-e".into()),
         mac_address: Some("02:00:00:00:00:01".into()),
         machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
         ..spec()
@@ -120,7 +120,7 @@ fn every_setting_that_recreates_the_container_is_named_in_the_dashboards_warning
     let old = ContainerSpec {
         cpus: Some(2.0),
         memory_mb: Some(2048),
-        hostname: Some("bilskirnir-e".into()),
+        hostname: Some("thoric-e".into()),
         mac_address: Some("02:00:00:00:00:01".into()),
         machine_id: Some("8aed3e38ba435c50deadb0896ace189b".into()),
         ..spec()
@@ -179,12 +179,9 @@ fn requests_cannot_change_the_image_or_reach_unknown_or_invalid_settings() {
         &request(json!({"image": current.image, "sudo": false})),
     );
     assert!(!same_image.unwrap().sudo);
-    let error = merged_spec(
-        &current,
-        &request(json!({"image": "bilskirnir/custom:other"})),
-    )
-    .unwrap_err()
-    .to_string();
+    let error = merged_spec(&current, &request(json!({"image": "thoric/custom:other"})))
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("cannot change"), "{error}");
     let error = merged_spec(&current, &request(json!({"privileged": true})))
         .unwrap_err()
@@ -252,9 +249,9 @@ fn volume_settings_leave_the_compose_volumes_alone() {
     .unwrap();
     let env = Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -290,9 +287,9 @@ async fn a_settings_change_cannot_mount_the_managers_own_volume() {
     let calls = crate::tests::manager_docker(&mut app);
     let env = Container {
         id: "edit".into(),
-        container: "bilskirnir-edit".into(),
-        private_network: "bilskirnir-edit-private".into(),
-        egress_network: "bilskirnir-edit-egress".into(),
+        container: "thoric-edit".into(),
+        private_network: "thoric-edit-private".into(),
+        egress_network: "thoric-edit-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -302,19 +299,19 @@ async fn a_settings_change_cannot_mount_the_managers_own_volume() {
         setup: None,
     };
     app.db.put(CONTAINERS, "edit", &env).unwrap();
-    let mounts = json!({"mounts": [{"volume": "bilskirnir-data", "target": "/workspace"}]});
+    let mounts = json!({"mounts": [{"volume": "thoric-data", "target": "/workspace"}]});
     let error = app
         .update_container("edit", request(mounts), "settings-job")
         .await
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+        "thoric-data is the manager's own volume and cannot be mounted in a desktop"
     );
     // Refused before the desktop is stopped or the settings are saved.
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\n"
+        "container inspect thoric-manager\n"
     );
     let saved: Container = app.db.get(CONTAINERS, "edit").unwrap();
     assert_eq!(saved.spec, env.spec);
@@ -330,14 +327,14 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
     let setup: crate::compose::Setup = serde_json::from_value(json!({
         "status": "completed", "image": "img", "parameters": {"DATA": "/opt/data"},
         "secrets": [],
-        "mounts": [{"volume": "bilskirnir-data", "target": "/opt/data", "readonly": false}],
+        "mounts": [{"volume": "thoric-data", "target": "/opt/data", "readonly": false}],
     }))
     .unwrap();
     let env = Container {
         id: "composed".into(),
-        container: "bilskirnir-composed".into(),
-        private_network: "bilskirnir-composed-private".into(),
-        egress_network: "bilskirnir-composed-egress".into(),
+        container: "thoric-composed".into(),
+        private_network: "thoric-composed-private".into(),
+        egress_network: "thoric-composed-egress".into(),
         source_image_id: "sha256:source".into(),
         created_at: 0,
         spec: spec(),
@@ -354,11 +351,11 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "bilskirnir-data is the manager's own volume and cannot be mounted in a desktop"
+        "thoric-data is the manager's own volume and cannot be mounted in a desktop"
     );
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap(),
-        "container inspect bilskirnir-manager\n"
+        "container inspect thoric-manager\n"
     );
     let saved: Container = app.db.get(CONTAINERS, "composed").unwrap();
     assert_eq!(saved.spec, env.spec);
@@ -393,9 +390,9 @@ async fn a_settings_change_keeps_the_volumes_a_container_mounts_and_filters_new_
         spec.mounts = serde_json::from_value(mounts).unwrap();
         Container {
             id: id.into(),
-            container: format!("bilskirnir-{id}"),
-            private_network: format!("bilskirnir-{id}-private"),
-            egress_network: format!("bilskirnir-{id}-egress"),
+            container: format!("thoric-{id}"),
+            private_network: format!("thoric-{id}-private"),
+            egress_network: format!("thoric-{id}-egress"),
             source_image_id: "sha256:source".into(),
             created_at: 0,
             spec,
@@ -455,12 +452,12 @@ fn proxied_ports_change_in_place_within_their_limits() {
 
 /// A manager whose Docker CLI is a shell script in a new directory, which it enters before
 /// `commands` run with the CLI's arguments. The container `e` exists, stopped, and the manager
-/// container is `bilskirnir-manager`.
+/// container is `thoric-manager`.
 #[cfg(unix)]
 fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!(
-        "bilskirnir-reconfigure-{}",
+        "thoric-reconfigure-{}",
         uuid::Uuid::new_v4().simple()
     ));
     std::fs::create_dir_all(&dir).unwrap();
@@ -478,12 +475,12 @@ fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.data = dir.join("data");
-    config.manager = Some("bilskirnir-manager".into());
+    config.manager = Some("thoric-manager".into());
     let env = Container {
         id: "e".into(),
-        container: "bilskirnir-e".into(),
-        private_network: "bilskirnir-e-private".into(),
-        egress_network: "bilskirnir-e-egress".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
         source_image_id: "sha256:desktop".into(),
         created_at: 1,
         spec: spec(),
@@ -497,7 +494,7 @@ fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
 }
 
 #[cfg(unix)]
-const STOPPED: &str = r#"[{"Id":"c0ffee","Config":{"Image":"sha256:desktop","Labels":{"bilskirnir.managed":"true","bilskirnir.environment":"e"}},"State":{"Running":false}}]"#;
+const STOPPED: &str = r#"[{"Id":"c0ffee","Config":{"Image":"sha256:desktop","Labels":{"thoric.managed":"true","thoric.environment":"e"}},"State":{"Running":false}}]"#;
 
 #[cfg(unix)]
 #[tokio::test]
@@ -505,10 +502,10 @@ async fn the_record_names_the_commit_before_the_new_container_is_created() {
     // Creating the new container fails; whether the old one can be renamed back is scripted.
     let (app, dir) = fake_docker(
         r#"case "$*" in
-  'container inspect bilskirnir-e') cat stopped.json; exit ;;
+  'container inspect thoric-e') cat stopped.json; exit ;;
   'container inspect '*) exit 1 ;;
   'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
-  'rename c0ffee bilskirnir-e') exit $(cat rename-status) ;;
+  'rename c0ffee thoric-e') exit $(cat rename-status) ;;
   create*) exit 1 ;;
 esac
 "#,
@@ -548,7 +545,7 @@ esac
         saved.working_image,
         Some(WorkingImage {
             image_id: "sha256:work".into(),
-            reference: "bilskirnir/container:change".into()
+            reference: "thoric/container:change".into()
         }),
         "{error:#}
 {calls}"
@@ -573,8 +570,8 @@ async fn a_retry_never_replaces_a_container_set_aside_without_its_commit_on_reco
     // The container is gone from under its name, and the one set aside is the only copy.
     let (app, dir) = fake_docker(
         r#"case "$*" in
-  'container inspect bilskirnir-manager') echo '[{"Id":"manager","Config":{"Labels":{"bilskirnir.manager":"true"}}}]'; exit ;;
-  'container inspect bilskirnir-e-previous') cat stopped.json; exit ;;
+  'container inspect thoric-manager') echo '[{"Id":"manager","Config":{"Labels":{"thoric.manager":"true"}}}]'; exit ;;
+  'container inspect thoric-e-previous') cat stopped.json; exit ;;
   'container inspect '*) exit 1 ;;
 esac
 "#,
@@ -583,7 +580,7 @@ esac
     let error = app.retry_container("e", "retry").await.unwrap_err();
     assert_eq!(
         error.to_string(),
-        format!("bilskirnir-e-previous {PREVIOUS_LEFT}")
+        format!("thoric-e-previous {PREVIOUS_LEFT}")
     );
     let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
     assert!(!calls.contains("create"), "{calls}");
@@ -592,7 +589,7 @@ esac
     let mut env: Container = app.db.get(CONTAINERS, "e").unwrap();
     env.working_image = Some(WorkingImage {
         image_id: "sha256:work".into(),
-        reference: "bilskirnir/container:change".into(),
+        reference: "thoric/container:change".into(),
     });
     app.db.put(CONTAINERS, "e", &env).unwrap();
     std::fs::write(dir.join("calls"), "").unwrap();
