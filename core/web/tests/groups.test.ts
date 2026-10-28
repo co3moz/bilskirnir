@@ -1,15 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 
-import {
-  formatNames,
-  groupNames,
-  groupPeers,
-  knownGroups,
-  nameLabel,
-  NAMES_PATTERN,
-  parseNames,
-} from "../src/lib/groups"
+import { groupNames, groupPeers, knownGroups, LABEL_PATTERN, nameLabel } from "../src/lib/groups"
+import { matchesPattern } from "../src/lib/tags"
 import type { ContainerItem, ContainerSpec } from "../src/lib/types"
 
 const cases: [string, string | null][] = JSON.parse(
@@ -35,12 +28,11 @@ describe("container groups", () => {
     expect(groupNames(spec("Web", [], { hostname: null }))).toEqual(["web"])
   })
 
-  test("the fields take names separated by commas or spaces", () => {
-    expect(parseNames(" build,  tests  build ,")).toEqual(["build", "tests"])
-    expect(formatNames(["build", "tests"])).toBe("build, tests")
-    const field = new RegExp(`^${NAMES_PATTERN}$`)
-    expect(field.test("build, team-2")).toBe(true)
-    expect(field.test("Build")).toBe(false)
+  test("a field takes the names groups.rs takes, as a browser reads its pattern", () => {
+    for (const name of ["build", "team-2", "a", "0", "a".repeat(63)])
+      expect(matchesPattern(name, LABEL_PATTERN)).toBe(true)
+    for (const name of ["Build", "-build", "build-", "bu ild", "bu,ild", "", "a".repeat(64)])
+      expect(matchesPattern(name, LABEL_PATTERN)).toBe(false)
   })
 
   test("the groups in use and the members of a container's groups", () => {
@@ -50,7 +42,13 @@ describe("container groups", () => {
       item("c", spec("Db", ["store"])),
       item("d", spec("Old", undefined as unknown as string[])),
     ]
-    expect(knownGroups(items)).toEqual(["build", "data", "store"])
+    expect(
+      knownGroups(items).map(({ name, members }) => [name, members.map((member) => member.id)])
+    ).toEqual([
+      ["build", ["a", "b"]],
+      ["data", ["a"]],
+      ["store", ["c"]],
+    ])
     expect(groupPeers(items[1]!, items).map((other) => other.id)).toEqual(["a"])
     expect(groupPeers(items[3]!, items)).toEqual([])
   })

@@ -1224,14 +1224,22 @@ export const tr: Messages = {
   "spec.ports.other": "{count} yönlendirilen port",
   "spec.groups": "Gruplar",
   "spec.groupsHint":
-    "Aynı gruptaki konteynerler kendilerine ait bir ağda birbirlerine hostname, ad ya da alias ile ulaşır. Küçük harf, rakam ve tire; virgülle ayrılır.",
-  "spec.groupsKnown": "Kullanımda: {groups}.",
+    "Aynı gruptaki konteynerler kendilerine ait bir ağda birbirlerine hostname, ad ya da alias ile ulaşır. Bir ad küçük harf, rakam ve tireden oluşur.",
+  "spec.groupsAdd": "Grup ekle",
   "spec.groupsExposed":
     "Bu masaüstünün imajı özel VNC'den eski olduğundan gruplarının üyeleri ekranını parolasız görüp yönetebilir. İmajını daha yeni bir tabandan yeniden derleyin ya da konteyneri yenisinden yeniden oluşturun.",
   "spec.aliases": "Alias'lar",
   "spec.aliasesHint": "Gruplarının üyelerinin ona ulaştığı ek adlar.",
+  "spec.aliasesAdd": "Alias ekle",
   "spec.groups.one": "{count} grup",
   "spec.groups.other": "{count} grup",
+
+  "groups.members.one": "{count} konteyner",
+  "groups.members.other": "{count} konteyner",
+
+  "tagInput.remove": "Kaldır: {name}",
+  "tagInput.clear": "Temizle",
+  "tagInput.new": "Yeni",
 
   "identity.title": "Makine kimliği",
   "identity.description":

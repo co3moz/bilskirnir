@@ -39,9 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { TagInput } from "@/components/ui/tag-input"
 import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { formatNames, NAMES_PATTERN, parseNames } from "@/lib/groups"
+import { type KnownGroup, LABEL_PATTERN } from "@/lib/groups"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { formatPorts, parsePorts, PORTS_PATTERN } from "@/lib/ports"
 import {
@@ -76,8 +77,8 @@ export type SpecDraft = {
   cpus: string
   memory_mb: string
   ports: string
-  groups: string
-  aliases: string
+  groups: string[]
+  aliases: string[]
   mounts: MountDraft[]
   proxy: ProxyDraft
 } & Record<Flag, boolean>
@@ -93,8 +94,8 @@ export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): Sp
     memory_mb: spec.memory_mb ? String(spec.memory_mb) : "",
     ...featureDraft(spec, settings),
     ports: formatPorts(spec.ports),
-    groups: formatNames(spec.groups),
-    aliases: formatNames(spec.aliases),
+    groups: spec.groups ?? [],
+    aliases: spec.aliases ?? [],
     mounts: (spec.mounts ?? []).map((mount) => ({ ...mount, key: ++mountKey })),
     proxy: proxyDraft(spec, settings),
   }
@@ -110,8 +111,8 @@ export function specBody(draft: SpecDraft) {
     memory_mb: number(draft.memory_mb),
     ...Object.fromEntries(FLAGS.map((flag) => [flag, draft[flag]])),
     ports: parsePorts(draft.ports),
-    groups: parseNames(draft.groups),
-    aliases: parseNames(draft.aliases),
+    groups: draft.groups,
+    aliases: draft.aliases,
     mounts: draft.mounts.map(({ volume, target, readonly }) => ({ volume, target, readonly })),
     ...proxyBody(draft.proxy),
   }
@@ -119,6 +120,14 @@ export function specBody(draft: SpecDraft) {
 
 const flagLabel = (flag: Flag) => t(`spec.flag.${flag}`)
 const flagDescription = (flag: Flag) => t(`spec.flag.${flag}.description`)
+
+const lowercase = (text: string) => text.toLowerCase()
+
+/** How many containers list a group, beside its suggestion. */
+function memberCount(groups: readonly KnownGroup[], name: string) {
+  const count = groups.find((group) => group.name === name)?.members.length ?? 0
+  return plural(count, { one: "groups.members.one", other: "groups.members.other" })
+}
 
 /** One line for the closed advanced section, so its values are known without opening it. */
 function advancedSummary(draft: SpecDraft) {
@@ -133,7 +142,7 @@ function advancedSummary(draft: SpecDraft) {
   ]
   const ports = parsePorts(draft.ports).length
   if (ports) parts.push(plural(ports, { one: "spec.ports.one", other: "spec.ports.other" }))
-  const groups = parseNames(draft.groups).length
+  const groups = draft.groups.length
   if (groups) parts.push(plural(groups, { one: "spec.groups.one", other: "spec.groups.other" }))
   if (draft.mounts.length)
     parts.push(plural(draft.mounts.length, { one: "spec.mounts.one", other: "spec.mounts.other" }))
@@ -163,7 +172,7 @@ export function SpecFields({
   settings?: Settings
   volumes: Volume[]
   spec?: ContainerSpec
-  groups?: string[]
+  groups?: KnownGroup[]
   vncPrivate?: boolean | null
   advancedOpen?: boolean
 }) {
@@ -344,24 +353,21 @@ export function SpecFields({
               </Field>
               <Field className="sm:col-span-2">
                 <FieldLabel htmlFor={`${id}-groups`}>{t("spec.groups")}</FieldLabel>
-                <Input
+                <TagInput
                   id={`${id}-groups`}
-                  pattern={NAMES_PATTERN}
-                  placeholder="build, tests"
-                  aria-describedby={`${id}-groups-hint`}
                   value={draft.groups}
-                  onChange={(event) => set({ groups: event.target.value })}
-                  className="font-mono"
+                  onChange={(groups) => set({ groups })}
+                  suggestions={groups.map((group) => group.name)}
+                  detail={(name) => memberCount(groups, name)}
+                  pattern={LABEL_PATTERN}
+                  normalize={lowercase}
+                  placeholder={t("spec.groupsAdd")}
+                  aria-describedby={`${id}-groups-hint`}
                 />
                 <FieldDescription id={`${id}-groups-hint`} className="text-xs">
-                  {[
-                    t("spec.groupsHint"),
-                    groups.length > 0 && t("spec.groupsKnown", { groups: formatList(groups) }),
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  {t("spec.groupsHint")}
                 </FieldDescription>
-                {vncPrivate === false && parseNames(draft.groups).length > 0 && (
+                {vncPrivate === false && draft.groups.length > 0 && (
                   <Alert>
                     <RiAlertLine className="text-warning" />
                     <AlertDescription>{t("spec.groupsExposed")}</AlertDescription>
@@ -370,13 +376,14 @@ export function SpecFields({
               </Field>
               <Field className="sm:col-span-2">
                 <FieldLabel htmlFor={`${id}-aliases`}>{t("spec.aliases")}</FieldLabel>
-                <Input
+                <TagInput
                   id={`${id}-aliases`}
-                  pattern={NAMES_PATTERN}
-                  aria-describedby={`${id}-aliases-hint`}
                   value={draft.aliases}
-                  onChange={(event) => set({ aliases: event.target.value })}
-                  className="font-mono"
+                  onChange={(aliases) => set({ aliases })}
+                  pattern={LABEL_PATTERN}
+                  normalize={lowercase}
+                  placeholder={t("spec.aliasesAdd")}
+                  aria-describedby={`${id}-aliases-hint`}
                 />
                 <FieldDescription id={`${id}-aliases-hint`} className="text-xs">
                   {t("spec.aliasesHint")}

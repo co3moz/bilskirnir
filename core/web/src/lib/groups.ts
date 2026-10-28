@@ -3,17 +3,12 @@
 // follow `groups.rs` there so the views can say what a container is reached as.
 import type { ContainerItem, ContainerSpec } from "@/lib/types"
 
-/** What the group and alias fields accept: lowercase DNS labels, separated by commas or spaces. */
-export const NAMES_PATTERN = "[a-z0-9, -]*"
-
-export function formatNames(names: readonly string[] = []) {
-  return names.join(", ")
-}
-
-/** The names a field lists, in its order, each once. */
-export function parseNames(text: string) {
-  return [...new Set(text.split(/[\s,]+/).filter(Boolean))]
-}
+/**
+ * One group name or alias as `label` in groups.rs takes it: 1 to 63 lowercase letters, digits and
+ * hyphens, without a hyphen at either end. Browsers read a `pattern` with the v flag, which wants
+ * the hyphen in a class escaped.
+ */
+export const LABEL_PATTERN = "[a-z0-9]([a-z0-9\\-]{0,61}[a-z0-9])?"
 
 // The Latin letters the manager writes without their marks; any other letter becomes a hyphen.
 const FOLDED = Object.fromEntries(
@@ -50,9 +45,15 @@ export function groupNames(spec: ContainerSpec) {
   return [...new Set(names.filter((name): name is string => !!name))]
 }
 
-/** Every group a container lists, sorted, each once. */
-export function knownGroups(items: readonly ContainerItem[]) {
-  return [...new Set(items.flatMap((item) => item.spec.groups ?? []))].sort()
+export type KnownGroup = { name: string; members: ContainerItem[] }
+
+/** Every group a container lists, sorted, with the containers that list it. */
+export function knownGroups(items: readonly ContainerItem[]): KnownGroup[] {
+  const members = new Map<string, ContainerItem[]>()
+  for (const item of items)
+    for (const name of item.spec.groups ?? [])
+      members.set(name, [...(members.get(name) ?? []), item])
+  return [...members.keys()].sort().map((name) => ({ name, members: members.get(name)! }))
 }
 
 /** The other containers that share a group with `item`. */

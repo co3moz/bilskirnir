@@ -1240,14 +1240,22 @@ export const fr: Messages = {
   "spec.ports.other": "{count} ports relayés",
   "spec.groups": "Groupes",
   "spec.groupsHint":
-    "Les conteneurs d'un même groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Minuscules, chiffres et tirets, séparés par des virgules.",
-  "spec.groupsKnown": "Déjà utilisés : {groups}.",
+    "Les conteneurs d'un même groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Un nom se compose de minuscules, de chiffres et de tirets.",
+  "spec.groupsAdd": "Ajouter un groupe",
   "spec.groupsExposed":
     "L'image de ce bureau est antérieure au VNC privé : les membres de ses groupes peuvent voir et contrôler son écran sans mot de passe. Reconstruisez son image à partir d'une base plus récente, ou recréez le conteneur à partir de celle-ci.",
   "spec.aliases": "Alias",
   "spec.aliasesHint": "D'autres noms sous lesquels les membres de ses groupes le joignent.",
+  "spec.aliasesAdd": "Ajouter un alias",
   "spec.groups.one": "{count} groupe",
   "spec.groups.other": "{count} groupes",
+
+  "groups.members.one": "{count} conteneur",
+  "groups.members.other": "{count} conteneurs",
+
+  "tagInput.remove": "Retirer {name}",
+  "tagInput.clear": "Vider",
+  "tagInput.new": "Nouveau",
 
   "identity.title": "Identité de la machine",
   "identity.description":

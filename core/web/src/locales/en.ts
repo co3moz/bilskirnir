@@ -1249,14 +1249,22 @@ export const en = {
   "spec.ports.other": "{count} proxied ports",
   "spec.groups": "Groups",
   "spec.groupsHint":
-    "Containers in the same group reach each other on a network of their own, by hostname, name or alias. Lowercase letters, digits and hyphens, separated by commas.",
-  "spec.groupsKnown": "In use: {groups}.",
+    "Containers in the same group reach each other on a network of their own, by hostname, name or alias. A name is lowercase letters, digits and hyphens.",
+  "spec.groupsAdd": "Add a group",
   "spec.groupsExposed":
     "This desktop's image predates private VNC, so the members of its groups can see and control its screen without a password. Rebuild its image from a newer base, or create the container again from one.",
   "spec.aliases": "Aliases",
   "spec.aliasesHint": "More names the members of its groups reach it by.",
+  "spec.aliasesAdd": "Add an alias",
   "spec.groups.one": "{count} group",
   "spec.groups.other": "{count} groups",
+
+  "groups.members.one": "{count} container",
+  "groups.members.other": "{count} containers",
+
+  "tagInput.remove": "Remove {name}",
+  "tagInput.clear": "Clear",
+  "tagInput.new": "New",
 
   "identity.title": "Machine identity",
   "identity.description":

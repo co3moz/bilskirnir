@@ -1236,14 +1236,22 @@ export const es: Messages = {
   "spec.ports.other": "{count} puertos redirigidos",
   "spec.groups": "Grupos",
   "spec.groupsHint":
-    "Los contenedores de un mismo grupo se alcanzan entre sí en una red propia, por nombre de host, nombre o alias. Minúsculas, dígitos y guiones, separados por comas.",
-  "spec.groupsKnown": "En uso: {groups}.",
+    "Los contenedores de un mismo grupo se alcanzan entre sí en una red propia, por nombre de host, nombre o alias. Un nombre lleva minúsculas, dígitos y guiones.",
+  "spec.groupsAdd": "Añadir un grupo",
   "spec.groupsExposed":
     "La imagen de este escritorio es anterior al VNC privado, así que los miembros de sus grupos pueden ver y controlar su pantalla sin contraseña. Reconstruye su imagen desde una base más reciente o crea de nuevo el contenedor desde una.",
   "spec.aliases": "Alias",
   "spec.aliasesHint": "Otros nombres con los que lo alcanzan los miembros de sus grupos.",
+  "spec.aliasesAdd": "Añadir un alias",
   "spec.groups.one": "{count} grupo",
   "spec.groups.other": "{count} grupos",
+
+  "groups.members.one": "{count} contenedor",
+  "groups.members.other": "{count} contenedores",
+
+  "tagInput.remove": "Quitar {name}",
+  "tagInput.clear": "Vaciar",
+  "tagInput.new": "Nuevo",
 
   "identity.title": "Identidad de la máquina",
   "identity.description":

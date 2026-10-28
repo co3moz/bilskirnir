@@ -1246,14 +1246,22 @@ export const de: Messages = {
   "spec.ports.other": "{count} weitergeleitete Ports",
   "spec.groups": "Gruppen",
   "spec.groupsHint":
-    "Container derselben Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Kleinbuchstaben, Ziffern und Bindestriche, durch Kommas getrennt.",
-  "spec.groupsKnown": "Verwendet: {groups}.",
+    "Container derselben Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen.",
+  "spec.groupsAdd": "Gruppe hinzufügen",
   "spec.groupsExposed":
     "Das Image dieses Desktops ist älter als privates VNC, daher können die Mitglieder seiner Gruppen seinen Bildschirm ohne Passwort sehen und steuern. Bauen Sie sein Image aus einer neueren Basis neu, oder erstellen Sie den Container erneut aus einer.",
   "spec.aliases": "Aliase",
   "spec.aliasesHint": "Weitere Namen, unter denen ihn die Mitglieder seiner Gruppen erreichen.",
+  "spec.aliasesAdd": "Alias hinzufügen",
   "spec.groups.one": "{count} Gruppe",
   "spec.groups.other": "{count} Gruppen",
+
+  "groups.members.one": "{count} Container",
+  "groups.members.other": "{count} Container",
+
+  "tagInput.remove": "{name} entfernen",
+  "tagInput.clear": "Leeren",
+  "tagInput.new": "Neu",
 
   "identity.title": "Maschinenidentität",
   "identity.description":
