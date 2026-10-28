@@ -2,7 +2,7 @@ import * as React from "react"
 import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { toast } from "sonner"
 
-import { AppSidebar, pageIcon, pageTitle, parentPage } from "@/components/app-sidebar"
+import { AppSidebar, pageIcon, pageParent, pageSection, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
 import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
@@ -12,6 +12,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { t, useLocale } from "@/lib/i18n"
+import { closeInspector } from "@/lib/inspector-session"
 import { useSession, useSettings } from "@/lib/queries"
 import { href, useRoute, type Page } from "@/lib/route"
 import { useServerEvents } from "@/lib/server-events"
@@ -23,7 +24,9 @@ import { ContainersPage } from "@/pages/containers"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
-import { McpPage } from "@/pages/mcp"
+import { McpEndpointsPage } from "@/pages/mcp-endpoints"
+import { McpInspectorPage } from "@/pages/mcp-inspector"
+import { McpServersPage } from "@/pages/mcp-servers"
 import { SettingsPage } from "@/pages/settings"
 import { TemplatesPage } from "@/pages/templates"
 import { VolumesPage } from "@/pages/volumes"
@@ -39,7 +42,9 @@ const pages: Record<Page, () => React.ReactNode> = {
   images: ImagesPage,
   templates: TemplatesPage,
   volumes: VolumesPage,
-  mcp: McpPage,
+  "mcp-endpoints": McpEndpointsPage,
+  "mcp-servers": McpServersPage,
+  "mcp-inspector": McpInspectorPage,
   files: FilesPage,
   jobs: JobsPage,
   activity: ActivityPage,
@@ -75,7 +80,9 @@ function readSidebarCookie() {
 
 function Shell({ page }: { page: Page }) {
   const Content = pages[page]
-  const parent = parentPage(page)
+  const section = pageSection(page)
+  // The inspector's server stays open while the pages under MCP show, and ends when they go.
+  React.useEffect(() => (section === "mcp" ? closeInspector : undefined), [section])
   return (
     <SidebarProvider
       defaultOpen={readSidebarCookie()}
@@ -88,11 +95,7 @@ function Shell({ page }: { page: Page }) {
     >
       <AppSidebar variant="inset" page={page} />
       <SidebarInset>
-        <SiteHeader
-          title={pageTitle(page)}
-          icon={pageIcon(page)}
-          parent={parent && { title: pageTitle(parent), href: href({ page: parent }) }}
-        >
+        <SiteHeader title={pageTitle(page)} icon={pageIcon(page)} parent={pageParent(page)}>
           {page === "containers" && (
             <Button size="sm" onClick={() => openDialog({ kind: "create" })}>
               <RiAddLine data-icon="inline-start" />

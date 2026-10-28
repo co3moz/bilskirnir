@@ -1,4 +1,4 @@
-// What the MCP page's inspector shows of a server: its tools, prompts, resources and resource
+// What the MCP inspector shows of a server: its tools, prompts, resources and resource
 // templates, the arguments each takes, and how a result reads. Pure helpers; the connection is
 // in mcp-client.ts.
 import type { Concept } from "./concepts"
@@ -61,7 +61,7 @@ export function targetGroups(
   ]
   if (endpoints.length)
     groups.push({
-      label: t("mcp.view.endpoints"),
+      label: t("nav.mcp-endpoints"),
       concept: "mcp",
       choices: [...endpoints]
         .sort((a, b) => a.name.localeCompare(b.name))

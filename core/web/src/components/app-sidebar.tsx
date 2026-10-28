@@ -3,9 +3,12 @@ import {
   RiBookOpenLine,
   RiFolderOpenLine,
   RiDashboardLine,
+  RiLinkM,
   RiListCheck3,
   RiPulseLine,
   RiBookletLine,
+  RiSearchEyeLine,
+  RiServerLine,
   RiSettings3Line,
 } from "@remixicon/react"
 
@@ -31,26 +34,29 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
-/** Pages that belong to another page, which the sidebar keeps open while one of them is. */
-const parents: Partial<Record<Page, Page>> = {
-  activity: "mcp",
-  jobs: "settings",
-  dependencies: "settings",
-}
-export const parentPage = (page: Page): Page | undefined => parents[page]
-
 type NavPage = { page: Page; icon: React.ReactNode; badge?: React.ReactNode }
+/**
+ * A sidebar entry, with the pages listed below it while one of them is open. A section is only
+ * a name for its pages, and its link opens the first of them.
+ */
+type NavEntry = NavPage & { section?: "mcp"; children?: NavPage[] }
 
-const navMain: (NavPage & { children?: NavPage[] })[] = [
+const navMain: NavEntry[] = [
   { page: "dashboard", icon: <RiDashboardLine /> },
   { page: "containers", icon: <ConceptIcon concept="container" /> },
   { page: "images", icon: <ConceptIcon concept="image" /> },
   { page: "templates", icon: <ConceptIcon concept="template" /> },
   { page: "volumes", icon: <ConceptIcon concept="volume" /> },
   {
-    page: "mcp",
+    section: "mcp",
+    page: "mcp-endpoints",
     icon: <ConceptIcon concept="mcp" />,
-    children: [{ page: "activity", icon: <RiPulseLine /> }],
+    children: [
+      { page: "mcp-endpoints", icon: <ConceptIcon concept="mcp" icon={RiLinkM} /> },
+      { page: "mcp-servers", icon: <ConceptIcon concept="mcp" icon={RiServerLine} /> },
+      { page: "mcp-inspector", icon: <RiSearchEyeLine /> },
+      { page: "activity", icon: <RiPulseLine /> },
+    ],
   },
   { page: "files", icon: <RiFolderOpenLine /> },
   {
@@ -60,10 +66,37 @@ const navMain: (NavPage & { children?: NavPage[] })[] = [
   },
 ]
 const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
+const entryTitle = (entry: NavEntry) =>
+  entry.section ? t(`nav.${entry.section}`) : pageTitle(entry.page)
+
+/** Pages the sidebar does not list, by the page they are reached from. */
+const reachedFrom: Partial<Record<Page, Page>> = { dependencies: "settings" }
+
+/** The sidebar entry a page is listed under, or that of the page it is reached from. */
+function entryOf(page: Page) {
+  const listed = reachedFrom[page] ?? page
+  return navMain.find(
+    (entry) => entry.page === listed || entry.children?.some((child) => child.page === listed)
+  )
+}
+
+/** The sidebar entry a page belongs to, which the sidebar keeps open while the page shows. */
+export function pageSection(page: Page): string {
+  const entry = entryOf(page)
+  return entry ? (entry.section ?? entry.page) : page
+}
+
+/** The entry the header names before a page, when the page is not that entry's own. */
+export function pageParent(page: Page) {
+  const entry = entryOf(page)
+  if (!entry || (entry.section ?? entry.page) === page) return undefined
+  return { title: entryTitle(entry), href: href({ page: entry.page }) }
+}
 
 /** A page's icon, in its concept's color on the pages of one kind of thing. */
 export const pageIcon = (page: Page) => {
-  const pages = navMain.flatMap((item) => [item, ...(item.children ?? [])])
+  // A section's first page has an icon of its own beside the section's.
+  const pages = navMain.flatMap((item) => [...(item.children ?? []), item])
   return pages.find((item) => item.page === page)?.icon
 }
 
@@ -105,9 +138,11 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain
           active={page}
-          section={parentPage(page) ?? page}
+          section={pageSection(page)}
           items={navMain.map((item) => ({
-            ...titled(item),
+            ...item,
+            section: item.section ?? item.page,
+            title: entryTitle(item),
             children: item.children?.map(titled),
           }))}
         />

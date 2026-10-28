@@ -33,7 +33,7 @@ function refresh(keys: string[]) {
     flush = undefined
     for (const key of keys)
       void queryClient.invalidateQueries(
-        // The MCP page keeps several lists under one key.
+        // The MCP pages keep several lists under one key.
         { queryKey: [key], exact: key !== "mcp" },
         { cancelRefetch: false }
       )

@@ -142,8 +142,7 @@ export const es: Messages = {
   "activity.credential.none": "Sin token",
   "activity.credential.inspector": "Inspector",
   "activity.credential.link": "Enlace de transferencia",
-  "activity.credentialHint.inspector":
-    "Hecha desde el inspector de la página MCP, no por un agente",
+  "activity.credentialHint.inspector": "Hecha desde el inspector MCP, no por un agente",
   "activity.kind.read": "Lectura",
   "activity.kind.change": "Cambio",
   "activity.kind.destructive": "Destructiva",
@@ -855,6 +854,9 @@ export const es: Messages = {
   "nav.desktop": "Escritorio",
   "nav.documentation": "Documentación",
   "nav.mcp": "MCP",
+  "nav.mcp-endpoints": "Puntos de acceso",
+  "nav.mcp-servers": "Servidores del escritorio",
+  "nav.mcp-inspector": "Inspector",
   "nav.files": "Archivos",
   "nav.settings": "Administración",
   "filesPage.title": "Archivos de los contenedores",
@@ -1229,7 +1231,7 @@ export const es: Messages = {
   "create.image": "Imagen",
   "create.mcpEndpoint": "Crear un punto de acceso MCP",
   "create.mcpEndpointHint":
-    "Un punto de acceso con el nombre del contenedor, solo para él, con los ámbitos predeterminados y todos sus servidores MCP del escritorio. Crea su token en la página MCP.",
+    "Un punto de acceso con el nombre del contenedor, solo para él, con los ámbitos predeterminados y todos sus servidores MCP del escritorio. Crea su token en la página Puntos de acceso.",
   "settings.unchanged": "No se cambió ningún ajuste.",
   "settings.title": "Ajustes del contenedor",
   "settings.description":
@@ -1306,10 +1308,8 @@ export const es: Messages = {
   "mcp.rootOff": "El /mcp raíz está desactivado",
   "mcp.rootOffHint":
     "Los puntos de acceso de abajo responden a los agentes con sus propios tokens en cualquier caso. El /mcp raíz, que llega a todos los contenedores, sigue ROOT_MCP_ENABLED en el .env de la instalación.",
-  "mcp.view.endpoints": "Puntos de acceso",
-  "mcp.view.servers": "Servidores del escritorio",
-  "mcp.view.inspector": "Inspector",
   "mcp.namePattern": "Letras minúsculas, dígitos y guiones, empezando por una letra o un dígito",
+  "mcp.endpoints.title": "Puntos de acceso MCP",
   "mcp.endpoints.description":
     "Cada punto de acceso da a un agente parte de las herramientas del contenedor y las de los servidores MCP del escritorio elegidos, con un token propio. Thoric MCP en {admin} conserva el acceso de administrador a todo.",
   "mcp.endpoints.loading": "Cargando puntos de acceso…",
@@ -1472,6 +1472,7 @@ export const es: Messages = {
     "Los conectores de Claude Desktop llegan a los servidores desde la nube de Anthropic, no a esta dirección, así que inicia un programa local en su lugar. En Windows con el paquete WSL de Thoric, el puente del gestor no necesita token; en otros sistemas, mcp-remote se conecta a la URL. Abre el archivo desde Settings, Developer, Edit Config y reinicia Claude Desktop después de guardarlo.",
   "mcp.connect.hint.generic":
     "Un cliente que habla Streamable HTTP necesita la URL y una cabecera Authorization con el token Bearer. Uno que solo inicia programas locales puede usar el puente mediante WSL.",
+  "mcp.servers.title": "Servidores MCP del escritorio",
   "mcp.servers.description":
     "Servidores MCP que se ejecutan dentro de los contenedores, declarados por la imagen o añadidos en el escritorio en marcha. Los agentes llegan a sus herramientas a través de los puntos de acceso que los incluyen.",
   "mcp.servers.loading": "Cargando servidores del escritorio…",
@@ -1555,6 +1556,7 @@ export const es: Messages = {
   "mcp.read.list": "El campo mcp de la configuración debe ser una lista de servidores.",
   "mcp.read.twice": "El servidor MCP del escritorio {name} está declarado dos veces.",
 
+  "inspector.title": "Inspector MCP",
   "inspector.description":
     "Abre un servidor MCP para ver lo que ofrece y probar sus herramientas, prompts y recursos. Un servidor del escritorio se ejecuta en un proceso propio para el inspector; un punto de acceso y Thoric MCP responden como responden a un agente.",
   "inspector.open": "Probar en el inspector",

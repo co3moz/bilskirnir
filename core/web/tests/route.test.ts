@@ -10,7 +10,9 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
     "images",
     "templates",
     "volumes",
-    "mcp",
+    "mcp-endpoints",
+    "mcp-servers",
+    "mcp-inspector",
     "files",
     "jobs",
     "activity",
@@ -21,6 +23,17 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
   assert.deepEqual(parseRoute(""), { page: "dashboard" })
   assert.deepEqual(parseRoute("#/nowhere"), { page: "dashboard" })
   assert.deepEqual(parseRoute("#/desktop"), { page: "dashboard" })
+})
+
+test("each MCP page has a link under #/mcp, and the MCP page's old link opens the endpoints", () => {
+  assert.equal(href({ page: "mcp-endpoints" }), "#/mcp/endpoints")
+  assert.equal(href({ page: "mcp-servers" }), "#/mcp/servers")
+  assert.equal(href({ page: "mcp-inspector" }), "#/mcp/inspector")
+  assert.deepEqual(parseRoute("#/mcp"), { page: "mcp-endpoints" })
+  assert.deepEqual(parseRoute("#/mcp/"), { page: "mcp-endpoints" })
+  assert.deepEqual(parseRoute("#/mcp/nowhere"), { page: "mcp-endpoints" })
+  // The pages' own names are not links of their own.
+  assert.deepEqual(parseRoute("#/mcp-servers"), { page: "dashboard" })
 })
 
 test("a desktop link carries its container ID intact", () => {

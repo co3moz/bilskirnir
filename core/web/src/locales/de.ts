@@ -144,8 +144,7 @@ export const de: Messages = {
   "activity.credential.none": "Kein Token",
   "activity.credential.inspector": "Inspektor",
   "activity.credential.link": "Übertragungslink",
-  "activity.credentialHint.inspector":
-    "Vom Inspektor der MCP-Seite ausgeführt, nicht von einem Agenten",
+  "activity.credentialHint.inspector": "Vom MCP-Inspektor ausgeführt, nicht von einem Agenten",
   "activity.kind.read": "Lesen",
   "activity.kind.change": "Ändern",
   "activity.kind.destructive": "Zerstörerisch",
@@ -864,6 +863,9 @@ export const de: Messages = {
   "nav.desktop": "Desktop",
   "nav.documentation": "Dokumentation",
   "nav.mcp": "MCP",
+  "nav.mcp-endpoints": "Endpunkte",
+  "nav.mcp-servers": "Desktop-Server",
+  "nav.mcp-inspector": "Inspektor",
   "nav.files": "Dateien",
   "nav.settings": "Verwaltung",
   "filesPage.title": "Container-Dateien",
@@ -1239,7 +1241,7 @@ export const de: Messages = {
   "create.image": "Image",
   "create.mcpEndpoint": "MCP-Endpunkt erstellen",
   "create.mcpEndpointHint":
-    "Ein Endpunkt mit dem Namen des Containers, nur für ihn, mit den Standardbereichen und all seinen Desktop-MCP-Servern. Sein Token erstellen Sie auf der MCP-Seite.",
+    "Ein Endpunkt mit dem Namen des Containers, nur für ihn, mit den Standardbereichen und all seinen Desktop-MCP-Servern. Sein Token erstellen Sie auf der Seite Endpunkte.",
   "settings.unchanged": "Keine Einstellungen geändert.",
   "settings.title": "Container-Einstellungen",
   "settings.description":
@@ -1317,11 +1319,9 @@ export const de: Messages = {
   "mcp.rootOff": "Das Root-/mcp ist ausgeschaltet",
   "mcp.rootOffHint":
     "Die Endpunkte unten antworten Agenten in jedem Fall mit ihren eigenen Tokens. Das Root-/mcp, das jeden Container erreicht, folgt ROOT_MCP_ENABLED in der .env der Installation.",
-  "mcp.view.endpoints": "Endpunkte",
-  "mcp.view.servers": "Desktop-Server",
-  "mcp.view.inspector": "Inspektor",
   "mcp.namePattern":
     "Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben oder einer Ziffer",
+  "mcp.endpoints.title": "MCP-Endpunkte",
   "mcp.endpoints.description":
     "Jeder Endpunkt gibt einem Agenten einen Teil der Container-Werkzeuge und die Werkzeuge ausgewählter Desktop-MCP-Server, mit einem eigenen Token. Thoric MCP unter {admin} behält den Administratorzugriff auf alles.",
   "mcp.endpoints.loading": "Endpunkte werden geladen…",
@@ -1483,6 +1483,7 @@ export const de: Messages = {
     "Die Connectors von Claude Desktop erreichen Server aus der Cloud von Anthropic, nicht diese Adresse, daher startet es stattdessen ein lokales Programm. Unter Windows mit dem WSL-Paket von Thoric braucht die Brücke im Manager kein Token; anderswo verbindet sich mcp-remote mit der URL. Öffnen Sie die Datei über Settings, Developer, Edit Config und starten Sie Claude Desktop nach dem Speichern neu.",
   "mcp.connect.hint.generic":
     "Ein Client, der Streamable HTTP spricht, braucht die URL und einen Authorization-Header mit dem Bearer-Token. Einer, der nur lokale Programme startet, kann die Brücke über WSL nutzen.",
+  "mcp.servers.title": "Desktop-MCP-Server",
   "mcp.servers.description":
     "MCP-Server, die in Containern laufen, vom Image deklariert oder im laufenden Desktop hinzugefügt. Agenten erreichen ihre Werkzeuge über die Endpunkte, die sie einschließen.",
   "mcp.servers.loading": "Desktop-Server werden geladen…",
@@ -1565,6 +1566,7 @@ export const de: Messages = {
   "mcp.read.list": "mcp in der Konfiguration muss eine Liste von Servern sein.",
   "mcp.read.twice": "Der Desktop-MCP-Server {name} ist doppelt deklariert.",
 
+  "inspector.title": "MCP-Inspektor",
   "inspector.description":
     "Öffnen Sie einen MCP-Server, um zu sehen, was er anbietet, und seine Werkzeuge, Prompts und Ressourcen auszuprobieren. Ein Desktop-Server läuft für den Inspektor in einem eigenen Prozess; ein Endpunkt und Thoric MCP antworten so, wie sie einem Agenten antworten.",
   "inspector.open": "Im Inspektor testen",

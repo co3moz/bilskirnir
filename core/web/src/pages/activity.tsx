@@ -326,7 +326,7 @@ export function ActivityPage() {
                 <EmptyDescription>{t("activity.empty.description")}</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button variant="outline" onClick={() => navigate({ page: "mcp" })}>
+                <Button variant="outline" onClick={() => navigate({ page: "mcp-endpoints" })}>
                   <ConceptIcon concept="mcp" data-icon="inline-start" />
                   {t("activity.empty.action")}
                 </Button>

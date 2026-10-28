@@ -1,4 +1,4 @@
-// MCP endpoints and desktop MCP servers as the MCP page and the forms show them. Thoric MCP at
+// MCP endpoints and desktop MCP servers as the MCP pages and the forms show them. Thoric MCP at
 // `/mcp` is the administrator channel; an endpoint at `/mcp/<name>` gives an agent some of the
 // container tools of the containers it covers, plus the tools of their desktop MCP servers.
 import type { Tone } from "./format"

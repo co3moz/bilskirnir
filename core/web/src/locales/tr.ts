@@ -139,9 +139,9 @@ export const tr: Messages = {
   "activity.credential.endpoint_token": "Uç noktanın token'ı",
   "activity.credential.mcp_token": "MCP token'ı",
   "activity.credential.none": "Token yok",
-  "activity.credential.inspector": "Test sekmesi",
+  "activity.credential.inspector": "Test sayfası",
   "activity.credential.link": "Aktarım bağlantısı",
-  "activity.credentialHint.inspector": "Bir ajan değil, MCP sayfasının test sekmesi çalıştırdı",
+  "activity.credentialHint.inspector": "Bir ajan değil, MCP test sayfası çalıştırdı",
   "activity.kind.read": "Okuma",
   "activity.kind.change": "Değişiklik",
   "activity.kind.destructive": "Yıkıcı",
@@ -851,6 +851,9 @@ export const tr: Messages = {
   "nav.desktop": "Masaüstü",
   "nav.documentation": "Dokümantasyon",
   "nav.mcp": "MCP",
+  "nav.mcp-endpoints": "Uç noktalar",
+  "nav.mcp-servers": "Masaüstü sunucuları",
+  "nav.mcp-inspector": "Test",
   "nav.files": "Dosyalar",
   "nav.settings": "Yönetim",
   "filesPage.title": "Konteyner dosyaları",
@@ -1217,7 +1220,7 @@ export const tr: Messages = {
   "create.image": "İmaj",
   "create.mcpEndpoint": "MCP uç noktası oluştur",
   "create.mcpEndpointHint":
-    "Konteynerin adını taşıyan, yalnızca ona ait, varsayılan kapsamlara ve tüm masaüstü MCP sunucularına sahip bir uç nokta. Token'ını MCP sayfasında oluşturun.",
+    "Konteynerin adını taşıyan, yalnızca ona ait, varsayılan kapsamlara ve tüm masaüstü MCP sunucularına sahip bir uç nokta. Token'ını Uç noktalar sayfasında oluşturun.",
   "settings.unchanged": "Hiçbir ayar değişmedi.",
   "settings.title": "Konteyner ayarları",
   "settings.description":
@@ -1294,10 +1297,8 @@ export const tr: Messages = {
   "mcp.rootOff": "Kök /mcp kapalı",
   "mcp.rootOffHint":
     "Aşağıdaki uç noktalar ajanlara her durumda kendi token'larıyla yanıt verir. Her konteynere ulaşan kök /mcp, kurulumun .env dosyasındaki ROOT_MCP_ENABLED ayarına uyar.",
-  "mcp.view.endpoints": "Uç noktalar",
-  "mcp.view.servers": "Masaüstü sunucuları",
-  "mcp.view.inspector": "Test",
   "mcp.namePattern": "Küçük harf, rakam ve tire; bir harf ya da rakamla başlar",
+  "mcp.endpoints.title": "MCP uç noktaları",
   "mcp.endpoints.description":
     "Her uç nokta bir ajana konteyner araçlarının bir kısmını ve seçilen masaüstü MCP sunucularının araçlarını kendi token'ıyla verir. {admin} adresindeki Thoric MCP her şeye yönetici erişimini korur.",
   "mcp.endpoints.loading": "Uç noktalar yükleniyor…",
@@ -1455,6 +1456,7 @@ export const tr: Messages = {
     "Claude Desktop'ın connector'ları sunuculara bu adresten değil Anthropic'in bulutundan ulaşır, bu yüzden onun yerine yerel bir program başlatır. Windows'ta Thoric WSL paketiyle yöneticideki köprü token gerektirmez; başka yerlerde mcp-remote URL'ye bağlanır. Dosyayı Settings, Developer, Edit Config ile açın ve kaydettikten sonra Claude Desktop'ı yeniden başlatın.",
   "mcp.connect.hint.generic":
     "Streamable HTTP konuşan bir istemciye URL ve bearer token içeren bir Authorization başlığı yeter. Yalnızca yerel programları başlatan bir istemci WSL üzerinden köprüyü kullanabilir.",
+  "mcp.servers.title": "Masaüstü MCP sunucuları",
   "mcp.servers.description":
     "Konteynerlerin içinde çalışan, imajın tanımladığı ya da çalışan masaüstünde eklenen MCP sunucuları. Ajanlar araçlarına onları içeren uç noktalar üzerinden ulaşır.",
   "mcp.servers.loading": "Masaüstü sunucuları yükleniyor…",
@@ -1537,10 +1539,11 @@ export const tr: Messages = {
   "mcp.read.list": "Yapılandırmadaki mcp bir sunucu listesi olmalı.",
   "mcp.read.twice": "{name} masaüstü MCP sunucusu iki kez tanımlanmış.",
 
+  "inspector.title": "MCP test aracı",
   "inspector.description":
     "Bir MCP sunucusunu açıp neler sunduğunu görün, araçlarını, istemlerini ve kaynaklarını deneyin. Masaüstü sunucusu test için ayrı bir süreçte çalışır; uç noktalar ve Thoric MCP bir ajana nasıl yanıt veriyorsa öyle yanıt verir.",
-  "inspector.open": "Test sekmesinde aç",
-  "inspector.openOf": "{name} sunucusunu Test sekmesinde aç",
+  "inspector.open": "Test sayfasında aç",
+  "inspector.openOf": "{name} sunucusunu Test sayfasında aç",
   "inspector.connection.title": "Sunucu",
   "inspector.connection.connect": "Bağlan",
   "inspector.connection.reconnect": "Yeniden bağlan",

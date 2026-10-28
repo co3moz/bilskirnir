@@ -22,16 +22,16 @@ type NavItem = { page: Page; title: string; icon?: React.ReactNode; badge?: Reac
 
 /**
  * The pages, with the open one marked. An item's own pages show below it while one of them, or a
- * page that belongs to the item, is open; `section` is the item the open page belongs to.
+ * page that belongs to the item, is open; `section` names the item the open page belongs to.
  */
 export function NavMain({
   items,
   active,
   section,
 }: {
-  items: (NavItem & { children?: NavItem[] })[]
+  items: (NavItem & { section: string; children?: NavItem[] })[]
   active: Page
-  section: Page
+  section: string
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
   // The mobile sidebar is a sheet over the page; following a link should reveal the page.
@@ -74,10 +74,10 @@ export function NavMain({
         </SidebarMenu>
         <SidebarMenu>
           {items.map((item) => {
-            const open = item.page === section
+            const open = item.section === section
             const onChild = item.children?.some((child) => child.page === active)
             return (
-              <SidebarMenuItem key={item.page}>
+              <SidebarMenuItem key={item.section}>
                 <SidebarMenuButton tooltip={item.title} isActive={open && !onChild} asChild>
                   <a href={href({ page: item.page })} onClick={close}>
                     {item.icon}
