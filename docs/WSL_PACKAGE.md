@@ -56,9 +56,11 @@ Then it asks who can reach the dashboard, and with it the agent endpoint, which 
 
 Before this question the setup warns when there is no password or agents need no token, since any device that reaches the address then controls every container.
 
-The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/thoric/.env` and asks whether to start Thoric now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080). With agent access on, the setup ends by printing the agent endpoint and client settings, which `thoric mcp` shows again later.
+Next it asks for the dashboard's port, `PORT`: Enter keeps 8080, or type another from 1 to 65535. Windows programs open the dashboard at localhost on that port, so choose another one when a program on Windows already uses 8080. With **Other devices too** it then asks for names other devices may open the dashboard by, such as the computer's name, separated by commas; they go into `ALLOWED_HOSTS` beside `localhost`. IP addresses need no name, and an empty answer lists none.
 
-A first start with piped input, such as an automated installation, answers each menu with a line holding the answer's first word (`yes`, `no`, `random`, `custom`, `none`, `this`, `other`) or its first letter; an empty line or the end of the input picks the default. It is not asked whether to start, and leaves that to `thoric start`.
+The setup then detects the WSL GPU device and CUDA libraries, writes the settings to `/opt/thoric/.env` and asks whether to start Thoric now, with the same kind of menu and **Yes** as the default. Starting downloads the manager and brings it up; the dashboard is then at [localhost:8080](http://localhost:8080), or at the port you chose. With agent access on, the setup ends by printing the agent endpoint and client settings, which `thoric mcp` shows again later.
+
+A first start with piped input, such as an automated installation, reads one line for each question in the order they are asked. A menu's line holds the answer's first word (`yes`, `no`, `random`, `custom`, `none`, `this`, `other`) or its first letter, the port's a number and the names' a list separated by commas; an empty line or the end of the input picks the default. An answer it cannot use ends the setup before anything is created. It is not asked whether to start, and leaves that to `thoric start`.
 
 ## The Windows helper
 
@@ -96,9 +98,9 @@ The helper's `stop` stops the manager and shuts the distribution down.
 
 ## Access from other devices
 
-The first start asks whether other devices may reach the dashboard and the agent endpoint, and records the answer as `BIND_ADDRESS` in `.env`: `127.0.0.1` for this computer only, `0.0.0.0` for other devices too. Change it later with `thoric settings`, then run `thoric restart`. `thoric status` and `thoric doctor` show which one is in effect, and `doctor` also names the WSL networking mode.
+The first start asks whether other devices may reach the dashboard and the agent endpoint, and records the answer as `BIND_ADDRESS` in `.env`: `127.0.0.1` for this computer only, `0.0.0.0` for other devices too. Change it later with `thoric settings`, then run `thoric restart`. `thoric status` and `thoric doctor` show which one is in effect, and `doctor` also names the WSL networking mode. The port the first start asks for next is `PORT`, which changes the same way.
 
-Set a password before opening it. Without one the dashboard has no sign-in, and with `MCP_AUTH_MODE=none` agents need no token, so any device that reaches the address controls every container. Over plain HTTP the password and the token cross the network readable; on a network you do not trust, use the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan). Other devices open the Windows computer's address, such as `http://192.168.1.20:8080`. A name instead of an address, such as the computer's name, has to be listed in `ALLOWED_HOSTS`.
+Set a password before opening it. Without one the dashboard has no sign-in, and with `MCP_AUTH_MODE=none` agents need no token, so any device that reaches the address controls every container. Over plain HTTP the password and the token cross the network readable; on a network you do not trust, use the [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan). Other devices open the Windows computer's address, such as `http://192.168.1.20:8080`. A name instead of an address, such as the computer's name, has to be listed in `ALLOWED_HOSTS`, which the first start asks for and the dashboard's Management page changes.
 
 `BIND_ADDRESS=0.0.0.0` opens the port inside the distribution. Whether other devices get through Windows to it depends on the WSL networking mode, a Windows setting for every distribution together, which the package leaves alone. The [Windows helper](#the-windows-helper) sets up what the mode needs: choose **Let other devices reach the dashboard**, or give it the command directly:
 
@@ -254,7 +256,7 @@ The disk file does not shrink when images or containers are deleted. Two ways re
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing other devices.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
 - Root agent access is enabled unless the first start turned it off: `ROOT_MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `thoric mcp` prints the endpoint, the token and the [client settings](MCP.md); root agent access grants administrator access to every container, so set `ROOT_MCP_ENABLED=false` in `.env` and restart if no agent needs that, and give agents [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers instead, which answer either way. Without a token it is safe only while the manager listens on localhost. Installations from before 0.6.3 have the setting as `MCP_ENABLED`, which keeps working until `thoric update` renames it.
-- The manager listens on `127.0.0.1:8080`, or on `0.0.0.0:8080` when the first start allowed other devices. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).
+- The manager listens on `127.0.0.1`, or on `0.0.0.0` when the first start allowed other devices, at the port the first start asked for, `8080` by default. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).
 
 ## Docker in other WSL distributions
 
