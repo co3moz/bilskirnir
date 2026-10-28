@@ -329,3 +329,42 @@ fn a_change_is_read_as_the_manager_would_start_with_it() {
             .is_empty()
     );
 }
+
+/// The Settings page puts each `<NAME>_DEFAULT` beside its `<NAME>_ENABLED` and switches it off
+/// while that one is off, the microphone's also without sound (`settingRows` and `idleSettings`
+/// in `core/web/src/lib/settings.ts`), which holds only while a default never gives more.
+#[test]
+fn a_default_gives_nothing_while_its_feature_is_switched_off() {
+    let mut app = crate::tests::app(true);
+    let config = &mut Arc::get_mut(&mut app).unwrap().config;
+    config.environment = BTreeMap::from([
+        ("AUTH_MODE".into(), "password".into()),
+        ("DESKTOP_CONTEXT".into(), DESKTOP_CONTEXT.into()),
+    ]);
+    let shown = names(config);
+    let paired: Vec<&str> = shown
+        .iter()
+        .filter_map(|name| name.strip_suffix("_DEFAULT"))
+        .filter(|base| shown.contains(&format!("{base}_ENABLED")))
+        .collect();
+    assert_eq!(
+        paired,
+        ["INTERNET", "SUDO", "AUDIO", "MICROPHONE", "GAMEPAD"]
+    );
+    let defaults = |off: &[&str]| {
+        let mut changes: BTreeMap<String, String> = paired
+            .iter()
+            .map(|base| (format!("{base}_DEFAULT"), "true".into()))
+            .collect();
+        changes.extend(off.iter().map(|name| (name.to_string(), "false".into())));
+        serde_json::to_value(config.with_changes(&changes).unwrap().feature_defaults()).unwrap()
+    };
+    for base in &paired {
+        let feature = base.to_lowercase();
+        assert_eq!(defaults(&[])[&feature], true, "{base}_DEFAULT");
+        let enabled = format!("{base}_ENABLED");
+        assert_eq!(defaults(&[enabled.as_str()])[&feature], false, "{enabled}");
+    }
+    // The microphone travels over the audio connection.
+    assert_eq!(defaults(&["AUDIO_ENABLED"])["microphone"], false);
+}

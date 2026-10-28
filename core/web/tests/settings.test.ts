@@ -9,10 +9,12 @@ import {
   featureDraft,
   gpuNotes,
   FIELDS,
+  idleSettings,
   initialText,
   releaseState,
   SECTION_OF,
   sections,
+  settingRows,
   shownValue,
   textProblem,
 } from "../src/lib/settings"
@@ -217,4 +219,64 @@ test("the GPU card names every missing route only when desktops get no GPU", () 
     assert.ok(`settings.gpu.reason.${reason}` in en, reason)
   for (const route of ["wsl", "nvidia", "dri"])
     assert.ok(`settings.gpu.route.${route}` in en, route)
+})
+
+/** The container features as the manager lists them, every switch on. */
+const FEATURE_SWITCHES: ConfigVariable[] = [
+  "AUDIO_ENABLED",
+  "MICROPHONE_ENABLED",
+  "INTERNET_ENABLED",
+  "SUDO_ENABLED",
+  "GAMEPAD_ENABLED",
+  "GPU_DEFAULT",
+  "INTERNET_DEFAULT",
+  "SUDO_DEFAULT",
+  "AUDIO_DEFAULT",
+  "MICROPHONE_DEFAULT",
+  "GAMEPAD_DEFAULT",
+].map((name) => ({ name, value: true, editable: true }))
+
+test("a feature's switch and its default for new containers share a row", () => {
+  const names = (variables: ConfigVariable[]) =>
+    settingRows(variables).map((row) => row.map((variable) => variable.name))
+  assert.deepEqual(names(FEATURE_SWITCHES), [
+    ["AUDIO_ENABLED", "AUDIO_DEFAULT"],
+    ["MICROPHONE_ENABLED", "MICROPHONE_DEFAULT"],
+    ["INTERNET_ENABLED", "INTERNET_DEFAULT"],
+    ["SUDO_ENABLED", "SUDO_DEFAULT"],
+    ["GAMEPAD_ENABLED", "GAMEPAD_DEFAULT"],
+    // The GPU has routes rather than a switch of its own.
+    ["GPU_DEFAULT"],
+  ])
+  // A pair stands where the first of the two was; a switch without a default stands alone.
+  assert.deepEqual(
+    names([
+      { name: "ROOT_MCP_ENABLED", value: false },
+      { name: "WEBCAM_DEFAULT", value: true },
+      { name: "UPLOAD_MAX_MB", value: 1024 },
+      { name: "WEBCAM_ENABLED", value: true },
+    ]),
+    [["ROOT_MCP_ENABLED"], ["WEBCAM_ENABLED", "WEBCAM_DEFAULT"], ["UPLOAD_MAX_MB"]]
+  )
+})
+
+test("a default goes idle with its feature, and the microphone with sound", () => {
+  const idle = (...off: string[]) => idleSettings(FEATURE_SWITCHES, (name) => !off.includes(name))
+  assert.deepEqual(idle(), {})
+  assert.deepEqual(idle("INTERNET_ENABLED", "GAMEPAD_ENABLED"), {
+    INTERNET_DEFAULT: "INTERNET_ENABLED",
+    GAMEPAD_DEFAULT: "GAMEPAD_ENABLED",
+  })
+  assert.deepEqual(idle("MICROPHONE_ENABLED"), { MICROPHONE_DEFAULT: "MICROPHONE_ENABLED" })
+  // Without sound the microphone is off too, whatever its own switch says.
+  assert.deepEqual(idle("AUDIO_ENABLED"), {
+    MICROPHONE_ENABLED: "AUDIO_ENABLED",
+    AUDIO_DEFAULT: "AUDIO_ENABLED",
+    MICROPHONE_DEFAULT: "AUDIO_ENABLED",
+  })
+  // A default whose switch is not listed, such as the GPU's, never goes idle.
+  assert.deepEqual(
+    idleSettings([{ name: "GPU_DEFAULT", value: true }], () => false),
+    {}
+  )
 })

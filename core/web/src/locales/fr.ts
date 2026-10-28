@@ -943,6 +943,7 @@ export const fr: Messages = {
   "settings.configurationFailed": "Impossible de lire la configuration",
   "settings.secretSet": "Défini, masqué",
   "settings.notSet": "Non défini",
+  "settings.idle": "Sans effet tant que {name} est désactivé.",
   "settings.section.access": "Connexion et accès",
   "settings.section.mcp": "Accès des agents (MCP)",
   "settings.section.desktops": "Bureaux",

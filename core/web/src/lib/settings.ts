@@ -63,6 +63,56 @@ export function sections(variables: ConfigVariable[]) {
   })).filter((entry) => entry.variables.length > 0)
 }
 
+/**
+ * A section's settings as the page's rows, in the manager's order: a `<NAME>_ENABLED` and the
+ * `<NAME>_DEFAULT` of the same section share one, where the first of them was, since one allows
+ * a feature and the other gives it to a new container. Every other setting has a row of its own.
+ */
+export function settingRows(variables: ConfigVariable[]): ConfigVariable[][] {
+  const byName = new Map(variables.map((variable) => [variable.name, variable]))
+  const placed = new Set<string>()
+  const rows: ConfigVariable[][] = []
+  for (const variable of variables) {
+    if (placed.has(variable.name)) continue
+    const base = /^(.+)_(?:ENABLED|DEFAULT)$/.exec(variable.name)?.[1]
+    const [enabled, fallback] = base
+      ? [byName.get(`${base}_ENABLED`), byName.get(`${base}_DEFAULT`)]
+      : []
+    const row = enabled && fallback ? [enabled, fallback] : [variable]
+    for (const entry of row) placed.add(entry.name)
+    rows.push(row)
+  }
+  return rows
+}
+
+/** The switches a setting needs beside its own: the microphone travels over the audio connection. */
+const NEEDS: Record<string, string> = { MICROPHONE_ENABLED: "AUDIO_ENABLED" }
+
+/**
+ * The settings that do nothing as the switches stand, each with the switch that is off: a
+ * `<NAME>_DEFAULT` gives a new container only what its `<NAME>_ENABLED` allows, as
+ * `Config::feature_defaults` reads them, and the microphone needs sound. `on` reads a switch as
+ * the page shows it.
+ */
+export function idleSettings(
+  variables: ConfigVariable[],
+  on: (name: string) => boolean
+): Record<string, string> {
+  const names = new Set(variables.map((variable) => variable.name))
+  const off = (name: string): string | undefined => {
+    const base = /^(.+)_DEFAULT$/.exec(name)?.[1]
+    const needed = NEEDS[name] ?? (base && `${base}_ENABLED`)
+    if (!needed || !names.has(needed)) return undefined
+    return off(needed) ?? (on(needed) ? undefined : needed)
+  }
+  const idle: Record<string, string> = {}
+  for (const { name } of variables) {
+    const by = off(name)
+    if (by) idle[name] = by
+  }
+  return idle
+}
+
 /** How a setting's value reads: hidden, not set, or the text `.env` would hold. */
 export function shownValue(
   variable: ConfigVariable

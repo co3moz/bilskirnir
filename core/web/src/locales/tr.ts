@@ -929,6 +929,7 @@ export const tr: Messages = {
   "settings.configurationFailed": "Yapılandırma okunamadı",
   "settings.secretSet": "Ayarlı, gizli",
   "settings.notSet": "Ayarlanmamış",
+  "settings.idle": "{name} kapalıyken etkisi yok.",
   "settings.section.access": "Giriş ve erişim",
   "settings.section.mcp": "Ajan erişimi (MCP)",
   "settings.section.desktops": "Masaüstleri",

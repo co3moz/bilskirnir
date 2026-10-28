@@ -6,6 +6,7 @@ import {
   RiLockLine,
   RiTerminalBoxLine,
 } from "@remixicon/react"
+import { cn } from "cn"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -44,9 +45,11 @@ import {
   choiceIndex,
   fieldOf,
   gpuNotes,
+  idleSettings,
   initialText,
   isOn,
   sections,
+  settingRows,
   shownValue,
   textProblem,
 } from "@/lib/settings"
@@ -143,8 +146,11 @@ type Edit = {
   onChange: (text: string, other?: boolean) => void
 }
 
-/** The control of an editable setting, by the kind of value it takes. */
-function Control({ name, edit }: { name: string; edit: Edit }) {
+/**
+ * The control of an editable setting, by the kind of value it takes. While the switch it needs is
+ * off it reads as off and cannot change, though the draft keeps its text for when that comes on.
+ */
+function Control({ name, edit, idle }: { name: string; edit: Edit; idle: boolean }) {
   const field = fieldOf(name)
   const id = `setting-${name}`
   const invalid = edit.error ? true : undefined
@@ -153,8 +159,9 @@ function Control({ name, edit }: { name: string; edit: Edit }) {
       <Switch
         id={id}
         aria-label={name}
-        checked={isOn(edit.text)}
-        disabled={edit.disabled}
+        aria-describedby={idle ? `${id}-idle` : undefined}
+        checked={!idle && isOn(edit.text)}
+        disabled={edit.disabled || idle}
         onCheckedChange={(on) => edit.onChange(on ? "true" : "false")}
       />
     )
@@ -223,25 +230,41 @@ function Control({ name, edit }: { name: string; edit: Edit }) {
   )
 }
 
-/** One setting: its name, what it does, and its value or the control that changes it. */
+/**
+ * One setting: its name, what it does, and its value or the control that changes it. Half of a
+ * pair, it keeps its value beside its name at every width.
+ */
 function SettingRow({
   variable,
   edit,
   changed,
   cliOnly,
+  idle,
+  paired,
+  className,
   onReset,
 }: {
   variable: ConfigVariable
   edit?: Edit
   changed: boolean
   cliOnly: boolean
+  /** The switch that is off, which leaves this setting without effect. */
+  idle?: string
+  paired?: boolean
+  className?: string
   onReset: () => void
 }) {
   const about = `settings.about.${variable.name}`
   return (
-    <div
+    <dl
       data-changed={changed || undefined}
-      className="grid gap-1.5 py-2.5 first:pt-0 last:pb-0 @md/settings:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @md/settings:gap-4"
+      className={cn(
+        "grid",
+        paired
+          ? "grid-cols-[minmax(0,1fr)_auto] gap-3"
+          : "gap-1.5 @md/settings:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @md/settings:gap-4",
+        className
+      )}
     >
       <dt className="flex min-w-0 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-1.5">
@@ -263,12 +286,31 @@ function SettingRow({
           {cliOnly && <CliOnly />}
         </span>
         {has(about) && <span className="text-xs text-muted-foreground">{t(about)}</span>}
+        {idle && (
+          <span
+            id={`setting-${variable.name}-idle`}
+            className="text-xs font-medium text-muted-foreground"
+          >
+            {t("settings.idle", { name: idle })}
+          </span>
+        )}
       </dt>
-      <dd className="flex min-w-0 flex-col gap-1 text-sm @md/settings:items-end @md/settings:text-right">
+      <dd
+        className={cn(
+          "flex min-w-0 flex-col gap-1 text-sm",
+          paired ? "items-end text-right" : "@md/settings:items-end @md/settings:text-right"
+        )}
+      >
         {edit ? (
-          <div className="flex w-full items-start gap-1 @md/settings:justify-end">
-            <div className="min-w-0 flex-1 @md/settings:flex @md/settings:justify-end">
-              <Control name={variable.name} edit={edit} />
+          <div
+            className={cn("flex items-start gap-1", !paired && "w-full @md/settings:justify-end")}
+          >
+            <div
+              className={
+                paired ? "flex" : "min-w-0 flex-1 @md/settings:flex @md/settings:justify-end"
+              }
+            >
+              <Control name={variable.name} edit={edit} idle={!!idle} />
             </div>
             {changed && (
               <Button
@@ -288,7 +330,7 @@ function SettingRow({
         )}
         {edit?.error && <FieldError className="text-xs">{edit.error}</FieldError>}
       </dd>
-    </div>
+    </dl>
   )
 }
 
@@ -438,6 +480,14 @@ export function ConfigurationEditor() {
     )
 
   const editable = !!data.editable
+  const canEdit = (variable: ConfigVariable) => editable && !variable.secret && !!variable.editable
+  const textOf = (variable: ConfigVariable) => draft[variable.name] ?? initialText(variable)
+  // A switch reads as the draft has it, so a default goes idle as soon as its feature is off.
+  const idle = idleSettings(data.variables, (name) => {
+    const variable = data.variables.find((entry) => entry.name === name)
+    if (!variable || variable.secret) return false
+    return canEdit(variable) ? isOn(textOf(variable)) : variable.value === true
+  })
   const changes = changesOf(data.variables, draft)
   const count = Object.keys(changes).length
   const problem = (name: string) => {
@@ -523,32 +573,46 @@ export function ConfigurationEditor() {
             </CardHeader>
             <CardContent className="@container/settings">
               {section === "gpu" && <GpuStatus />}
-              <dl className="flex flex-col divide-y">
-                {variables.map((variable) => {
-                  const canEdit = editable && !variable.secret && !!variable.editable
-                  const name = variable.name
+              <div className="flex flex-col divide-y">
+                {settingRows(variables).map((row) => {
+                  const paired = row.length > 1
+                  const settings = row.map((variable) => {
+                    const name = variable.name
+                    return (
+                      <SettingRow
+                        key={name}
+                        variable={variable}
+                        changed={name in changes}
+                        cliOnly={editable && !canEdit(variable)}
+                        idle={idle[name]}
+                        paired={paired}
+                        className={paired ? undefined : "py-2.5 first:pt-0 last:pb-0"}
+                        onReset={() => reset(name)}
+                        edit={
+                          canEdit(variable)
+                            ? {
+                                text: textOf(variable),
+                                other: other[name] ?? false,
+                                error: problem(name),
+                                disabled: !!job,
+                                onChange: (text, custom) => set(variable, text, custom),
+                              }
+                            : undefined
+                        }
+                      />
+                    )
+                  })
+                  if (!paired) return settings
                   return (
-                    <SettingRow
-                      key={name}
-                      variable={variable}
-                      changed={name in changes}
-                      cliOnly={editable && !canEdit}
-                      onReset={() => reset(name)}
-                      edit={
-                        canEdit
-                          ? {
-                              text: draft[name] ?? initialText(variable),
-                              other: other[name] ?? false,
-                              error: problem(name),
-                              disabled: !!job,
-                              onChange: (text, custom) => set(variable, text, custom),
-                            }
-                          : undefined
-                      }
-                    />
+                    <div
+                      key={row[0].name}
+                      className="grid gap-3 py-2.5 first:pt-0 last:pb-0 @md/settings:grid-cols-2 @md/settings:gap-6"
+                    >
+                      {settings}
+                    </div>
                   )
                 })}
-              </dl>
+              </div>
             </CardContent>
           </Card>
         ))}
