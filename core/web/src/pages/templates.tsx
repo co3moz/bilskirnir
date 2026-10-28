@@ -393,7 +393,7 @@ export function TemplatesPage() {
           ))}
       </SectionHeading>
       {!list ? (
-        <Empty className="mx-4 border lg:mx-6">
+        <Empty className="mx-4 w-auto border lg:mx-6">
           <EmptyHeader>
             <ConceptMedia concept="template" />
             <EmptyTitle>{t("templates.off")}</EmptyTitle>
@@ -406,7 +406,7 @@ export function TemplatesPage() {
           {t("templates.loading")}
         </p>
       ) : templates.error ? (
-        <Empty className="mx-4 border lg:mx-6">
+        <Empty className="mx-4 w-auto border lg:mx-6">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <RiAlertLine />
