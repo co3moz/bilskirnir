@@ -143,7 +143,7 @@ export const fr: Messages = {
   "activity.credential.none": "Aucun jeton",
   "activity.credential.inspector": "Inspecteur",
   "activity.credential.link": "Lien de transfert",
-  "activity.credentialHint.inspector": "Lancé depuis l'inspecteur de la page MCP, pas par un agent",
+  "activity.credentialHint.inspector": "Lancé depuis l'inspecteur MCP, pas par un agent",
   "activity.kind.read": "Lecture",
   "activity.kind.change": "Modification",
   "activity.kind.destructive": "Destructif",
@@ -866,6 +866,9 @@ export const fr: Messages = {
   "nav.desktop": "Bureau",
   "nav.documentation": "Documentation",
   "nav.mcp": "MCP",
+  "nav.mcp-endpoints": "Points d'accès",
+  "nav.mcp-servers": "Serveurs du bureau",
+  "nav.mcp-inspector": "Inspecteur",
   "nav.files": "Fichiers",
   "nav.settings": "Administration",
   "filesPage.title": "Fichiers des conteneurs",
@@ -1243,7 +1246,7 @@ export const fr: Messages = {
   "create.image": "Image",
   "create.mcpEndpoint": "Créer un point d'accès MCP",
   "create.mcpEndpointHint":
-    "Un point d'accès au nom du conteneur, pour lui seul, avec les portées par défaut et tous ses serveurs MCP du bureau. Créez son jeton sur la page MCP.",
+    "Un point d'accès au nom du conteneur, pour lui seul, avec les portées par défaut et tous ses serveurs MCP du bureau. Créez son jeton sur la page Points d'accès.",
   "settings.unchanged": "Aucun réglage modifié.",
   "settings.title": "Réglages du conteneur",
   "settings.description":
@@ -1321,11 +1324,9 @@ export const fr: Messages = {
   "mcp.rootOff": "Le /mcp racine est désactivé",
   "mcp.rootOffHint":
     "Les points d'accès ci-dessous répondent aux agents avec leurs propres jetons dans tous les cas. Le /mcp racine, qui atteint chaque conteneur, suit ROOT_MCP_ENABLED dans le .env de l'installation.",
-  "mcp.view.endpoints": "Points d'accès",
-  "mcp.view.servers": "Serveurs du bureau",
-  "mcp.view.inspector": "Inspecteur",
   "mcp.namePattern":
     "Lettres minuscules, chiffres et tirets, en commençant par une lettre ou un chiffre",
+  "mcp.endpoints.title": "Points d'accès MCP",
   "mcp.endpoints.description":
     "Chaque point d'accès donne à un agent une partie des outils du conteneur et les outils des serveurs MCP du bureau choisis, avec son propre jeton. Thoric MCP à {admin} garde l'accès administrateur à tout.",
   "mcp.endpoints.loading": "Chargement des points d'accès…",
@@ -1487,6 +1488,7 @@ export const fr: Messages = {
     "Les connecteurs de Claude Desktop atteignent les serveurs depuis le cloud d'Anthropic, pas cette adresse ; il lance donc un programme local à la place. Sous Windows avec le paquet WSL de Thoric, le pont du gestionnaire n'a pas besoin de jeton ; ailleurs, mcp-remote se connecte à l'URL. Ouvrez le fichier par Settings, Developer, Edit Config et redémarrez Claude Desktop après l'avoir enregistré.",
   "mcp.connect.hint.generic":
     "Un client qui parle Streamable HTTP a besoin de l'URL et d'un en-tête Authorization avec le jeton Bearer. Un client qui ne lance que des programmes locaux peut utiliser le pont par WSL.",
+  "mcp.servers.title": "Serveurs MCP du bureau",
   "mcp.servers.description":
     "Serveurs MCP qui tournent dans les conteneurs, déclarés par l'image ou ajoutés dans le bureau en marche. Les agents atteignent leurs outils par les points d'accès qui les incluent.",
   "mcp.servers.loading": "Chargement des serveurs du bureau…",
@@ -1571,6 +1573,7 @@ export const fr: Messages = {
   "mcp.read.list": "Le champ mcp de la configuration doit être une liste de serveurs.",
   "mcp.read.twice": "Le serveur MCP du bureau {name} est déclaré deux fois.",
 
+  "inspector.title": "Inspecteur MCP",
   "inspector.description":
     "Ouvrez un serveur MCP pour voir ce qu'il propose et essayer ses outils, prompts et ressources. Un serveur du bureau tourne dans un processus à part pour l'inspecteur ; un point d'accès et Thoric MCP répondent comme ils répondent à un agent.",
   "inspector.open": "Tester dans l'inspecteur",

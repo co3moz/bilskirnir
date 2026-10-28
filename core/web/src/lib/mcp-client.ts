@@ -1,4 +1,4 @@
-// The MCP page's inspector: an MCP client in the browser, joined to one server through the
+// The MCP inspector: an MCP client in the browser, joined to one server through the
 // manager's inspector socket, `/api/mcp/inspect`. The first frame names the server; after it,
 // every frame the client sends is one JSON-RPC message, and every frame back is an envelope
 // with what the server wrote, its stderr, or why it stopped. See docs/API.md.

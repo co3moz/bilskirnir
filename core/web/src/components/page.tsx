@@ -22,7 +22,7 @@ export function SectionHeading({
   children,
 }: {
   title: string
-  description?: string
+  description?: React.ReactNode
   children?: React.ReactNode
 }) {
   return (

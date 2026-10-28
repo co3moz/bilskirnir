@@ -6,7 +6,9 @@ export type Page =
   | "images"
   | "templates"
   | "volumes"
-  | "mcp"
+  | "mcp-endpoints"
+  | "mcp-servers"
+  | "mcp-inspector"
   | "files"
   | "jobs"
   | "activity"
@@ -29,13 +31,17 @@ const pages: Page[] = [
   "images",
   "templates",
   "volumes",
-  "mcp",
   "files",
   "jobs",
   "activity",
   "dependencies",
   "settings",
 ]
+
+/** The MCP pages, each at `#/mcp/` and the part of its name after `mcp-`. */
+const mcpPages = ["mcp-endpoints", "mcp-servers", "mcp-inspector"] as const
+const isMcpPage = (page: string): page is (typeof mcpPages)[number] =>
+  (mcpPages as readonly string[]).includes(page)
 
 /** The activity page's filters, from the part of its link after `?`. */
 function activityRoute(search: string): Route {
@@ -58,6 +64,11 @@ export function parseRoute(hash: string): Route {
   if (page === "desktop" && id) return { page: "desktop", id: decodeURIComponent(id) }
   if (page === "files") return id ? { page, container: decodeURIComponent(id) } : { page }
   if (page === "activity") return activityRoute(search)
+  if (page === "mcp") {
+    // `#/mcp` alone, the MCP page's link before it had pages of its own, opens the endpoints.
+    const view = `mcp-${id}`
+    return { page: isMcpPage(view) ? view : "mcp-endpoints" }
+  }
   return {
     page: pages.includes(page as Page)
       ? (page as Exclude<Page, "files" | "activity">)
@@ -77,6 +88,7 @@ export function href(route: Route) {
     const search = query.toString()
     return search ? `#/activity?${search}` : "#/activity"
   }
+  if (isMcpPage(route.page)) return `#/mcp/${route.page.slice("mcp-".length)}`
   return `#/${route.page}`
 }
 

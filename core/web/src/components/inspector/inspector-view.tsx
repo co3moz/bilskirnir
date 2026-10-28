@@ -82,7 +82,7 @@ const SECTIONS = {
   template: "inspector.section.templates",
 } as const
 
-/** The MCP page's inspector: open a server, browse what it offers and run it. */
+/** The MCP inspector: open a server, browse what it offers and run it. */
 export function InspectorView({
   client,
   groups,

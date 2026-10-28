@@ -1,4 +1,4 @@
-// What the MCP page changes through the manager's API. Each change refreshes the lists it affects:
+// What the MCP pages change through the manager's API. Each change refreshes the lists it affects:
 // a desktop MCP server's tools count towards the endpoints that include it.
 import { api } from "./api"
 import { openDialog } from "./dialogs"

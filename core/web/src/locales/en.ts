@@ -146,7 +146,7 @@ export const en = {
   "activity.credential.none": "No token",
   "activity.credential.inspector": "Inspector",
   "activity.credential.link": "Transfer link",
-  "activity.credentialHint.inspector": "Run from the MCP page's inspector, not by an agent",
+  "activity.credentialHint.inspector": "Run from the MCP inspector, not by an agent",
   "activity.kind.read": "Read",
   "activity.kind.change": "Change",
   "activity.kind.destructive": "Destructive",
@@ -869,6 +869,9 @@ export const en = {
   "nav.desktop": "Desktop",
   "nav.documentation": "Documentation",
   "nav.mcp": "MCP",
+  "nav.mcp-endpoints": "Endpoints",
+  "nav.mcp-servers": "Desktop servers",
+  "nav.mcp-inspector": "Inspector",
   "nav.files": "Files",
   "nav.settings": "Management",
   "filesPage.title": "Container files",
@@ -1254,7 +1257,7 @@ export const en = {
   "create.image": "Image",
   "create.mcpEndpoint": "Create an MCP endpoint",
   "create.mcpEndpointHint":
-    "An endpoint named after the container, for it alone, with the default scopes and all its desktop MCP servers. Create its token on the MCP page.",
+    "An endpoint named after the container, for it alone, with the default scopes and all its desktop MCP servers. Create its token on the Endpoints page.",
 
   "settings.unchanged": "No settings changed.",
   "settings.title": "Container settings",
@@ -1334,10 +1337,8 @@ export const en = {
   "mcp.rootOff": "The root /mcp is turned off",
   "mcp.rootOffHint":
     "The endpoints below answer agents with their own tokens either way. The root /mcp, which reaches every container, follows ROOT_MCP_ENABLED in the installation's .env.",
-  "mcp.view.endpoints": "Endpoints",
-  "mcp.view.servers": "Desktop servers",
-  "mcp.view.inspector": "Inspector",
   "mcp.namePattern": "Lowercase letters, digits and dashes, starting with a letter or digit",
+  "mcp.endpoints.title": "MCP endpoints",
   "mcp.endpoints.description":
     "Each endpoint gives an agent part of the container tools and the tools of chosen desktop MCP servers, with a token of its own. Thoric MCP at {admin} keeps administrator access to everything.",
   "mcp.endpoints.loading": "Loading endpoints…",
@@ -1491,6 +1492,7 @@ export const en = {
     "Claude Desktop's connectors reach servers from Anthropic's cloud, not this address, so it starts a local program instead. On Windows with Thoric's WSL package, the bridge in the manager needs no token; elsewhere mcp-remote connects to the URL. Open the file from Settings, Developer, Edit Config, and restart Claude Desktop after saving it.",
   "mcp.connect.hint.generic":
     "A client that speaks Streamable HTTP needs the URL and an Authorization header with the bearer token. One that starts only local programs can use the bridge through WSL.",
+  "mcp.servers.title": "Desktop MCP servers",
   "mcp.servers.description":
     "MCP servers that run inside containers, declared by the image or added in the running desktop. Agents reach their tools through the endpoints that include them.",
   "mcp.servers.loading": "Loading desktop servers…",
@@ -1570,6 +1572,7 @@ export const en = {
   "mcp.read.list": "The configuration's mcp must be a list of servers.",
   "mcp.read.twice": "The desktop MCP server {name} is declared twice.",
 
+  "inspector.title": "MCP inspector",
   "inspector.description":
     "Open an MCP server to see what it offers and try its tools, prompts and resources. A desktop server runs in a process of its own for the inspector; an endpoint and Thoric MCP answer as they answer an agent.",
   "inspector.open": "Test in the inspector",
