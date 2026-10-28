@@ -1,6 +1,7 @@
 //! The event stream: only a signed-in session opens it and it ends with that session, every job
-//! transition reaches it, progress is thinned out, and a page that falls behind is told to read
-//! everything again instead of holding up whoever publishes.
+//! transition reaches it, progress is thinned out, a page that falls behind is told to read
+//! everything again instead of holding up whoever publishes, and whether Docker's own events
+//! reach it is told once per change and to every new stream.
 use super::*;
 use crate::tests::app;
 use axum::{
@@ -11,13 +12,15 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 /// Every `type` the stream sends, which `docs/API.md` must describe.
-const TYPES: [&str; 6] = [
+const TYPES: [&str; 8] = [
     "ready",
     "resync",
     "job",
     "job-progress",
     "human-request",
     "human-request-answered",
+    "changed",
+    "docker-events",
 ];
 
 async fn open(app: &Arc<App>, cookie: Option<&str>) -> Response {
@@ -55,7 +58,7 @@ fn reader(events: broadcast::Receiver<Arc<str>>, closing: CancellationToken) -> 
         events,
         ended: Box::pin(std::future::pending()),
         closing,
-        greeted: false,
+        ready: Some(ready(false)),
     }
 }
 
@@ -89,7 +92,10 @@ async fn a_stream_carries_what_is_published_until_its_session_signs_out() {
     assert_eq!(response.headers()["content-type"], "text/event-stream");
     assert_eq!(response.headers()["x-accel-buffering"], "no");
     let mut body = response.into_body();
-    assert_eq!(next_data(&mut body).await, Some(json!({"type": "ready"})));
+    assert_eq!(
+        next_data(&mut body).await,
+        Some(json!({"type": "ready", "docker_events": false}))
+    );
     app.events
         .publish(json!({"type": "job", "job": {"id": "one"}}));
     assert_eq!(
@@ -106,7 +112,10 @@ async fn a_stream_carries_what_is_published_until_its_session_signs_out() {
 async fn a_stream_ends_when_the_manager_shuts_down() {
     let app = app(false);
     let mut body = open(&app, None).await.into_body();
-    assert_eq!(next_data(&mut body).await, Some(json!({"type": "ready"})));
+    assert_eq!(
+        next_data(&mut body).await,
+        Some(json!({"type": "ready", "docker_events": false}))
+    );
     app.events.close();
     assert_eq!(next_data(&mut body).await, None);
 }
@@ -121,11 +130,44 @@ async fn a_page_that_falls_behind_reads_everything_again_and_holds_up_nobody() {
         hub.publish(json!({"type": "job-progress", "id": number.to_string()}));
     }
     assert!(started.elapsed() < Duration::from_secs(5));
-    assert_eq!(slow.next().await.as_deref(), Some(READY));
+    assert_eq!(slow.next().await, Some(ready(false)));
     assert_eq!(slow.next().await.as_deref(), Some(RESYNC));
     // It goes on with the newest events the ring still holds.
     let next: Value = serde_json::from_str(&slow.next().await.unwrap()).unwrap();
     assert_eq!(next["id"], "9996");
+}
+
+#[tokio::test]
+async fn docker_events_are_told_once_per_change_and_greet_every_new_stream() {
+    let hub = Hub::default();
+    let mut page = reader(hub.subscribe(), hub.closing.clone());
+    assert!(!hub.docker_events());
+    hub.set_docker_events(true);
+    hub.set_docker_events(true);
+    hub.changed(&BTreeSet::from(["volumes", "containers"]));
+    hub.set_docker_events(false);
+    let mut seen = Vec::new();
+    for _ in 0..4 {
+        seen.push(serde_json::from_str::<Value>(&page.next().await.unwrap()).unwrap());
+    }
+    assert_eq!(
+        seen,
+        [
+            json!({"type": "ready", "docker_events": false}),
+            json!({"type": "docker-events", "live": true}),
+            json!({"type": "changed", "lists": ["containers", "volumes"]}),
+            json!({"type": "docker-events", "live": false}),
+        ]
+    );
+
+    // A stream opened while they flow says so in its first event.
+    let app = app(false);
+    app.events.set_docker_events(true);
+    let mut body = open(&app, None).await.into_body();
+    assert_eq!(
+        next_data(&mut body).await,
+        Some(json!({"type": "ready", "docker_events": true}))
+    );
 }
 
 #[tokio::test]

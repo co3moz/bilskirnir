@@ -1,5 +1,6 @@
 //! The Engine API requests the collector makes: which managed containers run, and the stats
-//! stream of each. Both go over the socket pulls use, one connection per request.
+//! stream of each. Both go over the socket pulls use, one connection per request; Docker's own
+//! events (`crate::events::docker`) are read through [`stream`] too.
 use crate::model::{Container, LABEL};
 use anyhow::{Context, Result, bail};
 use http_body_util::BodyExt;
@@ -10,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 /// A list of every container on a busy host stays far below this.
 const LIST_LIMIT: usize = 8 << 20;
-/// One stats message is a few kilobytes; a longer line is not one.
+/// One stats message or event is a few kilobytes; a longer line is not one.
 const LINE_LIMIT: usize = 1 << 20;
 
 /// The running containers that carry the managed label.
@@ -127,20 +128,23 @@ where
 }
 
 /// Pass on each line of a streamed response until it ends, or until it sends nothing for `idle`.
+/// `opened` is called once Docker accepted the request, before the first line.
 pub(crate) async fn stream<S>(
     io: S,
     path: &str,
     idle: Duration,
+    opened: impl FnOnce(),
     mut on_line: impl FnMut(&[u8]),
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let (mut response, _connection) = request(io, path).await?;
+    opened();
     let mut pending = Vec::new();
     while let Some(frame) = tokio::time::timeout(idle, response.body_mut().frame())
         .await
-        .context("Docker stopped sending stats")?
+        .context("Docker stopped sending messages")?
     {
         let Ok(data) = frame
             .context("The Docker API response was interrupted")?
@@ -157,7 +161,7 @@ where
             }
         }
         if pending.len() > LINE_LIMIT {
-            bail!("Docker sent an oversized stats message");
+            bail!("Docker sent an oversized message");
         }
     }
     Ok(())

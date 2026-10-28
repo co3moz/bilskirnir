@@ -1,8 +1,10 @@
 //! `GET /api/events`: what the manager tells a signed-in dashboard as it happens, so a page learns
-//! that a job was queued, started or ended, or that an agent asks for a person, without polling
-//! for it. Every event is one JSON object
+//! that a job was queued, started or ended, that an agent asks for a person, or that Docker
+//! changed a list by itself (`docker`), without polling for it. Every event is one JSON object
 //! with a `type`, sent as the data of an unnamed server-sent event. Nothing is replayed: a page
 //! reads its lists when it connects, and after any gap in the stream it reads them again.
+pub(crate) mod docker;
+
 use crate::{App, auth, model::Job};
 use axum::{
     extract::State,
@@ -14,11 +16,14 @@ use axum::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     convert::Infallible,
     future::Future,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 use tokio::sync::broadcast::{self, error::RecvError};
@@ -33,8 +38,11 @@ const KEEP_ALIVE: Duration = Duration::from_secs(15);
 /// The longest error a job event carries; the job's log has the whole of it.
 const ERROR_LIMIT: usize = 300;
 
-/// The first event of every stream: it is open and events follow.
-const READY: &str = r#"{"type":"ready"}"#;
+/// The first event of every stream: it is open and events follow, and whether Docker's own
+/// events reach it.
+fn ready(docker_events: bool) -> Arc<str> {
+    Arc::from(json!({"type": "ready", "docker_events": docker_events}).to_string())
+}
 /// Sent instead of the events a page fell too far behind to receive.
 const RESYNC: &str = r#"{"type":"resync"}"#;
 
@@ -47,6 +55,8 @@ pub(crate) struct Hub {
     closing: CancellationToken,
     /// When each running job last sent its progress.
     progress: Mutex<HashMap<String, Instant>>,
+    /// Whether Docker's own events reach the hub, so a page may poll the lists they cover slowly.
+    docker: AtomicBool,
 }
 
 impl Default for Hub {
@@ -61,6 +71,7 @@ impl Hub {
             sender: broadcast::channel(capacity).0,
             closing: CancellationToken::new(),
             progress: Mutex::new(HashMap::new()),
+            docker: AtomicBool::new(false),
         }
     }
     /// Send `event` to every open stream; without one it goes nowhere.
@@ -105,6 +116,22 @@ impl Hub {
         }
         self.publish(json!({"type": "job-progress", "id": id, "progress": progress}));
     }
+    /// Docker changed these lists by itself, such as a desktop that exited or an image pulled
+    /// with `docker` itself; a page reads them again.
+    pub(crate) fn changed(&self, lists: &BTreeSet<&str>) {
+        self.publish(json!({"type": "changed", "lists": lists}));
+    }
+    /// Docker's own events began or stopped reaching the hub, as when Docker restarts. A change
+    /// is published once; when they reach it again, the events of the gap are lost and a page
+    /// reads the lists again.
+    pub(crate) fn set_docker_events(&self, live: bool) {
+        if self.docker.swap(live, Ordering::SeqCst) != live {
+            self.publish(json!({"type": "docker-events", "live": live}));
+        }
+    }
+    pub(crate) fn docker_events(&self) -> bool {
+        self.docker.load(Ordering::SeqCst)
+    }
     /// End every stream, as the manager shuts down.
     pub(crate) fn close(&self) {
         self.closing.cancel();
@@ -133,15 +160,15 @@ struct Reader {
     /// Resolves when the session that opened the stream signs out or expires.
     ended: Pin<Box<dyn Future<Output = ()> + Send>>,
     closing: CancellationToken,
-    greeted: bool,
+    /// The first event, until it was sent.
+    ready: Option<Arc<str>>,
 }
 
 impl Reader {
     /// The next event's data, or `None` once the stream ends.
     async fn next(&mut self) -> Option<Arc<str>> {
-        if !self.greeted {
-            self.greeted = true;
-            return Some(Arc::from(READY));
+        if let Some(ready) = self.ready.take() {
+            return Some(ready);
         }
         tokio::select! {
             biased;
@@ -158,11 +185,14 @@ impl Reader {
 
 /// `GET /api/events`: the event stream of the signed-in session, which ends with it.
 pub async fn stream(State(app): State<Arc<App>>, session: auth::Session) -> Response {
+    let events = app.events.subscribe();
+    // Read once subscribed: a change after this arrives as an event too.
+    let ready = ready(app.events.docker_events());
     let reader = Reader {
-        events: app.events.subscribe(),
+        events,
         closing: app.events.closing.clone(),
         ended: Box::pin(async move { app.session_revoked(session).await }),
-        greeted: false,
+        ready: Some(ready),
     };
     let events = futures_util::stream::unfold(reader, |mut reader| async move {
         let data = reader.next().await?;

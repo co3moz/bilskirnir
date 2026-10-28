@@ -1361,7 +1361,8 @@ try:
     print("PASS desktop MCP servers are reached through a scoped endpoint as the desktop user", flush=True)
     # The dashboard hears of jobs and of agents that need a person on its event stream. An agent
     # asks and waits, the answer through the HTTP API returns the waiting call, and a call that
-    # runs out of time returns pending with the id that keeps waiting.
+    # runs out of time returns pending with the id that keeps waiting. What Docker does by itself
+    # reaches it too: a container paused with `docker` names the container list.
     events = client.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/events"), timeout=60)
     assert events.headers["Content-Type"] == "text/event-stream", events.headers
     def next_event(kind, matches=lambda event: True):
@@ -1370,7 +1371,10 @@ try:
             assert line, "the event stream ended"
             if line.startswith("data: ") and (event := json.loads(line[6:]))["type"] == kind and matches(event):
                 return event
-    next_event("ready")
+    opened = next_event("ready")
+    assert opened["docker_events"] is True, opened
+    docker("pause", container); docker("unpause", container)
+    next_event("changed", lambda event: "containers" in event["lists"])
     script = tool("exec_container", {"container_id": env_id, "script": "true"})["structuredContent"]["job_id"]
     finished = next_event("job", lambda event: event["job"]["id"] == script and event["job"]["finished_at"])
     assert finished["job"]["status"] == "completed" and finished["job"]["kind"] == "exec", finished
@@ -1390,7 +1394,7 @@ try:
     resumed = tool("request_human", {"container_id": env_id, "request_id": pending["request_id"]})["structuredContent"]
     assert resumed["status"] == "declined" and resumed["reply"] is None, resumed
     events.close()
-    print("PASS the event stream carries jobs and an agent's request for a person, which the waiting call answers", flush=True)
+    print("PASS the event stream carries jobs, Docker's own changes and an agent's request for a person, which the waiting call answers", flush=True)
     docker("exec",container,"chown","1001:1001","/shared")
     volume_upload = upload(env_id,"project.txt",b"persistent-upload",destination="/shared/uploads")
     assert docker("exec",container,"cat",volume_upload["path"]) == b"persistent-upload"

@@ -464,6 +464,7 @@ async fn main() -> anyhow::Result<()> {
         human: human::Requests::default(),
     });
     usage::spawn(app.clone());
+    events::docker::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
     releases::spawn(app.clone());
     for job in updates {

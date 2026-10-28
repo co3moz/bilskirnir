@@ -114,11 +114,17 @@ async fn a_stats_stream_is_read_line_by_line_across_chunks() {
     ));
     let mut lines = Vec::new();
     let path = stats_path(DOCKER_ID).unwrap();
-    stream(client, &path, Duration::from_secs(5), |line| {
-        lines.push(String::from_utf8(line.to_vec()).unwrap())
-    })
+    let mut opened = false;
+    stream(
+        client,
+        &path,
+        Duration::from_secs(5),
+        || opened = true,
+        |line| lines.push(String::from_utf8(line.to_vec()).unwrap()),
+    )
     .await
     .unwrap();
+    assert!(opened, "the stream says when Docker accepted it");
     let request = server.await.unwrap();
     assert!(
         request.starts_with(&format!("GET {path} HTTP/1.1\r\n")),
@@ -149,6 +155,7 @@ async fn a_silent_stream_or_a_refusal_is_an_error() {
         client,
         "/containers/x/stats",
         Duration::from_millis(100),
+        || {},
         |_| {},
     )
     .await

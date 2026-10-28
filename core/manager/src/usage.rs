@@ -9,7 +9,7 @@
 //! Every sample is stamped by one clock that only moves forward, so the newest stamp is a cursor:
 //! a client that passes it back as `since` receives exactly what came after.
 mod collector;
-mod engine;
+pub(crate) mod engine;
 mod gpu;
 mod history;
 pub(crate) mod stats;
