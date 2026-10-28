@@ -10,6 +10,8 @@ use tokio::{
 /// How long a logged Docker command (a build, a pull, a script or a setup step) may run, unless
 /// its caller gives a longer limit.
 pub(crate) const LOGGED_LIMIT: Duration = Duration::from_secs(3600);
+/// The device a VPN client opens its tunnel through, which a desktop with `vpn` gets.
+const TUN_DEVICE: &str = "/dev/net/tun";
 
 impl App {
     pub fn command(&self, args: &[String]) -> Command {
@@ -120,6 +122,16 @@ impl App {
         if spec.gamepad && !self.config.gamepad {
             bail!("The virtual gamepad is disabled for this installation (GAMEPAD_ENABLED=false)");
         }
+        if spec.vpn && !self.config.vpn {
+            bail!("VPN access is disabled for this installation (VPN_ENABLED=false)");
+        }
+        if spec.proxy == Some(crate::outbound::ProxyChoice::Installation)
+            && self.config.proxy.is_none()
+        {
+            bail!(
+                "This installation has no proxy (PROXY_URL); give the container a proxy of its own, or none"
+            );
+        }
         if spec.audio && !self.config.audio {
             bail!("Audio is disabled for this installation");
         }
@@ -133,9 +145,14 @@ impl App {
         }
         Ok(())
     }
-    /// A Docker error from creating or starting a GPU desktop, with the setting behind the
-    /// device it names.
-    pub(crate) fn gpu_error(&self, env: &Container, error: anyhow::Error) -> anyhow::Error {
+    /// A Docker error from creating or starting a desktop, with the setting behind the device it
+    /// names.
+    pub(crate) fn device_error(&self, env: &Container, error: anyhow::Error) -> anyhow::Error {
+        if env.spec.vpn && format!("{error:#}").contains(TUN_DEVICE) {
+            return error.context(
+                "VPN access needs /dev/net/tun on the Docker host, which this host does not have; use the container without vpn",
+            );
+        }
         if env.spec.gpu {
             crate::gpu::explain(error, &crate::gpu::routes(&self.config).used)
         } else {
@@ -404,14 +421,14 @@ impl App {
                 self.hand_over_mount_parents(env).await?;
                 self.docker(&["start", container_id])
                     .await
-                    .map_err(|error| self.gpu_error(env, error))?;
+                    .map_err(|error| self.device_error(env, error))?;
             }
             return Ok(());
         }
         let args = self.container_args(env);
         self.docker_args(&args)
             .await
-            .map_err(|error| self.gpu_error(env, error))?;
+            .map_err(|error| self.device_error(env, error))?;
         self.write_machine_id(env).await?;
         self.hand_over_mount_parents(env).await?;
         if env.spec.internet {
@@ -421,7 +438,7 @@ impl App {
         if start {
             self.docker(&["start", &env.container])
                 .await
-                .map_err(|error| self.gpu_error(env, error))?;
+                .map_err(|error| self.device_error(env, error))?;
         }
         Ok(())
     }
@@ -465,7 +482,10 @@ impl App {
             ("DESKTOP_GPU", env.spec.gpu.to_string()),
             ("GPU_ADAPTER", self.config.adapter.clone()),
         ];
-        for (key, val) in envs {
+        for (key, val) in envs
+            .into_iter()
+            .chain(crate::outbound::environment(&env.spec))
+        {
             args.extend(["--env".into(), format!("{key}={val}")]);
         }
         if let Some(profile) = self.config.seccomp_profile() {
@@ -505,6 +525,18 @@ impl App {
                 "/dev/uinput".into(),
                 "--device-cgroup-rule".into(),
                 "c 13:* rmw".into(),
+            ]);
+        }
+        if env.spec.vpn {
+            // A VPN client opens its tunnel and routes in the desktop's own network namespace;
+            // wg-quick marks its packets, which needs `src_valid_mark` for the default route.
+            args.extend([
+                "--cap-add".into(),
+                "NET_ADMIN".into(),
+                "--device".into(),
+                TUN_DEVICE.into(),
+                "--sysctl".into(),
+                "net.ipv4.conf.all.src_valid_mark=1".into(),
             ]);
         }
         // Use an immutable ID, not a tag that could change between inspect and create.
@@ -649,6 +681,7 @@ impl App {
         }
         self.remove_container_records(&env.id)?;
         self.forget_pinned(&env.id)?;
+        self.forget_proxy_password(&env.id)?;
         self.db.remove(CONTAINERS, &env.id)?;
         crate::desktop_mcp::forget_container(self, &env.id)?;
         self.append_log(

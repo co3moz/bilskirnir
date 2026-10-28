@@ -2,8 +2,9 @@
 //! the parts that follow them, chosen from what the installation has.
 //!
 //! The records are an allowlist of database kinds, the fields of [`Records`]. Containers, saved
-//! images with their icons and composes, each container's pinned compose with its values, and MCP
-//! endpoints with their token hashes are the installation's state. Jobs, the processes of running
+//! images with their icons and composes, each container's pinned compose with its values, the
+//! passwords of the containers' own proxies and MCP endpoints with their token hashes are the
+//! installation's state. Jobs, the processes of running
 //! desktops (applications, terminals, recordings), the tool lists of desktop MCP servers, which
 //! the manager reads again from a running desktop, and any kind added later are history or what a
 //! running manager rebuilds, and stay out until someone decides otherwise here. The tests list
@@ -12,6 +13,7 @@ use crate::{
     compose::Pinned,
     desktop_mcp::Endpoint,
     model::{Container, ImageRecord, Mount},
+    outbound::Credentials,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -35,7 +37,8 @@ pub(crate) struct Included {
     /// Each container's files: a commit of its container layer.
     #[serde(default)]
     pub files: bool,
-    /// The values of the composes' secret parameters.
+    /// The values of the composes' secret parameters and the passwords of the containers' own
+    /// proxies.
     #[serde(default)]
     pub secrets: bool,
 }
@@ -113,6 +116,14 @@ pub(crate) struct PinnedCompose {
     pub pinned: Pinned,
 }
 
+/// The password of a container's own proxy with the container it belongs to.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ProxyPassword {
+    pub container_id: String,
+    #[serde(flatten)]
+    pub credentials: Credentials,
+}
+
 /// The backup's second entry: the records of the included kinds.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +136,8 @@ pub(crate) struct Records {
     pub composes: Vec<PinnedCompose>,
     #[serde(default)]
     pub endpoints: Vec<Endpoint>,
+    #[serde(default)]
+    pub proxy_passwords: Vec<ProxyPassword>,
 }
 
 /// The last entry, so a backup cut short is told from a whole one.
@@ -155,6 +168,7 @@ pub(crate) struct Installation {
     pub images: Vec<ImageRecord>,
     pub composes: Vec<(String, Pinned)>,
     pub endpoints: Vec<Endpoint>,
+    pub proxy_passwords: Vec<(String, Credentials)>,
     /// Saved images whose Docker image exists, by record id.
     pub available_images: HashSet<String>,
     /// Containers whose files can be saved: their Docker container, or the commit a settings
@@ -178,6 +192,7 @@ pub(crate) fn plan(
         mut images,
         composes,
         endpoints,
+        proxy_passwords,
         available_images,
         with_files,
         volumes,
@@ -208,6 +223,21 @@ pub(crate) fn plan(
         });
     }
     kept_composes.sort_by(|a, b| a.container_id.cmp(&b.container_id));
+    let mut kept_passwords = Vec::new();
+    for (container_id, credentials) in proxy_passwords {
+        if !ids.contains(container_id.as_str()) {
+            continue;
+        }
+        if included.secrets {
+            kept_passwords.push(ProxyPassword {
+                container_id,
+                credentials,
+            });
+        } else if !secrets_left_out.contains(&container_id) {
+            secrets_left_out.push(container_id);
+        }
+    }
+    kept_passwords.sort_by(|a, b| a.container_id.cmp(&b.container_id));
     secrets_left_out.sort();
     let mut endpoints = endpoints;
     endpoints.sort_by(|a, b| a.name.cmp(&b.name));
@@ -293,6 +323,7 @@ pub(crate) fn plan(
         images,
         composes: kept_composes,
         endpoints,
+        proxy_passwords: kept_passwords,
     };
     (manifest, records)
 }

@@ -16,6 +16,7 @@ use crate::{
     error::Result,
     jobs,
     model::{CONTAINERS, Container, ImageRecord, LABEL, now},
+    outbound::{CREDENTIALS, Credentials},
     process::{self, Overflow},
 };
 use anyhow::{Context, anyhow, bail};
@@ -426,6 +427,7 @@ impl App {
         let images: Vec<ImageRecord> = self.db.list("image")?;
         let composes: Vec<(String, Pinned)> = self.db.entries(PINNED)?;
         let endpoints: Vec<Endpoint> = self.db.list(ENDPOINTS)?;
+        let proxy_passwords: Vec<(String, Credentials)> = self.db.entries(CREDENTIALS)?;
         let image_ids = lines(
             &self
                 .docker(&["image", "ls", "-a", "--no-trunc", "--format", "{{.ID}}"])
@@ -459,6 +461,7 @@ impl App {
             images,
             composes,
             endpoints,
+            proxy_passwords,
             available_images,
             with_files,
             volumes,
@@ -544,9 +547,9 @@ fn describe(manifest: &Manifest) -> String {
         manifest.images.len(),
         manifest.endpoints.len(),
         if manifest.included.secrets {
-            "It includes the values of secret parameters: keep the file where only you can read it."
+            "It includes the values of secret parameters and proxy passwords: keep the file where only you can read it."
         } else {
-            "The values of secret parameters are left out."
+            "The values of secret parameters and proxy passwords are left out."
         }
     )
 }

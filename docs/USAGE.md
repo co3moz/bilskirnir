@@ -14,7 +14,7 @@ The **Dashboard** sums up the host: how many containers exist and run, jobs in p
 
 ## Create and connect
 
-Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone and a virtual gamepad device for agents on or off; hover or focus one to see what it does. They start as the installation sets them (`GPU_DEFAULT` and the others in [the installation guide](INSTALLATION.md#settings)), and a feature the installation switched off is shown off with the reason below the buttons. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
+Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and [VPN access](#vpn) on or off; hover or focus one to see what it does. They start as the installation sets them (`GPU_DEFAULT` and the others in [the installation guide](INSTALLATION.md#settings)), and a feature the installation switched off is shown off with the reason below the buttons. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports, the [proxy](#proxy) and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
 
 **Create an MCP endpoint**, on by default, gives the new container an endpoint of its own at `/mcp/<name>`, where an agent reaches only this container and the MCP servers running in it; see [MCP servers and endpoints](#mcp-servers-and-endpoints).
 
@@ -226,15 +226,33 @@ docker cp thoric-CONTAINER_ID:/home/desktop/Downloads/result ./result
 
 ## Change a container's settings
 
-Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
+Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, VPN access, proxy, volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
 
 **Machine identity** shows the hostname, MAC address and machine ID that software inside the desktop sees, such as a license bound to one machine. A container keeps them through resets, retries and settings changes, while a new container, also one from a snapshot, gets its own. Change them only to let this container take over the identity of one it replaces; they can be changed but not cleared. A container created before Thoric kept identities shows them empty until it is next recreated, and keeps the machine ID of its image until one is set here. The details, including which Docker releases keep the internet interface's MAC address, are in [the API guide](API.md#machine-identity).
 
 The name, internet access and a new CPU or memory limit apply while the container keeps running. Docker fixes the other settings, and removing a limit, when it creates a container, so changing them creates a new one: Thoric stops the container, saves its files to an image, starts a new container from it with the new settings and removes the old one. The dialog says so before applying. Open applications close, but installed software and files in the container are kept, as are named volumes. If the new container cannot start, the previous one is restored.
 
-## Internet, sound and microphone
+## Internet access
 
 The internet switch attaches or detaches the container's Docker egress network. Its private connection to the manager stays in place, so you can keep using the desktop while internet access is off. This is a Docker network setting, not a general firewall policy for the host or LAN.
+
+## Proxy
+
+**Proxy** under **Advanced settings** leads the desktop's programs through a proxy: **Installation proxy**, which `PROXY_URL` sets (see [the installation guide](INSTALLATION.md#settings)) and a new container follows while it is set, **Own proxy**, or **None**. An own proxy has an address such as `http://proxy.example:3128`, `https://` or `socks5://`, and a user name, a password and the hosts that skip it when it needs them, such as `intranet.example, 10.0.0.0/8`.
+
+Programs see only a proxy inside the desktop at `127.0.0.1:31280`, through `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`. That proxy adds the user name and password, so browsers do not ask for them, and no program, image, snapshot or backup without secret values holds the password; Thoric shows only that one is kept. Changing the address, the credentials or the hosts that skip the proxy takes effect at once, while turning the proxy on or off creates the container again. A proxy needs internet access to be reached, and the proxy inside the desktop answers with an error until Thoric has given it its settings, so nothing goes around it. Proxies that sign in with NTLM or Kerberos are not supported. The details are in [the API guide](API.md#proxies).
+
+## VPN
+
+The **VPN** button gives a container what a VPN client needs inside it: the `NET_ADMIN` capability and the `/dev/net/tun` device, both limited to the container's own network namespace. Thoric installs no client; install one in the container, or in an image built for it, and start it as root. The tunnel changes only the desktop's routes, and the manager keeps reaching the desktop on its private network. A VPN needs internet access to reach its server. Turning VPN access on or off creates the container again, as the other settings Docker fixes do.
+
+- **WireGuard**: `sudo apt install wireguard-tools openresolv`, save the configuration as `/etc/wireguard/wg0.conf` and run `sudo wg-quick up wg0`. Desktops have no IPv6, so remove `::/0` from `AllowedIPs` and the IPv6 address from `Address` when the configuration has them.
+- **OpenVPN**: `sudo apt install openvpn`, then `sudo openvpn --config client.ovpn --daemon`.
+- **Tailscale**: install it with its install script, start `sudo tailscaled --state=/var/lib/tailscale/tailscaled.state &` and run `sudo tailscale up`. A container without VPN access can still run `tailscaled --tun=userspace-networking`, which offers a SOCKS5 or HTTP proxy instead of a tunnel.
+
+Desktops have no init system, so a client runs until the container stops; start it again after a restart, or run it as a [background application](API.md#applications-and-windows).
+
+## Sound and microphone
 
 Sound and microphone must be enabled both for the installation and for the container. Use the browser toolbar controls to start each channel. Microphone input also needs browser permission. Localhost supports this over HTTP; access from another device requires HTTPS. Leaving the desktop closes the media connections and microphone tracks.
 

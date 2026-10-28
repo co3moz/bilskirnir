@@ -21,7 +21,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: axum::http::HeaderMap
 }
 pub async fn settings(State(app): State<Arc<App>>) -> Json<Value> {
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.gpu_enabled(),"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"dri_gpu":app.config.dri_gpu,"gpu_adapter":app.config.adapter,"gpu":crate::gpu::report(&app.config),"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled,"internet_enabled":app.config.internet,"sudo_enabled":app.config.sudo,"gamepad_enabled":app.config.gamepad,"defaults":app.config.feature_defaults()}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"base_image":app.config.base_image,"audio_enabled":app.config.audio,"microphone_enabled":app.config.microphone,"gpu_enabled":app.config.gpu_enabled(),"wsl_gpu":app.config.wsl_gpu,"nvidia_compute":app.config.cuda,"dri_gpu":app.config.dri_gpu,"gpu_adapter":app.config.adapter,"gpu":crate::gpu::report(&app.config),"upload_limit_bytes":app.config.upload_limit,"archive_limit_bytes":app.config.archive_limit,"templates_url":app.config.templates_url,"volume_filter":app.config.volume_filter,"root_mcp_enabled":app.config.root_mcp_enabled,"internet_enabled":app.config.internet,"sudo_enabled":app.config.sudo,"gamepad_enabled":app.config.gamepad,"vpn_enabled":app.config.vpn,"proxy":app.config.proxy.as_ref().map(|proxy| json!({"url":proxy.url,"username":proxy.username,"bypass":proxy.bypass})),"defaults":app.config.feature_defaults()}),
     )
 }
 /// Build a catalog image from the bundled Docker context instead of downloading it.
@@ -174,6 +174,9 @@ pub struct CreateContainer {
     /// Give the container an MCP endpoint of its own once it is created.
     #[serde(default = "default_true")]
     pub mcp_endpoint: bool,
+    /// The password of the container's own proxy, kept apart from its settings.
+    #[serde(default)]
+    pub proxy_password: Option<String>,
 }
 /// A create request with the installation's defaults for the features it leaves out. Only a
 /// request gets them: the serde defaults of [`ContainerSpec`] fill the fields that records saved
@@ -190,6 +193,7 @@ pub(crate) fn creation_request(
             ("sudo", defaults.sudo),
             ("audio", defaults.audio),
             ("gamepad", defaults.gamepad),
+            ("vpn", defaults.vpn),
         ] {
             request.entry(feature).or_insert(json!(default));
         }
@@ -198,6 +202,12 @@ pub(crate) fn creation_request(
         request.entry("microphone").or_insert(json!(
             audio && config.defaults.microphone && config.microphone
         ));
+        // A container follows the installation's proxy unless it asks otherwise.
+        request.entry("proxy").or_insert(if config.proxy.is_some() {
+            json!({"mode": "installation"})
+        } else {
+            Value::Null
+        });
     }
     serde_json::from_value(body).map_err(|e| {
         Error(
@@ -208,10 +218,14 @@ pub(crate) fn creation_request(
 }
 pub async fn create(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Result<Json<Value>> {
     let CreateContainer {
-        spec,
+        mut spec,
         parameters,
         mcp_endpoint,
+        proxy_password,
     } = creation_request(&app.config, body)?;
+    let password =
+        crate::outbound::PasswordChange::from_value(proxy_password.map(Value::String).as_ref())?;
+    password.settle(None, &mut spec.proxy)?;
     spec.validate()?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     // A compose found by the name the request uses is checked now; the job checks again once
@@ -224,13 +238,20 @@ pub async fn create(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Res
         crate::compose::check_mounts(&spec.mounts, &compose.mounts(&values))?;
     }
     let name = spec.name.clone();
+    // The password is kept before the job, so the desktop's proxy has it as the desktop starts.
+    app.save_proxy_password(&id, spec.proxy.as_ref(), &password)?;
     launch_named(
         app,
         "create",
         format!("container:{id}"),
         Some(name),
         move |app, job_id| async move {
-            let mut result = app.create_container(&id, spec, parameters, &job_id).await?;
+            let created = app.create_container(&id, spec, parameters, &job_id).await;
+            // A creation refused before its record was saved leaves no container to keep it for.
+            if app.container(&id).is_err() {
+                app.forget_proxy_password(&id)?;
+            }
+            let mut result = created?;
             if mcp_endpoint {
                 let container = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
                 // The container is made either way; an endpoint can still be created later.
@@ -277,7 +298,7 @@ pub async fn action(
                 info["Id"].as_str().context("Missing container ID")?,
             ])
             .await
-            .map_err(|error| app.gpu_error(&env, error))?;
+            .map_err(|error| app.device_error(&env, error))?;
             Ok(json!({"container_id":id}))
         },
     )

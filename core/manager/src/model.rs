@@ -34,6 +34,13 @@ pub struct ContainerSpec {
     /// Attach /dev/uinput so a virtual controller can be created inside the desktop.
     #[serde(default)]
     pub gamepad: bool,
+    /// Give the desktop `NET_ADMIN` and `/dev/net/tun`, so a VPN client inside it can open a
+    /// tunnel in its own network namespace.
+    #[serde(default)]
+    pub vpn: bool,
+    /// The proxy the desktop's programs go through, `None` for none; see [`crate::outbound`].
+    #[serde(default)]
+    pub proxy: Option<crate::outbound::ProxyChoice>,
     /// The machine identity every Docker container created for this one gets (see `identity`).
     /// A new container is given what its request leaves out; records saved before identities
     /// were kept have none until another Docker container is created for them.
@@ -93,6 +100,9 @@ impl ContainerSpec {
         }
         if self.microphone && !self.audio {
             bail!("Enable audio to use the microphone");
+        }
+        if let Some(proxy) = &self.proxy {
+            proxy.validate()?;
         }
         if let Some(name) = &self.hostname {
             crate::identity::hostname(name)?;

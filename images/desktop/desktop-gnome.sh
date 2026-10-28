@@ -11,6 +11,22 @@ printf '[Desktop Entry]\nType=Application\nHidden=true\n' > "$HOME/.config/autos
 # Desktop locking/logind integration is unavailable in this container session.
 gsettings set org.gnome.desktop.screensaver lock-enabled false
 gsettings set org.gnome.desktop.session idle-delay 0
+# GNOME's proxy settings, which browsers read here in place of the variables, follow the proxy
+# Thoric gives a container, and go back to none in a container without one that came from a
+# commit of one that had it.
+if [[ -n ${HTTP_PROXY:-} ]]; then
+    address=${HTTP_PROXY#http://}
+    address=${address%/}
+    gsettings set org.gnome.system.proxy mode manual
+    for scheme in http https; do
+        gsettings set "org.gnome.system.proxy.$scheme" host "${address%:*}"
+        gsettings set "org.gnome.system.proxy.$scheme" port "${address##*:}"
+    done
+    gsettings set org.gnome.system.proxy ignore-hosts "['localhost', '127.0.0.0/8', '::1']"
+elif [[ $(gsettings get org.gnome.system.proxy.http host) == "'127.0.0.1'" &&
+    $(gsettings get org.gnome.system.proxy.http port) == 31280 ]]; then
+    gsettings set org.gnome.system.proxy mode none
+fi
 if [[ ! -f "$HOME/.config/thoric-gnome-initialized" ]]; then
     gsettings set org.gnome.desktop.interface gtk-theme Yaru
     gsettings set org.gnome.desktop.interface icon-theme Yaru

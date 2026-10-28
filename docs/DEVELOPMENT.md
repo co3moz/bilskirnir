@@ -40,6 +40,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | Audio capture and injection | `core/manager/src/audio.rs`, `core/manager/helpers/audio_tools.py` |
 | Interactive terminals | `core/manager/src/terminal.rs`, `core/manager/helpers/terminal_runner.py`, `core/manager/helpers/terminal_control.py` |
 | Virtual gamepad | `core/manager/src/gamepad.rs`, `core/manager/helpers/gamepad_daemon.py`, `core/manager/helpers/gamepad_control.py` |
+| Desktop proxies | `core/manager/src/outbound.rs`, `core/manager/src/outbound/`, `core/manager/helpers/outbound_proxy.py`, `core/manager/helpers/outbound_control.py`, `core/web/src/lib/proxy.ts` |
 | Accessibility inspection and file download | `core/manager/helpers/inspect_ui.py` (in `core/manager/src/windows.rs`), `core/manager/helpers/download_file.py` (in `core/manager/src/files.rs`) |
 | Stdio bridge for local agent clients | `core/bridge/mcp_bridge.py`, `core/bridge/tests/test_mcp_bridge.py` |
 | File read/write/list/move/delete API | `core/manager/src/files.rs`, `core/manager/helpers/read_file.py`, `core/manager/helpers/upload_file.py`, `core/manager/helpers/file_ops.py` |

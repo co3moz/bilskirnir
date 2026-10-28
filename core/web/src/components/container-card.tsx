@@ -6,6 +6,8 @@ import {
   RiMicLine,
   RiComputerLine,
   RiResetLeftLine,
+  RiRouteLine,
+  RiShieldKeyholeLine,
   RiUploadLine,
   RiVolumeUpLine,
 } from "@remixicon/react"
@@ -73,6 +75,18 @@ export function SpecBadges({ spec, className }: { spec: ContainerSpec; className
         <Badge variant="outline" className="text-muted-foreground">
           <RiGamepadLine />
           {t("spec.gamepad")}
+        </Badge>
+      )}
+      {spec.vpn && (
+        <Badge variant="outline" className="text-muted-foreground">
+          <RiShieldKeyholeLine />
+          {t("spec.vpn")}
+        </Badge>
+      )}
+      {spec.proxy && (
+        <Badge variant="outline" className="text-muted-foreground">
+          <RiRouteLine />
+          {t("spec.proxy")}
         </Badge>
       )}
     </div>

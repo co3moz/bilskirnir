@@ -8,6 +8,7 @@ export const SECTIONS = [
   "mcp",
   "desktops",
   "features",
+  "proxy",
   "gpu",
   "limits",
   "content",
@@ -34,12 +35,14 @@ export const SECTION_OF: Record<string, Section> = {
   INTERNET_ENABLED: "features",
   SUDO_ENABLED: "features",
   GAMEPAD_ENABLED: "features",
+  VPN_ENABLED: "features",
   GPU_DEFAULT: "features",
   INTERNET_DEFAULT: "features",
   SUDO_DEFAULT: "features",
   AUDIO_DEFAULT: "features",
   MICROPHONE_DEFAULT: "features",
   GAMEPAD_DEFAULT: "features",
+  VPN_DEFAULT: "features",
   WSL_GPU: "gpu",
   NVIDIA_COMPUTE: "gpu",
   DRI_GPU: "gpu",
@@ -48,6 +51,10 @@ export const SECTION_OF: Record<string, Section> = {
   IMAGE_ARCHIVE_MAX_MB: "limits",
   TEMPLATES_URL: "content",
   VOLUME_FILTER: "content",
+  PROXY_URL: "proxy",
+  PROXY_USERNAME: "proxy",
+  PROXY_PASSWORD: "proxy",
+  PROXY_BYPASS: "proxy",
   MANAGER_CONTAINER: "manager",
   UPDATE_CHECK: "manager",
 }
@@ -156,12 +163,14 @@ export const FIELDS: Record<string, Field> = {
   INTERNET_ENABLED: { kind: "switch" },
   SUDO_ENABLED: { kind: "switch" },
   GAMEPAD_ENABLED: { kind: "switch" },
+  VPN_ENABLED: { kind: "switch" },
   GPU_DEFAULT: { kind: "switch" },
   INTERNET_DEFAULT: { kind: "switch" },
   SUDO_DEFAULT: { kind: "switch" },
   AUDIO_DEFAULT: { kind: "switch" },
   MICROPHONE_DEFAULT: { kind: "switch" },
   GAMEPAD_DEFAULT: { kind: "switch" },
+  VPN_DEFAULT: { kind: "switch" },
   UPLOAD_MAX_MB: { kind: "number", min: 1, max: 65536 },
   IMAGE_ARCHIVE_MAX_MB: { kind: "number", min: 1, max: 1048576 },
   TEMPLATES_URL: {
@@ -180,6 +189,8 @@ export const FIELDS: Record<string, Field> = {
     ],
     placeholder: "team=desktops",
   },
+  PROXY_URL: { kind: "text", placeholder: "http://proxy.example:3128" },
+  PROXY_BYPASS: { kind: "text", placeholder: "intranet.example,10.0.0.0/8" },
   UPDATE_CHECK: { kind: "switch" },
 }
 
@@ -258,7 +269,15 @@ export function releaseState(
 }
 
 /** The features of the create and settings forms. */
-export const FEATURES = ["gpu", "internet", "sudo", "audio", "microphone", "gamepad"] as const
+export const FEATURES = [
+  "gpu",
+  "internet",
+  "sudo",
+  "audio",
+  "microphone",
+  "gamepad",
+  "vpn",
+] as const
 export type Feature = (typeof FEATURES)[number]
 
 /**
@@ -280,6 +299,7 @@ export function featureDraft(
     // The microphone travels over the audio connection.
     microphone: spec.microphone ?? (audio && (defaults?.microphone ?? false)),
     gamepad: spec.gamepad ?? defaults?.gamepad ?? false,
+    vpn: spec.vpn ?? defaults?.vpn ?? false,
   }
 }
 

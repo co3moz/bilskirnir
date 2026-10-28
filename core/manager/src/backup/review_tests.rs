@@ -19,6 +19,7 @@ fn backup() -> (Manifest, Records) {
         images: vec![image("i1", "Tools", "build")],
         composes: vec![("c1".into(), pinned())],
         endpoints: vec![endpoint("desk", &["c1"])],
+        proxy_passwords: Vec::new(),
         available_images: HashSet::from(["i1".into()]),
         with_files: HashSet::from(["c1".into()]),
         volumes: BTreeMap::from([("projects".into(), VolumeFacts::default())]),

@@ -84,6 +84,14 @@ pub(crate) fn changed_list(event: &Value) -> Option<&'static str> {
     Some(*list)
 }
 
+/// Whether an event is one of this manager's desktops starting, whose proxy, when it has one,
+/// has to be started and given its settings.
+pub(crate) fn starts_a_desktop(event: &Value) -> bool {
+    event["Type"] == "container"
+        && event["Action"] == "start"
+        && event["Actor"]["Attributes"][LABEL] == "true"
+}
+
 /// How long to wait before the `attempt`th try: one second, doubling up to [`RETRY_MAX`].
 fn retry_delay(attempt: u32) -> Duration {
     Duration::from_secs(1 << attempt.min(5)).min(RETRY_MAX)
@@ -155,6 +163,9 @@ async fn follow(app: &App, socket: &Path, changes: &Changes, attempt: &mut u32) 
         },
         |line| {
             let event = serde_json::from_slice::<Value>(line).ok();
+            if event.as_ref().is_some_and(starts_a_desktop) {
+                app.outbound.wake();
+            }
             if let Some(list) = event.as_ref().and_then(changed_list) {
                 changes.add(list);
             }

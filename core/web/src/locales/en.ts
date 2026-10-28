@@ -373,6 +373,8 @@ export const en = {
   "restart.field.microphone": "microphone",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "gamepad",
+  "restart.field.vpn": "VPN access",
+  "restart.field.proxy": "turning the proxy on or off",
   "restart.field.hostname": "hostname",
   "restart.field.mac_address": "MAC address",
   "restart.field.machine_id": "machine ID",
@@ -610,7 +612,8 @@ export const en = {
   "backup.volumesHint.one": "{count} named volume, never the manager's own.",
   "backup.volumesHint.other": "{count} named volumes, never the manager's own.",
   "backup.secrets": "Secret values",
-  "backup.secretsHint": "The values of the composes' secret parameters, such as license passwords.",
+  "backup.secretsHint":
+    "The values of the composes' secret parameters, such as license passwords, and the passwords of the containers' own proxies.",
   "backup.secretsWarning":
     "The file will hold these values in plain text. Keep it where only you can read it, and delete it once it is restored.",
   "backup.download": "Download backup",
@@ -974,6 +977,7 @@ export const en = {
   "settings.section.mcp": "Agent access (MCP)",
   "settings.section.desktops": "Desktops",
   "settings.section.features": "Container features",
+  "settings.section.proxy": "Proxy",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Limits",
   "settings.section.content": "Templates and volumes",
@@ -1038,6 +1042,8 @@ export const en = {
   "settings.about.INTERNET_ENABLED": "Whether containers may have internet access.",
   "settings.about.SUDO_ENABLED": "Whether containers may give the desktop user sudo.",
   "settings.about.GAMEPAD_ENABLED": "Whether containers may have the virtual gamepad.",
+  "settings.about.VPN_ENABLED":
+    "Whether containers may have VPN access, NET_ADMIN and /dev/net/tun.",
   "settings.about.GPU_DEFAULT": "Whether a new container gets GPU access unless it asks otherwise.",
   "settings.about.INTERNET_DEFAULT":
     "Whether a new container gets internet access unless it asks otherwise.",
@@ -1048,6 +1054,14 @@ export const en = {
     "Whether a new container with sound gets the microphone unless it asks otherwise.",
   "settings.about.GAMEPAD_DEFAULT":
     "Whether a new container gets the virtual gamepad unless it asks otherwise.",
+  "settings.about.VPN_DEFAULT": "Whether a new container gets VPN access unless it asks otherwise.",
+  "settings.about.PROXY_URL":
+    "The proxy that containers following the installation's go through: http://, https:// or socks5:// with a host and a port. Empty for none.",
+  "settings.about.PROXY_USERNAME": "The proxy's user name, when it asks for one.",
+  "settings.about.PROXY_PASSWORD":
+    "The proxy's password. It changes only in .env, with thoric settings.",
+  "settings.about.PROXY_BYPASS":
+    "Hosts, domains and networks that skip the proxy, separated by commas.",
   "settings.about.WSL_GPU": "Graphics acceleration through the WSL GPU, where the host has one.",
   "settings.about.NVIDIA_COMPUTE":
     "The NVIDIA GPU through the NVIDIA Container Toolkit: CUDA, and OpenGL outside WSL.",
@@ -1172,6 +1186,7 @@ export const en = {
   "spec.audio": "Audio",
   "spec.microphone": "Microphone",
   "spec.gamepad": "Gamepad",
+  "spec.vpn": "VPN",
   "spec.internet": "Internet",
   "spec.flag.gpu": "GPU",
   "spec.flag.gpu.description": "Hardware rendering on the host GPU.",
@@ -1185,6 +1200,25 @@ export const en = {
   "spec.flag.microphone.description": "The browser microphone, inside the desktop.",
   "spec.flag.gamepad": "Gamepad",
   "spec.flag.gamepad.description": "A virtual controller device.",
+  "spec.flag.vpn": "VPN",
+  "spec.flag.vpn.description": "Lets a VPN client inside open a tunnel.",
+  "spec.proxy": "Proxy",
+  "spec.proxy.summary": "Through a proxy",
+  "spec.proxy.mode.none": "None",
+  "spec.proxy.mode.installation": "Installation proxy",
+  "spec.proxy.mode.custom": "Own proxy",
+  "spec.proxy.none.description": "Programs go straight to every address.",
+  "spec.proxy.installation.description": "Through {url}, as the installation sets it.",
+  "spec.proxy.installation.missing":
+    "This installation has no proxy now, so programs go straight to every address.",
+  "spec.proxy.custom.description":
+    "A proxy inside the desktop adds the user name and password, so programs never see them.",
+  "spec.proxy.url": "Address",
+  "spec.proxy.username": "User name",
+  "spec.proxy.password": "Password",
+  "spec.proxy.passwordKept": "Kept; type to replace it",
+  "spec.proxy.removePassword": "Remove the kept password",
+  "spec.proxy.bypass": "Skip the proxy for",
   "spec.resolution": "Resolution",
   "spec.sharedMemory": "Shared memory (MB)",
   "spec.cpuLimit": "CPU limit",

@@ -22,6 +22,7 @@ use crate::{
     error::{Error, Result},
     jobs,
     model::{CONTAINERS, Container, ImageRecord},
+    outbound::{CREDENTIALS, ProxyChoice},
 };
 use anyhow::{Context, anyhow, bail};
 use axum::{
@@ -437,11 +438,22 @@ impl App {
         .lines()
         .map(str::to_owned)
         .collect();
+        let passwords: HashSet<String> = records
+            .proxy_passwords
+            .iter()
+            .map(|entry| entry.container_id.clone())
+            .collect();
         let mut skipped = HashMap::new();
         for container in &mut records.containers {
             if let Some(reason) = not_created(container, &volumes) {
                 container.last_error = Some(reason.clone());
                 skipped.insert(container.id.clone(), reason);
+            }
+            // A password the backup left out is asked for again in the container's settings.
+            if let Some(ProxyChoice::Custom { password, .. }) = &mut container.spec.proxy
+                && !passwords.contains(&container.id)
+            {
+                *password = false;
             }
         }
         let mut rows: Vec<(&str, &str, Value)> = Vec::new();
@@ -460,6 +472,13 @@ impl App {
         }
         for endpoint in &records.endpoints {
             rows.push((ENDPOINTS, &endpoint.name, serde_json::to_value(endpoint)?));
+        }
+        for entry in &records.proxy_passwords {
+            rows.push((
+                CREDENTIALS,
+                &entry.container_id,
+                serde_json::to_value(&entry.credentials)?,
+            ));
         }
         self.db
             .insert_all(&rows)
@@ -544,7 +563,7 @@ fn describe(manifest: &Manifest, missing: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ");
         text.push_str(&format!(
-            " It left out the values of the secret parameters of {names}; a reset runs their setup without them."
+            " It left out the secret values of {names}: the values of their secret parameters, which a reset then runs their setup without, and the passwords of their own proxies, which their settings ask for again."
         ));
     }
     if !missing.is_empty() {

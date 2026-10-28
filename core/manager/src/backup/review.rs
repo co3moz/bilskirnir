@@ -221,6 +221,18 @@ pub(crate) fn check_records(manifest: &Manifest, records: &Records) -> Result<()
         }
         compose.pinned.compose.validate()?;
     }
+    let mut passwords = HashSet::new();
+    for entry in &records.proxy_passwords {
+        if !passwords.insert(entry.container_id.as_str())
+            || !manifest
+                .containers
+                .iter()
+                .any(|c| c.id == entry.container_id)
+        {
+            bail!("The backup holds a proxy password of an unknown container");
+        }
+        crate::outbound::password(&entry.credentials.password)?;
+    }
     for endpoint in &records.endpoints {
         let mut aliases = HashSet::new();
         for grant in &endpoint.grants {

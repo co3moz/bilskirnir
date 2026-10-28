@@ -5,7 +5,11 @@
 //! remove one. The name and internet access therefore change in place and limits through
 //! `docker update`. Every other change recreates the container from a commit of its files:
 //! the desktop restarts, but nothing that was in its container layer is lost.
-use crate::{App, model::*};
+use crate::{
+    App,
+    model::*,
+    outbound::{PasswordChange, ProxyChoice},
+};
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value, json};
 
@@ -24,6 +28,8 @@ const EDITABLE: &[&str] = &[
     "microphone",
     "sudo",
     "gamepad",
+    "vpn",
+    "proxy",
     "hostname",
     "mac_address",
     "machine_id",
@@ -50,6 +56,10 @@ pub(crate) fn merged_spec(
 ) -> Result<ContainerSpec> {
     let mut value = serde_json::to_value(current)?;
     for (key, field) in request {
+        // The password of the container's own proxy is kept apart from its settings.
+        if key == "proxy_password" {
+            continue;
+        }
         if key == "image" {
             if field.as_str() != Some(current.image.as_str()) {
                 bail!(
@@ -105,6 +115,14 @@ pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     note(old.microphone != new.microphone, false, "microphone");
     note(old.sudo != new.sudo, false, "sudo");
     note(old.gamepad != new.gamepad, false, "gamepad");
+    note(old.vpn != new.vpn, false, "vpn");
+    // The desktop's proxy takes new settings as it runs; the variables that lead programs to it
+    // are fixed at creation.
+    note(
+        old.proxy != new.proxy,
+        old.proxy.is_some() == new.proxy.is_some(),
+        "proxy",
+    );
     // Docker fixes the hostname and MAC address at creation, and software reads the machine ID
     // when it starts.
     note(old.hostname != new.hostname, false, "hostname");
@@ -154,7 +172,9 @@ impl App {
         env: &Container,
         request: &Map<String, Value>,
     ) -> Result<(ContainerSpec, Changes)> {
-        let spec = merged_spec(&env.spec, request)?;
+        let mut spec = merged_spec(&env.spec, request)?;
+        let password = PasswordChange::requested(request)?;
+        password.settle(env.spec.proxy.as_ref(), &mut spec.proxy)?;
         crate::compose::check_mounts(&spec.mounts, env.compose_mounts())?;
         // Only a feature being switched on needs the installation's permission; a desktop that
         // already has one keeps it after the installation turns it off, as it did before.
@@ -165,8 +185,20 @@ impl App {
         enabled.internet &= !env.spec.internet;
         enabled.sudo &= !env.spec.sudo;
         enabled.gamepad &= !env.spec.gamepad;
+        enabled.vpn &= !env.spec.vpn;
+        if enabled.proxy == env.spec.proxy {
+            enabled.proxy = None;
+        }
         self.installation_allows(&enabled)?;
-        let changes = classify(&env.spec, &spec);
+        let mut changes = classify(&env.spec, &spec);
+        // A new password changes only what the desktop's proxy is given.
+        if password != PasswordChange::Keep
+            && matches!(spec.proxy, Some(ProxyChoice::Custom { .. }))
+            && !changes.live.contains(&"proxy")
+            && !changes.restart.contains(&"proxy")
+        {
+            changes.live.push("proxy");
+        }
         // A change that creates the container again gives it the host's GPU again, as a reset
         // does, and a GPU desktop without one stops at its renderer check.
         if spec.gpu
@@ -192,6 +224,9 @@ impl App {
             self.append_log(job_id, "The settings are unchanged.")?;
             return Ok(result);
         }
+        // The desktop's proxy reads the password when it is next given its settings.
+        let password = PasswordChange::requested(&request)?;
+        self.save_proxy_password(id, spec.proxy.as_ref(), &password)?;
         let mounts = spec.mounts.iter().chain(env.compose_mounts());
         let mounts = mounts.cloned().collect::<Vec<_>>();
         // A new container gets the mounts, so check them before the desktop stops.
@@ -235,6 +270,7 @@ impl App {
             .to_owned();
         if !changes.restart.is_empty() {
             self.recreate(env, spec, &info, job_id).await?;
+            self.outbound.wake();
             return Ok(result);
         }
         if let Some(mut args) = update_args(&env.spec, &spec) {
@@ -255,6 +291,9 @@ impl App {
         }
         env.spec = spec;
         self.db.put(CONTAINERS, id, &env)?;
+        if changes.live.contains(&"proxy") {
+            self.outbound.wake();
+        }
         self.append_log(job_id, "Saved the settings. The container kept running.")?;
         Ok(result)
     }
@@ -346,7 +385,7 @@ impl App {
         let replaced = async {
             self.docker_args(&self.container_args(&env))
                 .await
-                .map_err(|error| self.gpu_error(&env, error))?;
+                .map_err(|error| self.device_error(&env, error))?;
             self.write_machine_id(&env).await?;
             self.hand_over_mount_parents(&env).await?;
             if env.spec.internet {
@@ -356,7 +395,7 @@ impl App {
             if running {
                 self.docker(&["start", &env.container])
                     .await
-                    .map_err(|error| self.gpu_error(&env, error))?;
+                    .map_err(|error| self.device_error(&env, error))?;
             }
             anyhow::Ok(())
         }

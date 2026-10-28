@@ -772,8 +772,10 @@ try:
     # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
     # the defaults; the others keep what the create form chose before them.
     settings = api("settings")
-    assert settings["defaults"] == {"gpu": False, "internet": True, "sudo": True, "audio": False, "microphone": False, "gamepad": False}, settings
-    assert settings["root_mcp_enabled"] and settings["internet_enabled"] and settings["sudo_enabled"] and settings["gamepad_enabled"], settings
+    assert settings["defaults"] == {"gpu": False, "internet": True, "sudo": True, "audio": False, "microphone": False, "gamepad": False, "vpn": False}, settings
+    assert settings["root_mcp_enabled"] and settings["internet_enabled"] and settings["sudo_enabled"] and settings["gamepad_enabled"] and settings["vpn_enabled"], settings
+    # The suite's installation has no proxy, so a container follows none unless it has its own.
+    assert settings["proxy"] is None, settings
     # The manager looked at its host's /sys: WSL gets the WSL GPU and CUDA beside it, a Linux
     # host its NVIDIA GPU through the toolkit or its render devices; WSL_GPU stays on in both.
     gpu_routes = settings["gpu"]["routes"]
@@ -831,7 +833,8 @@ try:
         body = error.read().decode()
         assert error.code == 400 and "expected format" in body and f"words-{tag}" not in body, body
     secret = f"s3cret-{tag}"
-    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}], "parameters": {"GREETING": "hello", "TOKEN": secret}}
+    proxy_secret = f"proxy-{tag}"
+    spec = {"name": "GPU test", "image": built["image_id"], "resolution": "1280x720", "gpu": True, "gamepad": True, "vpn": True, "proxy": {"mode": "custom", "url": "http://127.0.0.1:18081", "username": "agent", "bypass": ["intranet.test"]}, "proxy_password": proxy_secret, "internet": False, "audio": True, "microphone": True, "cpus": 2, "memory_mb": 2048, "mounts": [{"volume": share, "target": "/shared", "readonly": False}], "parameters": {"GREETING": "hello", "TOKEN": secret}}
     created = api("containers", spec)
     env_id = job(created)["container_id"]
     container_ids.append(env_id)
@@ -845,6 +848,36 @@ try:
     assert secret not in json.dumps(described) and secret not in json.dumps(api("containers"))
     assert described["setup"] | {"finished_at": None} == {"status": "completed", "image": built["id"], "parameters": {"FLAVOR": "vanilla", "GREETING": "hello"}, "secrets": ["TOKEN"], "finished_at": None}, described
     print("PASS image compose asks for values, runs its setup as the desktop user and never returns a secret", flush=True)
+    # VPN access: root opens a tunnel interface in the desktop's own network namespace.
+    host_config = json.loads(docker("inspect", container))[0]["HostConfig"]
+    assert "CAP_NET_ADMIN" in [c if c.startswith("CAP_") else f"CAP_{c}" for c in host_config["CapAdd"]] and host_config["Sysctls"] == {"net.ipv4.conf.all.src_valid_mark": "1"}, host_config
+    open_tun = "import fcntl,os,struct\nfd=os.open('/dev/net/tun',os.O_RDWR)\nfcntl.ioctl(fd,0x400454ca,struct.pack('16sH',b'thoric0',0x1001))\nprint('tunnel')"
+    assert docker("exec", container, "python3", "-c", open_tun).strip() == b"tunnel"
+    print("PASS VPN access opens a tunnel in the container's own network namespace", flush=True)
+    # The desktop's proxy: programs see only 127.0.0.1:31280, which goes on to the container's own
+    # proxy with the user name and password that only the manager and that proxy hold. A fake
+    # upstream inside the desktop answers every request itself, so no internet is needed.
+    described = api(f"containers/{env_id}")
+    assert described["spec"]["proxy"] == {"mode": "custom", "url": "http://127.0.0.1:18081", "username": "agent", "bypass": ["intranet.test"], "password": True}, described["spec"]
+    environment = json.loads(docker("inspect", container))[0]["Config"]["Env"]
+    assert "HTTP_PROXY=http://127.0.0.1:31280" in environment and "no_proxy=localhost,127.0.0.1,::1" in environment, environment
+    assert proxy_secret not in json.dumps(environment) and proxy_secret not in json.dumps(api("containers")) and proxy_secret not in api(f"jobs/{created['job_id']}")["log"]
+    upstream = "import socket\ns=socket.socket()\ns.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)\ns.bind(('127.0.0.1',18081))\ns.listen(8)\nwhile True:\n    c,_=s.accept()\n    head=b''\n    while b'\\r\\n\\r\\n' not in head:\n        data=c.recv(65536)\n        if not data: break\n        head+=data\n    open('/tmp/upstream-seen','ab').write(head.split(b'\\r\\n\\r\\n')[0]+b'\\n--\\n')\n    c.sendall(b'HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\nConnection: close\\r\\n\\r\\nok')\n    c.close()\n"
+    docker("exec", "--detach", "--user", "desktop", container, "python3", "-c", upstream)
+    fetch = lambda: docker("exec", "--user", "desktop", container, "curl", "-s", "-w", " %{http_code}", "http://example.test/page", check=False)
+    assert wait_for(lambda: fetch() == b"ok 200" or None), fetch()
+    def seen_with(password):
+        seen = docker("exec", container, "cat", "/tmp/upstream-seen", check=False).decode()
+        token = base64.b64encode(f"agent:{password}".encode()).decode()
+        return f"Proxy-Authorization: Basic {token}" in seen and "GET http://example.test/page HTTP/1.1" in seen
+    assert seen_with(proxy_secret)
+    # A new password reaches the running desktop's proxy without recreating the container.
+    started = json.loads(docker("inspect", container))[0]["State"]["StartedAt"]
+    changed = api(f"containers/{env_id}/settings", {"proxy_password": f"{proxy_secret}-2"})
+    assert job(changed) == {"container_id": env_id, "live": ["proxy"], "restart": []}
+    assert wait_for(lambda: (fetch() == b"ok 200" and seen_with(f"{proxy_secret}-2")) or None)
+    assert json.loads(docker("inspect", container))[0]["State"]["StartedAt"] == started
+    print("PASS the desktop's proxy adds the credentials, which no list, variable or log holds, and takes new ones in place", flush=True)
     # Templates merged into one image: each part's script runs in a layer of its own in order,
     # and each compose step receives only its own values, although both ask for VERSION.
     merged_request = {"name": "merged-templates", "base_image": xfce["reference"], "internet": False, "template_ids": ["first", "second"],
@@ -1587,13 +1620,17 @@ try:
     assert snap_layers[:len(base_layers)] == base_layers and len(snap_layers) > len(base_layers)
     # The snapshot keeps the compose its container ran, so a container from it asks again.
     assert [p["name"] for p in snap["compose"]["parameters"]] == ["GREETING", "TOKEN", "FLAVOR"] and "script" not in snap["compose"]
-    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}], "parameters": {"GREETING": "again", "TOKEN": "other", "FLAVOR": ""}})
+    spec.update({"name": "Clone", "image": snap["image_id"], "gpu": False, "gamepad": False, "vpn": False, "proxy": None, "proxy_password": None, "audio": False, "microphone": False, "mounts": [{"volume": clone_share, "target": "/shared"}], "parameters": {"GREETING": "again", "TOKEN": "other", "FLAVOR": ""}})
     clone_id = job(api("containers", spec))["container_id"]
     container_ids.append(clone_id)
     clone = f"thoric-{clone_id}"
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"
     assert docker("exec", clone, "cat", "/home/desktop/compose-setup") == b"again|other||1001"
+    # A snapshot keeps no password, and its proxy variables are empty in a container without one.
+    assert proxy_secret not in docker("image", "inspect", snap["image_id"]).decode()
+    assert docker("exec", clone, "printenv", "HTTP_PROXY") == b"\n"
+    assert subprocess.run(["docker", "exec", clone, "python3", "-c", open_tun], capture_output=True).returncode != 0
     assert subprocess.run(["docker", "exec", clone, "test", "-e", "/shared/volume-marker"]).returncode != 0
     print("PASS layered snapshot, immutable ancestry and independent volume clone", flush=True)
     # The snapshot leaves as a gzip-compressed docker save stream and comes back under a new name.

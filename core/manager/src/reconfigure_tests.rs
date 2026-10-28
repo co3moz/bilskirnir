@@ -132,6 +132,8 @@ fn every_setting_that_recreates_the_container_is_named_in_the_dashboards_warning
         microphone: true,
         sudo: false,
         gamepad: true,
+        vpn: true,
+        proxy: Some(crate::outbound::ProxyChoice::Installation),
         hostname: Some("unity-build".into()),
         mac_address: Some("02:00:00:00:00:02".into()),
         machine_id: Some("0123456789abcdef0123456789abcdef".into()),
@@ -146,7 +148,7 @@ fn every_setting_that_recreates_the_container_is_named_in_the_dashboards_warning
         ..old.clone()
     };
     let restart = classify(&old, &new).restart;
-    assert_eq!(restart.len(), 13, "{restart:?}");
+    assert_eq!(restart.len(), 15, "{restart:?}");
     let catalog = include_str!("../../web/src/locales/en.ts");
     for name in restart {
         assert!(
@@ -449,6 +451,59 @@ fn proxied_ports_change_in_place_within_their_limits() {
             "{ports}"
         );
     }
+}
+
+#[test]
+fn a_proxy_changes_in_place_and_only_turning_it_on_or_off_recreates_the_container() {
+    let app = crate::tests::app(false);
+    let preview = |spec: ContainerSpec, change: Value| {
+        let env = Container {
+            id: "p".into(),
+            container: "thoric-p".into(),
+            private_network: "thoric-p-private".into(),
+            egress_network: "thoric-p-egress".into(),
+            source_image_id: "sha256:source".into(),
+            created_at: 0,
+            spec,
+            last_error: None,
+            desktop: None,
+            working_image: None,
+            setup: None,
+        };
+        app.settings_preview(&env, &request(change))
+    };
+    let own = json!({"mode": "custom", "url": "http://proxy.example:3128", "username": "ana"});
+    let (on, changes) = preview(spec(), json!({"proxy": own, "proxy_password": "pw"})).unwrap();
+    assert_eq!(changes.restart, ["proxy"]);
+    assert!(matches!(
+        on.proxy,
+        Some(ProxyChoice::Custom { password: true, .. })
+    ));
+    // Another address, the bypass list or a new password reach the running desktop's proxy.
+    let other =
+        json!({"mode": "custom", "url": "socks5://proxy.example:1080", "bypass": ["*.lan"]});
+    let (moved, changes) = preview(on.clone(), json!({"proxy": other})).unwrap();
+    assert_eq!((changes.live, changes.restart), (vec!["proxy"], vec![]));
+    // The password stays with the host it was given for.
+    assert!(matches!(
+        moved.proxy,
+        Some(ProxyChoice::Custom { password: true, .. })
+    ));
+    let (_, changes) = preview(on.clone(), json!({"proxy_password": "new"})).unwrap();
+    assert_eq!((changes.live, changes.restart), (vec!["proxy"], vec![]));
+    let (off, changes) = preview(on.clone(), json!({"proxy": null})).unwrap();
+    assert_eq!((off.proxy, changes.restart), (None, vec!["proxy"]));
+    // A password needs a proxy of the container's own, and following the installation's needs one.
+    assert!(preview(spec(), json!({"proxy_password": "pw"})).is_err());
+    let error = preview(spec(), json!({"proxy": {"mode": "installation"}})).unwrap_err();
+    assert!(error.to_string().contains("PROXY_URL"), "{error}");
+    // One that follows it keeps doing so while other settings change, now that it has none.
+    let following = ContainerSpec {
+        proxy: Some(ProxyChoice::Installation),
+        ..spec()
+    };
+    let (_, changes) = preview(following, json!({"name": "Renamed"})).unwrap();
+    assert_eq!(changes.live, ["name"]);
 }
 
 /// A manager whose Docker CLI is a shell script in a new directory, which it enters before
