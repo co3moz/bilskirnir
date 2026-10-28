@@ -1594,10 +1594,17 @@ try:
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
     job(api(f"containers/{env_id}/internet", {"enabled": True}))
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode == 0
+    # VNC asks no password, so it listens on the private network only, never on the internet one.
+    networks = json.loads(docker("inspect", container))[0]["NetworkSettings"]["Networks"]
+    vnc_script = "import socket, sys; s=socket.socket(); s.settimeout(2); s.connect((sys.argv[1], 5900))"
+    for network, listening in [(f"thoric-{env_id}-private", True), (f"thoric-{env_id}-egress", False)]:
+        address = networks[network]["IPAddress"]
+        reached = subprocess.run(["docker", "exec", container, "python3", "-c", vnc_script, address], capture_output=True)
+        assert (reached.returncode == 0) == listening, (network, address, reached.stderr)
     job(api(f"containers/{env_id}/internet", {"enabled": False}))
     assert api(f"containers/{env_id}/screenshot", raw=True).startswith(b"\xff\xd8")
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
-    print("PASS live internet on/off with VNC still reachable", flush=True)
+    print("PASS live internet on/off with VNC still reachable, and only on the private network", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
     snap = job(snap_job)

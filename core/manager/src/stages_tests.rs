@@ -513,6 +513,7 @@ case "$1 $2 $3" in
   'container inspect thoric-e') printf '[%s]' "$(cat container.json)"; exit ;;
   'container inspect '*) exit 1 ;;
   'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
+  'network inspect '*) echo '[{"IPAM":{"Config":[{"Subnet":"172.30.0.0/16"}]}}]'; exit ;;
 esac
 case "$1" in
   create) exit $(cat create-status) ;;
@@ -575,6 +576,13 @@ esac
             .contains("Stage 3/4: Creating the new container\n")
     );
     assert!(recreated.log.contains("Stage 4/4: Cleaning up\n"));
+    // The new container is told its private network's subnet, which its VNC server listens in.
+    assert!(
+        calls().lines().any(|call| call.starts_with("create ")
+            && call.contains("--env DESKTOP_PRIVATE_SUBNET=172.30.0.0/16 ")),
+        "{}",
+        calls()
+    );
 
     // A stopped container has nothing to stop, so that stage is skipped.
     let stopped = run("1600x900", false, 0).await;

@@ -425,7 +425,7 @@ impl App {
             }
             return Ok(());
         }
-        let args = self.container_args(env);
+        let args = self.container_args(env, private_subnet(&private));
         self.docker_args(&args)
             .await
             .map_err(|error| self.device_error(env, error))?;
@@ -443,8 +443,13 @@ impl App {
         Ok(())
     }
     /// The `docker create` arguments for a container: every setting that Docker
-    /// fixes when it creates a container is here.
-    pub(crate) fn container_args(&self, env: &Container) -> Vec<String> {
+    /// fixes when it creates a container is here. `private_subnet` is its private network's, the
+    /// one the desktop's VNC server listens in.
+    pub(crate) fn container_args(
+        &self,
+        env: &Container,
+        private_subnet: Option<&str>,
+    ) -> Vec<String> {
         let mut args: Vec<String> = vec![
             "create",
             "--name",
@@ -487,6 +492,9 @@ impl App {
             .chain(crate::outbound::environment(&env.spec))
         {
             args.extend(["--env".into(), format!("{key}={val}")]);
+        }
+        if let Some(subnet) = private_subnet {
+            args.extend(["--env".into(), format!("DESKTOP_PRIVATE_SUBNET={subnet}")]);
         }
         if let Some(profile) = self.config.seccomp_profile() {
             // The CLI reads the file and sends its contents with the request.
@@ -960,4 +968,18 @@ pub(crate) fn private_ip(env: &Container, info: &Value) -> Result<std::net::Ipv4
         .context("Missing private network address")?
         .parse()
         .context("Invalid Docker IP address")
+}
+/// The IPv4 subnet of a desktop's private network, from `docker network inspect`. The desktop's
+/// VNC server listens only on its address there, since VNC asks no password and the private
+/// network is the one only the manager shares with it.
+pub(crate) fn private_subnet(network: &Value) -> Option<&str> {
+    network["IPAM"]["Config"]
+        .as_array()?
+        .iter()
+        .filter_map(|config| config["Subnet"].as_str())
+        .find(|subnet| {
+            subnet
+                .split_once('/')
+                .is_some_and(|(address, _)| address.parse::<std::net::Ipv4Addr>().is_ok())
+        })
 }

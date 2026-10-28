@@ -227,14 +227,14 @@ fn every_created_container_gets_the_hostname_and_mac_address() {
     let mut identified =
         spec(json!({"hostname": "unity-build", "mac_address": "02:00:00:00:00:01"}));
     identified.machine_id = Some(generate_machine_id());
-    let args = app.container_args(&record(identified)).join(" ");
+    let args = app.container_args(&record(identified), None).join(" ");
     assert!(args.contains("--hostname unity-build"), "{args}");
     assert!(args.contains("--mac-address 02:00:00:00:00:01"), "{args}");
     assert!(args.contains("--network thoric-0123456789abcdef0123456789abcdef-private"));
     // The internet network is connected after creation, with the same address.
     assert!(!args.contains("-egress"), "{args}");
     // A record saved before identities were kept has none to give.
-    let args = app.container_args(&record(spec(json!({}))));
+    let args = app.container_args(&record(spec(json!({}))), None);
     assert!(
         !args
             .iter()

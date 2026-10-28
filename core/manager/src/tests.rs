@@ -2316,7 +2316,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         working_image: None,
         setup: None,
     };
-    let joined = |env: &model::Container| app.container_args(env).join(" ");
+    let joined = |env: &model::Container| app.container_args(env, Some("172.30.0.0/16")).join(" ");
     let args = joined(&env);
     let profile = std::path::Path::new(DESKTOP_CONTEXT).join("seccomp.json");
     let seccomp = format!("--security-opt seccomp={}", profile.display());
@@ -2328,6 +2328,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         "--env DESKTOP_AUDIO=true",
         "--env DESKTOP_GPU=true",
         "--env GPU_ADAPTER=NVIDIA",
+        "--env DESKTOP_PRIVATE_SUBNET=172.30.0.0/16",
         "--memory 2048m",
         "--mount type=volume,src=work,dst=/workspace,readonly",
         "--gpus all",
@@ -2380,6 +2381,22 @@ fn a_host_without_the_tun_device_names_the_vpn_setting() {
     assert!(error.contains("without vpn"), "{error}");
 }
 #[test]
+fn vnc_listens_in_the_ipv4_subnet_of_the_private_network() {
+    let network = |configs: serde_json::Value| serde_json::json!({"IPAM": {"Config": configs}});
+    let dual = network(serde_json::json!([
+        {"Subnet": "fd00:7468::/64", "Gateway": "fd00:7468::1"},
+        {"Subnet": "172.30.0.0/16"},
+    ]));
+    assert_eq!(docker::private_subnet(&dual), Some("172.30.0.0/16"));
+    // Without an IPv4 subnet the desktop is told nothing and listens on every interface.
+    let ipv6 = network(serde_json::json!([{"Subnet": "fd00:7468::/64"}]));
+    assert_eq!(docker::private_subnet(&ipv6), None);
+    assert_eq!(
+        docker::private_subnet(&network(serde_json::Value::Null)),
+        None
+    );
+}
+#[test]
 fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_place() {
     let mut app = app(false);
     Arc::get_mut(&mut app).unwrap().config.user_namespaces = false;
@@ -2397,7 +2414,7 @@ fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_pla
         setup: None,
     };
     assert_eq!(app.config.seccomp_profile(), None);
-    let args = app.container_args(&env);
+    let args = app.container_args(&env, None);
     assert!(!args.iter().any(|arg| arg == "--security-opt"), "{args:?}");
 }
 #[test]
@@ -2514,7 +2531,7 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
         )
         .unwrap();
     assert_eq!(changes.live, ["name"]);
-    let args = app.container_args(&env);
+    let args = app.container_args(&env, None);
     assert!(args.iter().any(|arg| arg == "/dev/uinput"), "{args:?}");
     assert!(args.iter().any(|arg| arg == "NET_ADMIN"), "{args:?}");
     assert!(
