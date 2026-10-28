@@ -771,6 +771,8 @@ export const es: Messages = {
   "templates.filter": "Filtrar plantillas",
   "templates.filterPlaceholder": "Buscar plantillas",
   "templates.tags": "Etiquetas",
+  "templates.allTags": "Todas las etiquetas",
+  "templates.filterTag": "Mostrar las plantillas con la etiqueta {tag}",
   "templates.kind.application": "Aplicaciones",
   "templates.kind.environment": "Entornos",
   "templates.kind.environmentHint":

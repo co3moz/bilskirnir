@@ -778,6 +778,8 @@ export const fr: Messages = {
   "templates.filter": "Filtrer les modèles",
   "templates.filterPlaceholder": "Rechercher des modèles",
   "templates.tags": "Étiquettes",
+  "templates.allTags": "Toutes les étiquettes",
+  "templates.filterTag": "Afficher les modèles avec l'étiquette {tag}",
   "templates.kind.application": "Applications",
   "templates.kind.environment": "Environnements",
   "templates.kind.environmentHint":

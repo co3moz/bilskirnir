@@ -780,6 +780,8 @@ export const en = {
   "templates.filter": "Filter templates",
   "templates.filterPlaceholder": "Search templates",
   "templates.tags": "Tags",
+  "templates.allTags": "All tags",
+  "templates.filterTag": "Show the templates tagged {tag}",
   "templates.kind.application": "Applications",
   "templates.kind.environment": "Environments",
   "templates.kind.environmentHint":

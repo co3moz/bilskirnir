@@ -4,7 +4,6 @@ import assert from "node:assert/strict"
 import { composeSteps } from "../src/lib/compose"
 import { dataUrlBytes, iconUrl, readIcon } from "../src/lib/icons"
 import {
-  allTags,
   buildable,
   compareVersions,
   groupByKind,
@@ -12,6 +11,7 @@ import {
   matches,
   mergeTemplates,
   readTemplateList,
+  sharedTags,
   templateFile,
 } from "../src/lib/templates"
 
@@ -139,11 +139,23 @@ test("search looks at every word in the name, description and tags", () => {
   assert.ok(matches(template, "unity GAMES"))
   assert.ok(matches(template, "editors 3d"))
   assert.ok(!matches(template, "unity blender"))
-  assert.deepEqual(allTags([template, { ...template, tags: ["3d", "art"] }]), [
-    "3d",
-    "art",
-    "games",
+})
+
+test("the tag filter offers only tags that narrow the list, the most common first", () => {
+  const tagged = (id: string, tags: string[]) => ({ ...unity, id, tags })
+  const templates = [
+    tagged("unity", ["games", "3d", "mcp", "unity"]),
+    tagged("godot", ["games", "godot", "mcp"]),
+    tagged("blender", ["3d", "graphics", "games", "mcp", "mcp"]),
+    tagged("node", ["javascript", "mcp"]),
+  ]
+  // A tag of one template is left to the search, and mcp, on every template, narrows nothing.
+  assert.deepEqual(sharedTags(templates), [
+    { name: "games", count: 3 },
+    { name: "3d", count: 2 },
   ])
+  assert.deepEqual(sharedTags([templates[0]]), [])
+  assert.deepEqual(sharedTags([]), [])
 })
 
 const PNG = "data:image/png;base64,"
