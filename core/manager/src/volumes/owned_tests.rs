@@ -47,7 +47,7 @@ fn a_volume_created_for_a_container_carries_its_owner() {
         "volume create --label thoric.managed=true --label team=unity --label thoric.environment=e --label thoric.parameter=UNITY_WORKSPACE thoric-e-unity-workspace"
     );
     // The owner label is the one the container carries.
-    let desktop = crate::tests::app(false).container_args(&container("e", &[]));
+    let desktop = crate::tests::app(false).container_args(&container("e", &[]), None);
     assert!(desktop.contains(&format!("{OWNER}=e")), "{desktop:?}");
     let labelled = |labels: Value| json!({"Name": "thoric-e-unity-workspace", "Labels": labels});
     assert!(owned_by(

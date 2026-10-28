@@ -422,7 +422,7 @@ fn every_new_container_mounts_the_volumes_its_compose_was_given() {
             mount("unity-installs", "/opt/unity")
         ]
     );
-    let args = app.container_args(&env).join(" ");
+    let args = app.container_args(&env, None).join(" ");
     for flag in [
         "--mount type=volume,src=projects,dst=/home/desktop/Projects",
         "--mount type=volume,src=unity-installs,dst=/opt/unity ",
@@ -516,15 +516,15 @@ fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
         ..container()
     };
     let flag = "--mount type=volume,src=thoric-e-unity-workspace,dst=/home/desktop/Projects";
-    assert!(app.container_args(&env).join(" ").contains(flag));
+    assert!(app.container_args(&env, None).join(" ").contains(flag));
     // A reset or a retry that recreates a missing container runs the setup again with it.
     setup_again(&mut env);
-    assert!(app.container_args(&env).join(" ").contains(flag));
+    assert!(app.container_args(&env, None).join(" ").contains(flag));
     // A settings change that recreates the container cannot drop it.
     env.spec =
         crate::reconfigure::merged_spec(&env.spec, json!({"mounts": []}).as_object().unwrap())
             .unwrap();
-    assert!(app.container_args(&env).join(" ").contains(flag));
+    assert!(app.container_args(&env, None).join(" ").contains(flag));
     // The record, as it is saved and read again.
     let saved: Container = serde_json::from_value(serde_json::to_value(&env).unwrap()).unwrap();
     assert_eq!(saved.mounts(), pinned.mounts());

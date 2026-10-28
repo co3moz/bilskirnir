@@ -13,8 +13,19 @@ trap cleanup EXIT
 trap 'exit 0' TERM INT
 mkdir -p "$HOME/.config" "$HOME"/{Desktop,Documents,Downloads,Music,Pictures,Videos}
 if command -v xdg-user-dirs-update >/dev/null; then xdg-user-dirs-update; fi
+# VNC carries the whole desktop without a password, so it listens only on the private network,
+# which the desktop shares with the manager alone. A container created before the manager passed
+# the subnet, or whose private network no longer has it, listens on every interface as before.
+vnc_listen=()
+if [[ -n ${DESKTOP_PRIVATE_SUBNET:-} ]]; then
+    if address=$(desktop-private-address "$DESKTOP_PRIVATE_SUBNET"); then
+        vnc_listen=(-interface "$address")
+    else
+        echo "No address in the private network $DESKTOP_PRIVATE_SUBNET; VNC listens on every interface" >&2
+    fi
+fi
 # Stale X locks live in tmpfs, not in snapshots.
-Xtigervnc :0 -geometry "${DESKTOP_RESOLUTION:-1920x1080}" -depth 24 \
+Xtigervnc :0 -geometry "${DESKTOP_RESOLUTION:-1920x1080}" -depth 24 "${vnc_listen[@]}" \
     -rfbport 5900 -localhost no -SecurityTypes None -AlwaysShared -AcceptSetDesktopSize=1 &
 vnc_pid=$!
 for _ in {1..100}; do

@@ -383,7 +383,9 @@ impl App {
         self.db.put(CONTAINERS, &env.id, &env)?;
         self.begin_stage(job_id, "create")?;
         let replaced = async {
-            self.docker_args(&self.container_args(&env))
+            let private = self.inspect("network", &env.private_network).await?;
+            let subnet = crate::docker::private_subnet(&private);
+            self.docker_args(&self.container_args(&env, subnet))
                 .await
                 .map_err(|error| self.device_error(&env, error))?;
             self.write_machine_id(&env).await?;

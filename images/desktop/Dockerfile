@@ -43,6 +43,7 @@ COPY desktop-diagnostics.sh /usr/local/bin/desktop-diagnostics
 COPY gpu-run.sh /usr/local/bin/gpu-run
 COPY desktop-gnome.sh /usr/local/bin/desktop-gnome
 COPY desktop-healthcheck.sh /usr/local/bin/desktop-healthcheck
+COPY desktop-private-address.py /usr/local/bin/desktop-private-address
 COPY thoric-mcp.py /usr/local/bin/thoric-mcp
 COPY thoric-mcp-tray.py /usr/local/bin/thoric-mcp-tray
 # The tray of both sessions: its menu entry, icons and autostart entry.

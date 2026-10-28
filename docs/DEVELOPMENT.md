@@ -101,6 +101,8 @@ The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authenti
 
 Each container has a private internal bridge to the manager. Browser desktop and media connections pass through the manager; VNC ports are not published on the host. A second bridge provides internet egress and is attached or detached by the container's internet setting.
 
+VNC asks no password, so a desktop listens for it only on its address in the private network. The manager passes that network's IPv4 subnet as `DESKTOP_PRIVATE_SUBNET` when it creates the container, and `desktop-session` starts the VNC server with `-interface` set to the address `desktop-private-address` finds in it. Docker fixes the variable at creation, so a container created before the manager passed it listens on every interface until it is recreated. So does a desktop whose image, or the image its snapshot was taken from, predates the script, and one whose private network no longer has the address, which its log says.
+
 Audio uses authenticated WebSockets carrying 48 kHz float32 PCM: stereo output at roughly 384 KB/s and mono microphone input at roughly 192 KB/s. The browser needs a secure context for microphone permission, so LAN microphone access uses HTTPS.
 
 The database records immutable image IDs so later tag changes do not change an existing container's base. Operations on the same container are serialized, while unrelated containers and image builds can proceed independently.
