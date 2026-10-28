@@ -132,7 +132,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
-| GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, and agents' requests for a person, while the session lasts. |
+| GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, agents' requests for a person, and the lists Docker changes by itself, while the session lasts. |
 | GET | `/api/human-requests` | The [requests for a person](#requests-for-a-person) that wait for an answer, oldest first, in `items`. |
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
 | GET | `/api/activity` | The [agent activity](#agent-activity) log: MCP tool calls and used transfer links, newest first, with filters and a cursor. |
@@ -791,14 +791,16 @@ Every event is unnamed, and its data is one JSON object whose `type` says what i
 
 | `type` | Fields | Sent when |
 | --- | --- | --- |
-| `ready` | | The stream opened; always the first event. |
+| `ready` | `docker_events` | The stream opened; always the first event. `docker_events` is whether Docker's own events reach the stream, as `docker-events` reports it. |
 | `job` | `job`: `id`, `kind`, `resource`, `name`, `status`, `created_at`, `finished_at` and `error` | A job was queued, started, began a [stage](#create-a-container-and-follow-the-job) or ended. `status` is as `GET /api/jobs/{job_id}` reports it; `error` is the first line of a failed job's error, at most 300 characters, and `null` otherwise. The job's log and result stay on its route. |
 | `job-progress` | `id`, `progress` | A running job measured its `progress` again, as its route reports it: at most once a second for each job, and `null` when the measured step ended. |
 | `human-request` | `request` | An agent asked for a person; `request` is as [`GET /api/human-requests`](#requests-for-a-person) lists it. |
 | `human-request-answered` | `request` | Someone answered a request for a person, on any page or through the API; `request` has its `status`, `reply` and `answered_at`. |
+| `changed` | `lists` | Docker changed these lists by itself, without a job of this manager: `containers` when one of Thoric's containers is created, starts, stops or exits, is renamed, paused or removed, or its health check changes; `images` when an image is pulled, tagged, untagged, deleted, imported or loaded; `volumes` when a volume is created or removed. A burst is one event; read those lists again. |
+| `docker-events` | `live` | Docker's own events began (`true`) or stopped (`false`) reaching the stream, such as while Docker restarts. The events in between are lost, so read `containers`, `images` and `volumes` again when it turns `true`. |
 | `resync` | | The client fell more than 256 events behind and missed some; read again what it shows. |
 
-Nothing is replayed: a client reads the lists it shows when it connects and again after any gap, such as a lost connection or a `resync`, since the events of that gap are gone. A comment line every 15 seconds keeps an idle stream open through proxies. The stream ends when its session signs out or expires, and when the manager stops; reconnect with a growing delay, and sign in again when the reconnection answers `401`. The dashboard keeps one stream for each open page, closes it a minute after the page goes to the background and reconnects when it comes back. Container states that Docker changes, such as a desktop that exits, are not events; the lists still poll for those.
+Nothing is replayed: a client reads the lists it shows when it connects and again after any gap, such as a lost connection or a `resync`, since the events of that gap are gone. A comment line every 15 seconds keeps an idle stream open through proxies. The stream ends when its session signs out or expires, and when the manager stops; reconnect with a growing delay, and sign in again when the reconnection answers `401`. The dashboard keeps one stream for each open page, closes it a minute after the page goes to the background and reconnects when it comes back. While the stream is up and `docker_events` is `true`, it reads containers, images, volumes and the system summary once a minute and when `changed` names them, instead of every 8 seconds. The manager follows Docker's events only where `DOCKER_HOST` is a Unix socket; elsewhere `docker_events` stays `false` and those lists are polled as before.
 
 A proxy in front of the manager must pass the stream on as it arrives. The bundled Caddy configuration does, since Caddy flushes `text/event-stream` responses at once, and the manager sends `X-Accel-Buffering: no` for nginx.
 

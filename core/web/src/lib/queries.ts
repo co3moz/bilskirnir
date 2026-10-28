@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { api, onUnauthorized } from "./api"
 import type { DependencyList } from "./dependencies"
 import { closeDialog } from "./dialogs"
-import { streamLive } from "./events"
+import { dockerEventsLive, streamLive } from "./events"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
 import { endpointApi } from "./mcp"
@@ -34,6 +34,10 @@ const STREAMED_INTERVAL = 60_000
 /** The pace of a list the event stream covers: slow while it is up, as before while it is down. */
 export const streamedInterval = (poll: boolean) =>
   poll ? (streamLive() ? STREAMED_INTERVAL : LIST_INTERVAL) : false
+
+/** The pace of a list Docker changes by itself: slow while its events reach the page. */
+export const watchedInterval = (poll: boolean) =>
+  poll ? (dockerEventsLive() ? STREAMED_INTERVAL : LIST_INTERVAL) : false
 
 let signedOut = false
 // While an update replaces the manager, requests fail until the page reloads; see lib/update.ts.
@@ -101,11 +105,12 @@ export const useDependencies = () =>
   })
 
 // Lists refresh while a page that shows them is open and visible; the desktop view opts out.
+// Docker's own events say when they change, so they are polled slowly while those arrive.
 function useList<T>(path: string, poll: boolean) {
   return useQuery({
     queryKey: [path],
     queryFn: () => api<T>(path),
-    refetchInterval: poll ? LIST_INTERVAL : false,
+    refetchInterval: () => watchedInterval(poll),
   })
 }
 

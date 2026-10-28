@@ -4,16 +4,29 @@ import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
 import { t } from "@/lib/i18n"
-import { useContainers } from "@/lib/queries"
 import type { ContainerItem } from "@/lib/types"
+
+const REFRESH = 10_000
+
+/** A number that moves on every `every` milliseconds while the page is in front. */
+function useStamp(every: number) {
+  const [stamp, setStamp] = React.useState(() => Math.floor(Date.now() / every))
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") setStamp(Math.floor(Date.now() / every))
+    }, every)
+    return () => clearInterval(timer)
+  }, [every])
+  return stamp
+}
 
 /** The live desktop, letterboxed rather than cropped so the whole screen stays visible. */
 export function ContainerPreview({ item, className }: { item: ContainerItem; className?: string }) {
   const { id, spec } = item
   const running = item.state === "running"
-  // The picture refreshes with the list, at most every ten seconds; the browser keeps the
+  // The picture refreshes every ten seconds while the page is in front; the browser keeps the
   // previous picture on screen until the new one has loaded.
-  const stamp = Math.floor(useContainers().dataUpdatedAt / 10000)
+  const stamp = useStamp(REFRESH)
   const [failed, setFailed] = React.useState<number | null>(null)
   const shown = running && failed !== stamp
 

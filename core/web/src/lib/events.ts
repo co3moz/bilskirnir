@@ -2,8 +2,9 @@ import type { DownloadProgress, HumanRequest, Job } from "./types"
 
 /**
  * The manager's event stream, `/api/events`: what happens as it happens, so the dashboard hears
- * that a job ended without polling for it. Lists still poll, more slowly while the stream is up,
- * and as before while it is down, so the stream speeds things up and is never the only way.
+ * that a job ended, or that Docker changed a list by itself, without polling for it. Lists still
+ * poll, more slowly while the stream is up, and as before while it is down, so the stream speeds
+ * things up and is never the only way.
  */
 
 /** A job as its event describes it: its record without the log, the result and the stages. */
@@ -13,12 +14,17 @@ export type JobEvent = Pick<
 > & { error: string | null }
 
 export type ServerEvent =
-  | { type: "ready" }
+  /** `docker_events`: whether Docker's own events reach the stream; older managers leave it out. */
+  | { type: "ready"; docker_events?: boolean }
   | { type: "resync" }
   | { type: "job"; job: JobEvent }
   | { type: "job-progress"; id: string; progress: DownloadProgress | null }
   /** An agent asks for a person, or someone answered it. */
   | { type: "human-request" | "human-request-answered"; request: HumanRequest }
+  /** Docker changed these lists by itself, such as a desktop that exited. */
+  | { type: "changed"; lists: string[] }
+  /** Docker's own events began or stopped reaching the stream. */
+  | { type: "docker-events"; live: boolean }
 
 /** Every event type the dashboard handles, which `docs/API.md` describes. */
 export const EVENT_TYPES = [
@@ -28,6 +34,8 @@ export const EVENT_TYPES = [
   "job-progress",
   "human-request",
   "human-request-answered",
+  "changed",
+  "docker-events",
 ] as const
 
 /** An event's data, or `null` for one this page does not know, such as from a newer manager. */
@@ -171,8 +179,11 @@ export type StreamOptions = {
   /** Opens the stream: `openEventSource` in the browser. */
   open: (handlers: Handlers) => Source
   onEvent: (event: ServerEvent) => void
-  /** The stream is up again: `resumed` after a gap, when the page should read everything again. */
-  onReady: (resumed: boolean) => void
+  /**
+   * The stream is up again: `resumed` after a gap, when the page should read everything again.
+   * `dockerEvents` is whether Docker's own events reach it, when the manager said so.
+   */
+  onReady: (resumed: boolean, dockerEvents?: boolean) => void
   /** Whether the stream is up, as polling and other views want to know. */
   onLive: (live: boolean) => void
   /**
@@ -228,7 +239,7 @@ export function keepStream(options: StreamOptions) {
         if (event.type === "ready") {
           attempt = 0
           setLive(true)
-          options.onReady(gap)
+          options.onReady(gap, event.docker_events === true)
           gap = false
         } else if (event.type === "resync") {
           options.onReady(true)
@@ -294,10 +305,21 @@ export function keepStream(options: StreamOptions) {
 }
 
 let streaming = false
+let docker = false
 const listeners = new Set<() => void>()
 
 /** Whether the event stream is up, which lets lists poll less often. */
 export const streamLive = () => streaming
+
+/**
+ * Whether Docker's own events reach the page, which lets what Docker changes by itself
+ * (containers, images, volumes and the system summary) poll less often.
+ */
+export const dockerEventsLive = () => streaming && docker
+
+export function setDockerEvents(live: boolean) {
+  docker = live
+}
 
 export function setStreamLive(live: boolean) {
   streaming = live

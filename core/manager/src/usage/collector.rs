@@ -126,18 +126,24 @@ async fn follow(app: Arc<App>, socket: PathBuf, id: String, docker_id: String) {
         let path = engine::stats_path(&docker_id).context("Invalid Docker container ID")?;
         let io = crate::pulls::connect(&socket).await?;
         let mut previous: Option<stats::Reading> = None;
-        engine::stream(io, &path, STATS_IDLE, |line| {
-            let current = serde_json::from_slice::<Value>(line)
-                .ok()
-                .as_ref()
-                .and_then(stats::reading);
-            if let (Some(before), Some(now)) = (&previous, &current)
-                && let Some(measure) = stats::measure(before, now)
-            {
-                app.usage.record(&id, &measure);
-            }
-            previous = current;
-        })
+        engine::stream(
+            io,
+            &path,
+            STATS_IDLE,
+            || {},
+            |line| {
+                let current = serde_json::from_slice::<Value>(line)
+                    .ok()
+                    .as_ref()
+                    .and_then(stats::reading);
+                if let (Some(before), Some(now)) = (&previous, &current)
+                    && let Some(measure) = stats::measure(before, now)
+                {
+                    app.usage.record(&id, &measure);
+                }
+                previous = current;
+            },
+        )
         .await
     }
     .await;

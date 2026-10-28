@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs"
 
 import {
   EVENT_TYPES,
+  dockerEventsLive,
   endedJobs,
   jobNotice,
   keepStream,
   parseEvent,
   retryDelay,
+  setDockerEvents,
+  setStreamLive,
   staleKeys,
   withProgress,
   type Handlers,
@@ -32,6 +35,14 @@ describe("reading events", () => {
       type: "job-progress",
       id: "a",
       progress: null,
+    })
+    expect(parseEvent('{"type":"changed","lists":["containers"]}')).toEqual({
+      type: "changed",
+      lists: ["containers"],
+    })
+    expect(parseEvent('{"type":"docker-events","live":false}')).toEqual({
+      type: "docker-events",
+      live: false,
     })
     expect(parseEvent('{"type":"from-a-newer-manager"}')).toBeNull()
     expect(parseEvent("not json")).toBeNull()
@@ -97,6 +108,20 @@ describe("reading events", () => {
     expect(withProgress(undefined, "a", null)).toBeUndefined()
   })
 
+  test("Docker's own events slow the lists only while the stream that carries them is up", () => {
+    expect(dockerEventsLive()).toBe(false)
+    setDockerEvents(true)
+    expect(dockerEventsLive()).toBe(false)
+    setStreamLive(true)
+    expect(dockerEventsLive()).toBe(true)
+    setDockerEvents(false)
+    expect(dockerEventsLive()).toBe(false)
+    setDockerEvents(true)
+    setStreamLive(false)
+    expect(dockerEventsLive()).toBe(false)
+    setDockerEvents(false)
+  })
+
   test("waits longer after each failed reconnection, up to half a minute", () => {
     const middle = () => 0.5
     expect([0, 1, 2, 3, 4, 5, 9].map((attempt) => retryDelay(attempt, middle))).toEqual([
@@ -111,6 +136,7 @@ describe("reading events", () => {
 function harness({ hidden = false, holds = async () => true as boolean } = {}) {
   const opened: { handlers: Handlers; closed: boolean }[] = []
   const seen: string[] = []
+  const docker: (boolean | undefined)[] = []
   let change = () => {}
   const state = { hidden }
   const stop = keepStream({
@@ -120,7 +146,10 @@ function harness({ hidden = false, holds = async () => true as boolean } = {}) {
       return { close: () => void (entry.closed = true) }
     },
     onEvent: (event: ServerEvent) => seen.push(event.type),
-    onReady: (resumed) => seen.push(resumed ? "resumed" : "ready"),
+    onReady: (resumed, dockerEvents) => {
+      seen.push(resumed ? "resumed" : "ready")
+      docker.push(dockerEvents)
+    },
     onLive: (live) => seen.push(live ? "live" : "down"),
     check: holds,
     hiddenFor: 0,
@@ -136,6 +165,7 @@ function harness({ hidden = false, holds = async () => true as boolean } = {}) {
   return {
     opened,
     seen,
+    docker,
     stop,
     last: () => opened[opened.length - 1],
     send: (data: object) => opened[opened.length - 1].handlers.message(JSON.stringify(data)),
@@ -159,6 +189,22 @@ describe("keeping the stream", () => {
     stream.stop()
     expect(stream.last().closed).toBe(true)
     expect(stream.seen.at(-1)).toBe("down")
+  })
+
+  test("passes on whether Docker's own events reach the stream", () => {
+    const stream = harness()
+    stream.send({ type: "ready", docker_events: true })
+    // A page that fell behind does not learn it again, and an older manager does not say.
+    stream.send({ type: "resync" })
+    stream.send({ type: "docker-events", live: false })
+    stream.last().handlers.error()
+    expect(stream.docker).toEqual([true, undefined])
+    expect(stream.seen).toEqual(["live", "ready", "resumed", "docker-events", "down"])
+    const older = harness()
+    older.send({ type: "ready" })
+    expect(older.docker).toEqual([false])
+    stream.stop()
+    older.stop()
   })
 
   test("reconnects after an error once the session holds, and says the page missed events", async () => {

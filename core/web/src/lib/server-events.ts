@@ -8,6 +8,7 @@ import {
   jobNotice,
   keepStream,
   openEventSource,
+  setDockerEvents,
   setStreamLive,
   staleKeys,
   withProgress,
@@ -116,6 +117,14 @@ function handle(event: ServerEvent) {
       ["jobs", event.id],
       (job) => job && { ...job, progress: event.progress }
     )
+  } else if (event.type === "changed") {
+    // The system summary counts Docker's containers too.
+    refresh(event.lists.includes("containers") ? [...event.lists, "system"] : event.lists)
+  } else if (event.type === "docker-events") {
+    // Back after a gap whose events are lost, or gone: either way the lists are read now, at
+    // the pace that now suits them.
+    setDockerEvents(event.live)
+    refresh(watched)
   } else if (event.type === "human-request" || event.type === "human-request-answered") {
     const { request } = event
     queryClient.setQueryData<HumanRequest[]>(HUMAN_REQUESTS, (list) => withRequest(list, request))
@@ -136,6 +145,8 @@ async function sessionHolds() {
 
 /** The lists the stream keeps current, which poll slowly while it is up. */
 const streamed = ["jobs", HUMAN_REQUESTS[0]]
+/** The lists Docker's own events keep current, which poll slowly while those reach the page. */
+const watched = ["containers", "images", "volumes", "system"]
 
 /**
  * Listen to the manager's event stream while signed in: lists are read again when a job changes,
@@ -166,11 +177,16 @@ export function useServerEvents() {
       onEvent: handle,
       // Events between the first read of the lists and the stream are not lost; after a gap,
       // nothing the page shows can be trusted.
-      onReady: (resumed) => (resumed ? void queryClient.invalidateQueries() : refresh(streamed)),
-      // Polling follows the stream: a list read now takes the pace that suits it.
+      onReady: (resumed, dockerEvents) => {
+        if (dockerEvents !== undefined) setDockerEvents(dockerEvents)
+        if (resumed) void queryClient.invalidateQueries()
+        else refresh(streamed)
+      },
+      // Polling follows the stream: a list read now takes the pace that suits it. The lists
+      // Docker changes were just read when the stream comes up, and are read again when it goes.
       onLive: (live) => {
         setStreamLive(live)
-        refresh(streamed)
+        refresh(live ? streamed : [...streamed, ...watched])
       },
       check: sessionHolds,
     })
@@ -178,6 +194,7 @@ export function useServerEvents() {
       stop()
       unsubscribe()
       setStreamLive(false)
+      setDockerEvents(false)
     }
   }, [])
 }
