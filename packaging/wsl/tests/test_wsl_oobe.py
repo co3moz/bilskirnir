@@ -1,6 +1,6 @@
 """The WSL package's first start with piped answers, as an automated installation runs it: which
-settings the answers write to .env, above all who can reach the dashboard, and what the setup says
-about it, including the Windows step for the WSL networking mode in use.
+settings the answers write to .env, above all who can reach the dashboard, on which port and by which
+names, and what the setup says about it, including the Windows step for the WSL networking mode in use.
 
 The script runs against a temporary installation directory and wsl.conf, with stand-ins on PATH for
 the commands that change the system (useradd, chpasswd, chown), for the thoric command and for
@@ -77,7 +77,11 @@ class FirstStartTest(unittest.TestCase):
         self.assertEqual(settings["ROOT_MCP_ENABLED"], "true")
         self.assertNotIn("MCP_ENABLED", settings)
         self.assertIn("Who can reach the dashboard? This computer only", result.stdout)
+        self.assertEqual(settings["PORT"], "8080")
         self.assertIn("listens on 127.0.0.1:8080", result.stdout)
+        # Names are asked for only when other devices reach the dashboard.
+        self.assertEqual(settings["ALLOWED_HOSTS"], "localhost")
+        self.assertNotIn("open it by a name", result.stdout)
         self.assertNotIn("Windows has to let other devices in", result.stdout)
         self.assertNotIn("thoric.ps1", result.stdout)
         # The password reaches chpasswd on its input, never on a command line.
@@ -104,6 +108,39 @@ class FirstStartTest(unittest.TestCase):
                 # The Windows helper sets up every mode, and the guide has the steps by hand.
                 self.assertIn(LAN_ENABLE, result.stdout)
                 self.assertIn("WSL_PACKAGE.md#access-from-other-devices", result.stdout)
+
+    def test_the_port_and_the_names_go_into_the_settings(self):
+        result = self.first_start("alice\nsecret123\nsecret123\nyes\nrandom\nother\n9191\nMy-PC, my-pc.local\n", "nat")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        settings = self.settings()
+        self.assertEqual((settings["PORT"], settings["ALLOWED_HOSTS"]), ("9191", "localhost,my-pc,my-pc.local"))
+        self.assertIn("listens on 0.0.0.0:9191", result.stdout)
+        self.assertIn("it answers to my-pc, my-pc.local.", result.stdout)
+        self.assertIn("so port 9191 needs a port proxy", result.stdout)
+        # This computer alone gets the port without the names question, which would take the next line.
+        (self.install / ".env").unlink()
+        result = self.first_start("alice\nsecret123\nsecret123\nyes\nrandom\nthis\n9191\nmy-pc\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        settings = self.settings()
+        self.assertEqual((settings["PORT"], settings["ALLOWED_HOSTS"]), ("9191", "localhost"))
+        self.assertIn("listens on 127.0.0.1:9191", result.stdout)
+
+    def test_an_unusable_port_or_name_ends_the_setup_before_anything_is_created(self):
+        for answers, message in (
+            ("this\n0\n", "Use a port number from 1 to 65535."),
+            ("this\n65536\n", "Use a port number from 1 to 65535."),
+            ("this\n8080x\n", "Use a port number from 1 to 65535."),
+            ("other\n\nmy_pc\n", "Use letters, digits, dots and dashes"),
+            ("other\n\nmy-pc,,nas\n", "Use letters, digits, dots and dashes"),
+            ("other\n\nmy pc\n", "Use letters, digits, dots and dashes"),
+            ("other\n\n-my-pc\n", "Use letters, digits, dots and dashes"),
+        ):
+            with self.subTest(answers=answers):
+                result = self.first_start("alice\nsecret123\nsecret123\nyes\nrandom\n" + answers)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stdout)
+                self.assertFalse((self.install / ".env").exists())
+                self.assertNotIn("useradd", self.calls.read_text() if self.calls.exists() else "")
 
     def test_the_question_warns_when_nothing_guards_the_address(self):
         # No password, agent access off: the first letter answers the network question.

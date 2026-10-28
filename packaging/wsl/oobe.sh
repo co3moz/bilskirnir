@@ -159,6 +159,39 @@ fi
 choose "Who can reach the dashboard?" "This computer only, 127.0.0.1" "Other devices too, 0.0.0.0"
 access=$choice
 
+echo
+echo "The dashboard answers on one port, which Windows programs open at localhost. Choose another one"
+echo "if a program on Windows already uses it."
+default_port=$(sed -n 's/^PORT=//p' "$INSTALL/.env.example" | tail -n1)
+default_port=${default_port:-8080}
+port=""
+while [[ -z $port ]]; do
+    read -erp "Port [$default_port]: " port || true
+    port=${port:-$default_port}
+    if ! [[ $port =~ ^[1-9][0-9]{0,4}$ ]] || ((port > 65535)); then
+        echo "Use a port number from 1 to 65535."
+        port=""
+        fail_unless_interactive
+    fi
+done
+# The manager answers private addresses by themselves; a name, such as the computer's, has to be
+# listed. It changes later on the dashboard's Management page.
+hosts=""
+if [[ $access == other ]]; then
+    echo
+    echo "Other devices open the dashboard at this computer's IP address. To open it by a name too, such"
+    echo "as the computer's name, list the names here; the Management page changes them later."
+    while true; do
+        read -erp "Names, separated by commas (empty for none): " hosts || true
+        hosts=$(sed -E 's/[[:space:]]*,[[:space:]]*/,/g' <<<"${hosts,,}")
+        if [[ -z $hosts || $hosts =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(,[a-z0-9]([a-z0-9.-]*[a-z0-9])?)*$ ]]; then
+            break
+        fi
+        echo "Use letters, digits, dots and dashes, with a comma between two names."
+        fail_unless_interactive
+    done
+fi
+
 useradd --create-home --shell /bin/bash --uid 1000 --groups sudo,docker "$username"
 if [[ -n $password ]]; then
     printf '%s:%s\n' "$username" "$password" | chpasswd
@@ -203,8 +236,10 @@ if [[ $access == other ]]; then
 else
     set_setting BIND_ADDRESS 127.0.0.1
 fi
-port=$(sed -n 's/^PORT=//p' "$ENV_FILE" | tail -n1)
-port=${port:-8080}
+set_setting PORT "$port"
+if [[ -n $hosts ]]; then
+    set_setting ALLOWED_HOSTS "localhost,$hosts"
+fi
 set_setting WSL_GPU "$gpu"
 set_setting NVIDIA_COMPUTE "$cuda"
 set_setting GPU_ADAPTER "$adapter"
@@ -223,6 +258,9 @@ else
 fi
 if [[ $access == other ]]; then
     echo "Other devices can reach the dashboard too: it listens on 0.0.0.0:$port."
+    if [[ -n $hosts ]]; then
+        echo "Besides this computer's IP addresses, it answers to ${hosts//,/, }."
+    fi
 else
     echo "Only this computer can reach the dashboard: it listens on 127.0.0.1:$port."
 fi
