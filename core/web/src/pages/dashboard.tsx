@@ -1,7 +1,6 @@
 import * as React from "react"
 
 import { DockerAlert, PageBody } from "@/components/page"
-import { ContainersTable } from "@/components/containers-table"
 import { SectionCards } from "@/components/section-cards"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -15,7 +14,7 @@ const UsageOverview = React.lazy(() =>
   import("@/components/usage-charts").then((module) => ({ default: module.UsageOverview }))
 )
 
-/** dashboard-01: summary cards, resource usage, the activity chart and the containers table. */
+/** dashboard-01: summary cards, resource usage and the activity chart; containers have a page. */
 export function DashboardPage() {
   return (
     <PageBody>
@@ -29,7 +28,6 @@ export function DashboardPage() {
           <ChartAreaInteractive />
         </React.Suspense>
       </div>
-      <ContainersTable />
     </PageBody>
   )
 }

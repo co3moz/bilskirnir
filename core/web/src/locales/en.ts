@@ -222,11 +222,8 @@ export const en = {
   "containers.creatingHint": "Its controls appear once it runs.",
   "containers.previewAlt": "Desktop preview of {name}",
   "containers.stopped": "Container stopped",
-  "containers.view.all": "All containers",
   "containers.view.attention": "Needs attention",
-  "containers.loading": "Loading containers…",
   "containers.noneInView": "No containers in this view.",
-  "containers.noneYet": "No containers yet.",
   "containers.none": "No containers",
   "containers.noneHint":
     "Create a container from an image. A catalog image downloads the first time you use it.",
@@ -1138,10 +1135,6 @@ export const en = {
   "usage.gpu.idle": "Sampled while a GPU container runs.",
   "usage.gpu.unavailable": "The GPU cannot be read: {reason}",
 
-  "table.selectAll": "Select all",
-  "table.selectRow": "Select row",
-  "table.columns": "Columns",
-  "table.selected": "{selected} of {total} row(s) selected.",
   "table.rows.one": "{count} row",
   "table.rows.other": "{count} rows",
   "table.rowsPerPage": "Rows per page",
@@ -1154,10 +1147,7 @@ export const en = {
   "table.selectView": "Select a view",
   "table.name": "Name",
   "table.status": "Status",
-  "table.resources": "Resources",
-  "table.devices": "Devices",
   "table.created": "Created",
-  "table.clearSelection": "Clear selection",
 
   "spec.gpu": "GPU",
   "spec.cpus": "{count} CPU",

@@ -6,7 +6,6 @@ import {
   createSortedRowModel,
   FlexRender,
   rowPaginationFeature,
-  rowSelectionFeature,
   rowSortingFeature,
   tableFeatures,
   useTable,
@@ -20,23 +19,14 @@ import {
   RiArrowDownLine,
   RiArrowUpDownLine,
   RiArrowUpLine,
-  RiArrowDownSLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
   RiArrowLeftDoubleLine,
   RiArrowRightDoubleLine,
-  RiLayoutColumnLine,
 } from "@remixicon/react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -61,7 +51,6 @@ import { formatNumber, plural, t } from "@/lib/i18n"
 export const features = tableFeatures({
   columnVisibilityFeature,
   rowPaginationFeature,
-  rowSelectionFeature,
   rowSortingFeature,
   paginatedRowModel: createPaginatedRowModel(),
   sortedRowModel: createSortedRowModel(),
@@ -79,14 +68,12 @@ export function useDataTable<T extends RowData>({
   columns,
   getRowId,
   sorting = [],
-  selectable = false,
   hidden = {},
 }: {
   data: T[]
   columns: DataColumn<T>[]
   getRowId: (row: T) => string
   sorting?: SortingState
-  selectable?: boolean
   hidden?: Record<string, boolean>
 }) {
   return useTable({
@@ -94,7 +81,6 @@ export function useDataTable<T extends RowData>({
     data,
     columns,
     getRowId,
-    enableRowSelection: selectable,
     // Lists refresh every few seconds; a refresh must not send the reader back to page one.
     autoResetPageIndex: false,
     initialState: {
@@ -102,44 +88,6 @@ export function useDataTable<T extends RowData>({
       pagination: { pageIndex: 0, pageSize: 10 },
       columnVisibility: Object.fromEntries(Object.keys(hidden).map((key) => [key, !hidden[key]])),
     },
-  })
-}
-
-const SELECT = "select"
-
-/**
- * dashboard-01 keeps its first column, the row selection, as narrow as a checkbox. Here only that
- * column is: a table that starts with a name lets it take the width it needs.
- */
-const cellWidth = (column: string) => (column === SELECT ? "w-8" : undefined)
-
-/** The row selection column from dashboard-01. */
-export function selectColumn<T extends RowData>(): DataColumn<T> {
-  return columnHelper<T>().display({
-    id: SELECT,
-    header: ({ table }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label={t("table.selectAll")}
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label={t("table.selectRow")}
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
   })
 }
 
@@ -173,41 +121,6 @@ export function SortHeader<T extends RowData>({
   )
 }
 
-export function ColumnsMenu<T extends RowData>({
-  table,
-  labels,
-}: {
-  table: DataTable<T>
-  labels: Record<string, string>
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <RiLayoutColumnLine data-icon="inline-start" />
-          <span className="hidden lg:inline">{t("table.columns")}</span>
-          <RiArrowDownSLine data-icon="inline-end" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        {table
-          .getAllColumns()
-          .filter((column) => column.getCanHide() && labels[column.id])
-          .map((column) => (
-            <DropdownMenuCheckboxItem
-              key={column.id}
-              checked={column.getIsVisible()}
-              onCheckedChange={(value) => column.toggleVisibility(!!value)}
-              onSelect={(event) => event.preventDefault()}
-            >
-              {labels[column.id]}
-            </DropdownMenuCheckboxItem>
-          ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 /**
  * A row outside the table's data, such as a record still being made: content for the columns
  * named in `cells`, and an empty cell under every other visible column.
@@ -222,9 +135,7 @@ export function ExtraRow<T extends RowData>({
   return (
     <TableRow>
       {table.getVisibleLeafColumns().map((column) => (
-        <TableCell key={column.id} className={cellWidth(column.id)}>
-          {cells[column.id]}
-        </TableCell>
+        <TableCell key={column.id}>{cells[column.id]}</TableCell>
       ))}
     </TableRow>
   )
@@ -259,9 +170,9 @@ export function DataTableView<T extends RowData>({
           {extra}
           {rows.length || extra.length ? (
             rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+              <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className={cellWidth(cell.column.id)}>
+                  <TableCell key={cell.id}>
                     <FlexRender cell={cell} />
                   </TableCell>
                 ))}
@@ -283,24 +194,13 @@ export function DataTableView<T extends RowData>({
   )
 }
 
-export function DataTablePagination<T extends RowData>({
-  table,
-  selectable = false,
-}: {
-  table: DataTable<T>
-  selectable?: boolean
-}) {
+export function DataTablePagination<T extends RowData>({ table }: { table: DataTable<T> }) {
   const id = React.useId()
   const { pageIndex, pageSize } = table.state.pagination
   return (
     <div className="flex items-center justify-between px-4">
       <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-        {selectable
-          ? t("table.selected", {
-              selected: formatNumber(table.getSelectedRowModel().rows.length),
-              total: formatNumber(table.getRowCount()),
-            })
-          : plural(table.getRowCount(), { one: "table.rows.one", other: "table.rows.other" })}
+        {plural(table.getRowCount(), { one: "table.rows.one", other: "table.rows.other" })}
       </div>
       <div className="flex w-full items-center gap-8 lg:w-fit">
         <div className="hidden items-center gap-2 lg:flex">
