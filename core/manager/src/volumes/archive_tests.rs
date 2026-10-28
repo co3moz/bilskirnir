@@ -374,3 +374,61 @@ async fn a_refusal_before_the_upload_keeps_its_status() {
     assert_eq!(refused.0, StatusCode::BAD_REQUEST);
     assert!(refused.1.contains("tar archive"), "{}", refused.1);
 }
+
+/// What a helper that is abandoned right after its tar ended meets on Docker 28: `--rm` is
+/// already removing the container, so `docker rm --force` refuses at once while the volume is
+/// still in use. The import removes its volume only after `abandon`, so it waits for the removal.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_abandoned_helper_is_gone_before_its_volume_is_removed() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir =
+        std::env::temp_dir().join(format!("thoric-abandon-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // The container is there until the third removal attempt, which finds it gone.
+    let script = r#"#!/bin/sh
+cd '@DIR@'
+echo "$*" >> calls
+removals=$(cat removals 2>/dev/null || echo 0)
+case "$*" in
+  'rm --force thoric-volume-helper')
+    echo $((removals + 1)) > removals
+    [ "$removals" -lt 2 ] && echo 'Error response from daemon: removal of container thoric-volume-helper is already in progress' >&2
+    exit 1 ;;
+  'container inspect thoric-volume-helper') [ "$removals" -lt 3 ] && echo '[{"Name": "/thoric-volume-helper"}]' && exit 0; exit 1 ;;
+  'ps -a --format {{.Names}}') [ "$removals" -lt 3 ] && echo thoric-volume-helper; exit 0 ;;
+esac
+exit 1
+"#
+    .replace("@DIR@", &dir.display().to_string());
+    let docker = dir.join("docker");
+    std::fs::write(&docker, script).unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let cli = tokio::process::Command::new("sleep")
+        .arg("60")
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    Helper {
+        child: cli,
+        name: "thoric-volume-helper".into(),
+    }
+    .abandon(&app)
+    .await;
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    assert_eq!(
+        calls.lines().collect::<Vec<_>>(),
+        [
+            "rm --force thoric-volume-helper",
+            "container inspect thoric-volume-helper",
+            "rm --force thoric-volume-helper",
+            "container inspect thoric-volume-helper",
+            "rm --force thoric-volume-helper",
+            "container inspect thoric-volume-helper",
+            "ps -a --format {{.Names}}",
+        ]
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
