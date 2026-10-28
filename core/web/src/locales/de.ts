@@ -101,6 +101,7 @@ export const de: Messages = {
   "jobs.noneInView": "Keine Aufträge in dieser Ansicht.",
   "jobs.none": "Noch keine Aufträge.",
   "jobs.log": "Auftragsprotokoll",
+  "jobs.copyLog": "Protokoll kopieren",
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
   "jobs.viewContainers": "Container anzeigen",

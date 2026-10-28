@@ -14,12 +14,15 @@ export function CopyButton({
   label,
   className,
   size = "icon-sm",
+  showLabel = false,
 }: {
   text: string
   /** What is copied, as the button's accessible name and tooltip. */
   label: string
   className?: string
   size?: "icon-xs" | "icon-sm"
+  /** Shows `label` on the button itself, such as in a footer beside other labelled buttons. */
+  showLabel?: boolean
 }) {
   const [copied, setCopied] = React.useState(false)
   React.useEffect(() => {
@@ -27,23 +30,30 @@ export function CopyButton({
     const timer = setTimeout(() => setCopied(false), 1500)
     return () => clearTimeout(timer)
   }, [copied])
+  const Icon = copied ? RiCheckLine : RiFileCopyLine
+  const button = (
+    <Button
+      type="button"
+      variant="outline"
+      size={showLabel ? "default" : size}
+      className={cn("shrink-0", className)}
+      aria-label={showLabel ? undefined : label}
+      onClick={async () => {
+        if (await copyText(text)) setCopied(true)
+        else toast.error(t("common.copyFailed"))
+      }}
+    >
+      <Icon
+        className={copied ? "text-success" : undefined}
+        data-icon={showLabel ? "inline-start" : undefined}
+      />
+      {showLabel && (copied ? t("common.copied") : label)}
+    </Button>
+  )
+  if (showLabel) return button
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size={size}
-          className={cn("shrink-0", className)}
-          aria-label={label}
-          onClick={async () => {
-            if (await copyText(text)) setCopied(true)
-            else toast.error(t("common.copyFailed"))
-          }}
-        >
-          {copied ? <RiCheckLine className="text-success" /> : <RiFileCopyLine />}
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent>{copied ? t("common.copied") : label}</TooltipContent>
     </Tooltip>
   )

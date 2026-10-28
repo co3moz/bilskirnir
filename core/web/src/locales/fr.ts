@@ -100,6 +100,7 @@ export const fr: Messages = {
   "jobs.noneInView": "Aucune tâche dans cette vue.",
   "jobs.none": "Aucune tâche pour l'instant.",
   "jobs.log": "Journal de la tâche",
+  "jobs.copyLog": "Copier le journal",
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
   "jobs.viewContainers": "Voir les conteneurs",
