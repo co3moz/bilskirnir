@@ -2,6 +2,7 @@ import * as React from "react"
 import { RiAddLine } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
+import { CopyButton } from "@/components/copy-button"
 import { JobStages } from "@/components/job-stages"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
@@ -110,6 +111,10 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
         )}
       </div>
       <DrawerFooter className="flex-row flex-wrap justify-end">
+        {/* The log as it is at the click, also while the job is still writing it. */}
+        {data?.log?.trim() && !job.error && (
+          <CopyButton text={data.log} label={t("jobs.copyLog")} showLabel className="mr-auto" />
+        )}
         {result?.image_id && result.reference && (
           <Button onClick={() => openDialog({ kind: "create", image: result.image_id })}>
             <RiAddLine data-icon="inline-start" />

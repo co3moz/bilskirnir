@@ -98,6 +98,7 @@ export const tr: Messages = {
   "jobs.noneInView": "Bu görünümde iş yok.",
   "jobs.none": "Henüz iş yok.",
   "jobs.log": "İş logu",
+  "jobs.copyLog": "Logu kopyala",
   "jobs.archiveProgress": "Arşiv ilerlemesi",
   "jobs.downloadProgress": "İmaj indirme ilerlemesi",
   "jobs.viewContainers": "Konteynerleri görüntüle",

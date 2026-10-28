@@ -103,6 +103,7 @@ export const en = {
   "jobs.noneInView": "No jobs in this view.",
   "jobs.none": "No jobs yet.",
   "jobs.log": "Job log",
+  "jobs.copyLog": "Copy log",
   "jobs.archiveProgress": "Archive progress",
   "jobs.downloadProgress": "Image download progress",
   "jobs.viewContainers": "View containers",
