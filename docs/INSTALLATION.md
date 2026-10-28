@@ -79,7 +79,7 @@ The full manifests also accept these Compose settings:
 | `PORT` | `8080` | The manager's HTTP port on the host. |
 | `MANAGER_CONTAINER` | `thoric-manager` | The manager container's name. |
 | `MANAGER_DATA_VOLUME` | `thoric-data` | The volume holding the manager database and temporary uploads. |
-| `MANAGER_IMAGE` | `ghcr.io/co3moz/thoric:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` follows `master`; the WSL package sets the release it belongs to. |
+| `MANAGER_IMAGE` | `ghcr.io/co3moz/thoric:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` is the newest release and `edge` follows `master`, see [Edge builds](#edge-builds); the WSL package sets the release it belongs to. |
 | `DESKTOP_HOST` | `localhost` | The hostname for the optional HTTPS service; also added to accepted hosts. |
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
 
@@ -148,11 +148,17 @@ For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
 The sidebar names a newer release when one is out, unless `UPDATE_CHECK=false`. Only the WSL package updates itself from there; on other installations, run the commands above. `compose.ghcr.yml` mounts an `update` folder beside it into the manager for that, which stays empty elsewhere.
 
-This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To get a newer release of a catalog image you already have, select the update button on its row under **Images**. A release manager, such as `ghcr.io/co3moz/thoric:1.2.0`, downloads the catalog image published with it (`ubuntu-xfce:1.2.0`) and tags it with the catalog reference (`ubuntu-xfce:24.04`); a manager built from `master`, such as `latest`, downloads the reference itself, which `master` moves. `docker pull` with the reference therefore always gives the `master` build. In the [WSL package](WSL_PACKAGE.md#update), `thoric update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `thoric` command.
+This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To bring a catalog image you already have to the one published with the updated manager, select the update button on its row under **Images**. A published manager downloads the catalog image published with it and tags it with the catalog reference (`ubuntu-xfce:24.04`): a release such as `ghcr.io/co3moz/thoric:1.2.0` downloads `ubuntu-xfce:1.2.0`, and an `edge` build of `master` the `ubuntu-xfce:sha-<commit>` of its own commit. A manager therefore never installs a desktop image published after it, however far `master` has gone since. Only a manager built from the source downloads the reference itself, which, like `docker pull` of the reference, gives the newest release. In the [WSL package](WSL_PACKAGE.md#update), `thoric update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `thoric` command.
 
 Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both catalog images at every start. They keep working. To download them only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
 
 New containers use the updated catalog images. Existing containers and snapshots keep their saved image IDs; updating the manager does not reinstall their applications or replace their files. Keep the manager data volume when updating. To stay on a particular build, pin image references to a published version, `sha-<full-commit>` tag or digest.
+
+### Edge builds
+
+`edge` is the newest build of `master`, published with every change before a release includes it. To follow it, set `MANAGER_IMAGE=ghcr.io/co3moz/thoric:edge` in `.env`, export the installation files from `ghcr.io/co3moz/thoric:edge` as [above](#use-the-full-installation-files), since a change on `master` may add a setting to them, and run the update commands. An edge manager downloads the desktop images published with it, those of its own commit, and the sidebar names that commit instead of a version, since an edge build still carries the version of the release before it. `ghcr.io/co3moz/thoric:sha-<full-commit>` stays on one build of `master` the same way. For the WSL package, see [Edge builds](WSL_PACKAGE.md#edge-builds) there.
+
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it may not read what the newer manager wrote.
 
 ## Know where your data lives
 

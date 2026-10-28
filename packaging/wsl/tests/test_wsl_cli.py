@@ -174,8 +174,17 @@ class UpdateTest(unittest.TestCase):
         installed = self.command()
         self.cli.write_text(installed)
         self.bundle(self.command(marker="new command"))
-        # The last one names a Docker Hub image that only looks like a release.
-        for image in (f"{REPOSITORY}:latest", f"{REPOSITORY}@sha256:{'a' * 64}", "ghcr.io/someone/thoric:0.1.0", "0.9.0"):
+        # An edge build of master stays on edge. The last one names a Docker Hub image that only
+        # looks like a release.
+        images = (
+            f"{REPOSITORY}:edge",
+            f"{REPOSITORY}:sha-{'a' * 40}",
+            f"{REPOSITORY}:latest",
+            f"{REPOSITORY}@sha256:{'a' * 64}",
+            "ghcr.io/someone/thoric:0.1.0",
+            "0.9.0",
+        )
+        for image in images:
             with self.subTest(image=image):
                 self.calls.unlink(missing_ok=True)
                 before = f"MANAGER_IMAGE={image}\n"
@@ -183,11 +192,15 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(env_file, before)
                 self.assertFalse(any(call.startswith("curl ") for call in calls))
+                self.assertIn(f"docker pull {image}", calls)
                 self.assertIn("docker compose pull", calls)
                 self.assertIn("docker compose up -d", calls)
                 self.assertEqual(self.cli.read_text(), installed)
                 self.assertFalse(any(call.endswith("/app/install/thoric") for call in calls))
                 self.assertIn("command stays as it is", result.stdout)
+                # The installation files come from the manager it runs, so its settings reach it.
+                self.assertIn(f"docker run --rm --network none --entrypoint cat {image} /app/install/compose.yml", calls)
+                self.assertEqual(self.installed("compose.yml"), self.new["compose.yml"])
 
     def test_a_missing_image_setting_is_pinned_to_the_newest_release(self):
         result, env_file, _ = self.update("AUTH_MODE=none\n")
@@ -220,7 +233,14 @@ class UpdateTest(unittest.TestCase):
         _, _, calls = self.update(before, DOWNLOADED="1", RELEASE_LABEL="0.3.0", RELEASE_TAG_HERE="1")
         self.assertIn(f"docker tag {desktop}:0.3.0 {desktop}:24.04", calls)
         self.assertFalse(any(call.startswith("docker image rm ") for call in calls))
-        # A manager built from master, or one too old to carry the label, downloads the reference.
+        # An edge build of master downloads the desktops published with it, under its commit.
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        self.calls.unlink()
+        _, _, calls = self.update(f"MANAGER_IMAGE={REPOSITORY}:edge\n", DOWNLOADED="1", RELEASE_LABEL=f"sha-{commit}")
+        self.assertIn(f"docker pull {desktop}:sha-{commit}", calls)
+        self.assertIn(f"docker tag {desktop}:sha-{commit} {desktop}:24.04", calls)
+        self.assertIn(f"docker image rm {desktop}:sha-{commit}", calls)
+        # A manager built from the source, or one too old to carry the label, downloads the reference.
         for label in ("", "<no value>"):
             with self.subTest(label=label):
                 self.calls.unlink()

@@ -43,6 +43,8 @@ jobs:
   checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    outputs:
+      newest: ${{ steps.newest.outputs.newest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -92,9 +94,25 @@ jobs:
             echo "::error::Tag $TAG does not match version $version in core/manager/Cargo.toml"
             exit 1
           fi
+      # `latest`, and the desktop images' catalog tag `24.04`, name the newest release, so publishing
+      # an older tag again leaves them where they are.
+      - name: Find whether the tag is the newest release
+        id: newest
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          newest=$(git ls-remote --tags --refs origin 'v*' | sed 's|.*refs/tags/v||' |
+            grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          echo "The newest release is v$newest."
+          if [[ "v$newest" == "$TAG" ]]; then
+            echo "newest=true" >> "$GITHUB_OUTPUT"
+          fi
 
+  # The manager downloads the desktop images published with it, so it is published after them and
+  # none of its tags names desktop images that are not there yet.
   publish:
-    needs: checks
+    needs: [checks, publish-desktops]
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -124,9 +142,12 @@ jobs:
           echo "image=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           hub="docker.io/$DOCKER_HUB_USER/${REPOSITORY#*/}"
           echo "hub=${hub,,}" >> "$GITHUB_OUTPUT"
-          # A release manager downloads the desktop images published under its own version.
+          # A manager downloads the desktop images published with it: a release those of its version,
+          # a master build those of its commit.
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             echo "release=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           fi
       - name: Tags and labels
         id: meta
@@ -135,9 +156,11 @@ jobs:
           images: |
             ${{ steps.names.outputs.image }}
             ${{ steps.names.outputs.hub }}
+          # `edge` follows master and `latest` the newest release.
           flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=latest,enable=${{ needs.checks.outputs.newest == 'true' }}
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -218,10 +241,13 @@ jobs:
           images: |
             ${{ steps.names.outputs.xfce }}
             ${{ steps.names.outputs.xfce-hub }}
+          # `edge` follows master. `latest` and the catalog reference's `24.04` name the newest
+          # release, which `docker pull` of the reference and a manager built without a release get.
           flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=raw,value=24.04,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=latest,enable=${{ needs.checks.outputs.newest == 'true' }}
+            type=raw,value=24.04,enable=${{ needs.checks.outputs.newest == 'true' }}
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -268,8 +294,9 @@ jobs:
             ${{ steps.names.outputs.gnome-hub }}
           flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=raw,value=24.04,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=latest,enable=${{ needs.checks.outputs.newest == 'true' }}
+            type=raw,value=24.04,enable=${{ needs.checks.outputs.newest == 'true' }}
             type=sha,format=long
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

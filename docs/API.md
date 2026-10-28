@@ -33,7 +33,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Management** page; secrets only say whether they are set. See [configuration](#configuration). |
 | POST | `/api/configuration` | Check a change of the editable settings, or have the WSL package write it to `.env` and recreate the manager; returns a job. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
-| GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
+| GET | `/api/update` | This manager's release or `edge` commit, the newest release and whether this installation can update to it; see [updates](#updates). |
 | POST | `/api/update` | Ask the WSL package to run `thoric update`; returns a job. See [updates](#updates). |
 | POST | `/api/update/check` | Ask GitHub for the newest release now; answers as `GET /api/update` does. See [updates](#updates). |
 | GET | `/api/backup` | Download a [backup](#backup-and-restore) of the whole installation; `images`, `volumes`, `files` and `secrets` choose its optional parts. The transfer is a `backup` job. |
@@ -896,6 +896,7 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 
 - `enabled`: whether the manager looks for releases at all.
 - `current`: this manager's release.
+- `commit`: for an `edge` build of `master`, the commit it was built from, since it still carries the version of the release before it; `null` for a release or a build from the source.
 - `newest`, `release_url` and `checked_at`: the newest release, the page of its notes and when GitHub was last asked, `null` before the first answer. `error` says why the last look failed; `newest` then keeps the release seen before.
 - `available`: whether `newest` is later than `current`.
 - `installable`: whether this installation runs the update itself, which only the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) does.

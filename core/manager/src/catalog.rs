@@ -6,9 +6,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub const DEFAULT_IMAGE: &str = "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04";
-/// The release this manager was built as. Only the release build sets it, through the
-/// `THORIC_RELEASE` build argument of the root Dockerfile.
+/// What this manager was published as: its version for a release, `sha-<commit>` for a build of
+/// `master`. Only the publishing workflow sets it, through the `THORIC_RELEASE` build argument of
+/// the root Dockerfile, as the tag the desktop images of the same run carry.
 const RELEASE: Option<&str> = option_env!("THORIC_RELEASE");
+
+/// The commit of a published build of `master`, which carries the version of the release before
+/// it. A release, or a build from the source, has none.
+pub(crate) fn edge_commit() -> Option<&'static str> {
+    edge_commit_of(RELEASE)
+}
+fn edge_commit_of(release: Option<&str>) -> Option<&str> {
+    release?
+        .strip_prefix("sha-")
+        .filter(|commit| !commit.is_empty())
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CatalogImage {
     pub id: String,
@@ -20,9 +32,10 @@ pub struct CatalogImage {
     pub build_service: String,
 }
 impl CatalogImage {
-    /// Where the image downloads from. A release downloads the desktop image published with it
-    /// and tags it as `reference`, which containers, composes and archives record, so it keeps
-    /// installing its own desktops however far the moving tag has gone since.
+    /// Where the image downloads from. A published manager downloads the desktop image published
+    /// with it, under its version or its commit, and tags it as `reference`, which containers,
+    /// composes and archives record, so it keeps installing its own desktops however far the
+    /// moving tags have gone since.
     pub fn source(&self) -> String {
         self.source_for(RELEASE.filter(|release| !release.is_empty()))
     }
