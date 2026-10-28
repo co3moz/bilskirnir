@@ -341,7 +341,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
               settings={settings}
               volumes={volumes}
               spec={spec}
-              groups={knownGroups(containers)}
+              groups={knownGroups(containers.filter((other) => other.id !== id))}
               vncPrivate={item?.vnc_private}
               // These settings are what this dialog is for, so they start in view.
               advancedOpen

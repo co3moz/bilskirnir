@@ -880,6 +880,7 @@ export const de: Messages = {
   "nav.dependencies": "Abhängigkeiten",
   "nav.dashboard": "Dashboard",
   "nav.containers": "Container",
+  "nav.groups": "Netzwerkgruppen",
   "nav.images": "Images",
   "nav.templates": "Vorlagen",
   "nav.volumes": "Volumes",
@@ -1246,14 +1247,51 @@ export const de: Messages = {
   "spec.ports.other": "{count} weitergeleitete Ports",
   "spec.groups": "Gruppen",
   "spec.groupsHint":
-    "Container derselben Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Kleinbuchstaben, Ziffern und Bindestriche, durch Kommas getrennt.",
-  "spec.groupsKnown": "Verwendet: {groups}.",
+    "Container derselben Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen.",
+  "spec.groupsAdd": "Gruppe hinzufügen",
   "spec.groupsExposed":
     "Das Image dieses Desktops ist älter als privates VNC, daher können die Mitglieder seiner Gruppen seinen Bildschirm ohne Passwort sehen und steuern. Bauen Sie sein Image aus einer neueren Basis neu, oder erstellen Sie den Container erneut aus einer.",
   "spec.aliases": "Aliase",
   "spec.aliasesHint": "Weitere Namen, unter denen ihn die Mitglieder seiner Gruppen erreichen.",
+  "spec.aliasesAdd": "Alias hinzufügen",
   "spec.groups.one": "{count} Gruppe",
   "spec.groups.other": "{count} Gruppen",
+
+  "groups.members.one": "{count} Container",
+  "groups.members.other": "{count} Container",
+  "groups.none": "Noch keine Netzwerkgruppen",
+  "groups.noneHint":
+    "Eine Gruppe bringt Container in ein eigenes Netzwerk, in dem sie einander über Hostname, Name oder Alias erreichen. Erstellen Sie eine und wählen Sie die Container, die verbunden werden.",
+  "groups.new": "Neue Gruppe",
+  "groups.create": "Gruppe erstellen",
+  "groups.newTitle": "Neue Netzwerkgruppe",
+  "groups.connect": "Container verbinden",
+  "groups.connectTo": "Container mit {name} verbinden",
+  "groups.connectHint":
+    "Container einer Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Ein laufender Container tritt sofort bei.",
+  "groups.connectAction": "Verbinden",
+  "groups.name": "Gruppenname",
+  "groups.nameHint": "Kleinbuchstaben, Ziffern und Bindestriche.",
+  "groups.exists":
+    "Eine Gruppe dieses Namens gibt es schon. Die gewählten Container treten ihr bei.",
+  "groups.containers": "Container",
+  "groups.noContainers": "Es gibt noch keine Container.",
+  "groups.allMembers": "Alle Container sind schon in dieser Gruppe.",
+  "groups.full": "Schon in {count} Gruppen, mehr erlaubt ein Container nicht.",
+  "groups.clash": "{other} wird schon als {name} erreicht.",
+  "groups.running": "{running} von {total} laufen",
+  "groups.open": "Öffnen",
+  "groups.all": "Alle Gruppen",
+  "groups.detailHint":
+    "Die Mitglieder erreichen einander im Netzwerk {network}, über Hostname, Name oder Alias.",
+  "groups.empty": "Kein Container in dieser Gruppe",
+  "groups.emptyHint":
+    "Eine Gruppe besteht, solange ein Container sie nennt. Verbinden Sie Container, um sie wieder zu nutzen.",
+  "groups.disconnect": "Von {name} trennen",
+
+  "tagInput.remove": "{name} entfernen",
+  "tagInput.clear": "Leeren",
+  "tagInput.new": "Neu",
 
   "identity.title": "Maschinenidentität",
   "identity.description":

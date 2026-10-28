@@ -879,6 +879,7 @@ export const fr: Messages = {
   "nav.dependencies": "Dépendances",
   "nav.dashboard": "Tableau de bord",
   "nav.containers": "Conteneurs",
+  "nav.groups": "Groupes réseau",
   "nav.images": "Images",
   "nav.templates": "Modèles",
   "nav.volumes": "Volumes",
@@ -1240,14 +1241,50 @@ export const fr: Messages = {
   "spec.ports.other": "{count} ports relayés",
   "spec.groups": "Groupes",
   "spec.groupsHint":
-    "Les conteneurs d'un même groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Minuscules, chiffres et tirets, séparés par des virgules.",
-  "spec.groupsKnown": "Déjà utilisés : {groups}.",
+    "Les conteneurs d'un même groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Un nom se compose de minuscules, de chiffres et de tirets.",
+  "spec.groupsAdd": "Ajouter un groupe",
   "spec.groupsExposed":
     "L'image de ce bureau est antérieure au VNC privé : les membres de ses groupes peuvent voir et contrôler son écran sans mot de passe. Reconstruisez son image à partir d'une base plus récente, ou recréez le conteneur à partir de celle-ci.",
   "spec.aliases": "Alias",
   "spec.aliasesHint": "D'autres noms sous lesquels les membres de ses groupes le joignent.",
+  "spec.aliasesAdd": "Ajouter un alias",
   "spec.groups.one": "{count} groupe",
   "spec.groups.other": "{count} groupes",
+
+  "groups.members.one": "{count} conteneur",
+  "groups.members.other": "{count} conteneurs",
+  "groups.none": "Aucun groupe réseau pour l'instant",
+  "groups.noneHint":
+    "Un groupe place des conteneurs sur un réseau à eux, où ils se joignent par nom d'hôte, nom ou alias. Créez-en un et choisissez les conteneurs à connecter.",
+  "groups.new": "Nouveau groupe",
+  "groups.create": "Créer un groupe",
+  "groups.newTitle": "Nouveau groupe réseau",
+  "groups.connect": "Connecter des conteneurs",
+  "groups.connectTo": "Connecter des conteneurs à {name}",
+  "groups.connectHint":
+    "Les conteneurs d'un groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Un conteneur en marche le rejoint aussitôt.",
+  "groups.connectAction": "Connecter",
+  "groups.name": "Nom du groupe",
+  "groups.nameHint": "Minuscules, chiffres et tirets.",
+  "groups.exists": "Un groupe porte déjà ce nom. Les conteneurs choisis rejoignent ses membres.",
+  "groups.containers": "Conteneurs",
+  "groups.noContainers": "Il n'y a pas encore de conteneur.",
+  "groups.allMembers": "Tous les conteneurs sont déjà dans ce groupe.",
+  "groups.full": "Déjà dans {count} groupes, le maximum pour un conteneur.",
+  "groups.clash": "{other} est déjà joint sous le nom {name}.",
+  "groups.running": "{running} sur {total} en marche",
+  "groups.open": "Ouvrir",
+  "groups.all": "Tous les groupes",
+  "groups.detailHint":
+    "Ses membres se joignent sur le réseau {network}, par nom d'hôte, nom ou alias.",
+  "groups.empty": "Aucun conteneur dans ce groupe",
+  "groups.emptyHint":
+    "Un groupe existe tant qu'un conteneur le cite. Connectez des conteneurs pour le réutiliser.",
+  "groups.disconnect": "Déconnecter de {name}",
+
+  "tagInput.remove": "Retirer {name}",
+  "tagInput.clear": "Vider",
+  "tagInput.new": "Nouveau",
 
   "identity.title": "Identité de la machine",
   "identity.description":

@@ -7,6 +7,7 @@ test("page links survive a reload and unknown pages fall back to the dashboard",
   for (const page of [
     "dashboard",
     "containers",
+    "groups",
     "images",
     "templates",
     "volumes",
@@ -47,6 +48,16 @@ test("the files page keeps the chosen container in its link", () => {
   assert.deepEqual(parseRoute("#/files"), { page: "files" })
   assert.deepEqual(parseRoute("#/files/"), { page: "files" })
   assert.equal(href({ page: "files" }), "#/files")
+})
+
+test("the network groups page keeps the open group in its link", () => {
+  assert.deepEqual(parseRoute(href({ page: "groups", group: "build" })), {
+    page: "groups",
+    group: "build",
+  })
+  assert.equal(href({ page: "groups", group: "build" }), "#/groups/build")
+  assert.equal(href({ page: "groups" }), "#/groups")
+  assert.deepEqual(parseRoute("#/groups/"), { page: "groups" })
 })
 
 test("the activity page keeps its container, caller and open call in its link", () => {

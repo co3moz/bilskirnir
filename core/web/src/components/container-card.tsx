@@ -102,6 +102,21 @@ export function SpecBadges({ spec, className }: { spec: ContainerSpec; className
   )
 }
 
+/** The more names a container's group members reach it by, beside its name. */
+export function AliasBadges({ aliases }: { aliases?: string[] }) {
+  if (!aliases?.length) return null
+  return (
+    <>
+      <span className="sr-only">{t("spec.aliases")}:</span>
+      {aliases.map((alias) => (
+        <Badge key={alias} variant="outline" className="font-mono text-muted-foreground">
+          {alias}
+        </Badge>
+      ))}
+    </>
+  )
+}
+
 /** A container in a group whose screen its members reach, since its image predates private VNC. */
 export function GroupExposure({ item }: { item: ContainerItem }) {
   if (item.vnc_private !== false || !item.spec.groups?.length) return null
@@ -173,7 +188,21 @@ export function InternetSwitch({ item, id }: { item: ContainerItem; id?: string 
   )
 }
 
-export function ContainerCard({ item, images }: { item: ContainerItem; images: ImageItem[] }) {
+/**
+ * A container with its live preview and controls. `aliases` shows its aliases beside its name, as
+ * a group's page does, and `actions` adds buttons before its menu.
+ */
+export function ContainerCard({
+  item,
+  images,
+  aliases = false,
+  actions,
+}: {
+  item: ContainerItem
+  images: ImageItem[]
+  aliases?: boolean
+  actions?: React.ReactNode
+}) {
   const { id, spec } = item
   const running = item.state === "running"
   const status = containerStatus(item)
@@ -192,15 +221,16 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
         <ContainerPreview item={item} />
       </CardContent>
       <CardHeader>
-        <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base">
           <ConceptIcon concept="container" className="size-4 shrink-0" />
           <button
             type="button"
-            className="truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
+            className="max-w-full min-w-0 truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
             onClick={() => openDialog({ kind: "details", id })}
           >
             {spec.name}
           </button>
+          {aliases && <AliasBadges aliases={spec.aliases} />}
         </CardTitle>
         <CardDescription className="truncate">
           {desktopTitle(spec, item.desktop?.title, images)}
@@ -242,6 +272,7 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
           </TooltipTrigger>
           <TooltipContent>{running ? t("uploads.title") : t("uploads.startFirst")}</TooltipContent>
         </Tooltip>
+        {actions}
         <ContainerMenu item={item} />
       </CardFooter>
     </Card>
