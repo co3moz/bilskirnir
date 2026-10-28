@@ -67,7 +67,7 @@ export function ContainersPage() {
           ))}
         </div>
       ) : all.length === 0 && pending.length === 0 ? (
-        <Empty className="mx-4 border lg:mx-6">
+        <Empty className="mx-4 w-auto border lg:mx-6">
           <EmptyHeader>
             <ConceptMedia concept="container" />
             <EmptyTitle>{t("containers.none")}</EmptyTitle>
