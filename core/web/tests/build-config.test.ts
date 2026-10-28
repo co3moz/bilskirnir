@@ -148,6 +148,21 @@ test("a configuration carries the image's compose both ways", () => {
   )
 })
 
+test("a build that left its base's compose out says so both ways, and only then", () => {
+  const without = formatBuildConfig({ ...config, inherit_compose: false })
+  assert.equal(JSON.parse(without).inherit_compose, false)
+  assert.deepEqual(parseBuildConfig(without), { ...config, inherit_compose: false })
+  // Keeping it is what a request without the field asks for, so the copy leaves it out.
+  assert.equal(
+    "inherit_compose" in JSON.parse(formatBuildConfig({ ...config, inherit_compose: true })),
+    false
+  )
+  assert.throws(
+    () => parseBuildConfig(JSON.stringify({ ...config, inherit_compose: "no" })),
+    /must be true or false/
+  )
+})
+
 test("a template's options are read for the install form, and refused when malformed", () => {
   const mcp = [{ name: "radare2", command: "r2mcp" }]
   const options = [

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiAddLine } from "@remixicon/react"
+import { RiAddLine, RiAlertLine } from "@remixicon/react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -38,6 +39,8 @@ import {
   newParameter,
   composeBody,
   composeDraft,
+  composeImage,
+  imageSteps,
   stepTitle,
   type ParameterDraft,
   type ComposeDraft,
@@ -46,7 +49,7 @@ import {
 import type { Compose } from "@/lib/types"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
-import { plural, t } from "@/lib/i18n"
+import { formatList, plural, t } from "@/lib/i18n"
 import { ParameterEditor } from "./parameter-editor"
 import { Footer } from "./simple-dialogs"
 
@@ -187,10 +190,17 @@ function StepFields({
   )
 }
 
-/** Gives a saved image a compose, changes it or removes it. */
+/**
+ * Gives a saved image a compose, changes it or removes it. An image built on a saved image
+ * before builds kept their base's compose is offered the steps it lacks.
+ */
 export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
-  const image = useImages().data?.find((record) => record.id === id)
+  const images = useImages().data
+  const image = images?.find((record) => record.id === id)
   const exists = !!image?.compose
+  const base = image?.base_compose_missing
+    ? composeImage(images ?? [], image.parent_image_id ?? undefined)
+    : undefined
   // The list leaves the script out; the compose route has all of it.
   const saved = useQuery({
     queryKey: ["images", id, "compose"],
@@ -208,6 +218,14 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     else return
     closeDialog()
     toast.success(remove ? t("compose.removed") : t("compose.saved", { name: image?.name ?? "" }))
+    void refreshAll()
+  }
+  // Nothing is built again: the manager puts the base's steps before the image's own.
+  const addBase = async () => {
+    if (!base) return
+    await api(`images/${id}/compose/base`, {})
+    closeDialog()
+    toast.success(t("compose.baseAdded", { base: base.name, name: image?.name ?? "" }))
     void refreshAll()
   }
 
@@ -229,6 +247,29 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-4 flex max-h-[min(36rem,60vh)] flex-col gap-5 overflow-y-auto px-4 py-1">
+            {base && image && (
+              <Alert>
+                <RiAlertLine className="text-warning" />
+                <AlertDescription className="flex flex-col items-start gap-3">
+                  <p>
+                    {t("compose.baseMissing", { name: image.name, base: base.name })}
+                    {imageSteps(base).length > 1 &&
+                      ` ${t("compose.baseSteps", { steps: formatList(imageSteps(base)) })}`}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    // Edits made here would be lost, so they are saved or dropped first.
+                    disabled={busy || !!draft}
+                    onClick={(event) => submit(addBase)(event)}
+                  >
+                    <RiAddLine data-icon="inline-start" />
+                    {t("compose.addBase", { base: base.name })}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
             {current ? (
               <>
                 <ComposeFields draft={current} onChange={setDraft} />

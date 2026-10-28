@@ -261,6 +261,9 @@ export const tr: Messages = {
   "images.compose.editOf": "{name} için compose'u düzenle",
   "images.compose.addOf": "{name} imajına compose ekle",
   "images.compose.addHint": "Compose ekle: oluştururken istenen değerler",
+  "images.compose.baseMissing": "Temel compose eksik",
+  "images.compose.baseMissingHint":
+    "Derlemeler temel imajın compose'unu korumaya başlamadan önce oluşturuldu. Compose'u düzenle bunu ekler.",
   "images.source": "Kaynak",
   "images.gone": "İmaj artık kullanılamıyor",
   "images.title": "İmaj kütüphanesi",
@@ -562,6 +565,11 @@ export const tr: Messages = {
     "İmajın her parçası kendi değerlerini ister ve kurulum betiği masaüstü hazır olduğunda yalnızca bunları alır. Gizli değerler bir daha gösterilmez.",
   "compose.stepRunsScript": "Kurulum betiğini değer almadan çalıştırır.",
   "compose.stepWaiting": "Bekliyor",
+  "compose.baseMissing":
+    "{name}, {base} üzerine onun compose'u olmadan oluşturuldu, bu yüzden bu imajdan oluşturulan yeni konteynerler o kurulumu atlar. Eklemek hiçbir şeyi yeniden derlemez; daha önce oluşturulan konteynerler compose'larını korur.",
+  "compose.addBase": "{base} compose'unu ekle",
+  "compose.baseAdded": "{base} compose'u {name} imajına eklendi.",
+  "compose.baseSteps": "Adımları: {steps}.",
   "media.sampleRate": "Bu tarayıcı 48 kHz sesi desteklemiyor.",
   "media.audioFailed": "Ses bağlantısı başarısız oldu. Konteyner loglarını kontrol edin.",
   "media.microphoneFailed": "Mikrofon bağlantısı başarısız oldu. Konteyner loglarını kontrol edin.",
@@ -749,6 +757,11 @@ export const tr: Messages = {
   "build.config.optionDefault": "{name} seçeneğinin varsayılanı true veya false olmalı.",
   "build.config.optionMcp":
     "{name} seçeneği yalnızca yapılandırmanın tanımladığı masaüstü MCP sunucularını listeleyebilir.",
+  "build.config.inheritCompose": "Temel imajın compose'unu koruma ayarı true veya false olmalı.",
+  "build.inherit": "{name} compose'unu koru",
+  "build.inheritHint":
+    "{name} imajının kurduğu her şey, o zaman seçilen seçeneklerle birlikte zaten imajda ve tekrar sorulmaz. Compose'u ise yeni bir konteynerin istediği ve kurduğu şeydir ve bu imajın kendi compose'undan önce çalışır.",
+  "build.inheritOff": "Bu imajdan oluşturulan yeni konteynerler {name} compose'unu atlar.",
 
   "icons.label": "Simge",
   "icons.choose": "Simge seç",

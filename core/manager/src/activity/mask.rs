@@ -161,6 +161,7 @@ pub(super) fn policy(tool: &str) -> Option<&'static [Rule]> {
             ("description", Text, false),
             ("script", Script, false),
             ("internet", Text, false),
+            ("inherit_compose", Text, false),
             ("template_id", Text, false),
             ("template_ids", Whole, false),
         ],

@@ -44,17 +44,20 @@ const hasOptions = (type: ParameterType) => type === "choice" || type === "choic
 type WithCompose = Pick<ImageItem, "image_id" | "reference" | "compose">
 
 /**
- * The compose a new container from `value`, an image ID or reference, asks for. The manager
- * takes it from the first record of that image that has one; lists come newest first.
+ * The record whose compose a new container from `value`, an image ID or reference, asks for.
+ * The manager takes it from the first record of that image that has one; lists come newest
+ * first. A build on that image keeps the same compose before its own.
  */
-export function composeFor(records: WithCompose[], value?: string) {
+export function composeImage<R extends WithCompose>(records: R[], value?: string) {
   if (!value) return undefined
-  return (
-    records.find(
-      (record) => record.compose && (record.image_id === value || record.reference === value)
-    )?.compose ?? undefined
+  return records.find(
+    (record) => record.compose && (record.image_id === value || record.reference === value)
   )
 }
+
+/** The compose a new container from `value`, an image ID or reference, asks for. */
+export const composeFor = (records: WithCompose[], value?: string) =>
+  composeImage(records, value)?.compose ?? undefined
 
 type StepFields = Pick<ComposeStep, "id" | "name" | "parameters">
 
@@ -64,6 +67,13 @@ export const composeSteps = <S extends StepFields>(compose: S | { steps: S[] }):
 
 /** What the forms call a step. */
 export const stepTitle = (step: Pick<ComposeStep, "id" | "name">) => step.name || step.id || ""
+
+/**
+ * What the steps of an image's compose are called once another image keeps them: the one step
+ * of a compose that names none goes by the image's name, as the manager names it.
+ */
+export const imageSteps = (image: Pick<ImageItem, "name" | "compose">) =>
+  image.compose ? composeSteps(image.compose).map((step) => stepTitle(step) || image.name) : []
 
 /**
  * Every parameter of a compose with its step and the name its value goes by: the parameter's

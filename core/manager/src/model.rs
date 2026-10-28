@@ -74,6 +74,10 @@ fn resolution() -> String {
 fn yes() -> bool {
     true
 }
+/// Leaves a setting that is on by default out of what is written.
+pub(crate) fn is_true(value: &bool) -> bool {
+    *value
+}
 fn shm() -> u64 {
     512
 }
@@ -338,6 +342,9 @@ pub struct BuildConfig {
     /// The desktop MCP servers the build declared in the image, in `/etc/thoric/mcp.d`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp: Vec<crate::desktop_mcp::Declaration>,
+    /// Whether the image kept the compose of the saved image it was built on, before its own.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub inherit_compose: bool,
 }
 /// One script of a build merged from several templates, run as root in a layer of its own.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

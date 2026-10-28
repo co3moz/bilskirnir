@@ -46,7 +46,13 @@ import { closeDialog } from "@/lib/dialogs"
 import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
-import { composeBody, composeDraft, orderSteps, type ComposeDraft } from "@/lib/compose"
+import {
+  composeBody,
+  composeDraft,
+  composeImage,
+  orderSteps,
+  type ComposeDraft,
+} from "@/lib/compose"
 import {
   optionGroups,
   resolveOptions,
@@ -55,6 +61,7 @@ import {
 } from "@/lib/template-options"
 import type { DraftPart } from "@/lib/types"
 import { ownedVolumes, volumeApi, volumeHolders } from "@/lib/volume-files"
+import { BuildBase } from "./build-base"
 import { BuildOptions } from "./build-options"
 import { BuildParts } from "./build-parts"
 import { BuildServers } from "./build-servers"
@@ -241,6 +248,8 @@ export function BuildImageDialog({
   const [compose, setCompose] = React.useState<ComposeDraft | null>(
     config?.compose ? composeDraft(config.compose) : null
   )
+  // A saved base's compose goes before the image's own unless this is turned off.
+  const [inherit, setInherit] = React.useState(config?.inherit_compose ?? true)
   // Desktop MCP servers the configuration declares; they are shown, never typed in here.
   const [servers, setServers] = React.useState(config?.mcp ?? [])
   // A template's options, or those of each merged part, and the values chosen for them, which
@@ -283,6 +292,8 @@ export function BuildImageDialog({
   const chosen = base ?? (usable ? wanted : initialImage(choices, settings?.base_image))
   // The base a loaded configuration named when this host cannot build on it.
   const missingBase = base === undefined && !usable && !images.isPending ? wanted : undefined
+  // The saved image built on, when new containers from it get a compose.
+  const baseImage = composeImage(images.data ?? [], chosen)
   const { busy, error, submit } = useSubmit()
   const field = React.useId()
 
@@ -296,6 +307,7 @@ export function BuildImageDialog({
     setParts(config.parts ?? null)
     if (config.script !== undefined) setScript(config.script)
     setCompose(config.compose ? composeDraft(config.compose) : null)
+    setInherit(config.inherit_compose ?? true)
     setServers(config.mcp ?? [])
     setOptions(config.options ?? [])
     setValues({})
@@ -325,6 +337,7 @@ export function BuildImageDialog({
                 ...(build.parts ? { parts: build.parts } : { script: build.script }),
                 internet,
                 ...(compose ? { compose: composeBody(compose) } : {}),
+                ...(inherit ? {} : { inherit_compose: false }),
                 ...(build.mcp.length ? { mcp: build.mcp } : {}),
                 ...(icon ? { icon } : {}),
                 ...(templateIds.length
@@ -417,6 +430,9 @@ export function BuildImageDialog({
                   {groups.length > 0 && (
                     <BuildOptions groups={groups} values={values} onChange={choose} />
                   )}
+                  {baseImage && (
+                    <BuildBase base={baseImage} checked={inherit} onCheckedChange={setInherit} />
+                  )}
                 </>
               )}
               {missingBase && (
@@ -501,7 +517,10 @@ export function BuildImageDialog({
                       </Field>
                     </FieldGroup>
                   </TabsContent>
-                  <TabsContent value="compose">
+                  <TabsContent value="compose" className="flex flex-col gap-4">
+                    {baseImage && (
+                      <BuildBase base={baseImage} checked={inherit} onCheckedChange={setInherit} />
+                    )}
                     {compose ? (
                       <div className="flex flex-col gap-4">
                         <ComposeFields draft={compose} onChange={setCompose} />
