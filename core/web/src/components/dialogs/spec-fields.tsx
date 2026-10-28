@@ -2,6 +2,7 @@ import * as React from "react"
 import { flushSync } from "react-dom"
 import {
   RiAddLine,
+  RiAlertLine,
   RiArrowDownSLine,
   RiCloseLine,
   RiCpuLine,
@@ -17,6 +18,7 @@ import { cn } from "cn"
 import { toast } from "sonner"
 
 import { ConceptIcon } from "@/components/concept"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -39,6 +41,7 @@ import {
 } from "@/components/ui/select"
 import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { formatNames, NAMES_PATTERN, parseNames } from "@/lib/groups"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { formatPorts, parsePorts, PORTS_PATTERN } from "@/lib/ports"
 import {
@@ -73,6 +76,8 @@ export type SpecDraft = {
   cpus: string
   memory_mb: string
   ports: string
+  groups: string
+  aliases: string
   mounts: MountDraft[]
   proxy: ProxyDraft
 } & Record<Flag, boolean>
@@ -88,6 +93,8 @@ export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): Sp
     memory_mb: spec.memory_mb ? String(spec.memory_mb) : "",
     ...featureDraft(spec, settings),
     ports: formatPorts(spec.ports),
+    groups: formatNames(spec.groups),
+    aliases: formatNames(spec.aliases),
     mounts: (spec.mounts ?? []).map((mount) => ({ ...mount, key: ++mountKey })),
     proxy: proxyDraft(spec, settings),
   }
@@ -103,6 +110,8 @@ export function specBody(draft: SpecDraft) {
     memory_mb: number(draft.memory_mb),
     ...Object.fromEntries(FLAGS.map((flag) => [flag, draft[flag]])),
     ports: parsePorts(draft.ports),
+    groups: parseNames(draft.groups),
+    aliases: parseNames(draft.aliases),
     mounts: draft.mounts.map(({ volume, target, readonly }) => ({ volume, target, readonly })),
     ...proxyBody(draft.proxy),
   }
@@ -124,6 +133,8 @@ function advancedSummary(draft: SpecDraft) {
   ]
   const ports = parsePorts(draft.ports).length
   if (ports) parts.push(plural(ports, { one: "spec.ports.one", other: "spec.ports.other" }))
+  const groups = parseNames(draft.groups).length
+  if (groups) parts.push(plural(groups, { one: "spec.groups.one", other: "spec.groups.other" }))
   if (draft.mounts.length)
     parts.push(plural(draft.mounts.length, { one: "spec.mounts.one", other: "spec.mounts.other" }))
   if (draft.proxy.mode !== "none") parts.push(t("spec.proxy.summary"))
@@ -134,7 +145,8 @@ function advancedSummary(draft: SpecDraft) {
  * The settings shared by the create and settings dialogs: the features as toggle buttons, then
  * resources and volumes in a section that starts closed unless `advancedOpen`. `spec` is the
  * container being changed, if any: a feature the installation switched off cannot be turned on, but
- * a container that has it can still turn it off.
+ * a container that has it can still turn it off. `groups` are the groups other containers list,
+ * and `vncPrivate` whether the container's screen stays away from the members of its groups.
  */
 export function SpecFields({
   draft,
@@ -142,6 +154,8 @@ export function SpecFields({
   settings,
   volumes,
   spec,
+  groups = [],
+  vncPrivate,
   advancedOpen = false,
 }: {
   draft: SpecDraft
@@ -149,6 +163,8 @@ export function SpecFields({
   settings?: Settings
   volumes: Volume[]
   spec?: ContainerSpec
+  groups?: string[]
+  vncPrivate?: boolean | null
   advancedOpen?: boolean
 }) {
   const id = React.useId()
@@ -324,6 +340,46 @@ export function SpecFields({
                 />
                 <FieldDescription id={`${id}-ports-hint`} className="text-xs">
                   {t("spec.proxiedPortsHint")}
+                </FieldDescription>
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor={`${id}-groups`}>{t("spec.groups")}</FieldLabel>
+                <Input
+                  id={`${id}-groups`}
+                  pattern={NAMES_PATTERN}
+                  placeholder="build, tests"
+                  aria-describedby={`${id}-groups-hint`}
+                  value={draft.groups}
+                  onChange={(event) => set({ groups: event.target.value })}
+                  className="font-mono"
+                />
+                <FieldDescription id={`${id}-groups-hint`} className="text-xs">
+                  {[
+                    t("spec.groupsHint"),
+                    groups.length > 0 && t("spec.groupsKnown", { groups: formatList(groups) }),
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                </FieldDescription>
+                {vncPrivate === false && parseNames(draft.groups).length > 0 && (
+                  <Alert>
+                    <RiAlertLine className="text-warning" />
+                    <AlertDescription>{t("spec.groupsExposed")}</AlertDescription>
+                  </Alert>
+                )}
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor={`${id}-aliases`}>{t("spec.aliases")}</FieldLabel>
+                <Input
+                  id={`${id}-aliases`}
+                  pattern={NAMES_PATTERN}
+                  aria-describedby={`${id}-aliases-hint`}
+                  value={draft.aliases}
+                  onChange={(event) => set({ aliases: event.target.value })}
+                  className="font-mono"
+                />
+                <FieldDescription id={`${id}-aliases-hint`} className="text-xs">
+                  {t("spec.aliasesHint")}
                 </FieldDescription>
               </Field>
             </div>

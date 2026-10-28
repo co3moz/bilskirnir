@@ -14,7 +14,7 @@ import {
 
 import { ConceptIcon } from "@/components/concept"
 import { ContainerActivity } from "@/components/container-activity"
-import { PrimaryAction, SpecBadges } from "@/components/container-card"
+import { GroupExposure, PrimaryAction, SpecBadges } from "@/components/container-card"
 import { ContainerPreview } from "@/components/container-preview"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -31,7 +31,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { attempt, containerAction, retrySetup, showLog } from "@/lib/actions"
 import { openDialog } from "@/lib/dialogs"
 import { containerStatus, date, desktopTitle } from "@/lib/format"
-import { formatNumber, rich, t } from "@/lib/i18n"
+import { groupNames, groupPeers } from "@/lib/groups"
+import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { useContainers, useImages } from "@/lib/queries"
 import { setupGroups, setupLabel } from "@/lib/compose"
 import type { ContainerSetup } from "@/lib/types"
@@ -62,7 +63,8 @@ const setupTone = {
 
 /** dashboard-01's row viewer for one container: preview, configuration and every action. */
 export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) {
-  const item = useContainers().data?.find((entry) => entry.id === id)
+  const containers = useContainers().data ?? []
+  const item = containers.find((entry) => entry.id === id)
   const images = useImages().data ?? []
   if (!item)
     return (
@@ -166,6 +168,7 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
           </Button>
         </div>
         <SpecBadges spec={spec} />
+        <GroupExposure item={item} />
         <Separator />
         <React.Suspense fallback={<Skeleton className="h-[140px] rounded-xl" />}>
           <ContainerUsage item={item} />
@@ -184,6 +187,17 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
           <Fact label={t("containers.dockerName")}>
             <code className="font-mono text-xs">{item.container}</code>
           </Fact>
+          {(spec.groups?.length ?? 0) > 0 && (
+            <>
+              <Fact label={t("containers.reachedAs")}>
+                <code className="font-mono text-xs">{formatList(groupNames(spec))}</code>
+              </Fact>
+              <Fact label={t("containers.groupMembers")}>
+                {formatList(groupPeers(item, containers).map((peer) => peer.spec.name)) ||
+                  t("containers.groupAlone")}
+              </Fact>
+            </>
+          )}
           <div className="col-span-2">
             <Fact label={t("containers.image")}>
               <code className="font-mono text-xs">{spec.image}</code>

@@ -14,6 +14,9 @@ RUN useradd --create-home --shell /bin/bash --uid 1001 desktop \
     && mkdir -p /shared /workspace && chown desktop:desktop /shared /workspace \
     && mkdir -p /usr/local/share/applications
 LABEL thoric.desktop=true
+# desktop-session listens for VNC only in the private network, so the members of a container's
+# groups do not reach the screen; the manager shows containers from images without this.
+LABEL thoric.vnc=private
 ENV LANG=en_US.UTF-8 DISPLAY=:0 DESKTOP_RESOLUTION=1920x1080 \
     DESKTOP_AUDIO=false DESKTOP_MICROPHONE=false DESKTOP_GPU=false DESKTOP_SUDO=true \
     PULSE_SERVER=unix:/run/desktop/pulse/native

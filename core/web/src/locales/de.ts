@@ -233,6 +233,11 @@ export const de: Messages = {
   "containers.setupUnfinished": "Einrichtung wurde nicht abgeschlossen",
   "containers.sharedMemory": "Gemeinsamer Speicher",
   "containers.dockerName": "Docker-Name",
+  "containers.reachedAs": "In seinen Gruppen erreichbar als",
+  "containers.groupMembers": "Gruppenmitglieder",
+  "containers.groupAlone": "Noch keine",
+  "containers.groupsExposed":
+    "Sein Image ist älter als privates VNC, daher können die Mitglieder seiner Gruppen seinen Bildschirm sehen und steuern.",
   "containers.image": "Image",
   "containers.noMounts": "Keine Volumes eingehängt.",
   "images.kind.catalog": "Katalog",
@@ -1239,6 +1244,16 @@ export const de: Messages = {
     "Ports von Programmen im Desktop, die Agenten mit dem MCP-Token über Thoric erreichen, durch Kommas getrennt.",
   "spec.ports.one": "{count} weitergeleiteter Port",
   "spec.ports.other": "{count} weitergeleitete Ports",
+  "spec.groups": "Gruppen",
+  "spec.groupsHint":
+    "Container derselben Gruppe erreichen einander in einem eigenen Netzwerk, über Hostname, Name oder Alias. Kleinbuchstaben, Ziffern und Bindestriche, durch Kommas getrennt.",
+  "spec.groupsKnown": "Verwendet: {groups}.",
+  "spec.groupsExposed":
+    "Das Image dieses Desktops ist älter als privates VNC, daher können die Mitglieder seiner Gruppen seinen Bildschirm ohne Passwort sehen und steuern. Bauen Sie sein Image aus einer neueren Basis neu, oder erstellen Sie den Container erneut aus einer.",
+  "spec.aliases": "Aliase",
+  "spec.aliasesHint": "Weitere Namen, unter denen ihn die Mitglieder seiner Gruppen erreichen.",
+  "spec.groups.one": "{count} Gruppe",
+  "spec.groups.other": "{count} Gruppen",
 
   "identity.title": "Maschinenidentität",
   "identity.description":
@@ -1295,7 +1310,7 @@ export const de: Messages = {
   "settings.unchanged": "Keine Einstellungen geändert.",
   "settings.title": "Container-Einstellungen",
   "settings.description":
-    "Name, Internet, weitergeleitete Ports und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
+    "Name, Internet, weitergeleitete Ports, Gruppen und Ressourcenlimits gelten für den laufenden Container. Andere Änderungen erfordern einen neuen Container; seine Dateien bleiben erhalten.",
   "settings.saveRestart": "Speichern und neu starten",
   "parameter.name": "Variablenname",
   "parameter.namePattern":

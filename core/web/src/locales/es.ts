@@ -230,6 +230,11 @@ export const es: Messages = {
   "containers.setupUnfinished": "La configuración no terminó",
   "containers.sharedMemory": "Memoria compartida",
   "containers.dockerName": "Nombre en Docker",
+  "containers.reachedAs": "En sus grupos se le llega como",
+  "containers.groupMembers": "Miembros del grupo",
+  "containers.groupAlone": "Ninguno todavía",
+  "containers.groupsExposed":
+    "Su imagen es anterior al VNC privado, así que los miembros de sus grupos pueden ver y controlar su pantalla.",
   "containers.image": "Imagen",
   "containers.noMounts": "No hay volúmenes montados.",
   "images.kind.catalog": "Catálogo",
@@ -1229,6 +1234,16 @@ export const es: Messages = {
     "Puertos de programas del escritorio a los que llegan los agentes con el token MCP a través de Thoric, separados por comas.",
   "spec.ports.one": "{count} puerto redirigido",
   "spec.ports.other": "{count} puertos redirigidos",
+  "spec.groups": "Grupos",
+  "spec.groupsHint":
+    "Los contenedores de un mismo grupo se alcanzan entre sí en una red propia, por nombre de host, nombre o alias. Minúsculas, dígitos y guiones, separados por comas.",
+  "spec.groupsKnown": "En uso: {groups}.",
+  "spec.groupsExposed":
+    "La imagen de este escritorio es anterior al VNC privado, así que los miembros de sus grupos pueden ver y controlar su pantalla sin contraseña. Reconstruye su imagen desde una base más reciente o crea de nuevo el contenedor desde una.",
+  "spec.aliases": "Alias",
+  "spec.aliasesHint": "Otros nombres con los que lo alcanzan los miembros de sus grupos.",
+  "spec.groups.one": "{count} grupo",
+  "spec.groups.other": "{count} grupos",
 
   "identity.title": "Identidad de la máquina",
   "identity.description":
@@ -1284,7 +1299,7 @@ export const es: Messages = {
   "settings.unchanged": "No se cambió ningún ajuste.",
   "settings.title": "Ajustes del contenedor",
   "settings.description":
-    "El nombre, Internet, los puertos redirigidos y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
+    "El nombre, Internet, los puertos redirigidos, los grupos y los límites de recursos se aplican al contenedor en ejecución. Otros cambios necesitan un contenedor nuevo; sus archivos se conservan.",
   "settings.saveRestart": "Guardar y reiniciar",
   "parameter.name": "Nombre de la variable",
   "parameter.namePattern": "Letras mayúsculas, dígitos y guiones bajos, empezando por una letra",

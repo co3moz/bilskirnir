@@ -2156,6 +2156,38 @@ try:
     assert machine(edit_container) == recorded(taken)
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     print("PASS machine identity survives a settings recreation and moves to the values a takeover sets", flush=True)
+    # Container groups: members reach each other on the group's own network by hostname, name and
+    # alias, but not each other's VNC server; the network comes and goes with its members.
+    group = f"g-{tag}"
+    group_network = f"thoric-group-{group}"
+    peer = job(api("containers", {"name": "Group peer", "image": xfce["reference"], "gpu": False, "internet": False, "groups": [group], "aliases": ["peer-api"]}))["container_id"]
+    container_ids.append(peer)
+    peer_container = f"thoric-{peer}"
+    ready(peer_container)
+    made = json.loads(docker("network", "inspect", group_network))[0]
+    assert made["Internal"] and made["Labels"]["thoric.group"] == group, made
+    # The peer answers to peer-api in the group already.
+    assert refused(f"containers/{edit}/settings", {"groups": [group], "aliases": ["peer-api"]}) == 400
+    preview = api(f"containers/{edit}/settings", {"groups": [group], "aliases": ["builder"], "dry_run": True})
+    assert preview["live"] == ["groups", "aliases"] and preview["restart"] == [], preview
+    job(api(f"containers/{edit}/settings", {"groups": [group], "aliases": ["builder"]}))
+    assert docker("inspect", "--format", "{{.Id}}", edit_container).decode().strip() == second["Id"]
+    assert api(f"containers/{edit}")["vnc_private"] is True
+    docker("exec", "--detach", "--user", "desktop", edit_container, "python3", "-m", "http.server", "8765")
+    reach = "import socket, sys; s=socket.socket(); s.settimeout(3); s.connect((sys.argv[1], int(sys.argv[2])))"
+    reaches = lambda name, port: subprocess.run(["docker", "exec", peer_container, "python3", "-c", reach, name, str(port)], capture_output=True).returncode == 0
+    for name in ["unity-build", "settings-edited", "builder"]:
+        wait_for(lambda: reaches(name, 8765) or None, 20)
+    assert not reaches("builder", 5900)
+    # Leaving takes its names away and keeps the network while the peer lists the group; the last
+    # member's deletion removes it.
+    job(api(f"containers/{edit}/settings", {"groups": []}))
+    assert not reaches("builder", 8765)
+    assert subprocess.run(["docker", "network", "inspect", group_network], capture_output=True).returncode == 0
+    assert job(api(f"containers/{peer}", method="DELETE"))["deleted"] == peer
+    container_ids.remove(peer)
+    assert subprocess.run(["docker", "network", "inspect", group_network], capture_output=True).returncode != 0
+    print("PASS container groups reach each other by hostname, name and alias, and not each other's screen", flush=True)
     # A new container would get the manager's data volume, so the change stops nothing.
     refused_mount = mcp_job(tool("update_container", {"container_id": edit, "mounts": [{"volume": volume, "target": "/workspace"}]}), success=False)
     assert f"{volume} is the manager's own volume" in refused_mount["log"], refused_mount["log"]
@@ -2307,6 +2339,10 @@ finally:
             if info and (info["Labels"].get("thoric.environment")==eid or info["Labels"].get("thoric.test")==tag):
                 docker("network","disconnect","--force",info["Id"],manager,check=False)
                 docker("network","rm",info["Id"],check=False)
+    # A group network this run named, left by a phase that stopped early.
+    info=inspect_cleanup("network",f"thoric-group-g-{tag}")
+    if info and info["Labels"].get("thoric.group")==f"g-{tag}":
+        docker("network","rm",info["Id"],check=False)
     docker("rm","--force",manager,check=False)
     for name in [volume,share,clone_share,files_volume,restored_volume,streamed_volume,cut_volume,interrupted_volume,copied_volume,mcp_copy_volume,device_volume,device_copy_volume,linked_volume,installs_volume,cache_volume,settings_volume,absent_volume,outside_volume,backup_volume,backup_data]: docker("volume","rm",name,check=False)
     # A volume created for one of this run's containers goes only while its label names that container.

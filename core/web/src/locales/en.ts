@@ -235,6 +235,11 @@ export const en = {
   "containers.setupUnfinished": "Setup did not finish",
   "containers.sharedMemory": "Shared memory",
   "containers.dockerName": "Docker name",
+  "containers.reachedAs": "Reached in its groups as",
+  "containers.groupMembers": "Group members",
+  "containers.groupAlone": "None yet",
+  "containers.groupsExposed":
+    "Its image predates private VNC, so the members of its groups can see and control its screen.",
   "containers.image": "Image",
   "containers.noMounts": "No volumes mounted.",
 
@@ -1242,6 +1247,16 @@ export const en = {
     "Ports of programs in the desktop that agents with the MCP token reach through Thoric, separated by commas.",
   "spec.ports.one": "{count} proxied port",
   "spec.ports.other": "{count} proxied ports",
+  "spec.groups": "Groups",
+  "spec.groupsHint":
+    "Containers in the same group reach each other on a network of their own, by hostname, name or alias. Lowercase letters, digits and hyphens, separated by commas.",
+  "spec.groupsKnown": "In use: {groups}.",
+  "spec.groupsExposed":
+    "This desktop's image predates private VNC, so the members of its groups can see and control its screen without a password. Rebuild its image from a newer base, or create the container again from one.",
+  "spec.aliases": "Aliases",
+  "spec.aliasesHint": "More names the members of its groups reach it by.",
+  "spec.groups.one": "{count} group",
+  "spec.groups.other": "{count} groups",
 
   "identity.title": "Machine identity",
   "identity.description":
@@ -1301,7 +1316,7 @@ export const en = {
   "settings.unchanged": "No settings changed.",
   "settings.title": "Container settings",
   "settings.description":
-    "Name, internet, proxied ports and resource limits apply to the running container. Other changes need a new container; its files are kept.",
+    "Name, internet, proxied ports, groups and resource limits apply to the running container. Other changes need a new container; its files are kept.",
   "settings.saveRestart": "Save and restart",
 
   "parameter.name": "Variable name",

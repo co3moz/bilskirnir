@@ -45,6 +45,9 @@ async fn supervise(app: &Arc<App>) -> Result<()> {
             "{{.ID}} {{.Label \"thoric.environment\"}}",
         ])
         .await?;
+    let records = app
+        .db
+        .list::<crate::model::Container>(crate::model::CONTAINERS)?;
     for line in String::from_utf8_lossy(&output).lines() {
         let Some((docker_id, record_id)) = line.split_once(' ') else {
             continue;
@@ -53,7 +56,8 @@ async fn supervise(app: &Arc<App>) -> Result<()> {
             continue;
         };
         let password = app.proxy_password(record_id);
-        let Some(settings) = super::settings(&app.config, &container.spec, password) else {
+        let peers = crate::groups::peers(record_id, &container.spec, &records);
+        let Some(settings) = super::settings(&app.config, &container.spec, password, peers) else {
             continue;
         };
         let result = ensure(app, docker_id, &settings).await;

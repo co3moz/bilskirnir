@@ -30,6 +30,10 @@ export type ContainerSpec = {
   machine_id?: string | null
   /** Ports inside the desktop that the manager proxies for holders of the MCP token. */
   ports: number[]
+  /** Groups whose members reach each other on the group's network; absent before groups existed. */
+  groups?: string[]
+  /** More names the members of its groups reach the container by. */
+  aliases?: string[]
   cpus: number | null
   memory_mb: number | null
   shm_mb: number
@@ -146,6 +150,8 @@ export type ContainerItem = Container & {
   state: string
   health: Health
   status: string | null
+  /** Whether its VNC server stays in its private network, away from its groups; `null` without a container. */
+  vnc_private?: boolean | null
 }
 
 /**

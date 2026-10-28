@@ -54,6 +54,13 @@ pub struct ContainerSpec {
     /// manager reaches them on the private network, so a change needs no new container.
     #[serde(default)]
     pub ports: Vec<u16>,
+    /// The groups the container belongs to: containers that share one reach each other on the
+    /// group's network (see `groups`). A change applies in place.
+    #[serde(default)]
+    pub groups: Vec<String>,
+    /// More names the members of its groups reach the container by, beside its hostname and name.
+    #[serde(default)]
+    pub aliases: Vec<String>,
     pub cpus: Option<f64>,
     pub memory_mb: Option<u64>,
     #[serde(default = "shm")]
@@ -122,6 +129,7 @@ impl ContainerSpec {
         {
             bail!("Proxied ports must be at most 32 different ports between 1 and 65535");
         }
+        crate::groups::validate(self)?;
         let mut targets = std::collections::HashSet::new();
         for mount in &self.mounts {
             volume_name(&mount.volume)?;

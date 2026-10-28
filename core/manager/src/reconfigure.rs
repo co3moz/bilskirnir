@@ -34,6 +34,8 @@ const EDITABLE: &[&str] = &[
     "mac_address",
     "machine_id",
     "ports",
+    "groups",
+    "aliases",
     "cpus",
     "memory_mb",
     "shm_mb",
@@ -101,6 +103,9 @@ pub(crate) fn classify(old: &ContainerSpec, new: &ContainerSpec) -> Changes {
     note(old.internet != new.internet, true, "internet");
     // The manager proxies the ports itself; Docker publishes none of them.
     note(old.ports != new.ports, true, "ports");
+    // A group's network is joined and left, and its names given again, in place.
+    note(old.groups != new.groups, true, "groups");
+    note(old.aliases != new.aliases, true, "aliases");
     // `docker update` changes or adds a limit, but silently ignores a request to remove one.
     note(old.cpus != new.cpus, new.cpus.is_some(), "cpus");
     note(
@@ -175,6 +180,7 @@ impl App {
         let mut spec = merged_spec(&env.spec, request)?;
         let password = PasswordChange::requested(request)?;
         password.settle(env.spec.proxy.as_ref(), &mut spec.proxy)?;
+        self.group_names_free(&env.id, &spec)?;
         crate::compose::check_mounts(&spec.mounts, env.compose_mounts())?;
         // Only a feature being switched on needs the installation's permission; a desktop that
         // already has one keeps it after the installation turns it off, as it did before.
@@ -289,9 +295,21 @@ impl App {
                 },
             )?;
         }
+        // The name is one of the names the members of its groups reach it by.
+        let regrouped = ["groups", "aliases", "name"]
+            .iter()
+            .any(|key| changes.live.contains(key))
+            && (!env.spec.groups.is_empty() || !spec.groups.is_empty());
+        if regrouped {
+            let mut joined = env.clone();
+            joined.spec = spec.clone();
+            self.join_groups(&joined, &info).await?;
+            self.append_log(job_id, "Brought the container's groups in line.")?;
+        }
         env.spec = spec;
         self.db.put(CONTAINERS, id, &env)?;
-        if changes.live.contains(&"proxy") {
+        // The desktop proxies of the members let the names in their groups through.
+        if changes.live.contains(&"proxy") || regrouped {
             self.outbound.wake();
         }
         self.append_log(job_id, "Saved the settings. The container kept running.")?;
@@ -393,6 +411,10 @@ impl App {
             if env.spec.internet {
                 self.connect_network(&env, &env.egress_network, &env.container)
                     .await?;
+            }
+            if !env.spec.groups.is_empty() {
+                let created = self.inspect("container", &env.container).await?;
+                self.join_groups(&env, &created).await?;
             }
             if running {
                 self.docker(&["start", &env.container])

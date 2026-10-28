@@ -44,6 +44,7 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
+import { knownGroups } from "@/lib/groups"
 import { formatList, plural, t } from "@/lib/i18n"
 import { imageServers } from "@/lib/mcp"
 import { useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
@@ -155,6 +156,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
   const settings = useSettings().data
   const images = useImages().data ?? []
   const volumes = useVolumes().data ?? []
+  const groups = knownGroups(useContainers().data ?? [])
   const choices = imageChoices(images, settings?.base_image, image)
   const [name, setName] = React.useState("")
   const [selected, setSelected] = React.useState<string | undefined>()
@@ -236,7 +238,13 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
                 </FieldContent>
               </Field>
             </FieldGroup>
-            <SpecFields draft={draft} onChange={setDraft} settings={settings} volumes={volumes} />
+            <SpecFields
+              draft={draft}
+              onChange={setDraft}
+              settings={settings}
+              volumes={volumes}
+              groups={groups}
+            />
           </div>
           {/* Outside the scrolling fields, so a long form cannot hide the outcome. */}
           <FieldError>{error}</FieldError>
@@ -258,7 +266,8 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
 }
 
 export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
-  const item = useContainers().data?.find((entry) => entry.id === id)
+  const containers = useContainers().data ?? []
+  const item = containers.find((entry) => entry.id === id)
   const settings = useSettings().data
   const volumes = useVolumes().data ?? []
   const spec = item?.spec
@@ -332,6 +341,8 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
               settings={settings}
               volumes={volumes}
               spec={spec}
+              groups={knownGroups(containers)}
+              vncPrivate={item?.vnc_private}
               // These settings are what this dialog is for, so they start in view.
               advancedOpen
             />

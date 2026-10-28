@@ -149,10 +149,10 @@ fn programs_are_led_to_the_desktops_proxy_only_while_there_is_one() {
 fn the_desktops_proxy_is_given_the_chosen_proxy_with_its_credentials() {
     let mut app = crate::tests::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
-    assert_eq!(settings(config, &spec(Value::Null), None), None);
+    assert_eq!(settings(config, &spec(Value::Null), None, Vec::new()), None);
     // Following an installation without a proxy goes straight to every address.
     let installation = spec(json!({"mode": "installation"}));
-    let direct = settings(config, &installation, None).unwrap();
+    let direct = settings(config, &installation, None, Vec::new()).unwrap();
     assert_eq!((direct.upstream, direct.bypass.len()), (None, 0));
     let mut notices = Vec::new();
     config.proxy = super::installation(
@@ -171,7 +171,7 @@ fn the_desktops_proxy_is_given_the_chosen_proxy_with_its_credentials() {
         &mut notices,
     )
     .unwrap();
-    let followed = settings(config, &installation, Some("ignored".into())).unwrap();
+    let followed = settings(config, &installation, Some("ignored".into()), Vec::new()).unwrap();
     let upstream = followed.upstream.clone().unwrap();
     assert_eq!(upstream.scheme, choice::Scheme::Socks5);
     assert_eq!(upstream.password.as_deref(), Some("corp-secret"));
@@ -181,7 +181,7 @@ fn the_desktops_proxy_is_given_the_chosen_proxy_with_its_credentials() {
     let own = spec(
         json!({"mode": "custom", "url": "http://own.example:8080", "username": "ana", "bypass": ["*.lan"]}),
     );
-    let given = settings(config, &own, Some("own-secret".into())).unwrap();
+    let given = settings(config, &own, Some("own-secret".into()), Vec::new()).unwrap();
     let upstream = given.upstream.clone().unwrap();
     assert_eq!(
         (
@@ -193,14 +193,18 @@ fn the_desktops_proxy_is_given_the_chosen_proxy_with_its_credentials() {
     );
     assert_eq!(upstream.password.as_deref(), Some("own-secret"));
     // A new password is a new version, so the desktop's proxy is given it.
-    let changed = settings(config, &own, Some("other".into())).unwrap();
+    let changed = settings(config, &own, Some("other".into()), Vec::new()).unwrap();
     assert_ne!(changed.version, given.version);
     assert_eq!(
-        settings(config, &own, Some("own-secret".into()))
+        settings(config, &own, Some("own-secret".into()), Vec::new())
             .unwrap()
             .version,
         given.version
     );
+    // The members of its groups are reached straight, and joining one is a new version too.
+    let grouped = settings(config, &own, Some("own-secret".into()), vec!["web".into()]).unwrap();
+    assert_eq!(grouped.bypass, ["*.lan", "web"]);
+    assert_ne!(grouped.version, given.version);
 }
 
 #[test]

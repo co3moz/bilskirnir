@@ -488,7 +488,7 @@ async fn the_tools_and_guides_describe_the_ports_setting() {
         update["description"]
             .as_str()
             .unwrap()
-            .contains("name, internet, ports and")
+            .contains("name, internet, ports, groups, aliases and")
     );
     assert!(
         include_str!("../../../docs/API.md").contains("`/api/containers/{id}/ports/{port}/{path}`")
