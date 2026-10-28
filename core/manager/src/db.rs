@@ -94,15 +94,15 @@ impl Db {
     }
     pub fn jobs_summary(&self) -> Result<Vec<crate::model::Job>> {
         let conn = self.0.lock().unwrap();
-        // Strip potentially large logs in SQLite, before allocating/deserializing rows.
-        let mut stmt = conn.prepare("SELECT json_set(data, '$.log', '') FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT 100")?;
+        // Strip potentially large logs and script reports in SQLite, before allocating/deserializing rows.
+        let mut stmt = conn.prepare("SELECT json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT 100")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
         rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
     }
-    /// The jobs that are queued or running, newest first, without their logs.
+    /// The jobs that are queued or running, newest first, without their logs or script reports.
     pub fn active_jobs(&self) -> Result<Vec<crate::model::Job>> {
         let conn = self.0.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT json_set(data, '$.log', '') FROM records WHERE kind='job' AND json_extract(data, '$.status') IN ('queued', 'running') ORDER BY rowid DESC")?;
+        let mut stmt = conn.prepare("SELECT json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' AND json_extract(data, '$.status') IN ('queued', 'running') ORDER BY rowid DESC")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
         rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
     }

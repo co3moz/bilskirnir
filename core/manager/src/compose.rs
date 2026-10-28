@@ -18,6 +18,7 @@ use crate::{
     App,
     error::{Error, Result},
     model::*,
+    script_progress::{ScriptPart, ScriptProgress},
 };
 use anyhow::{Context, anyhow, bail};
 use axum::{
@@ -489,7 +490,7 @@ impl Pinned {
     }
     /// The setup runner's request for step `index` on stdin, which keeps values out of command
     /// lines. The secrets of the other steps are masked too, in case this script prints
-    /// something an earlier one saved.
+    /// something an earlier one saved. Bash reads the line trace before the script.
     pub fn request(&self, index: usize) -> Value {
         let step = &self.compose.steps[index];
         let secrets = step
@@ -515,6 +516,7 @@ impl Pinned {
             "secrets": secrets,
             "mask": mask,
             "timeout_seconds": step.timeout_seconds,
+            "trace": crate::script_progress::TRACE,
         })
     }
 }
@@ -639,6 +641,18 @@ impl App {
                 .context("The folders of the compose's volume parameters could not be prepared")?;
         }
         let count = pinned.compose.steps.len();
+        let mut progress = ScriptProgress::setup(
+            pinned
+                .compose
+                .steps
+                .iter()
+                .map(|step| ScriptPart {
+                    id: step.id.clone(),
+                    name: step.title().into(),
+                    script: step.script.replace("\r\n", "\n"),
+                })
+                .collect(),
+        );
         for (index, step) in pinned.compose.steps.iter().enumerate() {
             let user = if step.root { "root" } else { "1001:1001" };
             let names = pinned.environment(index).into_keys().collect::<Vec<_>>();
@@ -660,6 +674,8 @@ impl App {
                 ),
             )?;
             self.set_step(&env.id, index, "running")?;
+            progress.start_part(index, now());
+            self.save_script(job_id, &mut progress)?;
             let mut args = crate::exec::desktop_exec(user, step.root);
             args.extend([
                 container.clone(),
@@ -673,8 +689,12 @@ impl App {
             let limit = (Duration::from_secs(step.timeout_seconds) + RUNNER_GRACE)
                 .max(crate::docker::LOGGED_LIMIT);
             let outcome = self
-                .docker_logged_within(job_id, &args, Some(input), limit)
+                .docker_setup_logged(job_id, &args, input, limit, &mut progress)
                 .await;
+            if outcome.is_ok() {
+                progress.finish_part(index, now());
+                self.save_script(job_id, &mut progress)?;
+            }
             self.set_step(
                 &env.id,
                 index,
@@ -692,6 +712,8 @@ impl App {
                 }
             })?;
         }
+        progress.end();
+        self.save_script(job_id, &mut progress)?;
         self.append_log(job_id, "Compose setup completed.")?;
         Ok(())
     }

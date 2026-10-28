@@ -1254,6 +1254,7 @@ async fn get_job_reads_only_the_jobs_of_the_endpoints_containers() {
                     result: None,
                     progress: None,
                     stages: Vec::new(),
+                    script: None,
                     name: None,
                 },
             )

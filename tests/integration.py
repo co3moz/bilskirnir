@@ -848,17 +848,24 @@ try:
     # Templates merged into one image: each part's script runs in a layer of its own in order,
     # and each compose step receives only its own values, although both ask for VERSION.
     merged_request = {"name": "merged-templates", "base_image": xfce["reference"], "internet": False, "template_ids": ["first", "second"],
-        "parts": [{"id": "first", "name": "First", "script": "set -eu\nprintf first > /opt/merged-order\n"}, {"id": "second", "name": "Second", "script": "set -eu\nprintf ' second' >> /opt/merged-order\n"}],
+        "parts": [{"id": "first", "name": "First", "script": "set -eu\nprintf first > /opt/merged-order\n"}, {"id": "second", "name": "Second", "script": "set -eu\necho 'THORIC_SKIP=1/2 Nothing to add'\nprintf ' second' >> /opt/merged-order\n"}],
         "compose": {"steps": [
             {"id": "first", "name": "First", "parameters": [{"name": "VERSION", "default": "1"}, {"name": "TOKEN", "secret": True}], "script": "set -eu\nprintf '%s|%s' \"$VERSION\" \"${OTHER-unset}\" > ~/first-step\nprintf '%s' \"$TOKEN\" > ~/first-token\n"},
-            {"id": "second", "name": "Second", "parameters": [{"name": "VERSION", "default": "2"}, {"name": "OTHER"}], "script": "set -eu\nprintf '%s|%s' \"$VERSION\" \"${TOKEN-unset}\" > ~/second-step\necho \"saved $(cat ~/first-token)\"\n"}]}}
+            {"id": "second", "name": "Second", "parameters": [{"name": "VERSION", "default": "2"}, {"name": "OTHER"}], "script": "set -eu\necho 'THORIC_STAGE=1/1 Saving'\nprintf '%s|%s' \"$VERSION\" \"${TOKEN-unset}\" > ~/second-step\necho \"saved $(cat ~/first-token)\"\n"}]}}
     for invalid in [{**merged_request, "script": "true"}, {**merged_request, "parts": [merged_request["parts"][0]] * 2}, {**merged_request, "compose": {"steps": [{**step, "id": "first"} for step in merged_request["compose"]["steps"]]}}]:
         assert refused("images/build", invalid) == 400, invalid
     merged_job = api("images/build", merged_request)
     merged_image = job(merged_job)
     assert merged_image["template_ids"] == ["first", "second"] and merged_image["build"]["parts"] == [{"id": "first", "name": "First"}, {"id": "second", "name": "Second"}], merged_image
     assert all("script" not in step for step in merged_image["compose"]["steps"]), merged_image["compose"]
-    assert "Running the scripts of First, Second as root" in api(f"jobs/{merged_job['job_id']}")["log"]
+    merged_build = api(f"jobs/{merged_job['job_id']}")
+    assert "Running the scripts of First, Second as root" in merged_build["log"]
+    # Each part is followed from the build step that runs it; the step a part left out is kept.
+    merged_parts = merged_build["script"]["parts"]
+    assert [part["name"] for part in merged_parts] == ["First", "Second"] and all(part.get("finished_at") for part in merged_parts), merged_parts
+    assert merged_parts[1]["stages"] == 2 and merged_parts[1]["steps"] == [{"stage": 1, "label": "Nothing to add", "skipped": True}], merged_parts
+    assert "THORIC_SKIP=1/2 Nothing to add" in merged_build["log"] and "THORIC_LINE" not in merged_build["log"], merged_build["log"]
+    assert all("script" not in listed for listed in api("jobs"))
     exported = api(f"images/{merged_image['id']}/config")
     assert exported["parts"][1] == merged_request["parts"][1] and "script" not in exported and exported["template_ids"] == ["first", "second"], exported
     merged_base = {"image": merged_image["image_id"], "internet": False}
@@ -871,9 +878,15 @@ try:
     assert docker("exec", f"thoric-{merged_id}", "cat", "/opt/merged-order") == b"first second"
     assert docker("exec", f"thoric-{merged_id}", "cat", "/home/desktop/first-step") == b"1|unset"
     assert docker("exec", f"thoric-{merged_id}", "cat", "/home/desktop/second-step") == b"two|unset"
-    merged_log = api(f"jobs/{created['job_id']}")["log"]
+    merged_created = api(f"jobs/{created['job_id']}")
+    merged_log = merged_created["log"]
     # The second step never gets the first one's secret, and its output masks what the first saved.
     assert "step 1 of 2, First" in merged_log and "step 2 of 2, Second" in merged_log and "saved ***" in merged_log and merged_secret not in merged_log, merged_log
+    # The compose steps are the setup's parts, and the step a script named stays on the job.
+    setup_parts = merged_created["script"]["parts"]
+    assert [(part["name"], bool(part.get("finished_at"))) for part in setup_parts] == [("First", True), ("Second", True)], setup_parts
+    assert [(step["stage"], step["label"]) for step in setup_parts[1]["steps"]] == [(1, "Saving")], setup_parts
+    assert "THORIC_LINE" not in merged_log and merged_created.get("progress") is None, merged_created
     merged_setup = api(f"containers/{merged_id}")["setup"]
     assert merged_setup["parameters"] == {"first.VERSION": "1", "second.OTHER": "x", "second.VERSION": "two"} and merged_setup["secrets"] == ["first.TOKEN"], merged_setup
     assert [(step["id"], step["name"], step["status"]) for step in merged_setup["steps"]] == [("first", "First", "completed"), ("second", "Second", "completed")], merged_setup
@@ -1667,14 +1680,23 @@ try:
     print("PASS an image is deleted only while no container needs it, and Docker keeps one another tag holds", flush=True)
     # BuildKit holds a line without its newline until the step ends, so the marker needs one to
     # reach the job log while the script still sleeps.
-    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\necho SLOW_STARTED\nsleep 20\necho SLOW_FINISHED\n"})
+    slow = api("images/build", {"name":"concurrent-build","base_image":xfce["reference"],"internet":False,"script":"set -eu\necho 'THORIC_STAGE=1/3 Sleeping'\necho SLOW_STARTED\nsleep 20\necho 'THORIC_SKIP=2/3 Optional feature'\necho SLOW_FINISHED\n"})
     wait_for(lambda: "SLOW_STARTED" in api(f"jobs/{slow['job_id']}")["log"])
+    # While the script sleeps, the build's progress is the step it named last. The trace reported
+    # the line before that step, and the percentage never goes back, so it is below the next step.
+    slow_progress = wait_for(lambda: (p := api(f"jobs/{slow['job_id']}").get("progress") or {}).get("script", {}).get("stage") == 1 and p)["script"]
+    assert slow_progress | {"percent": None} == {"part": 1, "parts": 1, "stage": 1, "stages": 3, "label": "Sleeping", "percent": None} and 0 <= slow_progress["percent"] < 34, slow_progress
     started = time.monotonic()
     job(api(f"containers/{clone_id}/action", {"action": "stop"}))
     assert time.monotonic() - started < 8, "stop blocked by unrelated build"
     assert api(f"jobs/{slow['job_id']}")["status"] == "running"
     job(slow)
-    print("PASS long image build does not block other container mutations",flush=True)
+    slow_done = api(f"jobs/{slow['job_id']}")
+    slow_steps = slow_done["script"]["parts"][0]["steps"]
+    assert [(step["stage"], step["label"], step.get("skipped", False)) for step in slow_steps] == [(1, "Sleeping", False), (2, "Optional feature", True)], slow_done["script"]
+    assert slow_steps[0]["finished_at"] - slow_steps[0]["started_at"] >= 15, slow_steps
+    assert "THORIC_STAGE=1/3 Sleeping" in slow_done["log"] and "THORIC_LINE" not in slow_done["log"], slow_done["log"]
+    print("PASS long image build does not block other container mutations and reports its script's steps",flush=True)
     job(api(f"containers/{clone_id}/action", {"action": "start"}))
     ready(clone)
     assert docker("exec", clone, "cat", "/home/desktop/snapshot-marker") == b"snapshot-home"

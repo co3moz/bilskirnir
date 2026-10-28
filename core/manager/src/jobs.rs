@@ -136,6 +136,7 @@ where
         result: None,
         progress: None,
         stages: Vec::new(),
+        script: None,
     };
     app.db.put("job", &id, &job)?;
     if let Some(request) = &request {

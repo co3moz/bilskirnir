@@ -3,6 +3,7 @@ use crate::{
     error::{Error, Result, missing},
     jobs::{launch, launch_named, launch_retryable, retry},
     model::*,
+    script_progress::{ScriptPart, ScriptProgress, TRACE, TRACE_NAME},
 };
 use anyhow::Context;
 use axum::{
@@ -757,20 +758,34 @@ pub async fn build(
             // Each part runs in a step of its own, named after it in the build's output, so a
             // failure says whose script it was and Docker's cache keeps the parts before it.
             let files = if parts.is_empty() {
-                vec![("setup", script.as_str())]
+                vec![ScriptPart {
+                    id: "setup".into(),
+                    name: body.name.clone(),
+                    script: script.clone(),
+                }]
             } else {
                 parts
                     .iter()
-                    .map(|part| (part.id.as_str(), part.script.as_str()))
+                    .map(|part| ScriptPart {
+                        id: part.id.clone(),
+                        name: part.name.clone(),
+                        script: part.script.clone(),
+                    })
                     .collect()
             };
+            // Bash reads the line trace first; a bind mount leaves nothing of it in the image.
+            tokio::fs::write(dir.join(TRACE_NAME), TRACE).await?;
             let mut dockerfile = format!("FROM {base_tag}\nUSER root\n");
-            for (name, script) in files {
+            for ScriptPart {
+                id: name, script, ..
+            } in &files
+            {
                 tokio::fs::write(dir.join(format!("{name}.sh")), script).await?;
                 dockerfile.push_str(&format!(
-                    "COPY {name}.sh /tmp/thoric-{name}.sh\nRUN bash /tmp/thoric-{name}.sh && rm /tmp/thoric-{name}.sh\n"
+                    "COPY {name}.sh /tmp/thoric-{name}.sh\nRUN --mount=type=bind,source={TRACE_NAME},target=/tmp/{TRACE_NAME} BASH_ENV=/tmp/{TRACE_NAME} bash /tmp/thoric-{name}.sh && rm /tmp/thoric-{name}.sh\n"
                 ));
             }
+            let mut progress = ScriptProgress::build(files);
             // After the scripts, so the declarations the build names are the ones that hold.
             if !body.mcp.is_empty() {
                 dockerfile
@@ -809,7 +824,7 @@ pub async fn build(
                     )
                 },
             )?;
-            app.docker_build_logged(&id, &args).await?;
+            app.docker_build_logged(&id, &args, &mut progress).await?;
             // Without BuildKit's markers, the layer stage is skipped rather than guessed.
             app.begin_stage(&id, "image")?;
             let info = app.inspect("image", &reference).await?;

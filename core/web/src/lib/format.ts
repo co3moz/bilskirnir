@@ -8,6 +8,7 @@ import type {
   ContainerSpec,
   ImageItem,
   Job,
+  ScriptSummary,
 } from "./types"
 
 const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
@@ -25,12 +26,14 @@ export const shortDate = (seconds: number) =>
     minute: "2-digit",
   })
 
-export function duration(seconds: number) {
-  if (seconds < 60) return t("duration.seconds", { seconds: Math.max(0, Math.round(seconds)) })
+export function duration(time: number) {
+  // Rounded first, so 59.6 seconds past a minute reads as the next minute and never as 60 seconds.
+  const seconds = Math.max(0, Math.round(time))
+  if (seconds < 60) return t("duration.seconds", { seconds })
   if (seconds < 3600)
     return t("duration.minutes", {
       minutes: Math.floor(seconds / 60),
-      seconds: Math.round(seconds % 60),
+      seconds: seconds % 60,
     })
   return t("duration.hours", {
     hours: Math.floor(seconds / 3600),
@@ -225,7 +228,14 @@ export function jobLogText(job: Pick<Job, "log" | "status" | "result">) {
   return job.status === "failed" ? t("jobs.log.failed") : t("jobs.log.interrupted")
 }
 
-export type DownloadSummary = { text: string; value?: number; max?: number; percent?: number }
+export type DownloadSummary = {
+  text: string
+  value?: number
+  max?: number
+  percent?: number
+  /** What the bar measures, for its accessible name. */
+  title?: string
+}
 
 // Docker's per-layer counts, summarized by the manager while a job downloads an image.
 export function downloadProgress(progress?: DownloadProgress | null): DownloadSummary | null {
@@ -253,26 +263,63 @@ export function downloadProgress(progress?: DownloadProgress | null): DownloadSu
 }
 
 /**
- * A running job's measured progress: layers for an image download, bytes for an archive or a
- * volume copy.
+ * A running job's progress: layers for an image download, bytes for an archive or a volume copy,
+ * and the step or line the scripts of a build or a compose setup reached.
  */
 export function jobProgress(progress?: DownloadProgress | null): DownloadSummary | null {
-  if (!progress?.transfer) return downloadProgress(progress)
+  if (progress?.script) return scriptProgress(progress.script)
+  if (!progress?.transfer) {
+    const download = downloadProgress(progress)
+    return download && { ...download, title: t("jobs.downloadProgress") }
+  }
   const { current = 0, total = null } = progress
+  const title = t("jobs.archiveProgress")
   if (progress.transfer === "export")
     return {
+      title,
       text: current
         ? t("progress.exported", { size: fileSize(current) })
         : t("progress.preparingImage"),
     }
   if (progress.transfer === "copy")
-    return { text: t("progress.copied", { size: fileSize(current) }) }
-  if (!total) return { text: t("progress.received", { size: fileSize(current) }) }
+    return { title, text: t("progress.copied", { size: fileSize(current) }) }
+  if (!total) return { title, text: t("progress.received", { size: fileSize(current) }) }
   return {
+    title,
     value: current,
     max: total,
     percent: Math.floor((current * 100) / total),
     text: t("progress.receivedOf", { current: fileSize(current), total: fileSize(total) }),
+  }
+}
+
+/** The scripts' progress in words: the part when there are several, then the step or line. */
+function scriptProgress(script: ScriptSummary): DownloadSummary {
+  const { stage, stages, line, lines, label } = script
+  const where =
+    stage != null && stages != null
+      ? t(script.skipped ? "progress.script.skipped" : "progress.script.stage", {
+          stage: formatNumber(stage),
+          stages: formatNumber(stages),
+        })
+      : line != null && lines != null
+        ? t("progress.script.line", { line: formatNumber(line), lines: formatNumber(lines) })
+        : undefined
+  const part =
+    script.parts > 1
+      ? t("progress.script.part", {
+          part: formatNumber(script.part),
+          parts: formatNumber(script.parts),
+          name: script.name ?? "",
+        })
+      : undefined
+  const step = where && label ? `${where}: ${label}` : (where ?? label)
+  return {
+    title: t("jobs.scriptProgress"),
+    value: script.percent,
+    max: 100,
+    percent: script.percent,
+    text: [part, step].filter(Boolean).join(" · ") || t("progress.script.running"),
   }
 }
 
@@ -320,6 +367,107 @@ export function currentStage(job: Pick<Job, "status" | "stages">) {
   if (job.status !== "running") return undefined
   const stage = job.stages?.findLast((stage) => stage.started_at != null)
   return stage && stageLabel(stage.name)
+}
+
+export type ScriptStepRow = {
+  key: string
+  /** Where the step is among the part's, such as `3/10`; none for a range of steps. */
+  number?: string
+  label: string
+  state: StageState
+  seconds: number | null
+}
+export type ScriptPartRow = {
+  key: string
+  name?: string
+  state: StageState
+  seconds: number | null
+  cached: boolean
+  steps: ScriptStepRow[]
+}
+
+/**
+ * The parts of a job's scripts and the steps each named, as the job panel lists them. A number a
+ * script jumped over, and the numbers after its last step in a part that ended well, were
+ * skipped; in a part still running they are still to come, and in one a job stopped in they were
+ * not reached. The step or part a failed or interrupted job stopped in has no end of its own.
+ */
+export function scriptParts(
+  job: Pick<Job, "status" | "finished_at" | "script">,
+  now: number
+): ScriptPartRow[] {
+  const active = jobActive(job)
+  const stopped = job.status === "failed" || job.status === "interrupted"
+  const end = active ? now : (job.finished_at ?? now)
+  // A part or a step without an end is the one running, or the one a job stopped in.
+  const open: StageState = active ? "running" : stopped ? "failed" : "done"
+  const time = (from?: number | null, to?: number | null) =>
+    from == null ? null : Math.max(0, (to ?? end) - from)
+  const range = (from: number, to: number) =>
+    from === to
+      ? t("scriptSteps.step", { stage: formatNumber(from) })
+      : t("scriptSteps.range", { from: formatNumber(from), to: formatNumber(to) })
+  return (job.script?.parts ?? []).map((part, index): ScriptPartRow => {
+    const ended = part.finished_at != null
+    const steps: ScriptStepRow[] = []
+    let last = 0
+    for (const step of part.steps ?? []) {
+      if (step.stage > last + 1)
+        steps.push({
+          key: `skipped-${last + 1}`,
+          label: range(last + 1, step.stage - 1),
+          state: "skipped",
+          seconds: null,
+        })
+      steps.push({
+        key: `step-${step.stage}`,
+        number: part.stages
+          ? `${formatNumber(step.stage)}/${formatNumber(part.stages)}`
+          : formatNumber(step.stage),
+        label: step.label ?? t("scriptSteps.step", { stage: formatNumber(step.stage) }),
+        state: step.skipped
+          ? "skipped"
+          : step.started_at == null
+            ? "pending"
+            : step.finished_at != null || ended
+              ? "done"
+              : open,
+        seconds: step.skipped ? null : time(step.started_at, step.finished_at ?? part.finished_at),
+      })
+      last = step.stage
+    }
+    if (part.stages && last && last < part.stages) {
+      const count = part.stages - last
+      steps.push({
+        key: `rest-${last + 1}`,
+        label: ended
+          ? range(last + 1, part.stages)
+          : plural(
+              count,
+              active
+                ? { one: "scriptSteps.more.one", other: "scriptSteps.more.other" }
+                : { one: "scriptSteps.notReached.one", other: "scriptSteps.notReached.other" }
+            ),
+        state: ended ? "skipped" : "pending",
+        seconds: null,
+      })
+    }
+    return {
+      key: String(index),
+      name: part.name,
+      state:
+        part.started_at == null
+          ? job.status === "completed"
+            ? "skipped"
+            : "pending"
+          : ended
+            ? "done"
+            : open,
+      seconds: time(part.started_at, part.finished_at),
+      cached: !!part.cached,
+      steps,
+    }
+  })
 }
 
 /**

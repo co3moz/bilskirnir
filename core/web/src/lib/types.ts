@@ -289,7 +289,48 @@ export type DownloadProgress = {
   layers_done?: number
   /** Set for an archive transfer or a volume copy, whose progress counts bytes instead of layers. */
   transfer?: "export" | "import" | "copy"
+  /** Set while a build's or a compose setup's scripts run. */
+  script?: ScriptSummary
 }
+
+/**
+ * Where the scripts of a build or a compose setup are: the part that started last, the step it
+ * named last (`THORIC_STAGE`, `THORIC_SKIP`) or else the line it reached, and the share done.
+ */
+export type ScriptSummary = {
+  part: number
+  parts: number
+  /** Only when there are several parts. */
+  name?: string
+  stage?: number
+  stages?: number
+  label?: string
+  skipped?: boolean
+  line?: number
+  lines?: number
+  percent: number
+}
+
+/** A step a script named; a skipped one has no times. */
+export type ScriptStep = {
+  stage: number
+  label?: string
+  started_at?: number | null
+  finished_at?: number | null
+  skipped?: boolean
+}
+
+/** A build part or a compose step. One a failed job stopped in has no `finished_at`. */
+export type ScriptPart = {
+  name?: string
+  started_at?: number | null
+  finished_at?: number | null
+  cached?: boolean
+  stages?: number
+  steps?: ScriptStep[]
+}
+
+export type ScriptReport = { parts: ScriptPart[] }
 
 /** A named part of a job, such as a script build's layer save; times are the manager's seconds. */
 export type JobStage = {
@@ -312,6 +353,8 @@ export type Job = {
   progress?: DownloadProgress | null
   /** Every stage of a job that reports them, in order; one that has not started has no times. */
   stages?: JobStage[]
+  /** The parts and named steps of a build's or a compose setup's scripts; lists omit it. */
+  script?: ScriptReport | null
   /** A failed or interrupted job the manager can start again with its request; lists omit it. */
   retryable?: boolean
 }

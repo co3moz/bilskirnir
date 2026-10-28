@@ -908,7 +908,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "build_image",
-            "Build a reusable desktop image by running a root shell script, or the scripts of several templates in order (parts), on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Before writing a script, look for a template: get_settings gives templates_url, a list whose templates entries each name an id, and <id>.json in the same folder is a build request this tool takes unchanged with template_id set to that id. An exported build configuration is a valid request as it is too. Returns job_id; get_job lists the build's stages with their times.",
+            "Build a reusable desktop image by running a root shell script, or the scripts of several templates in order (parts), on a selected desktop base. A catalog base that is not downloaded yet is pulled first. Optional internet access and compose (see set_image_compose). Before writing a script, look for a template: get_settings gives templates_url, a list whose templates entries each name an id, and <id>.json in the same folder is a build request this tool takes unchanged with template_id set to that id. An exported build configuration is a valid request as it is too. A script you write can print a line THORIC_STAGE=<i>/<n> <label> as each of its n steps begins and THORIC_SKIP=<i>/<n> <label> for one it leaves out. Returns job_id; get_job lists the build's stages with their times, the script's progress and the steps it named.",
             json!({
                 "name":text,"description":{"type":"string","maxLength":4096,"default":""},"base_image":text,
                 "script":{"type":"string","maxLength":1000000,"description":"The root shell script, for a build without parts."},
@@ -988,7 +988,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result, plus progress while an image downloads and the stages of an image build, a snapshot or a settings change that recreates the container. Wait for completed, failed or interrupted; a queued job is not finished.",
+            "Read a job's status, bounded log and result, plus progress while an image downloads or a build or compose setup script runs, the stages of an image build, a snapshot or a settings change that recreates the container, and the parts and named steps of a build's or setup's scripts. Wait for completed, failed or interrupted; a queued job is not finished.",
             json!({"job_id":text}),
             &["job_id"],
             true,

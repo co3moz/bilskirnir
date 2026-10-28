@@ -165,7 +165,7 @@ A job is finished when its status is `completed`, `failed` or `interrupted`. A s
 
 Creating a container or building an image from a catalog image that is not downloaded yet pulls it first, in the same job. While the download runs, the job carries `progress`: `current` and `total` compressed bytes, where `total` is `null` until the size of every remaining layer is known, and `layers_done` of `layers`. Layers already on the host count as done and are not part of the byte total. The field is removed when the download ends. A download that fails is tried up to three times in the same job, unless Docker refused it, such as for an unknown image.
 
-A script build (`POST /api/images/build`) also lists its `stages`, in order, once it starts: `base` prepares the base image, downloading it if needed; `script` runs the setup script; `layer` saves the layer the script wrote; `image` writes and tags the image; and `cleanup` removes the build's temporary files and tag. Each stage is `{"name", "started_at", "finished_at"}` in Unix seconds, and a stage that has not started carries only its name. The job log has a line such as `Stage 3/5: Saving the image layer` when one starts. Stages only move forward: a stage that never started before a later one was skipped, and in a failed or interrupted job the last stage that started is where it stopped. `progress` belongs to the running stage and only `base` has one, while its download runs. Docker reports no measurable progress while the script runs or while it saves the layer, so those stages have only their times; saving a large layer can take minutes. The `layer` and `image` stages start from BuildKit's own progress lines; with a builder that does not print them, `layer` is skipped and its time counts toward `script`.
+A script build (`POST /api/images/build`) also lists its `stages`, in order, once it starts: `base` prepares the base image, downloading it if needed; `script` runs the setup script; `layer` saves the layer the script wrote; `image` writes and tags the image; and `cleanup` removes the build's temporary files and tag. Each stage is `{"name", "started_at", "finished_at"}` in Unix seconds, and a stage that has not started carries only its name. The job log has a line such as `Stage 3/5: Saving the image layer` when one starts. Stages only move forward: a stage that never started before a later one was skipped, and in a failed or interrupted job the last stage that started is where it stopped. `progress` belongs to the running stage: `base` has one while its download runs, and `script` while the scripts run, as [script progress](#script-progress) describes. Docker reports no measurable progress while it saves the layer, so `layer` has only its times; saving a large layer can take minutes. The `layer` and `image` stages start from BuildKit's own progress lines; with a builder that does not print them, `layer` is skipped and its time counts toward `script`.
 
 A snapshot (`POST /api/containers/{id}/snapshot`) and a settings change that recreates its container ([below](#change-settings-after-creation)) list their stages the same way. A snapshot has `check`, which confirms the container is the one the manager created; `commit`, which commits the container layer to an image while Docker briefly pauses the desktop; and `record`, which saves the image record. A recreating settings change has `stop`, skipped when the container was not running; `commit`; `create`, which creates the new container and starts it if the old one ran; and `cleanup`, which removes the previous container and the image an earlier settings change committed. A settings change that applies in place has no stages. `docker commit` reports nothing until it is done, so `commit` has only its times, and committing a large container layer can take minutes. Other jobs have no `stages`.
 
@@ -199,6 +199,36 @@ A feature a request leaves out gets the installation's default, which `GET /api/
 - The machine ID is written to `/etc/machine-id` and `/var/lib/dbus/machine-id` in the created container before it starts. The catalog images carry one ID that every container of a release shares, and a snapshot carries the ID of the container it was taken from, so neither is used as it is.
 
 Records saved before identities were kept have `null` for all three until a Docker container is next created for them. They then take the hostname of the container being replaced, and its MAC address if it is running, since Docker gives a stopped container its address only when it starts; without such a container they get new ones. Their machine ID stays `null`, which leaves the ID their image or commit carries, as before, until the settings set one.
+
+## Script progress
+
+The scripts of a build, its script or each of its [parts](#merged-templates), and of a compose setup, each of its [steps](#steps), can say where they are. A line of output that is exactly `THORIC_STAGE=<i>/<n>` or `THORIC_STAGE=<i>/<n> <label>` says the script begins the i-th of its n steps, and `THORIC_SKIP=<i>/<n> <label>` that it leaves the i-th out, such as the step of an option that is off. Numbers go from 1 to 10,000 and a label is one line, cut at 120 characters; any other line is ordinary output. These lines stay in the job log, and a step only moves forward, so a repeated or earlier number changes nothing.
+
+```bash
+echo "THORIC_STAGE=1/3 Installing Ghidra"
+# ...
+if [ "$WINE" = true ]; then
+  echo "THORIC_STAGE=2/3 Installing Wine"
+  # ...
+else
+  echo "THORIC_SKIP=2/3 Wine"
+fi
+echo "THORIC_STAGE=3/3 Cleaning up"
+```
+
+A script that prints none of these is still followed: bash reads a short line trace before it, through `BASH_ENV`, which reports each line further down the script reaches as `THORIC_LINE=<line>`. The manager leaves those lines out of the log. Only the script's own top-level commands count, not those inside its functions or subshells, nor another shell it starts, and a script that sets a DEBUG trap of its own ends the trace there. Builds read the trace from a bind mount, so nothing of it stays in the image.
+
+While the scripts run, the job's `progress` is `{"script": {...}}`:
+
+| Field | Meaning |
+| --- | --- |
+| `part`, `parts` | The part that started last, counted from 1, of the build's parts or the compose's steps. |
+| `name` | That part's name, when there are several. |
+| `stage`, `stages`, `label`, `skipped` | The step the part named last, `skipped` when it was a `THORIC_SKIP`. |
+| `line`, `lines`, `label` | Without a named step, the furthest line the part reached, of the lines its script has, and the command on it; a command continued over several lines is named by its first. |
+| `percent` | The share of all parts done, each part weighing the same: a step that began counts the ones before it, a skipped step counts itself and a line counts the lines above it. It never goes back. |
+
+The job also keeps `script`, which stays once the job ends: `{"parts": [...]}`, each part with `name` when there are several, `started_at`, `finished_at` when it ended well, so the part a failed or interrupted job stopped in has none, `cached` when BuildKit reused the layer of an earlier build and the script did not run, `stages`, the count its steps gave, and `steps`, at most 200 of `{"stage", "label", "started_at", "finished_at", "skipped"}`. A skipped step has no times. A number a script jumped over, and the numbers after its last step in a part that ended well, were skipped too and are not listed. Job lists leave `script` out, as they leave the log out; `GET /api/jobs/{job_id}` has it.
 
 ## Retry a job
 
@@ -364,7 +394,7 @@ A compose can also be several steps, run in order, such as one for each template
 
 Each step's script receives only its own parameters, so two steps may ask for the same name, such as a `VERSION` each. A value then goes by `STEP.NAME`: the create request's `parameters`, the container's `setup.parameters` and `setup.secrets` all name it `chrome.VERSION` or `vscode.VERSION`. A request may still give a value by its name alone when only one step asks for that name; when several do, the request is refused with the names to use. Volume parameters of all steps still need paths of their own. A step's mistake, in the compose or a value, names the step, and the dashboard asks for each step's values in a section of its own.
 
-The setup runs the steps one after another in the same job. A step that fails stops the setup, and the error names it; a retry or a reset runs every step again, so write each script to work where it already ran. The setup job's log masks the secrets of every step in each step's output, in case a script prints something an earlier one saved.
+The setup runs the steps one after another in the same job, each a part of its [script progress](#script-progress). A step that fails stops the setup, and the error names it; a retry or a reset runs every step again, so write each script to work where it already ran. The setup job's log masks the secrets of every step in each step's output, in case a script prints something an earlier one saved.
 
 A parameter's `name` is the environment variable that carries its value to the script: at most 64 capital letters, digits and underscores, starting with a letter. Names that the shell or the desktop session relies on, such as `PATH`, `HOME`, `DISPLAY` or names starting with `LD_`, `XDG_` or `DESKTOP_`, are refused. A `label` is what the dashboard asks for, the name when empty. A `description` of at most 500 characters is shown with the field, such as where to find the value. Values are text of at most 16 KiB. A secret parameter cannot have a default, because image lists return the compose.
 
@@ -799,7 +829,7 @@ Every event is unnamed, and its data is one JSON object whose `type` says what i
 | --- | --- | --- |
 | `ready` | `docker_events` | The stream opened; always the first event. `docker_events` is whether Docker's own events reach the stream, as `docker-events` reports it. |
 | `job` | `job`: `id`, `kind`, `resource`, `name`, `status`, `created_at`, `finished_at` and `error` | A job was queued, started, began a [stage](#create-a-container-and-follow-the-job) or ended. `status` is as `GET /api/jobs/{job_id}` reports it; `error` is the first line of a failed job's error, at most 300 characters, and `null` otherwise. The job's log and result stay on its route. |
-| `job-progress` | `id`, `progress` | A running job measured its `progress` again, as its route reports it: at most once a second for each job, and `null` when the measured step ended. |
+| `job-progress` | `id`, `progress` | A running job's `progress` changed, such as a download or a [script](#script-progress), as its route reports it: at most once a second for each job, and `null` when the measured step ended. |
 | `human-request` | `request` | An agent asked for a person; `request` is as [`GET /api/human-requests`](#requests-for-a-person) lists it. |
 | `human-request-answered` | `request` | Someone answered a request for a person, on any page or through the API; `request` has its `status`, `reply` and `answered_at`. |
 | `changed` | `lists` | Docker changed these lists by itself, without a job of this manager: `containers` when one of Thoric's containers is created, starts, stops or exits, is renamed, paused or removed, or its health check changes; `images` when an image is pulled, tagged, untagged, deleted, imported or loaded; `volumes` when a volume is created or removed. A burst is one event; read those lists again. |

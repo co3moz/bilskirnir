@@ -436,6 +436,10 @@ pub struct Job {
     /// The named stages of a job that reports them, such as a script build, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stages: Vec<crate::stages::Stage>,
+    /// What the scripts of a build or a compose setup reported about their steps, kept once the
+    /// job ends. Job lists leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<crate::script_progress::ScriptReport>,
 }
 impl Job {
     pub fn trim_log(&mut self) {
