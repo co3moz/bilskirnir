@@ -276,11 +276,24 @@ impl Helper {
         Ok(Self { child, name })
     }
 
-    /// Stop a helper that did not finish: the CLI's container goes on without it.
+    /// Stop a helper that did not finish: the CLI's container goes on without it. Returns once
+    /// Docker no longer has the container, so a volume this import created can be removed: a
+    /// helper whose tar ended a moment before is already being removed for `--rm`, and Docker
+    /// refuses another removal at once while that one still holds the volume.
     async fn abandon(mut self, app: &App) {
         let _ = self.child.start_kill();
         let _ = self.child.wait().await;
-        let _ = app.docker(&["rm", "--force", &self.name]).await;
+        for _ in 0..50 {
+            if app.docker(&["rm", "--force", &self.name]).await.is_ok()
+                || matches!(
+                    app.optional_inspect("container", &self.name).await,
+                    Ok(None)
+                )
+            {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 }
 

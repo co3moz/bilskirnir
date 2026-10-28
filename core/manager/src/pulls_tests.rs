@@ -48,7 +48,8 @@ fn manifest_sizes_give_a_total_before_any_layer_downloads() {
         progress.apply(&message).unwrap();
         seen.push(progress.summary()["current"].as_u64().unwrap());
     }
-    assert_eq!(seen, [40, 160, 220, 220, 220, 220, 400, 400]);
+    // A full bar waits for the layer's checksum, since Docker prints one for a broken attempt too.
+    assert_eq!(seen, [40, 160, 220, 220, 220, 220, 220, 400]);
     assert_eq!(progress.summary()["layers_done"], 2);
     progress
         .apply(&layer("bbbbbbbbbbbb", "Pull complete"))
@@ -81,6 +82,89 @@ fn without_a_manifest_the_total_stays_unknown_until_every_layer_reports_its_size
     progress.apply(&downloading("bbbbbbbbbbbb", 5, 50)).unwrap();
     assert_eq!(progress.summary()["total"], 150);
     assert_eq!(progress.summary()["current"], 15);
+}
+
+/// The messages Docker 28's classic image store sent when the registry connection of a 312 MB
+/// layer broke during an acceptance run: the broken attempt closes with a full bar, Docker waits,
+/// and the resumed attempt counts from zero against the bytes it still lacks.
+#[test]
+fn a_resumed_layer_download_keeps_counting_from_where_it_stopped() {
+    let manifest = HashMap::from([("aaaaaaaaaaaa".into(), 1_000), ("bbbbbbbbbbbb".into(), 100)]);
+    // Without the manifest, the size comes from the first attempt's count.
+    for sizes in [manifest, HashMap::new()] {
+        let mut progress = PullProgress {
+            sizes,
+            ..Default::default()
+        };
+        let mut seen = Vec::new();
+        for message in [
+            layer("aaaaaaaaaaaa", "Pulling fs layer"),
+            layer("bbbbbbbbbbbb", "Pulling fs layer"),
+            downloading("aaaaaaaaaaaa", 400, 1_000),
+            downloading("bbbbbbbbbbbb", 100, 100),
+            layer("bbbbbbbbbbbb", "Verifying Checksum"),
+            downloading("aaaaaaaaaaaa", 600, 1_000),
+            // The connection broke at 600 bytes.
+            downloading("aaaaaaaaaaaa", 1_000, 1_000),
+            layer("aaaaaaaaaaaa", "Retrying in 5 seconds"),
+            downloading("aaaaaaaaaaaa", 50, 400),
+            downloading("aaaaaaaaaaaa", 300, 400),
+            downloading("aaaaaaaaaaaa", 400, 400),
+            layer("aaaaaaaaaaaa", "Verifying Checksum"),
+            layer("aaaaaaaaaaaa", "Download complete"),
+            json!({"id": "aaaaaaaaaaaa", "status": "Extracting", "progressDetail": {"current": 32_768, "total": 2_000}}),
+            layer("aaaaaaaaaaaa", "Pull complete"),
+        ] {
+            progress.apply(&message).unwrap();
+            seen.push(progress.summary()["current"].as_u64().unwrap());
+        }
+        assert_eq!(
+            seen,
+            [
+                0, 0, 400, 400, 500, 700, 700, 700, 750, 1_000, 1_000, 1_100, 1_100, 1_100, 1_100
+            ]
+        );
+        assert_eq!(progress.summary()["total"], 1_100);
+    }
+}
+
+/// A download that fails is tried again with the same count. Docker starts the layers the failed
+/// attempt left unfinished over, and names those it finished as already present, which keeps
+/// them apart from a layer the host had before.
+#[test]
+fn another_attempt_keeps_what_the_failed_one_downloaded() {
+    let mut progress = PullProgress {
+        sizes: HashMap::from([("aaaaaaaaaaaa".into(), 1_000), ("bbbbbbbbbbbb".into(), 100)]),
+        ..Default::default()
+    };
+    let mut seen = Vec::new();
+    for message in [
+        layer("cccccccccccc", "Already exists"),
+        layer("aaaaaaaaaaaa", "Pulling fs layer"),
+        layer("bbbbbbbbbbbb", "Pulling fs layer"),
+        downloading("aaaaaaaaaaaa", 300, 1_000),
+        layer("bbbbbbbbbbbb", "Download complete"),
+        layer("bbbbbbbbbbbb", "Pull complete"),
+        // The next attempt.
+        json!({"id": "24.04", "status": "Pulling from co3moz/thoric/ubuntu-xfce"}),
+        layer("cccccccccccc", "Already exists"),
+        layer("bbbbbbbbbbbb", "Already exists"),
+        layer("aaaaaaaaaaaa", "Pulling fs layer"),
+        downloading("aaaaaaaaaaaa", 100, 1_000),
+        downloading("aaaaaaaaaaaa", 500, 1_000),
+    ] {
+        progress.apply(&message).unwrap();
+        let summary = progress.summary();
+        seen.push(summary["current"].as_u64().unwrap());
+        if summary["layers"] == 3 {
+            assert_eq!(summary["total"], 1_100, "{summary}");
+        }
+    }
+    assert_eq!(seen, [0, 0, 0, 300, 400, 400, 400, 400, 400, 400, 400, 600]);
+    assert_eq!(
+        progress.summary(),
+        json!({"current": 600, "total": 1_100, "layers": 3, "layers_done": 2})
+    );
 }
 
 /// The shapes Docker 29 sends with the containerd image store, as captured from a real pull:

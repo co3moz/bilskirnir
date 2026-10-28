@@ -41,6 +41,7 @@ impl std::error::Error for Refused {}
 #[derive(Default)]
 struct Layer {
     current: u64,
+    /// The size Docker gave in the layer's first byte count, which starts at the layer's beginning.
     total: Option<u64>,
     downloaded: bool,
     complete: bool,
@@ -87,13 +88,33 @@ impl PullProgress {
         match status {
             "Downloading" => {
                 let detail = &message["progressDetail"];
-                layer.current = detail["current"].as_u64().unwrap_or(layer.current);
-                if let Some(total) = detail["total"].as_u64().filter(|total| *total > 0) {
-                    layer.total = Some(total);
+                let left = detail["total"].as_u64().filter(|total| *total > 0);
+                if layer.total.is_none() {
+                    layer.total = left;
+                }
+                match (detail["current"].as_u64(), left) {
+                    // Docker prints a full bar for an attempt that broke off as for one that
+                    // finished, and the checksum that follows a finished one counts the layer.
+                    (Some(current), Some(left)) if current >= left => {}
+                    (Some(current), _) => {
+                        // A broken download resumes where it stopped, counted from zero against
+                        // what is left. One that starts over keeps what it had until it passes it.
+                        let before = layer
+                            .total
+                            .zip(left)
+                            .map_or(0, |(size, left)| size.saturating_sub(left));
+                        layer.current = layer.current.max(before + current);
+                    }
+                    (None, _) => {}
                 }
             }
             "Verifying Checksum" | "Download complete" | "Extracting" => layer.downloaded = true,
             "Pull complete" => {
+                layer.downloaded = true;
+                layer.complete = true;
+            }
+            // A layer an earlier attempt of this download fetched is not one the host had.
+            "Already exists" if layer.downloaded || layer.current > 0 => {
                 layer.downloaded = true;
                 layer.complete = true;
             }
@@ -353,15 +374,14 @@ impl App {
             source != image.reference && self.image_present(source).await.unwrap_or(true);
         // An empty count tells the dashboard the download is being prepared.
         self.set_progress(job_id, Some(PullProgress::default().summary()))?;
-        let sizes = self.layer_sizes(source).await;
+        // One count for every attempt, so the job's progress never goes back: a layer an earlier
+        // attempt finished comes back as already present and stays counted.
+        let mut progress = PullProgress {
+            sizes: self.layer_sizes(source).await,
+            ..Default::default()
+        };
         let mut attempt = 1;
         let pulled = loop {
-            // Layers finished by an earlier attempt are reported as already present, so each
-            // attempt counts only what it still has to download.
-            let mut progress = PullProgress {
-                sizes: sizes.clone(),
-                ..Default::default()
-            };
             match self.pull_image(job_id, source, &mut progress).await {
                 Err(error) if attempt < ATTEMPTS && error.downcast_ref::<Refused>().is_none() => {
                     let wait = 5 * attempt;
