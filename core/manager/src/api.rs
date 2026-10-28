@@ -651,6 +651,7 @@ pub async fn register_image(
     if info["Config"]["Labels"]["thoric.desktop"] != "true" {
         return Err(anyhow::anyhow!("A desktop-compatible image is required").into());
     }
+    crate::catalog::check_level(&info["Config"]["Labels"])?;
     let rec = ImageRecord {
         id: uuid::Uuid::new_v4().simple().to_string(),
         name: body.name,
@@ -771,6 +772,7 @@ pub async fn build(
             if base["Config"]["Labels"]["thoric.desktop"] != "true" {
                 anyhow::bail!("Base image must be desktop-compatible");
             }
+            crate::catalog::check_level(&base["Config"]["Labels"])?;
             let parent = base["Id"]
                 .as_str()
                 .context("Missing base image ID")?

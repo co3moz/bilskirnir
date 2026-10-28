@@ -1238,6 +1238,16 @@ fn catalog_images_are_listed_with_the_saved_images() {
     let foreign = catalog::listed(&xfce, Some(&labels("ubuntu-gnome", "gnome")), true);
     assert!(foreign["available"] == false && foreign["downloaded"] == true);
     assert!(foreign["error"].is_string());
+    // A catalog reference made for a newer Thoric, such as one pulled by hand, says why it waits.
+    let mut newer = labels("ubuntu-xfce", "xfce");
+    newer["Config"]["Labels"]["thoric.desktop-level"] =
+        serde_json::json!((catalog::DESKTOP_LEVEL + 1).to_string());
+    let newer = catalog::listed(&xfce, Some(&newer), true);
+    assert!(newer["available"] == false && newer["downloaded"] == true);
+    assert!(
+        newer["error"].as_str().unwrap().contains("newer Thoric"),
+        "{newer}"
+    );
     // Without Docker nobody knows.
     assert!(catalog::listed(&xfce, None, false)["available"].is_null());
 }

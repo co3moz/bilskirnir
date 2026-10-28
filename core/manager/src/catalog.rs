@@ -67,6 +67,55 @@ pub fn catalog() -> Vec<CatalogImage> {
 pub fn find(id: &str) -> Option<CatalogImage> {
     catalog().into_iter().find(|image| image.id == id)
 }
+/// The newest desktop level this manager handles. A desktop image names its level in the
+/// `thoric.desktop-level` label, which images built, committed or imported from it keep, and one
+/// without the label is level 0. The label in both final stages of `images/desktop/Dockerfile`
+/// equals this, and the two are raised together when the desktop image changes in a way an older
+/// manager cannot handle, so that manager refuses the image with a reason instead of failing
+/// inside the desktop.
+pub const DESKTOP_LEVEL: u32 = 1;
+/// The oldest desktop level this manager still handles, raised when it stops coping with desktop
+/// images from before a change.
+pub const MIN_DESKTOP_LEVEL: u32 = 0;
+const LEVEL_LABEL: &str = "thoric.desktop-level";
+
+/// Refuses a desktop image, by its labels, whose level this manager does not handle.
+pub fn check_level(labels: &Value) -> anyhow::Result<()> {
+    match level_refusal(labels) {
+        Some(reason) => anyhow::bail!(reason),
+        None => Ok(()),
+    }
+}
+/// Why this manager cannot use a desktop image with these labels, if it cannot.
+pub fn level_refusal(labels: &Value) -> Option<String> {
+    refusal_for(&labels[LEVEL_LABEL], MIN_DESKTOP_LEVEL, DESKTOP_LEVEL)
+}
+fn refusal_for(label: &Value, min: u32, max: u32) -> Option<String> {
+    let level = match label {
+        Value::Null => 0,
+        Value::String(text) if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) => {
+            text.parse().unwrap_or(u32::MAX)
+        }
+        _ => {
+            return Some(format!(
+                "The image's {LEVEL_LABEL} label is not a whole number"
+            ));
+        }
+    };
+    if level > max {
+        Some(format!(
+            "The image is made for a newer Thoric: its desktop level is {level}, and this Thoric \
+             handles up to {max}. Update Thoric to use it."
+        ))
+    } else if level < min {
+        Some(format!(
+            "The image is older than this Thoric supports: its desktop level is {level}, and this \
+             Thoric needs {min} or later. Download its catalog image again and build it again."
+        ))
+    } else {
+        None
+    }
+}
 pub fn from_image(image: &Value) -> Option<DesktopInfo> {
     let labels = &image["Config"]["Labels"];
     Some(DesktopInfo {
@@ -82,10 +131,18 @@ pub fn from_image(image: &Value) -> Option<DesktopInfo> {
 /// could not list images at all, which leaves availability unknown.
 pub fn listed(image: &CatalogImage, inspected: Option<&Value>, docker_listed: bool) -> Value {
     let desktop = inspected.and_then(from_image);
-    let usable = desktop
-        .as_ref()
-        .is_some_and(|d| d.catalog_id == image.id && d.session == image.session);
-    let error = (inspected.is_some() && !usable).then_some("Image labels do not match the catalog");
+    // A catalog reference made for a newer Thoric came from somewhere else, such as a pull by
+    // hand; its update button downloads the one published with this manager again.
+    let refusal = inspected.and_then(|info| level_refusal(&info["Config"]["Labels"]));
+    let usable = refusal.is_none()
+        && desktop
+            .as_ref()
+            .is_some_and(|d| d.catalog_id == image.id && d.session == image.session);
+    let error = match (inspected, refusal) {
+        (Some(_), Some(reason)) => Some(reason),
+        (Some(_), None) if !usable => Some("Image labels do not match the catalog".to_owned()),
+        _ => None,
+    };
     json!({
         "id": image.id,
         "kind": "catalog",

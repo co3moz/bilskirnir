@@ -572,6 +572,7 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 
 - It holds exactly one image, with its `manifest.json` and configuration.
 - The image has the `thoric.desktop=true` label.
+- Its `thoric.desktop-level` label, 0 when it has none, is one this Thoric handles. An image made for a newer Thoric is refused with a reason that says to update Thoric; containers, builds and image records refuse it the same way, and the image list reports a catalog image that carries one with `"available": false` and that reason as its `error`.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `thoric/imported:<id>`.

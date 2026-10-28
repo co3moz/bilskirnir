@@ -553,6 +553,19 @@ try:
             image_refs.append(pulled_xfce)
     assert docker("image", "inspect", "--format", "{{.Id}}", xfce_ref).decode().strip() == local_xfce
     print(f"PASS missing catalog image downloads from {xfce_source} on creation with byte progress, named in the job list", flush=True)
+    # A desktop image made for a newer Thoric, such as one pulled by hand or imported from a newer
+    # installation, is refused with the reason before anything starts from it.
+    level = docker("image", "inspect", "--format", '{{index .Config.Labels "thoric.desktop-level"}}', xfce_ref).decode().strip()
+    newer_ref = f"thoric-test-newer-level:{tag}"
+    docker("build", "-q", "-t", newer_ref, "--label", f"thoric.desktop-level={int(level) + 1 if level.isdigit() else 1}", "-", data=f"FROM {xfce_ref}\n".encode())
+    image_refs.append(newer_ref)
+    before = len(api("containers"))
+    newer_create = api("containers", {"name": "Newer desktop level", "image": newer_ref, "gpu": False, "internet": False})
+    refused_newer = wait_for(lambda: (j if (j := api(f"jobs/{newer_create['job_id']}"))["status"] not in ("queued", "running") else None))
+    assert refused_newer["status"] == "failed" and "made for a newer Thoric" in refused_newer["log"], refused_newer
+    assert len(api("containers")) == before
+    docker("image", "rm", newer_ref)
+    print("PASS a desktop image made for a newer Thoric is refused with the reason", flush=True)
     api("volumes", {"name": share})
     api("volumes", {"name": clone_share})
     # A volume's files are reachable without a container, as the desktop user.

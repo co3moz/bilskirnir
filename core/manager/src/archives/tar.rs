@@ -712,14 +712,16 @@ fn rebuild_index(data: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// An early answer for the common mistake; the manager checks the loaded image again, since
-/// Docker's reading of a deliberately ambiguous configuration can differ from this one.
+/// Docker's reading of a deliberately ambiguous configuration can differ from this one. An image
+/// made for a newer Thoric, from an archive or a backup of another installation, stops here
+/// before Docker has loaded it.
 fn check_desktop(config: &[u8]) -> Result<()> {
     let config: Value = serde_json::from_slice(config)
         .context("The archive's image configuration is not valid JSON")?;
     if config["config"]["Labels"]["thoric.desktop"] != "true" {
         bail!("The archive does not contain a Thoric desktop image");
     }
-    Ok(())
+    crate::catalog::check_level(&config["config"]["Labels"])
 }
 
 #[cfg(test)]

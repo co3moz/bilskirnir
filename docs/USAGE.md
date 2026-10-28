@@ -28,7 +28,7 @@ Both catalog images are Ubuntu 24.04. XFCE uses fewer resources and is a good st
 
 The GNOME image runs an X11 session in the container. It does not include GDM, a Wayland login session or host power and USB management. Screen locking is disabled; access goes through the manager's login.
 
-**Images** lists them with the source **Catalog**, above the images you save. A catalog image is downloaded the first time you create a container or build an image from it. The job panel shows the download's size and progress, and later containers from it start without it. On its row, the download button fetches it ahead of time and, once it is here, the update button fetches the version this Thoric installs again, the one published with it, which after an update of Thoric is the newer one. `DESKTOP_IMAGE` sets the default selection. Script builds and snapshots made from a catalog image appear under it and keep its desktop information.
+**Images** lists them with the source **Catalog**, above the images you save. A catalog image is downloaded the first time you create a container or build an image from it. The job panel shows the download's size and progress, and later containers from it start without it. On its row, the download button fetches it ahead of time and, once it is here, the update button fetches the version this Thoric installs again, the one published with it, which after an update of Thoric is the newer one. `DESKTOP_IMAGE` sets the default selection. Script builds and snapshots made from a catalog image appear under it and keep its desktop information. An image made for a newer Thoric, such as one imported from a newer installation, is refused with that reason until Thoric is updated.
 
 ## Running graphics applications
 

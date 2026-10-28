@@ -203,7 +203,7 @@ A package from before the units gets them with its first `thoric update` to a re
 - The `thoric` command and the units of the dashboard's update and settings stay as the package or the last release brought them, since they run as root (see [The thoric command](#the-thoric-command)).
 - The sidebar names the commit the manager was built from instead of a version, since an edge build still carries the version of the release before it.
 
-To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, such as `ghcr.io/co3moz/thoric:1.2.0`, and run `thoric update`; updates then follow releases again. An older release is a step back that its version does not show: it may not read what the newer manager wrote.
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, such as `ghcr.io/co3moz/thoric:1.2.0`, and run `thoric update`; updates then follow releases again. An older release is a step back that its version does not show: it may not read what the newer manager wrote, and it refuses the desktop images, and the images built on them, made for a newer Thoric.
 
 ## Settings from the dashboard
 

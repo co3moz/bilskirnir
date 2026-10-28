@@ -158,7 +158,7 @@ New containers use the updated catalog images. Existing containers and snapshots
 
 `edge` is the newest build of `master`, published with every change before a release includes it. To follow it, set `MANAGER_IMAGE=ghcr.io/co3moz/thoric:edge` in `.env`, export the installation files from `ghcr.io/co3moz/thoric:edge` as [above](#use-the-full-installation-files), since a change on `master` may add a setting to them, and run the update commands. An edge manager downloads the desktop images published with it, those of its own commit, and the sidebar names that commit instead of a version, since an edge build still carries the version of the release before it. `ghcr.io/co3moz/thoric:sha-<full-commit>` stays on one build of `master` the same way. For the WSL package, see [Edge builds](WSL_PACKAGE.md#edge-builds) there.
 
-To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it may not read what the newer manager wrote.
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it may not read what the newer manager wrote, and it refuses the desktop images, and the images built on them, made for a newer Thoric.
 
 ## Know where your data lives
 
