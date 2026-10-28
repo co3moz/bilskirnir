@@ -11,6 +11,8 @@ use std::{
     sync::{Arc, Weak},
 };
 
+pub(crate) mod retry;
+
 /// A job's result for a caller that waits for it: the value it returned, or its error message.
 pub(crate) type Outcome = tokio::sync::oneshot::Receiver<std::result::Result<Value, String>>;
 
@@ -57,6 +59,24 @@ where
     Ok(Json(json!({"job_id":id})))
 }
 
+/// [`launch_named`] for a job that can be started again once it fails or is interrupted:
+/// `request` is what its route was asked, kept beside the job until it completes.
+pub(crate) fn launch_retryable<F, Fut>(
+    app: Arc<App>,
+    kind: &str,
+    resource: String,
+    name: Option<String>,
+    request: retry::Request,
+    work: F,
+) -> Result<Json<Value>>
+where
+    F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+{
+    let (id, _) = queue(app, kind, resource, name, true, Some(request), work)?;
+    Ok(Json(json!({"job_id":id})))
+}
+
 /// Queue a job and return its ID with its eventual outcome. An `exclusive` job first takes its
 /// resource's lock; one that only reads the resource, such as an image export, runs alongside.
 pub(crate) fn start<F, Fut>(
@@ -86,6 +106,23 @@ where
     F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
+    queue(app, kind, resource, name, exclusive, None, work)
+}
+
+/// [`start_named`] that keeps the `request` of a job that can be retried before the job can end.
+fn queue<F, Fut>(
+    app: Arc<App>,
+    kind: &str,
+    resource: String,
+    name: Option<String>,
+    exclusive: bool,
+    request: Option<retry::Request>,
+    work: F,
+) -> Result<(String, Outcome)>
+where
+    F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+{
     let id = uuid::Uuid::new_v4().simple().to_string();
     let job = Job {
         id: id.clone(),
@@ -101,6 +138,9 @@ where
         stages: Vec::new(),
     };
     app.db.put("job", &id, &job)?;
+    if let Some(request) = &request {
+        app.db.put(retry::REQUESTS, &id, request)?;
+    }
     app.events.job(&job, None);
     let lock = exclusive.then(|| app.resource_lock(&resource));
     let (done, outcome) = tokio::sync::oneshot::channel();
@@ -160,6 +200,10 @@ pub(crate) fn finish(
         Ok(value) => {
             job.status = "completed".into();
             job.result = Some(value.clone());
+            // Only a job that failed or was interrupted is started again.
+            if let Err(e) = app.db.remove(retry::REQUESTS, id) {
+                tracing::debug!("Job request: {e:#}");
+            }
             Ok(value)
         }
         Err(e) => {

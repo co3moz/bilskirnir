@@ -11,10 +11,12 @@ const INCLUDED_KINDS: [&str; 4] = [
     crate::compose::PINNED,
     crate::desktop_mcp::ENDPOINTS,
 ];
-/// The kinds a backup leaves out on purpose: history, the processes of running desktops, and the
-/// tool lists the manager reads again from a desktop once it runs.
-const EXCLUDED_KINDS: [&str; 5] = [
+/// The kinds a backup leaves out on purpose: history with the requests kept to retry it, the
+/// processes of running desktops, and the tool lists the manager reads again from a desktop once
+/// it runs.
+const EXCLUDED_KINDS: [&str; 6] = [
     "job",
+    crate::jobs::retry::REQUESTS,
     "application",
     "terminal",
     "recording",
@@ -259,6 +261,7 @@ fn every_record_kind_is_either_carried_or_left_out() {
         ("PINNED", crate::compose::PINNED),
         ("ENDPOINTS", crate::desktop_mcp::ENDPOINTS),
         ("SERVERS", crate::desktop_mcp::SERVERS),
+        ("REQUESTS", crate::jobs::retry::REQUESTS),
     ];
     let put = regex::Regex::new(r"\bdb\s*\.\s*put(?:::<[^>]*>)?\s*\(\s*([^,]+?)\s*,").unwrap();
     let mut found = BTreeSet::new();

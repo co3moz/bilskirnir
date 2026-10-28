@@ -99,6 +99,8 @@ export const tr: Messages = {
   "jobs.none": "Henüz iş yok.",
   "jobs.log": "İş logu",
   "jobs.copyLog": "Logu kopyala",
+  "jobs.retry": "Yeniden dene",
+  "jobs.editRetry": "Düzenleyip yeniden dene",
   "jobs.archiveProgress": "Arşiv ilerlemesi",
   "jobs.downloadProgress": "İmaj indirme ilerlemesi",
   "jobs.viewContainers": "Konteynerleri görüntüle",

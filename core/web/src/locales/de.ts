@@ -102,6 +102,8 @@ export const de: Messages = {
   "jobs.none": "Noch keine Aufträge.",
   "jobs.log": "Auftragsprotokoll",
   "jobs.copyLog": "Protokoll kopieren",
+  "jobs.retry": "Erneut versuchen",
+  "jobs.editRetry": "Bearbeiten und erneut versuchen",
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
   "jobs.viewContainers": "Container anzeigen",
