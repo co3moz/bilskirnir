@@ -767,6 +767,8 @@ export const tr: Messages = {
   "templates.filter": "Şablonları filtrele",
   "templates.filterPlaceholder": "Şablon ara",
   "templates.tags": "Etiketler",
+  "templates.allTags": "Tüm etiketler",
+  "templates.filterTag": "{tag} etiketli şablonları göster",
   "templates.kind.application": "Uygulamalar",
   "templates.kind.environment": "Ortamlar",
   "templates.kind.environmentHint":

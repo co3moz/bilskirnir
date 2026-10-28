@@ -780,6 +780,8 @@ export const de: Messages = {
   "templates.filter": "Vorlagen filtern",
   "templates.filterPlaceholder": "Vorlagen suchen",
   "templates.tags": "Schlagwörter",
+  "templates.allTags": "Alle Schlagwörter",
+  "templates.filterTag": "Vorlagen mit dem Schlagwort {tag} zeigen",
   "templates.kind.application": "Anwendungen",
   "templates.kind.environment": "Umgebungen",
   "templates.kind.environmentHint":

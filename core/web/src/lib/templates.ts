@@ -141,9 +141,20 @@ export function matches(template: Template, search: string) {
   return words.every((word) => text.includes(word))
 }
 
-/** Every tag of the list, each once, in alphabetical order. */
-export const allTags = (templates: Template[]) =>
-  [...new Set(templates.flatMap((template) => template.tags))].sort((a, b) => a.localeCompare(b))
+/**
+ * The tags worth filtering by, each with how many templates carry it, the most common first. A tag
+ * of one template finds nothing the search does not, and one every template carries narrows
+ * nothing, so neither is offered; both still show on their cards and match the search.
+ */
+export function sharedTags(templates: Template[]) {
+  const counts = new Map<string, number>()
+  for (const template of templates)
+    for (const tag of new Set(template.tags)) counts.set(tag, (counts.get(tag) ?? 0) + 1)
+  return [...counts]
+    .filter(([, count]) => count > 1 && count < templates.length)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+}
 
 /**
  * The templates of each kind that has any, applications first, each in the list's order. The page

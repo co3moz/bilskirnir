@@ -36,17 +36,24 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { openDialog } from "@/lib/dialogs"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { useImages, useSettings, useTemplates } from "@/lib/queries"
 import {
-  allTags,
   buildable,
   groupByKind,
   loadTemplate,
   matches,
   mergeTemplates,
+  sharedTags,
   templateFile,
   type BrokenTemplate,
   type Template,
@@ -56,14 +63,18 @@ import {
 const KIND_ICONS = { application: RiApps2Line, environment: RiTerminalBoxLine }
 
 /**
- * One template: its icon, what it is, whether an image was built from it, and Install. While
- * templates are chosen for a merge, the whole card chooses it and shows where it comes in.
+ * One template: its icon, what it is, whether an image was built from it, and Install. A tag the
+ * filter offers filters by it, or stops filtering when it is the chosen one. While templates are
+ * chosen for a merge, the whole card chooses it and shows where it comes in.
  */
 function TemplateCard({
   list,
   template,
   version,
   installed,
+  filterTags,
+  tag,
+  onTag,
   choosing,
   order,
   onChoose,
@@ -72,6 +83,11 @@ function TemplateCard({
   template: Template
   version: string
   installed: number
+  /** The tags the filter offers. */
+  filterTags: Set<string>
+  /** The tag the list is filtered by. */
+  tag?: string
+  onTag: (tag: string) => void
   choosing: boolean
   /** Where it comes in the merge, from 1; 0 when it is not chosen. */
   order: number
@@ -129,11 +145,29 @@ function TemplateCard({
           />
         )}
         <div className="flex flex-wrap gap-1">
-          {template.tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-muted-foreground">
-              {tag}
-            </Badge>
-          ))}
+          {template.tags.map((name) =>
+            filterTags.has(name) && !choosing ? (
+              <Badge
+                key={name}
+                asChild
+                variant="outline"
+                className="cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground aria-pressed:border-transparent aria-pressed:bg-secondary aria-pressed:text-secondary-foreground"
+              >
+                <button
+                  type="button"
+                  aria-pressed={name === tag}
+                  title={t("templates.filterTag", { tag: name })}
+                  onClick={() => onTag(name)}
+                >
+                  {name}
+                </button>
+              </Badge>
+            ) : (
+              <Badge key={name} variant="outline" className="text-muted-foreground">
+                {name}
+              </Badge>
+            )
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-2">
@@ -263,9 +297,13 @@ export function TemplatesPage() {
   const templates = useTemplates(list)
   const images = useImages().data ?? []
   const [search, setSearch] = React.useState("")
-  const [tag, setTag] = React.useState<string>()
+  const [chosenTag, setTag] = React.useState<string>()
   const all = React.useMemo(() => templates.data?.templates ?? [], [templates.data])
-  const tags = React.useMemo(() => allTags(all), [all])
+  const tags = React.useMemo(() => sharedTags(all), [all])
+  const filterTags = React.useMemo(() => new Set(tags.map(({ name }) => name)), [tags])
+  // A refreshed list may no longer offer the chosen tag, which then filters nothing.
+  const tag = chosenTag !== undefined && filterTags.has(chosenTag) ? chosenTag : undefined
+  const toggleTag = (name: string) => setTag(name === tag ? undefined : name)
   const shown = all.filter(
     (template) => matches(template, search) && (!tag || template.tags.includes(tag))
   )
@@ -399,27 +437,25 @@ export function TemplatesPage() {
                 />
               </div>
               {tags.length > 0 && (
-                <div className="flex flex-wrap gap-1" role="group" aria-label={t("templates.tags")}>
-                  <Button
-                    size="xs"
-                    variant={tag ? "ghost" : "secondary"}
-                    aria-pressed={!tag}
-                    onClick={() => setTag(undefined)}
-                  >
-                    {t("common.all")}
-                  </Button>
-                  {tags.map((name) => (
-                    <Button
-                      key={name}
-                      size="xs"
-                      variant={tag === name ? "secondary" : "ghost"}
-                      aria-pressed={tag === name}
-                      onClick={() => setTag(tag === name ? undefined : name)}
-                    >
-                      {name}
-                    </Button>
-                  ))}
-                </div>
+                <Select
+                  // Tags are free text, so each value carries a prefix that "all" does not.
+                  value={tag === undefined ? "all" : `tag:${tag}`}
+                  onValueChange={(value) => setTag(value === "all" ? undefined : value.slice(4))}
+                >
+                  <SelectTrigger size="sm" className="w-48" aria-label={t("templates.tags")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {`${t("templates.allTags")} (${formatNumber(all.length)})`}
+                    </SelectItem>
+                    {tags.map(({ name, count }) => (
+                      <SelectItem key={name} value={`tag:${name}`}>
+                        {`${name} (${formatNumber(count)})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           )}
@@ -454,6 +490,9 @@ export function TemplatesPage() {
                       template={template}
                       version={version}
                       installed={installed(template.id)}
+                      filterTags={filterTags}
+                      tag={tag}
+                      onTag={toggleTag}
                       choosing={choosing}
                       order={chosen.indexOf(template.id) + 1}
                       onChoose={() => choose(template.id)}
