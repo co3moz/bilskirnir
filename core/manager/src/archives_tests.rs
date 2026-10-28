@@ -249,6 +249,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
         script: "apt-get install -y git\n".into(),
         parts: Vec::new(),
         mcp: Vec::new(),
+        inherit_compose: true,
     };
     let record = ImageRecord {
         id: "built".into(),
@@ -289,6 +290,7 @@ fn a_script_build_keeps_its_configuration_through_the_archive() {
             })
             .to_vec(),
         mcp: Vec::new(),
+        inherit_compose: true,
     };
     let written = serde_json::to_vec(&ArchiveInfo::of(&ImageRecord {
         build: Some(merged.clone()),

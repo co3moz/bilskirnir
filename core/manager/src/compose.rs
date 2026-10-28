@@ -11,7 +11,9 @@
 //! values it was given, so editing the image later changes neither what the container ran nor
 //! what a reset runs again. The values live in a record of their own that no route returns:
 //! the container shows the values of ordinary parameters and only the names of secret ones,
-//! and the setup job's log masks every secret value.
+//! and the setup job's log masks every secret value. An image built on a saved image keeps that
+//! image's compose before its own (`inherit`).
+pub(crate) mod inherit;
 mod parameters;
 
 use crate::{

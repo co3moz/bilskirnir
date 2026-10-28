@@ -246,6 +246,10 @@ fn router(app: Arc<App>) -> Router {
             "/api/images/{id}/compose",
             get(compose::get).put(compose::set).delete(compose::remove),
         )
+        .route(
+            "/api/images/{id}/compose/base",
+            post(compose::inherit::add_base),
+        )
         .route("/api/volumes", get(api::volumes).post(api::create_volume))
         .route("/api/volumes/{name}", delete(volumes::remove))
         .route(

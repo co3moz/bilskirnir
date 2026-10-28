@@ -924,6 +924,35 @@ try:
     assert merged_setup["parameters"] == {"first.VERSION": "1", "second.OTHER": "x", "second.VERSION": "two"} and merged_setup["secrets"] == ["first.TOKEN"], merged_setup
     assert [(step["id"], step["name"], step["status"]) for step in merged_setup["steps"]] == [("first", "First", "completed"), ("second", "Second", "completed")], merged_setup
     print("PASS templates merged into one image run their parts and setup steps in order, each step with its own values", flush=True)
+    # A build on a saved image keeps that image's compose before its own: nothing of the base's
+    # build runs again, while a new container asks for and runs both steps.
+    extended_request = {"name": "extended", "base_image": built["image_id"], "internet": False, "template_id": "extra",
+        "script": "set -eu\nprintf extra > /opt/extra-built\n",
+        "compose": {"parameters": [{"name": "NOTE", "default": "note"}], "script": "set -eu\nprintf '%s|%s' \"$NOTE\" \"${GREETING-unset}\" > ~/extra-step\n"}}
+    extended_job = api("images/build", extended_request)
+    extended = job(extended_job)
+    assert [(step["id"], step["name"]) for step in extended["compose"]["steps"]] == [("acceptance", built["name"]), ("extra", "extended")], extended["compose"]
+    assert extended["template_ids"] == ["acceptance", "extra"], extended
+    assert f"Keeping the compose of {built['name']}" in api(f"jobs/{extended_job['job_id']}")["log"]
+    extended_created = api("containers", {"name": "Extended", "image": extended["image_id"], "internet": False, "parameters": {"GREETING": "hi", "TOKEN": f"t-{tag}", "NOTE": "kept"}})
+    extended_id = job(extended_created)["container_id"]
+    container_ids.append(extended_id)
+    ready(f"thoric-{extended_id}")
+    assert docker("exec", f"thoric-{extended_id}", "cat", "/opt/script-built", "/opt/extra-built") == b"script-builtextra"
+    assert docker("exec", f"thoric-{extended_id}", "cat", "/home/desktop/compose-setup") == f"hi|t-{tag}|vanilla|1001".encode()
+    assert docker("exec", f"thoric-{extended_id}", "cat", "/home/desktop/extra-step") == b"kept|unset"
+    assert api(f"containers/{extended_id}")["setup"]["parameters"] == {"acceptance.FLAVOR": "vanilla", "acceptance.GREETING": "hi", "extra.NOTE": "kept"}
+    # Left out, the base's compose is what the list marks missing and the compose route adds, once.
+    without = job(api("images/build", {**extended_request, "name": "extended-without", "inherit_compose": False}))
+    assert "steps" not in without["compose"] and [p["name"] for p in without["compose"]["parameters"]] == ["NOTE"] and without["template_ids"] == ["extra"], without
+    assert next(image for image in api("images") if image["id"] == without["id"]).get("base_compose_missing") is True
+    assert api(f"images/{without['id']}/config")["inherit_compose"] is False
+    added = api(f"images/{without['id']}/compose/base", {})
+    assert [step["id"] for step in added["compose"]["steps"]] == ["acceptance", "extra"] and added["template_ids"] == ["acceptance", "extra"], added
+    listed = {image["id"]: image for image in api("images")}
+    assert "base_compose_missing" not in listed[without["id"]] and "base_compose_missing" not in listed[extended["id"]], listed[without["id"]]
+    assert refused(f"images/{without['id']}/compose/base", {}) == 409
+    print("PASS a build on a saved image keeps its compose before its own, and one built without it gets it added", flush=True)
     # Browser and Electron sandboxes start in a new user namespace. The desktop's seccomp profile
     # allows that and nothing else Docker reserves for CAP_SYS_ADMIN, such as mount(2).
     assert docker("exec", "--user", "desktop", container, "unshare", "--user", "--map-root-user", "true") == b""

@@ -264,6 +264,9 @@ export const fr: Messages = {
   "images.compose.editOf": "Modifier le Compose de {name}",
   "images.compose.addOf": "Ajouter un Compose à {name}",
   "images.compose.addHint": "Ajouter un Compose : valeurs demandées à la création",
+  "images.compose.baseMissing": "Compose de base manquant",
+  "images.compose.baseMissingHint":
+    "Construite avant que les constructions conservent le Compose de leur image de base. Modifier le Compose l'ajoute.",
   "images.source": "Source",
   "images.gone": "L'image n'est plus disponible",
   "images.title": "Bibliothèque d'images",
@@ -569,6 +572,11 @@ export const fr: Messages = {
     "Chaque partie de l'image demande ses propres valeurs, et son script de configuration ne reçoit que celles-ci une fois le bureau prêt. Les valeurs secrètes ne sont plus affichées.",
   "compose.stepRunsScript": "Exécute son script de configuration sans valeurs.",
   "compose.stepWaiting": "En attente",
+  "compose.baseMissing":
+    "{name} a été construite sur {base} sans le Compose de cette image, donc les nouveaux conteneurs issus d'elle sautent sa configuration. L'ajouter ne reconstruit rien, et les conteneurs créés auparavant conservent leur Compose.",
+  "compose.addBase": "Ajouter le Compose de {base}",
+  "compose.baseAdded": "Compose de {base} ajouté à {name}.",
+  "compose.baseSteps": "Ses étapes : {steps}.",
   "media.sampleRate": "Ce navigateur ne prend pas en charge l'audio à 48 kHz.",
   "media.audioFailed": "Échec de la connexion audio. Consultez les journaux du conteneur.",
   "media.microphoneFailed":
@@ -759,6 +767,12 @@ export const fr: Messages = {
   "build.config.optionDefault": "La valeur par défaut de l'option {name} doit être true ou false.",
   "build.config.optionMcp":
     "L'option {name} ne peut nommer que des serveurs MCP de bureau que la configuration déclare.",
+  "build.config.inheritCompose":
+    "La conservation du Compose de l'image de base doit valoir true ou false.",
+  "build.inherit": "Conserver le Compose de {name}",
+  "build.inheritHint":
+    "Ce que {name} a installé, avec les options choisies, est déjà dans l'image et n'est plus demandé. Son Compose est ce qu'un nouveau conteneur demande et configure, et il s'exécute avant celui de cette image.",
+  "build.inheritOff": "Les nouveaux conteneurs de cette image ignoreront le Compose de {name}.",
 
   "icons.label": "Icône",
   "icons.choose": "Choisir une icône",

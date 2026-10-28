@@ -201,6 +201,11 @@ export type ImageItem = {
   own_size?: number | null
   /** The desktop MCP servers the image declares, which every container from it has. */
   mcp_servers?: string[]
+  /**
+   * A build that lacks steps of the compose of the saved image it was built on, as builds before
+   * they kept it did; `POST images/{id}/compose/base` adds them.
+   */
+  base_compose_missing?: boolean
 }
 
 /** One step of an image's history, as `GET images/{id}/layers` lists it. */
@@ -266,6 +271,8 @@ export type BuildConfig = {
   script?: string
   parts?: BuildPart[]
   compose?: Compose
+  /** `false` leaves out the compose of a saved base image, which a build keeps before its own. */
+  inherit_compose?: boolean
   /** A PNG of at most 256 by 256 pixels as a `data:image/png;base64,` URL. */
   icon?: string
   /** One template the image is built from. */

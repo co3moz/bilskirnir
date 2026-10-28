@@ -171,6 +171,8 @@ The container keeps the compose it was created with, so editing the image's comp
 
 **Build image** has a **Compose** tab that gives the new image a compose, and **Export configuration** and image archives carry it along.
 
+You can also build on an image you built earlier, for example to add a template you forgot to merge. What that image installed, with the template options chosen for it, is already in its layers and is not asked for again. Its compose is different: it is what each new container asks for and sets up, such as a volume of its own. So when the base image has a compose, **Build image** shows **Keep the compose of** that image, on by default: the new image runs the base's setup first and then its own, as a merged image does, and asks for each one's values in a section of its own. Turn it off to leave the base's compose out. An image built on another before builds kept its compose shows **Base compose missing** under **Images**; **Edit compose** on its row adds the missing steps without building anything, and containers created earlier keep their compose.
+
 ## Move an image to another installation
 
 Under **Images**, the archive button on an image's row (**Export archive**) downloads it as a `.tar.gz` file, with its name, description and desktop information inside. A script build's configuration travels along, so **Export configuration** still works after the move. Snapshots, script builds and imported images can all be exported. The archive holds every layer of the image, the base desktop included, so expect several gigabytes. Docker prepares the whole image before the download starts to grow; **Jobs** shows the export and any error.

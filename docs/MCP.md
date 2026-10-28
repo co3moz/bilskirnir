@@ -113,7 +113,7 @@ The dashboard's **Templates** page lists ready-made images, applications such as
 4. Fetch `<id>.json` from the same folder as the list. It is a build request, the JSON **Export configuration** copies.
 5. Call `build_image` with that JSON unchanged and `template_id` set to the entry's `id`, then poll `get_job` as for any build.
 
-`<id>.png` in the same folder is the icon the page shows; pass it as `icon`, a `data:image/png;base64,` URL, to show it beside the image. Several templates go into one image through `parts`, as [composes](#ask-for-values-with-composes) describe. [The development guide](DEVELOPMENT.md#add-a-template) describes the list format in full.
+`<id>.png` in the same folder is the icon the page shows; pass it as `icon`, a `data:image/png;base64,` URL, to show it beside the image. Several templates go into one image through `parts`, as [composes](#ask-for-values-with-composes) describe. A template can also be added to an image built earlier: give that image's `image_id` as `base_image`, and the new image keeps the base's compose before the template's own, unless `inherit_compose` is `false` ([API](API.md#a-base-images-compose)). [The development guide](DEVELOPMENT.md#add-a-template) describes the list format in full.
 
 ## Run commands and install software
 
@@ -311,7 +311,7 @@ The desktop user's declaration of a name replaces the image's. A declaration is 
 {"url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}
 ```
 
-Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. Inside the desktop, `thoric-mcp` writes the desktop user's files:
+Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. A template's declaration names its values alone, and keeps working once its image is merged with another template or [built on](API.md#a-base-images-compose): `${NAME}` stands for the one step's value of that name, and is refused with the names to use when several steps have one. Inside the desktop, `thoric-mcp` writes the desktop user's files:
 
 ```bash
 thoric-mcp add x --description "My extension's helper" -- node /home/desktop/ext/mcp.js

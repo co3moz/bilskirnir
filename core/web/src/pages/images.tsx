@@ -269,6 +269,15 @@ const columns: DataColumn<Row>[] = [
             {t("compose.name")}
           </Badge>
         )}
+        {row.original.base_compose_missing && (
+          <Badge
+            variant="outline"
+            className="border-warning/40 text-warning"
+            title={t("images.compose.baseMissingHint")}
+          >
+            {t("images.compose.baseMissing")}
+          </Badge>
+        )}
         {!!row.original.mcp_servers?.length && (
           <ConceptBadge
             concept="mcp"

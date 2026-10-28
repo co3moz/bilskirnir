@@ -265,6 +265,9 @@ export const de: Messages = {
   "images.compose.editOf": "Compose von {name} bearbeiten",
   "images.compose.addOf": "Compose zu {name} hinzufügen",
   "images.compose.addHint": "Compose hinzufügen: Werte, die beim Erstellen abgefragt werden",
+  "images.compose.baseMissing": "Basis-Compose fehlt",
+  "images.compose.baseMissingHint":
+    "Erstellt, bevor Builds die Compose ihres Basis-Images behielten. Compose bearbeiten fügt sie hinzu.",
   "images.source": "Quelle",
   "images.gone": "Image nicht mehr verfügbar",
   "images.title": "Image-Bibliothek",
@@ -572,6 +575,11 @@ export const de: Messages = {
     "Jeder Teil des Images fragt nach eigenen Werten, und sein Einrichtungsskript erhält nur diese, sobald der Desktop bereit ist. Geheime Werte werden nicht erneut angezeigt.",
   "compose.stepRunsScript": "Führt sein Einrichtungsskript ohne Werte aus.",
   "compose.stepWaiting": "Wartet",
+  "compose.baseMissing":
+    "{name} wurde auf {base} erstellt, aber ohne dessen Compose, daher überspringen neue Container daraus dessen Einrichtung. Das Hinzufügen erstellt nichts neu, und früher erstellte Container behalten ihre Compose.",
+  "compose.addBase": "Compose von {base} hinzufügen",
+  "compose.baseAdded": "Compose von {base} zu {name} hinzugefügt.",
+  "compose.baseSteps": "Ihre Schritte: {steps}.",
   "media.sampleRate": "Dieser Browser unterstützt kein 48-kHz-Audio.",
   "media.audioFailed": "Audioverbindung fehlgeschlagen. Prüfen Sie die Container-Protokolle.",
   "media.microphoneFailed":
@@ -761,6 +769,12 @@ export const de: Messages = {
   "build.config.optionDefault": "Der Standardwert der Option {name} muss true oder false sein.",
   "build.config.optionMcp":
     "Die Option {name} darf nur Desktop-MCP-Server nennen, die die Konfiguration angibt.",
+  "build.config.inheritCompose":
+    "Das Beibehalten der Compose des Basis-Images muss true oder false sein.",
+  "build.inherit": "Compose von {name} beibehalten",
+  "build.inheritHint":
+    "Was {name} installiert hat, mit den dafür gewählten Optionen, ist bereits im Image und wird nicht erneut abgefragt. Seine Compose ist das, was ein neuer Container abfragt und einrichtet, und sie läuft vor der eigenen dieses Images.",
+  "build.inheritOff": "Neue Container aus diesem Image überspringen die Compose von {name}.",
 
   "icons.label": "Symbol",
   "icons.choose": "Symbol wählen",

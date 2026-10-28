@@ -366,6 +366,7 @@ esac
                 internet: false,
                 script: "true\n".into(),
                 compose: None,
+                inherit_compose: true,
                 icon: None,
                 template_id: None,
                 template_ids: Vec::new(),

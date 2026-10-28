@@ -268,6 +268,9 @@ export const en = {
   "images.compose.editOf": "Edit the compose of {name}",
   "images.compose.addOf": "Add a compose to {name}",
   "images.compose.addHint": "Add a compose: values asked for on creation",
+  "images.compose.baseMissing": "Base compose missing",
+  "images.compose.baseMissingHint":
+    "Built before builds kept the compose of their base image. Edit compose adds it.",
   "images.source": "Source",
   "images.gone": "Image no longer available",
   "images.title": "Image library",
@@ -575,6 +578,11 @@ export const en = {
     "Each part of the image asks for its own values, and its setup script receives only those once the desktop is ready. Secret values are not shown again.",
   "compose.stepRunsScript": "Runs its setup script without values.",
   "compose.stepWaiting": "Waiting",
+  "compose.baseMissing":
+    "{name} was built on {base} without that image's compose, so new containers from it skip its setup. Adding it builds nothing again, and containers created earlier keep their compose.",
+  "compose.addBase": "Add the compose of {base}",
+  "compose.baseAdded": "Added the compose of {base} to {name}.",
+  "compose.baseSteps": "Its steps: {steps}.",
 
   "media.sampleRate": "This browser does not support 48 kHz audio.",
   "media.audioFailed": "Audio connection failed. Check the container logs.",
@@ -763,6 +771,11 @@ export const en = {
   "build.config.optionDefault": "The default of the option {name} must be true or false.",
   "build.config.optionMcp":
     "The option {name} can list only desktop MCP servers the configuration declares.",
+  "build.config.inheritCompose": "Keeping the base image's compose must be true or false.",
+  "build.inherit": "Keep the compose of {name}",
+  "build.inheritHint":
+    "What {name} installed, with the options chosen for it, is already in the image and is not asked for again. Its compose is what a new container asks for and sets up, and it runs before this image's own.",
+  "build.inheritOff": "New containers from this image will skip the compose of {name}.",
 
   "icons.label": "Icon",
   "icons.choose": "Choose icon",

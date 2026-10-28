@@ -540,6 +540,9 @@ pub(crate) async fn image_list(app: &Arc<App>) -> Result<Vec<Value>> {
         let mut value = image_summary(r);
         value["available"] = json!(available);
         value["mcp_servers"] = json!(declared_servers(&records, r));
+        if crate::compose::inherit::base_compose_missing(&records, r) {
+            value["base_compose_missing"] = json!(true);
+        }
         value
     });
     Ok(catalog
@@ -624,6 +627,7 @@ pub async fn image_config(
         parts: build.parts,
         mcp: build.mcp,
         compose: record.compose,
+        inherit_compose: build.inherit_compose,
         icon: record.icon,
         template_id,
         template_ids,
@@ -688,6 +692,12 @@ pub struct BuildImage {
     /// composes name it `template`.
     #[serde(default, alias = "template", skip_serializing_if = "Option::is_none")]
     pub compose: Option<crate::compose::Compose>,
+    /// Keep the compose of a saved base image before this one (`compose::inherit`).
+    #[serde(
+        default = "default_true",
+        skip_serializing_if = "crate::model::is_true"
+    )]
+    pub inherit_compose: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<crate::icons::Icon>,
     /// Set by the templates page, so it can tell which of its templates are installed: one
@@ -728,7 +738,7 @@ impl BuildImage {
     }
 
     /// The templates the image is built from, each once.
-    fn templates(&self) -> Vec<String> {
+    pub(crate) fn templates(&self) -> Vec<String> {
         let mut ids = Vec::new();
         for id in self.template_id.iter().chain(&self.template_ids) {
             if !ids.contains(id) {
@@ -765,6 +775,8 @@ pub async fn build(
                 .as_str()
                 .context("Missing base image ID")?
                 .to_owned();
+            let (compose, template_ids) =
+                crate::compose::inherit::built_on(&app, &id, &body, &parent)?;
             let base_tag = format!("thoric/build-base:{id}");
             app.docker(&["image", "tag", &parent, &base_tag]).await?;
             let dir = app.config.data.join("builds").join(&id);
@@ -851,7 +863,6 @@ pub async fn build(
             // Without BuildKit's markers, the layer stage is skipped rather than guessed.
             app.begin_stage(&id, "image")?;
             let info = app.inspect("image", &reference).await?;
-            let template_ids = body.templates();
             let rec = ImageRecord {
                 id: id.clone(),
                 name: body.name,
@@ -869,8 +880,9 @@ pub async fn build(
                     script,
                     parts,
                     mcp: body.mcp,
+                    inherit_compose: body.inherit_compose,
                 }),
-                compose: body.compose,
+                compose,
                 icon: body.icon,
                 template_ids,
             };

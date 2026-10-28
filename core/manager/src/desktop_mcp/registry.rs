@@ -280,14 +280,38 @@ pub(crate) fn substitute(text: &str, values: &BTreeMap<String, String>) -> Resul
         {
             bail!("${{{name}}} does not name a compose value");
         }
-        let value = values.get(name).with_context(|| {
-            format!("The container has no compose value {name} for this server")
-        })?;
-        out.push_str(value);
+        out.push_str(value(values, name)?);
         rest = &after[end + 1..];
     }
     out.push_str(rest);
     Ok(out)
+}
+
+/// The compose value `name` names. A declaration written for a compose of one step names its
+/// values alone, and keeps them once the image is merged with another or built on: a name
+/// without a step stands for the one step's value that has it.
+fn value<'a>(values: &'a BTreeMap<String, String>, name: &str) -> Result<&'a str> {
+    if let Some(value) = values.get(name) {
+        return Ok(value);
+    }
+    let scoped = values
+        .iter()
+        .filter(|(key, _)| {
+            !name.contains('.') && key.split_once('.').is_some_and(|(_, own)| own == name)
+        })
+        .collect::<Vec<_>>();
+    match scoped.as_slice() {
+        [(_, value)] => Ok(value),
+        [] => bail!("The container has no compose value {name} for this server"),
+        several => bail!(
+            "Several steps of the container's compose have a value {name}; name it as {}",
+            several
+                .iter()
+                .map(|(key, _)| key.as_str())
+                .collect::<Vec<_>>()
+                .join(" or ")
+        ),
+    }
 }
 
 /// An HTTP server's URL: http or https on the desktop's own loopback, with a port. While values

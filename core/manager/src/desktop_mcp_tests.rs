@@ -191,6 +191,19 @@ fn compose_values_fill_placeholders_and_a_missing_one_is_an_error() {
     );
     assert_eq!(substitute("$HOME and $5", &values).unwrap(), "$HOME and $5");
     assert!(substitute("${MISSING}", &values).is_err());
+    // A declaration written for a compose of one step keeps its names once the image's compose
+    // has several: a name alone stands for the one step's value that has it.
+    assert_eq!(substitute("${TOKEN}", &values).unwrap(), "s3cret");
+    let merged = BTreeMap::from([
+        ("chrome.PORT".to_owned(), "8931".to_owned()),
+        ("vscode.PORT".to_owned(), "3000".to_owned()),
+        ("PORT".to_owned(), "1".to_owned()),
+    ]);
+    assert_eq!(substitute("${PORT}", &merged).unwrap(), "1");
+    let both = BTreeMap::from_iter(merged.into_iter().filter(|(key, _)| key != "PORT"));
+    let refused = substitute("${PORT}", &both).unwrap_err().to_string();
+    assert!(refused.contains("chrome.PORT or vscode.PORT"), "{refused}");
+    assert!(substitute("${other.TOKEN}", &values).is_err());
     assert!(substitute("${PORT", &values).is_err());
     assert!(substitute("${a b}", &values).is_err());
     let spec = ServerSpec {

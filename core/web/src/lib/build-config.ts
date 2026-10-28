@@ -30,6 +30,7 @@ export function formatBuildConfig({
   script,
   parts,
   compose,
+  inherit_compose,
   mcp,
   template_id,
   template_ids,
@@ -43,6 +44,7 @@ export function formatBuildConfig({
       internet,
       ...(parts?.length ? { parts } : { script }),
       ...(compose ? { compose } : {}),
+      ...(inherit_compose === false ? { inherit_compose } : {}),
       ...(mcp?.length ? { mcp } : {}),
       ...(template_id ? { template_id } : {}),
       ...(template_ids?.length ? { template_ids } : {}),
@@ -136,7 +138,7 @@ export function readBuildConfig(value: unknown): ImportedBuild {
     throw new Error(t("build.config.object"))
   const fields = value as Record<string, unknown>
   const { name, description, base_image, internet, script, parts, icon, template_id } = fields
-  const { template_ids, mcp, options } = fields
+  const { template_ids, mcp, options, inherit_compose } = fields
   // Configurations exported before templates were called composes name it `template`.
   const compose = fields.compose ?? fields.template
   const config: ImportedBuild = {}
@@ -167,6 +169,10 @@ export function readBuildConfig(value: unknown): ImportedBuild {
     config.internet = internet
   }
   if (compose !== undefined && compose !== null) config.compose = readCompose(compose)
+  if (inherit_compose !== undefined && inherit_compose !== null) {
+    if (typeof inherit_compose !== "boolean") throw new Error(t("build.config.inheritCompose"))
+    config.inherit_compose = inherit_compose
+  }
   if (mcp !== undefined && mcp !== null) {
     const servers = readServerDeclarations(mcp)
     if (servers.length) config.mcp = servers

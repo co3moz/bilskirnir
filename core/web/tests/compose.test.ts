@@ -18,7 +18,9 @@ import {
   composeDraft,
   composeEntries,
   composeFor,
+  composeImage,
   composeSteps,
+  imageSteps,
   orderSteps,
   setupGroups,
   toggleChoice,
@@ -89,6 +91,26 @@ test("the compose comes from a record of the chosen image, as the manager picks 
     { ...record("same", { ...unity, root: true }), reference: "b" },
   ]
   assert.equal(composeSteps(composeFor(shared, "sha256:same")!)[0].root, true)
+})
+
+test("a build keeps the compose of the record a container would take it from, by its steps", () => {
+  const re = { ...record("re", unity), name: "re" }
+  const records = [record("plain"), re]
+  assert.equal(composeImage(records, "sha256:re"), re)
+  assert.equal(composeImage(records, "sha256:plain"), undefined)
+  // The one step of a compose that names none goes by the image's name, as the manager names it.
+  assert.deepEqual(imageSteps(re), ["re"])
+  const merged = {
+    name: "merged",
+    compose: {
+      steps: [
+        { ...unity, id: "unity-dev", name: "Unity development" },
+        { ...unity, id: "chrome", name: "" },
+      ],
+    },
+  }
+  assert.deepEqual(imageSteps(merged), ["Unity development", "chrome"])
+  assert.deepEqual(imageSteps({ name: "plain", compose: null }), [])
 })
 
 test("the create form sends a value for every parameter, the default when left alone", () => {

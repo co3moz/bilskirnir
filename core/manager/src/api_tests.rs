@@ -30,6 +30,7 @@ fn unity_tools() -> BuildConfig {
         script: "set -eu\napt-get install -y git\n".into(),
         parts: Vec::new(),
         mcp: Vec::new(),
+        inherit_compose: true,
     }
 }
 
@@ -43,7 +44,9 @@ async fn configuration_is_the_request_that_built_the_image() {
         ..record("a", "build", Some(unity_tools()))
     };
     app.db.put("image", "a", &built).unwrap();
-    let Json(config) = image_config(State(app), Path("a".into())).await.unwrap();
+    let Json(config) = image_config(State(app.clone()), Path("a".into()))
+        .await
+        .unwrap();
     let expected = BuildImage {
         name: "build image".into(),
         description: "Git for Unity projects".into(),
@@ -53,6 +56,7 @@ async fn configuration_is_the_request_that_built_the_image() {
         parts: Vec::new(),
         mcp: Vec::new(),
         compose: None,
+        inherit_compose: true,
         icon: Some(crate::icons::sample(256, 256)),
         // One template is named as before templates could be merged, so older releases read it.
         template_id: Some("unity".into()),
@@ -65,6 +69,18 @@ async fn configuration_is_the_request_that_built_the_image() {
         serde_json::from_str::<BuildImage>(&exported).unwrap(),
         expected
     );
+    // A build that left its base's compose out exports that, so building it again does too.
+    let without = record(
+        "b",
+        "build",
+        Some(BuildConfig {
+            inherit_compose: false,
+            ..unity_tools()
+        }),
+    );
+    app.db.put("image", "b", &without).unwrap();
+    let Json(config) = image_config(State(app), Path("b".into())).await.unwrap();
+    assert!(!config.inherit_compose);
 }
 
 #[test]
@@ -78,11 +94,25 @@ fn a_build_request_checks_its_description_icon_and_template() {
     };
     let plain = request(json!({})).unwrap();
     assert!(plain.validate().is_ok());
+    // A build keeps its base's compose unless it says otherwise, as requests made before it
+    // could say so get.
+    assert!(plain.inherit_compose);
     // An exported configuration names only what the image has.
     let exported = serde_json::to_value(&plain).unwrap();
-    for key in ["description", "icon", "template_id", "compose"] {
+    for key in [
+        "description",
+        "icon",
+        "template_id",
+        "compose",
+        "inherit_compose",
+    ] {
         assert!(exported.get(key).is_none(), "{key}");
     }
+    let without = request(json!({"inherit_compose": false})).unwrap();
+    assert_eq!(
+        serde_json::to_value(&without).unwrap()["inherit_compose"],
+        json!(false)
+    );
     let full = request(json!({
         "description": "Unity Hub and an editor",
         "icon": crate::icons::sample(256, 256),
