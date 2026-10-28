@@ -2,7 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "./api"
 import { archiveUrl } from "./archives"
-import { formatBuildConfig } from "./build-config"
+import { formatBuildConfig, readBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
 import { plural, t } from "./i18n"
 import { refreshAll } from "./queries"
@@ -37,6 +37,15 @@ export const containerAction = (id: string, action: "start" | "stop" | "restart"
   runJob(`containers/${id}/action`, { action })
 
 export const retrySetup = (id: string) => runJob(`containers/${id}/retry`, {})
+
+/** Starts a failed or interrupted job again with the request it was started with. */
+export const retryJob = (id: string) => runJob(`jobs/${id}/retry`, {})
+
+/** Opens the build form with a failed build's request, to change it before building again. */
+export async function editBuildJob(id: string) {
+  const kept = await api<{ kind: string; request: unknown }>(`jobs/${id}/request`)
+  openDialog({ kind: "build", config: readBuildConfig(kept.request) })
+}
 
 export const setInternet = (id: string, enabled: boolean) =>
   runJob(`containers/${id}/internet`, { enabled })

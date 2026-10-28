@@ -101,6 +101,8 @@ export const fr: Messages = {
   "jobs.none": "Aucune tâche pour l'instant.",
   "jobs.log": "Journal de la tâche",
   "jobs.copyLog": "Copier le journal",
+  "jobs.retry": "Réessayer",
+  "jobs.editRetry": "Modifier et réessayer",
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
   "jobs.viewContainers": "Voir les conteneurs",

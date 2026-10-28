@@ -309,6 +309,8 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
+        .route("/api/jobs/{id}/retry", post(jobs::retry::retry))
+        .route("/api/jobs/{id}/request", get(jobs::retry::request))
         .route("/api/events", get(events::stream))
         .route("/api/human-requests", get(human::list))
         .route("/api/human-requests/{id}/answer", post(human::answer))

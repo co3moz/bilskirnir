@@ -312,6 +312,8 @@ export type Job = {
   progress?: DownloadProgress | null
   /** Every stage of a job that reports them, in order; one that has not started has no times. */
   stages?: JobStage[]
+  /** A failed or interrupted job the manager can start again with its request; lists omit it. */
+  retryable?: boolean
 }
 
 /** How a GPU desktop reaches the host's GPU: WSL_GPU, NVIDIA_COMPUTE or DRI_GPU. */

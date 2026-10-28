@@ -104,6 +104,8 @@ export const en = {
   "jobs.none": "No jobs yet.",
   "jobs.log": "Job log",
   "jobs.copyLog": "Copy log",
+  "jobs.retry": "Retry",
+  "jobs.editRetry": "Edit and retry",
   "jobs.archiveProgress": "Archive progress",
   "jobs.downloadProgress": "Image download progress",
   "jobs.viewContainers": "View containers",
