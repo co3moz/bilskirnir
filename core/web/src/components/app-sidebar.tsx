@@ -31,10 +31,13 @@ import { href, type Page } from "@/lib/route"
 
 export const pageTitle = (page: Page) => t(`nav.${page}`)
 
-/** Pages that belong to Management, which the sidebar keeps open while one of them is. */
-const underSettings: Page[] = ["jobs", "activity", "dependencies"]
-export const parentPage = (page: Page): Page | undefined =>
-  underSettings.includes(page) ? "settings" : undefined
+/** Pages that belong to another page, which the sidebar keeps open while one of them is. */
+const parents: Partial<Record<Page, Page>> = {
+  activity: "mcp",
+  jobs: "settings",
+  dependencies: "settings",
+}
+export const parentPage = (page: Page): Page | undefined => parents[page]
 
 type NavPage = { page: Page; icon: React.ReactNode; badge?: React.ReactNode }
 
@@ -44,15 +47,16 @@ const navMain: (NavPage & { children?: NavPage[] })[] = [
   { page: "images", icon: <ConceptIcon concept="image" /> },
   { page: "templates", icon: <ConceptIcon concept="template" /> },
   { page: "volumes", icon: <ConceptIcon concept="volume" /> },
-  { page: "mcp", icon: <ConceptIcon concept="mcp" /> },
+  {
+    page: "mcp",
+    icon: <ConceptIcon concept="mcp" />,
+    children: [{ page: "activity", icon: <RiPulseLine /> }],
+  },
   { page: "files", icon: <RiFolderOpenLine /> },
   {
     page: "settings",
     icon: <RiSettings3Line />,
-    children: [
-      { page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> },
-      { page: "activity", icon: <RiPulseLine /> },
-    ],
+    children: [{ page: "jobs", icon: <RiListCheck3 />, badge: <ActiveJobsBadge /> }],
   },
 ]
 const titled = (item: NavPage) => ({ ...item, title: pageTitle(item.page) })
