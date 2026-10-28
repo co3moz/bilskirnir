@@ -232,6 +232,11 @@ export const fr: Messages = {
   "containers.setupUnfinished": "La configuration n'a pas abouti",
   "containers.sharedMemory": "Mémoire partagée",
   "containers.dockerName": "Nom Docker",
+  "containers.reachedAs": "Joignable dans ses groupes sous",
+  "containers.groupMembers": "Membres du groupe",
+  "containers.groupAlone": "Aucun pour l'instant",
+  "containers.groupsExposed":
+    "Son image est antérieure au VNC privé : les membres de ses groupes peuvent voir et contrôler son écran.",
   "containers.image": "Image",
   "containers.noMounts": "Aucun volume monté.",
   "images.kind.catalog": "Catalogue",
@@ -1233,6 +1238,16 @@ export const fr: Messages = {
     "Ports de programmes du bureau que les agents munis du jeton MCP atteignent par Thoric, séparés par des virgules.",
   "spec.ports.one": "{count} port relayé",
   "spec.ports.other": "{count} ports relayés",
+  "spec.groups": "Groupes",
+  "spec.groupsHint":
+    "Les conteneurs d'un même groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Minuscules, chiffres et tirets, séparés par des virgules.",
+  "spec.groupsKnown": "Déjà utilisés : {groups}.",
+  "spec.groupsExposed":
+    "L'image de ce bureau est antérieure au VNC privé : les membres de ses groupes peuvent voir et contrôler son écran sans mot de passe. Reconstruisez son image à partir d'une base plus récente, ou recréez le conteneur à partir de celle-ci.",
+  "spec.aliases": "Alias",
+  "spec.aliasesHint": "D'autres noms sous lesquels les membres de ses groupes le joignent.",
+  "spec.groups.one": "{count} groupe",
+  "spec.groups.other": "{count} groupes",
 
   "identity.title": "Identité de la machine",
   "identity.description":
@@ -1288,7 +1303,7 @@ export const fr: Messages = {
   "settings.unchanged": "Aucun réglage modifié.",
   "settings.title": "Réglages du conteneur",
   "settings.description":
-    "Le nom, l'accès à Internet, les ports relayés et les limites de ressources s'appliquent au conteneur en cours d'exécution. Les autres modifications nécessitent un nouveau conteneur ; ses fichiers sont conservés.",
+    "Le nom, l'accès à Internet, les ports relayés, les groupes et les limites de ressources s'appliquent au conteneur en cours d'exécution. Les autres modifications nécessitent un nouveau conteneur ; ses fichiers sont conservés.",
   "settings.saveRestart": "Enregistrer et redémarrer",
   "parameter.name": "Nom de la variable",
   "parameter.namePattern":

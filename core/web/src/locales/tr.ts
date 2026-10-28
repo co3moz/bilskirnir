@@ -229,6 +229,11 @@ export const tr: Messages = {
   "containers.setupUnfinished": "Kurulum tamamlanmadı",
   "containers.sharedMemory": "Paylaşılan bellek",
   "containers.dockerName": "Docker adı",
+  "containers.reachedAs": "Gruplarında şu adlarla erişilir",
+  "containers.groupMembers": "Grup üyeleri",
+  "containers.groupAlone": "Henüz yok",
+  "containers.groupsExposed":
+    "İmajı özel VNC'den eski olduğundan gruplarının üyeleri ekranını görüp yönetebilir.",
   "containers.image": "İmaj",
   "containers.noMounts": "Bağlı volume yok.",
   "images.kind.catalog": "Katalog",
@@ -1217,6 +1222,16 @@ export const tr: Messages = {
     "Masaüstündeki programların, MCP token'ı olan ajanların Thoric üzerinden ulaştığı portları; virgülle ayrılır.",
   "spec.ports.one": "{count} yönlendirilen port",
   "spec.ports.other": "{count} yönlendirilen port",
+  "spec.groups": "Gruplar",
+  "spec.groupsHint":
+    "Aynı gruptaki konteynerler kendilerine ait bir ağda birbirlerine hostname, ad ya da alias ile ulaşır. Küçük harf, rakam ve tire; virgülle ayrılır.",
+  "spec.groupsKnown": "Kullanımda: {groups}.",
+  "spec.groupsExposed":
+    "Bu masaüstünün imajı özel VNC'den eski olduğundan gruplarının üyeleri ekranını parolasız görüp yönetebilir. İmajını daha yeni bir tabandan yeniden derleyin ya da konteyneri yenisinden yeniden oluşturun.",
+  "spec.aliases": "Alias'lar",
+  "spec.aliasesHint": "Gruplarının üyelerinin ona ulaştığı ek adlar.",
+  "spec.groups.one": "{count} grup",
+  "spec.groups.other": "{count} grup",
 
   "identity.title": "Makine kimliği",
   "identity.description":
@@ -1272,7 +1287,7 @@ export const tr: Messages = {
   "settings.unchanged": "Hiçbir ayar değişmedi.",
   "settings.title": "Konteyner ayarları",
   "settings.description":
-    "Ad, internet, yönlendirilen portlar ve kaynak sınırları çalışan konteynere uygulanır. Diğer değişiklikler yeni bir konteyner gerektirir; dosyaları korunur.",
+    "Ad, internet, yönlendirilen portlar, gruplar ve kaynak sınırları çalışan konteynere uygulanır. Diğer değişiklikler yeni bir konteyner gerektirir; dosyaları korunur.",
   "settings.saveRestart": "Kaydet ve yeniden başlat",
   "parameter.name": "Değişken adı",
   "parameter.namePattern": "Büyük harf, rakam ve alt çizgi; harfle başlamalı",

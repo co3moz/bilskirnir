@@ -81,12 +81,14 @@ pub(crate) struct Settings {
 /// The settings of a container's desktop proxy, or `None` for a container without a proxy. The
 /// installation's proxy is read as it is now, so a container that follows it gets a change of
 /// `PROXY_URL` once the manager starts again, and goes straight to every address without one.
+/// `peers` are the names of the members of its groups, which only the desktop itself reaches.
 pub(crate) fn settings(
     config: &Config,
     spec: &ContainerSpec,
     password: Option<String>,
+    peers: Vec<String>,
 ) -> Option<Settings> {
-    let (upstream, bypass) = match spec.proxy.as_ref()? {
+    let (upstream, mut bypass) = match spec.proxy.as_ref()? {
         ProxyChoice::Installation => match &config.proxy {
             None => (None, Vec::new()),
             Some(proxy) => (
@@ -119,6 +121,7 @@ pub(crate) fn settings(
             )
         }
     };
+    bypass.extend(peers);
     let digest = Blake2s256::digest(serde_json::to_vec(&(&upstream, &bypass)).ok()?);
     Some(Settings {
         version: digest.iter().map(|b| format!("{b:02x}")).collect(),

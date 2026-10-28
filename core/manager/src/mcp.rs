@@ -789,6 +789,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "mac_address":{"type":"string","description":"Unicast MAC address such as 02:42:ac:11:00:02, on every network interface; leave out for a random one."},
                 "machine_id":{"type":"string","description":"32 hex digits written to /etc/machine-id and /var/lib/dbus/machine-id; leave out for a random one."},
                 "ports":ports_schema(),
+                "groups":group_schemas().0,"aliases":group_schemas().1,
                 "mcp_endpoint":{"type":"boolean","default":true,"description":"Create an MCP endpoint at /mcp/NAME for the new container, named after it, with every scope but commands and all its desktop MCP servers, without a token of its own yet (create_mcp_endpoint_token)."},
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64,"default":512},
@@ -819,13 +820,14 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place, as do proxy_password and changes to a proxy the container has. resolution, gpu, audio, microphone, sudo, gamepad, vpn, turning proxy on or off, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports, groups, aliases and a new or changed cpus/memory_mb limit apply in place, as do proxy_password and changes to a proxy the container has. resolution, gpu, audio, microphone, sudo, gamepad, vpn, turning proxy on or off, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
                 "resolution":{"type":"string"},"gpu":{"type":"boolean"},"internet":{"type":"boolean"},
                 "audio":{"type":"boolean"},"microphone":{"type":"boolean"},"sudo":{"type":"boolean"},
                 "gamepad":{"type":"boolean"},"vpn":{"type":"boolean"},"proxy":proxy_schemas().0,"proxy_password":proxy_schemas().1,"ports":ports_schema(),
+                "groups":group_schemas().0,"aliases":group_schemas().1,
                 "hostname":{"type":"string","maxLength":63},"mac_address":{"type":"string"},"machine_id":{"type":"string"},
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64},
@@ -1307,6 +1309,14 @@ fn compose_tools() -> [Tool; 2] {
 /// A container's proxied ports, as `create_container` and `update_container` take them.
 fn ports_schema() -> Value {
     json!({"type":"array","maxItems":32,"uniqueItems":true,"items":{"type":"integer","minimum":1,"maximum":65535},"description":"Ports inside the desktop that /api/containers/{id}/ports/{port}/ proxies, HTTP and WebSocket, for requests with this MCP token. Empty by default; a change applies in place. Use it to reach a server running in the desktop, such as an MCP server at /api/containers/{id}/ports/{port}/mcp."})
+}
+/// A container's groups and aliases, as `create_container` and `update_container` take them.
+fn group_schemas() -> (Value, Value) {
+    let label = json!({"type":"string","pattern":"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"});
+    (
+        json!({"type":"array","maxItems":8,"uniqueItems":true,"items":label,"description":"Groups the container belongs to. Containers that share a group reach each other on that group's own network, by hostname, by name in lowercase with hyphens, and by aliases; the network has neither the internet nor the manager. Empty by default; a change applies in place. A name another member of a shared group is reached by already is refused. A desktop whose list_containers entry has vnc_private false shows its screen to the members without a password."}),
+        json!({"type":"array","maxItems":8,"uniqueItems":true,"items":label,"description":"More names the members of the container's groups reach it by. A change applies in place."}),
+    )
 }
 /// `request_human`, which asks the person at the dashboard and waits for the answer.
 fn request_human_tool(id: Value) -> Tool {

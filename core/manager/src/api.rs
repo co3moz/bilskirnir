@@ -147,6 +147,8 @@ pub async fn containers(State(app): State<Arc<App>>) -> Result<Json<Value>> {
             });
             item["health"] = json!(health);
             item["status"] = json!(docker.map(|d| &d["Status"]));
+            // Whether the members of its groups are kept from its screen.
+            item["vnc_private"] = json!(docker.map(crate::groups::vnc_private));
             item
         })
         .collect::<Vec<_>>();

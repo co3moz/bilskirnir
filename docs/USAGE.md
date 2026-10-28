@@ -14,7 +14,7 @@ The **Dashboard** sums up the host: how many containers exist and run, jobs in p
 
 ## Create and connect
 
-Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and [VPN access](#vpn) on or off; hover or focus one to see what it does. They start as the installation sets them (`GPU_DEFAULT` and the others in [the installation guide](INSTALLATION.md#settings)), and a feature the installation switched off is shown off with the reason below the buttons. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports, the [proxy](#proxy) and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
+Select **New container**, give it a name and choose an image: XFCE or GNOME from the catalog, a script build, a snapshot or an imported image. Under **Features**, buttons turn GPU access, internet access, sudo, sound, microphone, a virtual gamepad device for agents and [VPN access](#vpn) on or off; hover or focus one to see what it does. They start as the installation sets them (`GPU_DEFAULT` and the others in [the installation guide](INSTALLATION.md#settings)), and a feature the installation switched off is shown off with the reason below the buttons. **Advanced settings** holds the resolution, shared memory, CPU and memory limits, proxied ports, [groups](#container-groups), the [proxy](#proxy) and volume mounts; it starts closed with its current values in one line, and opens by itself when one of its fields needs a correction. **Proxied ports** lists ports of programs inside the desktop, separated by commas, that an agent holding the MCP token reaches through the manager, as [desktop ports](API.md#desktop-ports) describes; a change applies without a restart.
 
 **Create an MCP endpoint**, on by default, gives the new container an endpoint of its own at `/mcp/<name>`, where an agent reaches only this container and the MCP servers running in it; see [MCP servers and endpoints](#mcp-servers-and-endpoints).
 
@@ -226,15 +226,21 @@ docker cp thoric-CONTAINER_ID:/home/desktop/Downloads/result ./result
 
 ## Change a container's settings
 
-Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, VPN access, proxy, volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
+Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, VPN access, proxy, [groups](#container-groups), volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
 
 **Machine identity** shows the hostname, MAC address and machine ID that software inside the desktop sees, such as a license bound to one machine. A container keeps them through resets, retries and settings changes, while a new container, also one from a snapshot, gets its own. Change them only to let this container take over the identity of one it replaces; they can be changed but not cleared. A container created before Thoric kept identities shows them empty until it is next recreated, and keeps the machine ID of its image until one is set here. The details, including which Docker releases keep the internet interface's MAC address, are in [the API guide](API.md#machine-identity).
 
-The name, internet access and a new CPU or memory limit apply while the container keeps running. Docker fixes the other settings, and removing a limit, when it creates a container, so changing them creates a new one: Thoric stops the container, saves its files to an image, starts a new container from it with the new settings and removes the old one. The dialog says so before applying. Open applications close, but installed software and files in the container are kept, as are named volumes. If the new container cannot start, the previous one is restored.
+The name, internet access, groups, aliases and a new CPU or memory limit apply while the container keeps running. Docker fixes the other settings, and removing a limit, when it creates a container, so changing them creates a new one: Thoric stops the container, saves its files to an image, starts a new container from it with the new settings and removes the old one. The dialog says so before applying. Open applications close, but installed software and files in the container are kept, as are named volumes. If the new container cannot start, the previous one is restored.
 
 ## Internet access
 
 The internet switch attaches or detaches the container's Docker egress network. Its private connection to the manager stays in place, so you can keep using the desktop while internet access is off. This is a Docker network setting, not a general firewall policy for the host or LAN.
+
+## Container groups
+
+Containers cannot reach each other unless they share a group. **Groups** under **Advanced settings** lists the groups a container belongs to, such as `build, tests`; the hint below it names the groups other containers use. Containers in the same group are on a network of their own, which has no internet, and reach each other there by hostname, by name in lowercase with hyphens (`Web Server` is `web-server`) and by the names in **Aliases**. A test runner in one desktop can then open `http://web-server:8080/` in another. The details pane shows the names a container answers to and the other members of its groups. Joining, leaving and new names apply without a restart, and Thoric refuses a name another member of the group already answers to.
+
+Members reach every program the others serve on their network, so put only containers that trust each other in a group. Their screens stay private: a desktop listens for its screen connection only on its private network to Thoric. A desktop whose image is older than that shows a warning when it is in a group, because the other members could see and control its screen; build its image again from a current catalog image, or create the container again from one.
 
 ## Proxy
 

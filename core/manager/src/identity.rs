@@ -180,8 +180,12 @@ fn tar_entry(name: &str, data: &[u8], mtime: u64) -> Vec<u8> {
 }
 
 /// The Engine API request that connects a container to a network with a MAC address.
-pub(crate) fn connect_request(container: &str, mac: &str) -> Value {
-    json!({"Container": container, "EndpointConfig": {"MacAddress": mac}})
+pub(crate) fn connect_request(container: &str, mac: &str, aliases: &[String]) -> Value {
+    let mut request = json!({"Container": container, "EndpointConfig": {"MacAddress": mac}});
+    if !aliases.is_empty() {
+        request["EndpointConfig"]["Aliases"] = json!(aliases);
+    }
+    request
 }
 
 /// Send one Engine API request with a JSON body and check its answer.
@@ -261,11 +265,24 @@ impl App {
         network: &str,
         container: &str,
     ) -> Result<()> {
+        self.connect_network_as(env, network, container, &[]).await
+    }
+
+    /// [`App::connect_network`], with names the network's DNS answers with the container's
+    /// address: a group's network (see `groups`).
+    pub(crate) async fn connect_network_as(
+        &self,
+        env: &Container,
+        network: &str,
+        container: &str,
+        aliases: &[String],
+    ) -> Result<()> {
         if let (Some(mac), Some(socket)) = (&env.spec.mac_address, &self.config.docker_socket) {
             match crate::pulls::connect(socket).await {
                 Ok(stream) => {
                     let path = format!("/networks/{}/connect", crate::pulls::query_value(network));
-                    return engine_post(stream, &path, &connect_request(container, mac)).await;
+                    let request = connect_request(container, mac, aliases);
+                    return engine_post(stream, &path, &request).await;
                 }
                 Err(error) => tracing::debug!(
                     "Connecting {container} to {network} through the CLI; {} is unavailable: {error}",
@@ -273,8 +290,12 @@ impl App {
                 ),
             }
         }
-        self.docker(&["network", "connect", network, container])
-            .await?;
+        let mut args = vec!["network", "connect"];
+        for alias in aliases {
+            args.extend(["--alias", alias]);
+        }
+        args.extend([network, container]);
+        self.docker(&args).await?;
         Ok(())
     }
 }

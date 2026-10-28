@@ -21,6 +21,7 @@ mod files;
 mod folder_archive;
 mod gamepad;
 mod gpu;
+mod groups;
 mod human;
 mod icons;
 mod identity;
@@ -571,6 +572,8 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
                 env.spec.internet = actual;
                 app.db.put(model::CONTAINERS, &env.id, &env)?;
             }
+            // Also a group network removed by hand while the manager was down.
+            app.join_groups(&env, &info).await?;
             anyhow::Ok(())
         }
         .await;

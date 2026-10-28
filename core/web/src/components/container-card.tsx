@@ -1,10 +1,12 @@
 import * as React from "react"
 import {
+  RiAlertLine,
   RiPlayCircleLine,
   RiCpuLine,
   RiGamepadLine,
   RiMicLine,
   RiComputerLine,
+  RiGroupLine,
   RiResetLeftLine,
   RiRouteLine,
   RiShieldKeyholeLine,
@@ -89,7 +91,25 @@ export function SpecBadges({ spec, className }: { spec: ContainerSpec; className
           {t("spec.proxy")}
         </Badge>
       )}
+      {!!spec.groups?.length && <span className="sr-only">{t("spec.groups")}:</span>}
+      {spec.groups?.map((group) => (
+        <Badge key={group} variant="outline" className="text-muted-foreground">
+          <RiGroupLine />
+          {group}
+        </Badge>
+      ))}
     </div>
+  )
+}
+
+/** A container in a group whose screen its members reach, since its image predates private VNC. */
+export function GroupExposure({ item }: { item: ContainerItem }) {
+  if (item.vnc_private !== false || !item.spec.groups?.length) return null
+  return (
+    <Alert>
+      <RiAlertLine className="text-warning" />
+      <AlertDescription>{t("containers.groupsExposed")}</AlertDescription>
+    </Alert>
   )
 }
 
@@ -191,6 +211,7 @@ export function ContainerCard({ item, images }: { item: ContainerItem; images: I
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <SpecBadges spec={spec} />
+        <GroupExposure item={item} />
         <div className="flex items-center justify-between">
           <Label htmlFor={switchId} className="text-muted-foreground">
             {t("spec.internet")}

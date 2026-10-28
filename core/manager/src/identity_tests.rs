@@ -323,7 +323,7 @@ async fn the_internet_network_is_connected_with_the_containers_mac_address() {
         server,
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
     ));
-    let body = connect_request("thoric-e", "02:00:00:00:00:01");
+    let body = connect_request("thoric-e", "02:00:00:00:00:01", &[]);
     engine_post(client, "/networks/thoric-e-egress/connect", &body)
         .await
         .unwrap();
@@ -343,6 +343,15 @@ async fn the_internet_network_is_connected_with_the_containers_mac_address() {
         serde_json::from_str::<Value>(sent).unwrap(),
         json!({"Container": "thoric-e", "EndpointConfig": {"MacAddress": "02:00:00:00:00:01"}})
     );
+    // A group's network gets the names its members reach the container by, with the same address.
+    assert_eq!(
+        connect_request(
+            "thoric-e",
+            "02:00:00:00:00:01",
+            &["web".into(), "api".into()]
+        ),
+        json!({"Container": "thoric-e", "EndpointConfig": {"MacAddress": "02:00:00:00:00:01", "Aliases": ["web", "api"]}})
+    );
 }
 
 #[tokio::test]
@@ -357,7 +366,7 @@ async fn a_refused_connection_reports_dockers_message() {
     let error = engine_post(
         client,
         "/networks/thoric-e-egress/connect",
-        &connect_request("thoric-e", "02:00:00:00:00:01"),
+        &connect_request("thoric-e", "02:00:00:00:00:01", &[]),
     )
     .await
     .unwrap_err();

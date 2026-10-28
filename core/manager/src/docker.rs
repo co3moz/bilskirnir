@@ -230,6 +230,7 @@ impl App {
         let mut spec = spec;
         // A container from a snapshot gets an identity of its own, not the source container's.
         crate::identity::assign(&mut spec, &container);
+        self.group_names_free(id, &spec)?;
         let env = Container {
             id: id.into(),
             container,
@@ -415,6 +416,7 @@ impl App {
             }
             let mut saved = env.clone();
             self.set_internet(&mut saved, env.spec.internet).await?;
+            self.join_groups(env, &info).await?;
             if start && info["State"]["Running"] != true {
                 // Also a container an earlier attempt created without its machine ID.
                 self.write_machine_id(env).await?;
@@ -434,6 +436,10 @@ impl App {
         if env.spec.internet {
             self.connect_network(env, &env.egress_network, &env.container)
                 .await?;
+        }
+        if !env.spec.groups.is_empty() {
+            let info = self.inspect("container", &env.container).await?;
+            self.join_groups(env, &info).await?;
         }
         if start {
             self.docker(&["start", &env.container])
@@ -495,6 +501,12 @@ impl App {
         }
         if let Some(subnet) = private_subnet {
             args.extend(["--env".into(), format!("DESKTOP_PRIVATE_SUBNET={subnet}")]);
+        } else {
+            // Its VNC server listens everywhere, whatever its image says.
+            args.extend([
+                "--label".into(),
+                format!("{}=all", crate::groups::VNC_LABEL),
+            ]);
         }
         if let Some(profile) = self.config.seccomp_profile() {
             // The CLI reads the file and sends its contents with the request.
@@ -670,6 +682,10 @@ impl App {
             }
             self.docker(&["network", "rm", id]).await?;
             self.append_log(job_id, &format!("Removed the container's {role} network."))?;
+        }
+        // A group whose last member this was loses its network; the others keep theirs.
+        if let Err(error) = self.leave_groups(env).await {
+            self.append_log(job_id, &format!("Keeping a group's network: {error:#}"))?;
         }
         // The container is gone, so Docker refuses only a volume something else still uses.
         for name in doomed {
