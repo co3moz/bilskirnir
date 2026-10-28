@@ -949,6 +949,7 @@ export const en = {
   "settings.configurationFailed": "The configuration could not be read",
   "settings.secretSet": "Set, hidden",
   "settings.notSet": "Not set",
+  "settings.idle": "No effect while {name} is off.",
   "settings.section.access": "Sign-in and access",
   "settings.section.mcp": "Agent access (MCP)",
   "settings.section.desktops": "Desktops",

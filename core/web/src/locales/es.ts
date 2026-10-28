@@ -934,6 +934,7 @@ export const es: Messages = {
   "settings.configurationFailed": "No se pudo leer la configuración",
   "settings.secretSet": "Definido, oculto",
   "settings.notSet": "Sin definir",
+  "settings.idle": "Sin efecto mientras {name} esté desactivado.",
   "settings.section.access": "Inicio de sesión y acceso",
   "settings.section.mcp": "Acceso de agentes (MCP)",
   "settings.section.desktops": "Escritorios",

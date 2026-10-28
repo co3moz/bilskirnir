@@ -944,6 +944,7 @@ export const de: Messages = {
   "settings.configurationFailed": "Die Konfiguration konnte nicht gelesen werden",
   "settings.secretSet": "Gesetzt, verborgen",
   "settings.notSet": "Nicht gesetzt",
+  "settings.idle": "Ohne Wirkung, solange {name} aus ist.",
   "settings.section.access": "Anmeldung und Zugriff",
   "settings.section.mcp": "Agentenzugriff (MCP)",
   "settings.section.desktops": "Desktops",
