@@ -879,6 +879,7 @@ export const fr: Messages = {
   "nav.dependencies": "Dépendances",
   "nav.dashboard": "Tableau de bord",
   "nav.containers": "Conteneurs",
+  "nav.groups": "Groupes réseau",
   "nav.images": "Images",
   "nav.templates": "Modèles",
   "nav.volumes": "Volumes",
@@ -1252,6 +1253,34 @@ export const fr: Messages = {
 
   "groups.members.one": "{count} conteneur",
   "groups.members.other": "{count} conteneurs",
+  "groups.none": "Aucun groupe réseau pour l'instant",
+  "groups.noneHint":
+    "Un groupe place des conteneurs sur un réseau à eux, où ils se joignent par nom d'hôte, nom ou alias. Créez-en un et choisissez les conteneurs à connecter.",
+  "groups.new": "Nouveau groupe",
+  "groups.create": "Créer un groupe",
+  "groups.newTitle": "Nouveau groupe réseau",
+  "groups.connect": "Connecter des conteneurs",
+  "groups.connectTo": "Connecter des conteneurs à {name}",
+  "groups.connectHint":
+    "Les conteneurs d'un groupe se joignent sur un réseau à eux, par nom d'hôte, nom ou alias. Un conteneur en marche le rejoint aussitôt.",
+  "groups.connectAction": "Connecter",
+  "groups.name": "Nom du groupe",
+  "groups.nameHint": "Minuscules, chiffres et tirets.",
+  "groups.exists": "Un groupe porte déjà ce nom. Les conteneurs choisis rejoignent ses membres.",
+  "groups.containers": "Conteneurs",
+  "groups.noContainers": "Il n'y a pas encore de conteneur.",
+  "groups.allMembers": "Tous les conteneurs sont déjà dans ce groupe.",
+  "groups.full": "Déjà dans {count} groupes, le maximum pour un conteneur.",
+  "groups.clash": "{other} est déjà joint sous le nom {name}.",
+  "groups.running": "{running} sur {total} en marche",
+  "groups.open": "Ouvrir",
+  "groups.all": "Tous les groupes",
+  "groups.detailHint":
+    "Ses membres se joignent sur le réseau {network}, par nom d'hôte, nom ou alias.",
+  "groups.empty": "Aucun conteneur dans ce groupe",
+  "groups.emptyHint":
+    "Un groupe existe tant qu'un conteneur le cite. Connectez des conteneurs pour le réutiliser.",
+  "groups.disconnect": "Déconnecter de {name}",
 
   "tagInput.remove": "Retirer {name}",
   "tagInput.clear": "Vider",

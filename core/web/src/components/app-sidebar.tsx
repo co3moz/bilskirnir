@@ -3,6 +3,7 @@ import {
   RiBookOpenLine,
   RiFolderOpenLine,
   RiDashboardLine,
+  RiGroupLine,
   RiLinkM,
   RiListCheck3,
   RiPulseLine,
@@ -43,7 +44,11 @@ type NavEntry = NavPage & { section?: "mcp"; children?: NavPage[] }
 
 const navMain: NavEntry[] = [
   { page: "dashboard", icon: <RiDashboardLine /> },
-  { page: "containers", icon: <ConceptIcon concept="container" /> },
+  {
+    page: "containers",
+    icon: <ConceptIcon concept="container" />,
+    children: [{ page: "groups", icon: <ConceptIcon concept="container" icon={RiGroupLine} /> }],
+  },
   { page: "images", icon: <ConceptIcon concept="image" /> },
   { page: "templates", icon: <ConceptIcon concept="template" /> },
   { page: "volumes", icon: <ConceptIcon concept="volume" /> },

@@ -870,6 +870,7 @@ export const es: Messages = {
   "nav.dependencies": "Dependencias",
   "nav.dashboard": "Panel",
   "nav.containers": "Contenedores",
+  "nav.groups": "Grupos de red",
   "nav.images": "Imágenes",
   "nav.templates": "Plantillas",
   "nav.volumes": "Volúmenes",
@@ -1248,6 +1249,35 @@ export const es: Messages = {
 
   "groups.members.one": "{count} contenedor",
   "groups.members.other": "{count} contenedores",
+  "groups.none": "Todavía no hay grupos de red",
+  "groups.noneHint":
+    "Un grupo pone contenedores en una red propia, donde se alcanzan entre sí por nombre de host, nombre o alias. Crea uno y elige los contenedores que conectar.",
+  "groups.new": "Nuevo grupo",
+  "groups.create": "Crear grupo",
+  "groups.newTitle": "Nuevo grupo de red",
+  "groups.connect": "Conectar contenedores",
+  "groups.connectTo": "Conectar contenedores a {name}",
+  "groups.connectHint":
+    "Los contenedores de un grupo se alcanzan entre sí en una red propia, por nombre de host, nombre o alias. Un contenedor en marcha se une al momento.",
+  "groups.connectAction": "Conectar",
+  "groups.name": "Nombre del grupo",
+  "groups.nameHint": "Minúsculas, dígitos y guiones.",
+  "groups.exists":
+    "Ya hay un grupo con este nombre. Los contenedores que elijas se unen a sus miembros.",
+  "groups.containers": "Contenedores",
+  "groups.noContainers": "Todavía no hay contenedores.",
+  "groups.allMembers": "Todos los contenedores ya están en este grupo.",
+  "groups.full": "Ya está en {count} grupos, el máximo para un contenedor.",
+  "groups.clash": "{other} ya se alcanza como {name}.",
+  "groups.running": "{running} de {total} en marcha",
+  "groups.open": "Abrir",
+  "groups.all": "Todos los grupos",
+  "groups.detailHint":
+    "Sus miembros se alcanzan en la red {network}, por nombre de host, nombre o alias.",
+  "groups.empty": "Ningún contenedor en este grupo",
+  "groups.emptyHint":
+    "Un grupo existe mientras un contenedor lo nombra. Conecta contenedores para volver a usarlo.",
+  "groups.disconnect": "Desconectar de {name}",
 
   "tagInput.remove": "Quitar {name}",
   "tagInput.clear": "Vaciar",

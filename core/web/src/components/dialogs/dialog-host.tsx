@@ -4,6 +4,7 @@ import { closeDialog, useDialogState, type Dialog } from "@/lib/dialogs"
 import { ActivityDrawer } from "./activity-drawer"
 import { ContainerDrawer } from "./container-drawer"
 import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
+import { GroupConnectDialog } from "./group-dialog"
 import { JobDrawer } from "./job-drawer"
 import { LogDialog } from "./log-dialog"
 import { ImportImageDialog } from "./import-dialog"
@@ -75,6 +76,8 @@ function render(dialog: Dialog, open: boolean) {
       return <VolumeImportDialog {...props} />
     case "volume-copy":
       return <VolumeCopyDialog {...props} name={dialog.name} />
+    case "group-connect":
+      return <GroupConnectDialog {...props} group={dialog.group} />
     case "volume-delete":
       return <VolumeDeleteDialog {...props} name={dialog.name} />
     case "job":

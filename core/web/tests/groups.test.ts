@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 
-import { groupNames, groupPeers, knownGroups, LABEL_PATTERN, nameLabel } from "../src/lib/groups"
+import {
+  groupNames,
+  groupPeers,
+  joinRefusal,
+  knownGroups,
+  LABEL_PATTERN,
+  nameLabel,
+} from "../src/lib/groups"
 import { matchesPattern } from "../src/lib/tags"
 import type { ContainerItem, ContainerSpec } from "../src/lib/types"
 
@@ -51,5 +58,30 @@ describe("container groups", () => {
     ])
     expect(groupPeers(items[1]!, items).map((other) => other.id)).toEqual(["a"])
     expect(groupPeers(items[3]!, items)).toEqual([])
+  })
+
+  test("a container joins a group unless the manager would refuse it", () => {
+    const items = [
+      item("a", spec("Web", ["build"], { aliases: ["api"] })),
+      item("b", spec("Api", [])),
+      item("c", spec("Db", [])),
+      item("d", spec("Busy", ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"])),
+      item("e", spec("Db", [], { hostname: "thoric-db2" })),
+    ]
+    // Api's name is the alias a member is reached by already.
+    expect(joinRefusal(items[1]!, "build", items, [])).toEqual({
+      kind: "clash",
+      name: "api",
+      other: "Web",
+    })
+    expect(joinRefusal(items[2]!, "build", items, [])).toBeNull()
+    expect(joinRefusal(items[3]!, "build", items, [])).toEqual({ kind: "full" })
+    // Two containers chosen together are held to each other too.
+    expect(joinRefusal(items[4]!, "build", items, ["c"])).toEqual({
+      kind: "clash",
+      name: "db",
+      other: "Db",
+    })
+    expect(joinRefusal(items[4]!, "data", items, [])).toBeNull()
   })
 })

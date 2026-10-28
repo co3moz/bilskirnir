@@ -21,6 +21,7 @@ import { DashboardPage } from "@/pages/dashboard"
 import { DependenciesPage } from "@/pages/dependencies"
 import { FilesPage } from "@/pages/files"
 import { ContainersPage } from "@/pages/containers"
+import { GroupsPage, NewGroupButton } from "@/pages/groups"
 import { ImagesPage } from "@/pages/images"
 import { JobsPage } from "@/pages/jobs"
 import { LoginPage } from "@/pages/login"
@@ -39,6 +40,7 @@ const DesktopPage = React.lazy(() =>
 const pages: Record<Page, () => React.ReactNode> = {
   dashboard: DashboardPage,
   containers: ContainersPage,
+  groups: GroupsPage,
   images: ImagesPage,
   templates: TemplatesPage,
   volumes: VolumesPage,
@@ -103,6 +105,7 @@ function Shell({ page }: { page: Page }) {
               <span className="sr-only sm:hidden">{t("containers.new")}</span>
             </Button>
           )}
+          {page === "groups" && <NewGroupButton />}
         </SiteHeader>
         <HumanRequestsBanner />
         <Content />

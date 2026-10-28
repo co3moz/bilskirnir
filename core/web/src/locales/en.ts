@@ -883,6 +883,7 @@ export const en = {
   "nav.dependencies": "Dependencies",
   "nav.dashboard": "Dashboard",
   "nav.containers": "Containers",
+  "nav.groups": "Network groups",
   "nav.images": "Images",
   "nav.templates": "Templates",
   "nav.volumes": "Volumes",
@@ -1261,6 +1262,35 @@ export const en = {
 
   "groups.members.one": "{count} container",
   "groups.members.other": "{count} containers",
+  "groups.none": "No network groups yet",
+  "groups.noneHint":
+    "A group puts containers on a network of their own, where they reach each other by hostname, name or alias. Create one and choose the containers to connect.",
+  "groups.new": "New group",
+  "groups.create": "Create group",
+  "groups.newTitle": "New network group",
+  "groups.connect": "Connect containers",
+  "groups.connectTo": "Connect containers to {name}",
+  "groups.connectHint":
+    "Containers in a group reach each other on a network of their own, by hostname, name or alias. A running container joins at once.",
+  "groups.connectAction": "Connect",
+  "groups.name": "Group name",
+  "groups.nameHint": "Lowercase letters, digits and hyphens.",
+  "groups.exists":
+    "A group by this name exists already. The containers you choose join its members.",
+  "groups.containers": "Containers",
+  "groups.noContainers": "There are no containers yet.",
+  "groups.allMembers": "Every container is in this group already.",
+  "groups.full": "It is in {count} groups already, the most a container can be in.",
+  "groups.clash": "{other} is reached as {name} already.",
+  "groups.running": "{running} of {total} running",
+  "groups.open": "Open",
+  "groups.all": "All groups",
+  "groups.detailHint":
+    "Its members reach each other on the network {network}, by hostname, name or alias.",
+  "groups.empty": "No container is in this group",
+  "groups.emptyHint":
+    "A group lasts while a container lists it. Connect containers to use it again.",
+  "groups.disconnect": "Disconnect from {name}",
 
   "tagInput.remove": "Remove {name}",
   "tagInput.clear": "Clear",

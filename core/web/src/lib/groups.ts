@@ -63,3 +63,33 @@ export function groupPeers(item: ContainerItem, items: readonly ContainerItem[])
     (other) => other.id !== item.id && (other.spec.groups ?? []).some((g) => groups.includes(g))
   )
 }
+
+/** The most groups a container lists, as `MOST` in groups.rs allows. */
+export const MOST_GROUPS = 8
+
+/** The Docker network a group's members share, as `group_network` in groups.rs names it. */
+export const groupNetwork = (group: string) => `thoric-group-${group}`
+
+export type JoinRefusal = { kind: "full" } | { kind: "clash"; name: string; other: string }
+
+/**
+ * Why the manager would refuse `item` in `group`, beside the group's members and the containers
+ * `chosen` to join with it: it lists the most groups already, or a name it is reached by answers
+ * for one of them. `null` when it can join.
+ */
+export function joinRefusal(
+  item: ContainerItem,
+  group: string,
+  items: readonly ContainerItem[],
+  chosen: readonly string[]
+): JoinRefusal | null {
+  if ((item.spec.groups ?? []).length >= MOST_GROUPS) return { kind: "full" }
+  const own = groupNames(item.spec)
+  for (const other of items) {
+    if (other.id === item.id) continue
+    if (!(other.spec.groups ?? []).includes(group) && !chosen.includes(other.id)) continue
+    const name = groupNames(other.spec).find((each) => own.includes(each))
+    if (name) return { kind: "clash", name, other: other.spec.name }
+  }
+  return null
+}

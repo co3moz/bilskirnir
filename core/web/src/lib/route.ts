@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react"
 export type Page =
   | "dashboard"
   | "containers"
+  | "groups"
   | "images"
   | "templates"
   | "volumes"
@@ -15,7 +16,9 @@ export type Page =
   | "dependencies"
   | "settings"
 export type Route =
-  | { page: Exclude<Page, "files" | "activity"> }
+  | { page: Exclude<Page, "files" | "activity" | "groups"> }
+  /** The network groups, or the members of the one `group` names. */
+  | { page: "groups"; group?: string }
   /** The files page, with the container it shows when one was chosen. */
   | { page: "files"; container?: string }
   /**
@@ -28,6 +31,7 @@ export type Route =
 const pages: Page[] = [
   "dashboard",
   "containers",
+  "groups",
   "images",
   "templates",
   "volumes",
@@ -63,6 +67,7 @@ export function parseRoute(hash: string): Route {
   const [page, id] = path.split("/")
   if (page === "desktop" && id) return { page: "desktop", id: decodeURIComponent(id) }
   if (page === "files") return id ? { page, container: decodeURIComponent(id) } : { page }
+  if (page === "groups") return id ? { page, group: decodeURIComponent(id) } : { page }
   if (page === "activity") return activityRoute(search)
   if (page === "mcp") {
     // `#/mcp` alone, the MCP page's link before it had pages of its own, opens the endpoints.
@@ -71,7 +76,7 @@ export function parseRoute(hash: string): Route {
   }
   return {
     page: pages.includes(page as Page)
-      ? (page as Exclude<Page, "files" | "activity">)
+      ? (page as Exclude<Page, "files" | "activity" | "groups">)
       : "dashboard",
   }
 }
@@ -80,6 +85,7 @@ export function href(route: Route) {
   if (route.page === "desktop") return `#/desktop/${encodeURIComponent(route.id)}`
   if (route.page === "files" && route.container)
     return `#/files/${encodeURIComponent(route.container)}`
+  if (route.page === "groups" && route.group) return `#/groups/${encodeURIComponent(route.group)}`
   if (route.page === "activity") {
     const query = new URLSearchParams()
     if (route.container) query.set("container", route.container)
