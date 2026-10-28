@@ -132,6 +132,8 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. |
+| POST | `/api/jobs/{job_id}/retry` | Start a [failed or interrupted job again](#retry-a-job) with the request it was started with; returns the new `job_id`. |
+| GET | `/api/jobs/{job_id}/request` | The request a failed or interrupted job would be retried with, as `{"kind", "request"}`. |
 | GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, and agents' requests for a person, while the session lasts. |
 | GET | `/api/human-requests` | The [requests for a person](#requests-for-a-person) that wait for an answer, oldest first, in `items`. |
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
@@ -157,7 +159,7 @@ The response contains `job_id`. Poll its detail endpoint:
 curl --cookie thoric.cookies http://localhost:8080/api/jobs/JOB_ID
 ```
 
-A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `container_id` in `result`. A job that makes a container or an image, `create`, `build`, `snapshot` or `image-import`, carries its `name` from the moment it is queued, so a list can show what is on its way before the record exists; an import sent without a name has none, since its image takes the archive's. Other jobs have no `name`. Read the log for a failed job; after interruption, inspect the resources before retrying.
+A job is finished when its status is `completed`, `failed` or `interrupted`. A successful creation puts `container_id` in `result`. A job that makes a container or an image, `create`, `build`, `snapshot` or `image-import`, carries its `name` from the moment it is queued, so a list can show what is on its way before the record exists; an import sent without a name has none, since its image takes the archive's. Other jobs have no `name`. Read the log for a failed job; after interruption, inspect the resources before retrying. A build, a snapshot and a catalog image's download or build can be [retried](#retry-a-job) with the request they were started with.
 
 `GET /api/containers` returns each container's record, with `id`, `spec` (its creation settings), `container` (the Docker container's name), `source_image_id` and `last_error`, and Docker's view beside those fields: `state` is Docker's container state, `missing` when the container is gone or `unavailable` when Docker cannot be reached; `health` is `healthy`, `unhealthy`, `starting` or `unknown`; `status` is Docker's status text. `GET /api/containers/{id}` returns one item of the same shape.
 
@@ -197,6 +199,10 @@ A feature a request leaves out gets the installation's default, which `GET /api/
 - The machine ID is written to `/etc/machine-id` and `/var/lib/dbus/machine-id` in the created container before it starts. The catalog images carry one ID that every container of a release shares, and a snapshot carries the ID of the container it was taken from, so neither is used as it is.
 
 Records saved before identities were kept have `null` for all three until a Docker container is next created for them. They then take the hostname of the container being replaced, and its MAC address if it is running, since Docker gives a stopped container its address only when it starts; without such a container they get new ones. Their machine ID stays `null`, which leaves the ID their image or commit carries, as before, until the settings set one.
+
+## Retry a job
+
+A script build (`build`), a snapshot (`snapshot`) and a catalog image's download (`image-pull`) or source build (`source-build`) keep the request they were started with, so a job that failed, such as on a dropped connection to Docker, or that a restart interrupted, can start again without its form being filled in again. `GET /api/jobs/{job_id}` then carries `"retryable": true`, and `POST /api/jobs/{job_id}/retry` sends the request through its route once more: it is checked again, and a new job of the same kind and name answers with its own `job_id`. Each retry is a job of its own, and the failed one stays retryable. `GET /api/jobs/{job_id}/request` returns what a retry would send, `{"kind": "build", "request": {...}}`, where a build's `request` is the body of `POST /api/images/build`, so it can be changed and sent there instead. A snapshot's is `{"container_id", "name", "description"}` and a catalog image's `{"image_id"}`. Both answer `409` for a job that is still running or completed, and for one that keeps no request: a container's creation can carry secret values, which are kept nowhere but in its setup record, and an upload's body is gone once it has been read. A request goes with its job when it completes or when the job history is pruned, and backups leave it out with the jobs.
 
 ## Change settings after creation
 

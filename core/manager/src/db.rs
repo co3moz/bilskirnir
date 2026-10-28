@@ -71,11 +71,26 @@ impl Db {
     /// Remove the finished jobs beyond the newest `keep`. A job still running or queued stays
     /// whatever its age; its end is what marks it finished.
     pub fn prune_jobs(&self, keep: usize) -> Result<usize> {
-        let removed = self.0.lock().unwrap().execute(
+        let conn = self.0.lock().unwrap();
+        let removed = conn.execute(
             "DELETE FROM records WHERE kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)",
             params![keep as i64],
         )?;
+        // A request kept to start a job again goes with its job.
+        conn.execute(
+            "DELETE FROM records WHERE kind=?1 AND id NOT IN (SELECT id FROM records WHERE kind='job')",
+            params![crate::jobs::retry::REQUESTS],
+        )?;
         Ok(removed)
+    }
+    /// Whether a record of `kind` is saved under `id`, without reading it.
+    pub fn contains(&self, kind: &str, id: &str) -> Result<bool> {
+        let found = self.0.lock().unwrap().query_row(
+            "SELECT EXISTS(SELECT 1 FROM records WHERE kind=?1 AND id=?2)",
+            params![kind, id],
+            |row| row.get(0),
+        )?;
+        Ok(found)
     }
     pub fn jobs_summary(&self) -> Result<Vec<crate::model::Job>> {
         let conn = self.0.lock().unwrap();

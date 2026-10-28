@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiAddLine } from "@remixicon/react"
+import { RiAddLine, RiPencilLine, RiResetLeftLine } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
 import { CopyButton } from "@/components/copy-button"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/drawer"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
+import { attempt, editBuildJob, retryJob } from "@/lib/actions"
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { date, jobLogText, jobName, jobProgress, jobTone } from "@/lib/format"
 import { t } from "@/lib/i18n"
@@ -66,6 +67,13 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
   const staged = data?.stages?.length ? data : null
   const result = data?.result as
     { reference?: string; image_id?: string; container_id?: string } | null | undefined
+  // A retry opens the new job's log, or the build form, in place of this one.
+  const [busy, setBusy] = React.useState(false)
+  const run = (action: () => Promise<unknown>) => async () => {
+    setBusy(true)
+    await attempt(action)
+    setBusy(false)
+  }
 
   return (
     <SideDrawer {...props} wide>
@@ -131,6 +139,18 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
           >
             <ConceptIcon concept="container" data-icon="inline-start" />
             {t("jobs.viewContainers")}
+          </Button>
+        )}
+        {data?.retryable && data.kind === "build" && (
+          <Button variant="outline" disabled={busy} onClick={run(() => editBuildJob(id))}>
+            <RiPencilLine data-icon="inline-start" />
+            {t("jobs.editRetry")}
+          </Button>
+        )}
+        {data?.retryable && (
+          <Button disabled={busy} onClick={run(() => retryJob(id))}>
+            <RiResetLeftLine data-icon="inline-start" />
+            {t("jobs.retry")}
           </Button>
         )}
         <DrawerClose asChild>

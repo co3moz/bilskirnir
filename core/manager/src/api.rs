@@ -1,7 +1,7 @@
 use crate::{
     App,
     error::{Error, Result, missing},
-    jobs::{launch, launch_named},
+    jobs::{launch, launch_named, launch_retryable, retry},
     model::*,
 };
 use anyhow::Context;
@@ -30,10 +30,15 @@ pub async fn build_catalog(
 ) -> Result<Json<Value>> {
     let image = crate::catalog::find(&id).ok_or_else(missing)?;
     let resource = format!("image:{}", image.id);
-    launch(
+    let request = retry::Request::SourceBuild {
+        image_id: image.id.clone(),
+    };
+    launch_retryable(
         app,
         "source-build",
         resource,
+        None,
+        request,
         move |app, job_id| async move {
             app.append_log(
                 &job_id,
@@ -69,9 +74,17 @@ pub async fn pull_catalog(
 ) -> Result<Json<Value>> {
     let image = crate::catalog::find(&id).ok_or_else(missing)?;
     let resource = format!("image:{}", image.id);
-    launch(app, "image-pull", resource, move |app, job_id| async move {
-        app.pull_catalog_image(&image, &job_id).await
-    })
+    let request = retry::Request::ImagePull {
+        image_id: image.id.clone(),
+    };
+    launch_retryable(
+        app,
+        "image-pull",
+        resource,
+        None,
+        request,
+        move |app, job_id| async move { app.pull_catalog_image(&image, &job_id).await },
+    )
 }
 pub async fn system(State(app): State<Arc<App>>) -> Json<Value> {
     match app.docker(&["info", "--format", "{{json .}}"]).await {
@@ -632,7 +645,7 @@ pub async fn register_image(
 /// A build request. `GET /api/images/{id}/config` returns the same shape, so an exported
 /// configuration is a request that builds the image again, and a template on the templates page
 /// is one too.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BuildImage {
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -710,11 +723,12 @@ pub async fn build(
 ) -> Result<Json<Value>> {
     body.validate()?;
     let name = body.name.clone();
-    launch_named(
+    launch_retryable(
         app,
         "build",
         format!("build:{}", uuid::Uuid::new_v4()),
         Some(name),
+        retry::Request::Build(body.clone()),
         move |app, id| async move {
             app.plan_stages(&id, &crate::stages::BUILD_STAGES)?;
             app.begin_stage(&id, "base")?;
@@ -846,11 +860,17 @@ pub async fn snapshot(
         return Err(anyhow::anyhow!("Invalid snapshot name or description").into());
     }
     let name = body.name.clone();
-    launch_named(
+    let request = retry::Request::Snapshot {
+        container_id: env_id.clone(),
+        name: body.name.clone(),
+        description: body.description.clone(),
+    };
+    launch_retryable(
         app,
         "snapshot",
         format!("container:{env_id}"),
         Some(name),
+        request,
         move |app, id| async move {
             app.plan_stages(&id, &crate::stages::SNAPSHOT_STAGES)?;
             app.begin_stage(&id, "check")?;
@@ -934,7 +954,11 @@ pub async fn jobs(State(app): State<Arc<App>>) -> Result<Json<Value>> {
 }
 pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
     let job: Job = app.db.get("job", &id)?;
-    Ok(Json(json!(job)))
+    let mut value = json!(job);
+    if retry::retryable(&app, &job) {
+        value["retryable"] = json!(true);
+    }
+    Ok(Json(value))
 }
 #[cfg(test)]
 #[path = "api_tests.rs"]
