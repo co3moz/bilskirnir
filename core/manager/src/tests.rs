@@ -1169,6 +1169,7 @@ fn job_list_is_bounded_and_strips_logs_before_deserialization() {
             result: None,
             progress: Some(serde_json::json!({"current": 1})),
             stages: Vec::new(),
+            script: None,
             name: None,
         };
         app.db.put("job", &id, &j).unwrap();

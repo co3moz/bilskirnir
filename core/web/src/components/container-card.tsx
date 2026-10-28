@@ -233,7 +233,7 @@ export function PendingContainerCard({ pending }: { pending: Pending }) {
           {progress?.max !== undefined && (
             <Progress
               value={(progress.value! * 100) / progress.max}
-              aria-label={t("jobs.downloadProgress")}
+              aria-label={progress.title}
               className="max-w-48 bg-background"
             />
           )}

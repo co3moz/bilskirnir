@@ -108,6 +108,7 @@ export const en = {
   "jobs.editRetry": "Edit and retry",
   "jobs.archiveProgress": "Archive progress",
   "jobs.downloadProgress": "Image download progress",
+  "jobs.scriptProgress": "Setup script progress",
   "jobs.viewContainers": "View containers",
 
   "events.jobCompleted": "{action} completed",
@@ -327,6 +328,11 @@ export const en = {
   "progress.received": "{size} received",
   "progress.copied": "{size} copied",
   "progress.receivedOf": "{current} of {total} received",
+  "progress.script.part": "{name}, part {part} of {parts}",
+  "progress.script.stage": "Step {stage} of {stages}",
+  "progress.script.skipped": "Step {stage} of {stages} skipped",
+  "progress.script.line": "Line {line} of {lines}",
+  "progress.script.running": "Running the script",
 
   "stage.base": "Preparing the base image",
   "stage.script": "Running the setup script",
@@ -349,6 +355,15 @@ export const en = {
   "stages.total": "Total",
   "stages.pending": "Not started",
   "stages.skipped": "Skipped",
+  "scriptSteps.parts": "Script parts",
+  "scriptSteps.steps": "Script steps",
+  "scriptSteps.step": "Step {stage}",
+  "scriptSteps.range": "Steps {from}-{to}",
+  "scriptSteps.more.one": "{count} more step",
+  "scriptSteps.more.other": "{count} more steps",
+  "scriptSteps.notReached.one": "{count} step not reached",
+  "scriptSteps.notReached.other": "{count} steps not reached",
+  "scriptSteps.cached": "Cached",
   "stages.layerHint":
     "Docker reports no progress while it saves the layer. A large change can take several minutes.",
 

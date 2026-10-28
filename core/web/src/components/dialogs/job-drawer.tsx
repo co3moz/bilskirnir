@@ -3,7 +3,7 @@ import { RiAddLine, RiPencilLine, RiResetLeftLine } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
 import { CopyButton } from "@/components/copy-button"
-import { JobStages } from "@/components/job-stages"
+import { JobStages, ProgressBar, ScriptSteps } from "@/components/job-stages"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +13,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { attempt, editBuildJob, retryJob } from "@/lib/actions"
 import { closeDialog, openDialog } from "@/lib/dialogs"
@@ -92,21 +91,12 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
           </div>
         </DrawerDescription>
       </DrawerHeader>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 text-sm">
+      {/* Scrolls when the stages and a script's steps leave the log less than its least height. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 text-sm">
         {staged && <JobStages job={staged} progress={progress} />}
-        {progress && !staged && (
-          <div role="status" className="flex flex-col gap-2">
-            {progress.max !== undefined && (
-              <Progress
-                value={(progress.value! * 100) / progress.max}
-                aria-label={
-                  data?.progress?.transfer ? t("jobs.archiveProgress") : t("jobs.downloadProgress")
-                }
-              />
-            )}
-            <p className="text-xs text-muted-foreground">{progress.text}</p>
-          </div>
-        )}
+        {progress && !staged && <ProgressBar progress={progress} />}
+        {/* A compose setup's steps, in the job that creates, resets or retries a container. */}
+        {data && !staged && <ScriptSteps job={data} />}
         {job.error ? (
           <p className="text-destructive">{job.error.message}</p>
         ) : data ? (

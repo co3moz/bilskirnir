@@ -168,6 +168,7 @@ fn job(app: &App, id: &str) {
         result: None,
         progress: None,
         stages: Vec::new(),
+        script: None,
         name: None,
     };
     app.db.put("job", id, &job).unwrap();

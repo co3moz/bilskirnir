@@ -51,6 +51,7 @@ fn job(id: &str, kind: &str, status: &str) -> Job {
         result: None,
         progress: None,
         stages: Vec::new(),
+        script: None,
     }
 }
 

@@ -18,6 +18,7 @@ fn job(stages: bool) -> Job {
         result: None,
         progress: None,
         stages: Vec::new(),
+        script: None,
         name: None,
     };
     if stages {
@@ -88,7 +89,7 @@ const CLASSIC: &str = "#0 building with \"default\" instance using docker driver
 #6 [2/3] COPY setup.sh /tmp/thoric-setup.sh
 #6 DONE 0.1s
 
-#7 [3/3] RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh
+#7 [3/3] RUN --mount=type=bind,source=thoric_trace.sh,target=/tmp/thoric_trace.sh BASH_ENV=/tmp/thoric_trace.sh bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh
 #7 0.231 exporting to image
 #7 0.232 #9 naming to nowhere
 #7 2.004 Setting up python3 (3.12.3-0ubuntu2) ...
@@ -180,14 +181,21 @@ fn build_output_names_each_stage_on_its_own_log_line() {
     app.set_progress("build", Some(download)).unwrap();
     app.begin_stage("build", "script").unwrap();
     // Output arrives in pieces that split lines, the marker line included.
+    let mut progress = ScriptProgress::build(vec![crate::script_progress::ScriptPart {
+        id: "setup".into(),
+        name: "Staged".into(),
+        script: "true\n".into(),
+    }]);
     let mut lines = Lines::default();
     let mut rest = CLASSIC;
     while !rest.is_empty() {
         let (piece, after) = rest.split_at(rest.len().min(37));
-        app.log_build_output("build", &lines.push(piece)).unwrap();
+        app.log_script_output("build", &lines.push(piece), &mut progress)
+            .unwrap();
         rest = after;
     }
-    app.log_build_output("build", &lines.finish()).unwrap();
+    app.log_script_output("build", &lines.finish(), &mut progress)
+        .unwrap();
     let job: Job = app.db.get("job", "build").unwrap();
     assert_eq!(
         begun(&job),
@@ -199,8 +207,14 @@ fn build_output_names_each_stage_on_its_own_log_line() {
             ("cleanup", false)
         ]
     );
-    // The download's progress ended with the stage it belonged to.
+    // The download's progress ended with the stage it belonged to, and the script's with the
+    // layer stage; the script's one part ran from its step's first line to its end.
     assert_eq!(job.progress, None);
+    let part = &job.script.as_ref().unwrap().parts[0];
+    assert!(
+        part.started_at.is_some() && part.finished_at.is_some(),
+        "{part:?}"
+    );
     let log = job.log.lines().collect::<Vec<_>>();
     assert_eq!(log[0], "Stage 1/5: Preparing the base image");
     assert_eq!(log[1], "Stage 2/5: Running the setup script");
@@ -333,7 +347,7 @@ async fn a_build_job_reports_its_stages_and_where_it_failed() {
     // Images are desktop images, and a build writes the prepared output.
     let (app, dir) = fake_docker(
         r#"case "$1" in
-  build) cat build-output >&2; exit $(cat build-status) ;;
+  build) cp "$7/Dockerfile" "$7/thoric_trace.sh" .; cat build-output >&2; exit $(cat build-status) ;;
 esac
 case "$1 $2" in
   'image inspect') echo '[{"Id":"sha256:feed","Config":{"Labels":{"thoric.desktop":"true"}}}]' ;;
@@ -374,13 +388,32 @@ esac
         assert!(started <= finished && finished <= built.finished_at.unwrap());
     }
     assert!(built.log.contains("Stage 5/5: Cleaning up\n"));
+    // Bash reads the line trace before the script, from a mount that leaves nothing in the image.
+    let dockerfile = std::fs::read_to_string(dir.join("Dockerfile")).unwrap();
+    assert!(dockerfile.contains("COPY setup.sh /tmp/thoric-setup.sh\nRUN --mount=type=bind,source=thoric_trace.sh,target=/tmp/thoric_trace.sh BASH_ENV=/tmp/thoric_trace.sh bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh\n"), "{dockerfile}");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("thoric_trace.sh")).unwrap(),
+        crate::script_progress::TRACE
+    );
+    assert!(
+        built.script.as_ref().unwrap().parts[0]
+            .finished_at
+            .is_some()
+    );
 
-    // A failed script leaves its own stage as the last one started; cleanup still runs unlisted.
+    // A failed script leaves its own stage as the last one started, and its part without an end;
+    // cleanup still runs unlisted.
     let failed = run(
-        "#7 [3/3] RUN bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh\n#7 0.1 nope\n#7 ERROR: exit code: 17\n",
+        "#7 [3/3] RUN BASH_ENV=/tmp/thoric_trace.sh bash /tmp/thoric-setup.sh && rm /tmp/thoric-setup.sh\n#7 0.1 THORIC_LINE=1\n#7 0.1 nope\n#7 ERROR: exit code: 17\n",
         1,
     )
     .await;
+    let part = &failed.script.as_ref().unwrap().parts[0];
+    assert!(
+        part.started_at.is_some() && part.finished_at.is_none(),
+        "{part:?}"
+    );
+    assert!(failed.log.contains("#7 0.1 nope\n") && !failed.log.contains("THORIC_LINE"));
     assert_eq!(failed.status, "failed");
     assert_eq!(
         begun(&failed),

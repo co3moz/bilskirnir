@@ -1,4 +1,4 @@
-use crate::{App, model::*, volumes::RemovedVolumes};
+use crate::{App, model::*, script_progress::ScriptProgress, volumes::RemovedVolumes};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{process::Stdio, time::Duration};
@@ -772,30 +772,39 @@ impl App {
         args: &[String],
         input: Option<Vec<u8>>,
     ) -> Result<()> {
-        self.run_logged(id, args, input, false, LOGGED_LIMIT).await
+        self.run_logged(id, args, input, None, LOGGED_LIMIT).await
     }
-    /// A logged command that may run longer than the usual hour, such as a compose setup step
-    /// whose own timeout is longer.
-    pub async fn docker_logged_within(
+    /// A compose setup step's `docker exec`: its output is logged a whole line at a time and
+    /// followed for the script's progress, and it may run longer than the usual hour when the
+    /// step's own timeout is longer.
+    pub(crate) async fn docker_setup_logged(
         &self,
         id: &str,
         args: &[String],
-        input: Option<Vec<u8>>,
+        input: Vec<u8>,
         limit: Duration,
+        progress: &mut ScriptProgress,
     ) -> Result<()> {
-        self.run_logged(id, args, input, false, limit).await
+        self.run_logged(id, args, Some(input), Some(progress), limit)
+            .await
     }
-    /// A script build's `docker build`: its output is logged a whole line at a time, and a line
-    /// that begins a build stage starts it.
-    pub async fn docker_build_logged(&self, id: &str, args: &[String]) -> Result<()> {
-        self.run_logged(id, args, None, true, LOGGED_LIMIT).await
+    /// A script build's `docker build`: its output is logged a whole line at a time and followed
+    /// for the scripts' progress, and a line that begins a build stage starts it.
+    pub(crate) async fn docker_build_logged(
+        &self,
+        id: &str,
+        args: &[String],
+        progress: &mut ScriptProgress,
+    ) -> Result<()> {
+        self.run_logged(id, args, None, Some(progress), LOGGED_LIMIT)
+            .await
     }
     async fn run_logged(
         &self,
         id: &str,
         args: &[String],
         input: Option<Vec<u8>>,
-        staged: bool,
+        progress: Option<&mut ScriptProgress>,
         limit: Duration,
     ) -> Result<()> {
         let mut child = self
@@ -832,14 +841,15 @@ impl App {
                 crate::process::TextDecoder::default(),
             );
             let (mut buf_a, mut buf_b) = ([0; 8192], [0; 8192]);
-            let mut lines = staged.then(<[crate::stages::Lines; 2]>::default);
-            let mut log = |stream: usize, text: String, end: bool| match &mut lines {
-                Some(lines) => {
+            let mut script =
+                progress.map(|progress| (<[crate::stages::Lines; 2]>::default(), progress));
+            let mut log = |stream: usize, text: String, end: bool| match &mut script {
+                Some((lines, progress)) => {
                     let mut whole = lines[stream].push(&text);
                     if end {
                         whole.push_str(&lines[stream].finish());
                     }
-                    self.log_build_output(id, &whole)
+                    self.log_script_output(id, &whole, progress)
                 }
                 None if text.is_empty() => Ok(()),
                 None => self.append_log(id, &text),

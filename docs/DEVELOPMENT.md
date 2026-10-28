@@ -190,6 +190,21 @@ A template can let the user choose part of what it installs with `options`, whic
 }
 ```
 
+Let a template's scripts say where they are, so the build's panel shows its steps and which were left out. Print `THORIC_STAGE=<i>/<n> <label>` on a line of its own as the i-th of n steps begins, and `THORIC_SKIP=<i>/<n> <label>` for the step of an option that is off, keeping the numbers the same whichever options are chosen:
+
+```bash
+echo "THORIC_STAGE=1/3 Installing radare2"
+if [ "$WINE" = true ]; then
+  echo "THORIC_STAGE=2/3 Installing Wine"
+  apt-get install -y wine
+else
+  echo "THORIC_SKIP=2/3 Wine"
+fi
+echo "THORIC_STAGE=3/3 Cleaning up"
+```
+
+Count each script's steps on its own: in a merged build every part, and every compose step, is followed apart, so a template's numbers never depend on what it is merged with. The compose's setup script can print them too. A script without them is followed by the line it reached, which says less, since one long `apt-get install` line is most of the time; [the API guide](API.md#script-progress) has the details.
+
 The dashboard resolves options in the browser and never sends them. When the image builds, it writes the values at the top of the script, after its `#!` line, as `RADARE2=true` and `WINE=false`, and leaves out the servers of the options that are off. So the script sets its own defaults with `: "${NAME:=default}"`, each the same as its option's `default`: a release from before options, an agent calling `build_image` and a pasted configuration send the script as it is, and it then installs the default set. Give an option a name of the template's own, such as `RADARE2`, never a variable the script or its tools read, such as `PATH` or `HOME`. The image's record keeps the script with the values in it, so its **Export configuration** builds the same image again and has no `options`. In a merged build each template's options stay with its part, and its values go into its own script.
 
 ```bash

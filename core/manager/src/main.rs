@@ -38,6 +38,7 @@ mod pulls;
 mod reconfigure;
 mod recordings;
 mod releases;
+mod script_progress;
 mod stages;
 mod terminal;
 mod transfers;

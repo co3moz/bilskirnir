@@ -2,9 +2,10 @@
 
 Reads one JSON request from stdin: the script of one compose step, its parameter values, the
 names of its secret parameters, the secret values of the compose's other steps and the time
-limit. Each parameter becomes an environment variable of the script, which runs with
-fail-on-error and stdin closed. Its output is streamed back with every secret value replaced
-by ***, and the exit status is the script's.
+limit, and the manager's line trace. Each parameter becomes an environment variable of the
+script, which runs with fail-on-error and stdin closed, after bash reads the trace so the job can
+tell which line the script has reached. Its output is streamed back with every secret value
+replaced by ***, and the exit status is the script's.
 """
 
 import json
@@ -52,6 +53,18 @@ def emit(data):
         sys.stdout.buffer.flush()
 
 
+def unlinked(text):
+    """A descriptor of an unlinked copy of `text`: a command that reads stdin cannot consume it,
+    and nothing of it stays behind in the desktop."""
+    with tempfile.NamedTemporaryFile("wb", prefix="thoric-setup.", delete=False) as handle:
+        handle.write(text.encode())
+        path = handle.name
+    try:
+        return os.open(path, os.O_RDONLY)
+    finally:
+        os.unlink(path)
+
+
 def stop(process):
     """Ends the script and whatever it started, which share its session."""
     for sig, wait in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
@@ -75,25 +88,23 @@ def main():
     timeout = int(request.get("timeout_seconds", 600))
     environment = dict(os.environ)
     environment.update(values)
-    # An unlinked copy: a command that reads stdin cannot consume the script, and nothing of it
-    # stays behind in the desktop.
-    with tempfile.NamedTemporaryFile("wb", prefix="thoric-setup.", delete=False) as handle:
-        handle.write(request["script"].encode())
-        path = handle.name
-    try:
-        script = os.open(path, os.O_RDONLY)
-    finally:
-        os.unlink(path)
+    script = unlinked(request["script"])
+    files = (script,)
+    if request.get("trace"):
+        trace = unlinked(request["trace"])
+        files += (trace,)
+        environment["BASH_ENV"] = f"/dev/fd/{trace}"
     process = subprocess.Popen(
         ["bash", "-e", f"/dev/fd/{script}"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=environment,
-        pass_fds=(script,),
+        pass_fds=files,
         start_new_session=True,
     )
-    os.close(script)
+    for file in files:
+        os.close(file)
     masker = Masker(secrets)
     output = process.stdout.fileno()
     os.set_blocking(output, False)

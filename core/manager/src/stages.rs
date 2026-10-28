@@ -5,13 +5,14 @@
 //! records when it started and finished, in seconds like the job's own times. Stages only move
 //! forward. One that never started was skipped, and the last one that started in a failed or
 //! interrupted job is where it stopped. A stage has no percentage of its own: the job's `progress`
-//! stays the measured progress of the running stage, which only a base image download has.
-//! BuildKit reports nothing countable while a script runs or while it saves the image layer, and
-//! `docker commit` reports nothing while it saves a container layer, so those stages show only
-//! their time.
+//! stays the progress of the running stage, which a base image download measures and the scripts
+//! report themselves (`script_progress`). BuildKit reports nothing countable while it saves the
+//! image layer, and `docker commit` reports nothing while it saves a container layer, so those
+//! stages show only their time.
 use crate::{
     App,
     model::{Job, now},
+    script_progress::ScriptProgress,
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -202,18 +203,30 @@ impl App {
         Ok(())
     }
 
-    /// Log whole lines of a build's output, starting the stage a line begins before the line.
-    pub(crate) fn log_build_output(&self, id: &str, text: &str) -> Result<()> {
-        let (mut from, mut at) = (0, 0);
+    /// Log whole lines of a build's or a compose setup's output and follow its scripts'
+    /// progress. A line that begins a build stage starts it before the line, and ends the
+    /// scripts' progress; the trace's lines stay out of the log.
+    pub(crate) fn log_script_output(
+        &self,
+        id: &str,
+        text: &str,
+        progress: &mut ScriptProgress,
+    ) -> Result<()> {
+        let at = now();
+        let mut kept = String::new();
         for line in text.split_inclusive('\n') {
-            if let Some(stage) = buildkit_stage(line) {
-                self.log_text(id, &text[from..at])?;
+            if let Some(stage) = progress.builds().then(|| buildkit_stage(line)).flatten() {
+                self.log_text(id, &std::mem::take(&mut kept))?;
+                progress.end();
+                self.save_script(id, progress)?;
                 self.begin_stage(id, stage)?;
-                from = at;
             }
-            at += line.len();
+            if progress.read(line, at) {
+                kept.push_str(line);
+            }
         }
-        self.log_text(id, &text[from..])
+        self.log_text(id, &kept)?;
+        self.save_script(id, progress)
     }
 
     fn log_text(&self, id: &str, text: &str) -> Result<()> {

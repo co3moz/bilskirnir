@@ -1,4 +1,5 @@
 import { test } from "bun:test"
+import { readFileSync } from "node:fs"
 import assert from "node:assert/strict"
 
 import {
@@ -7,6 +8,7 @@ import {
   downloadProgress,
   containerStatus,
   desktopTitle,
+  duration,
   imageChoices,
   imageHolders,
   imageSource,
@@ -19,6 +21,7 @@ import {
   needsAttention,
   recentJobs,
   restartNotice,
+  scriptParts,
 } from "../src/lib/format"
 import type { ContainerItem, ContainerSetup, ImageItem, JobStatus } from "../src/lib/types"
 
@@ -273,12 +276,15 @@ test("a job names what it worked on, even after that container was deleted", () 
 
 test("archive jobs count bytes; image downloads keep counting layers", () => {
   assert.deepEqual(jobProgress({ transfer: "export", current: 0 }), {
+    title: "Archive progress",
     text: "Docker is preparing the image…",
   })
   assert.deepEqual(jobProgress({ transfer: "export", current: 3 * 1024 ** 3 }), {
+    title: "Archive progress",
     text: "3.0 GiB exported",
   })
   assert.deepEqual(jobProgress({ transfer: "import", current: 1024 ** 3, total: 4 * 1024 ** 3 }), {
+    title: "Archive progress",
     value: 1024 ** 3,
     max: 4 * 1024 ** 3,
     percent: 25,
@@ -286,17 +292,189 @@ test("archive jobs count bytes; image downloads keep counting layers", () => {
   })
   // An archive streamed without a size has no total: bytes, and no percentage to show.
   assert.deepEqual(jobProgress({ transfer: "import", current: 3 * 1024 ** 3 }), {
+    title: "Archive progress",
     text: "3.0 GiB received",
   })
   // A volume copy counts the bytes it has copied; nothing was received.
   assert.deepEqual(jobProgress({ transfer: "copy", current: 2 * 1024 ** 2 }), {
+    title: "Archive progress",
     text: "2.0 MiB copied",
   })
-  assert.deepEqual(
-    jobProgress({ current: 0, total: 0, layers: 0, layers_done: 0 }),
-    downloadProgress({ current: 0, total: 0, layers: 0, layers_done: 0 })
-  )
+  assert.deepEqual(jobProgress({ current: 0, total: 0, layers: 0, layers_done: 0 }), {
+    ...downloadProgress({ current: 0, total: 0, layers: 0, layers_done: 0 }),
+    title: "Image download progress",
+  })
   assert.equal(jobProgress(null), null)
+})
+
+test("a script's progress names its part, then the step it named or the line it reached", () => {
+  const title = "Setup script progress"
+  assert.deepEqual(
+    jobProgress({
+      script: {
+        part: 2,
+        parts: 3,
+        name: "Ghidra",
+        stage: 3,
+        stages: 10,
+        label: "Installing Ghidra",
+        percent: 47,
+      },
+    }),
+    {
+      title,
+      value: 47,
+      max: 100,
+      percent: 47,
+      text: "Ghidra, part 2 of 3 · Step 3 of 10: Installing Ghidra",
+    }
+  )
+  assert.equal(
+    jobProgress({
+      script: { part: 1, parts: 1, stage: 4, stages: 5, label: "Wine", skipped: true, percent: 80 },
+    })?.text,
+    "Step 4 of 5 skipped: Wine"
+  )
+  assert.equal(
+    jobProgress({
+      script: {
+        part: 1,
+        parts: 1,
+        line: 42,
+        lines: 120,
+        label: "apt-get install -y gdb",
+        percent: 34,
+      },
+    })?.text,
+    "Line 42 of 120: apt-get install -y gdb"
+  )
+  // A part that has said nothing yet is still running.
+  assert.deepEqual(jobProgress({ script: { part: 1, parts: 1, percent: 0 } }), {
+    title,
+    value: 0,
+    max: 100,
+    percent: 0,
+    text: "Running the script",
+  })
+})
+
+// A running stage counts up to the current time, which has a fraction.
+test("a time just short of a minute reads as the next minute", () => {
+  assert.equal(duration(59.6), "1m 0s")
+  assert.equal(duration(479.6), "8m 0s")
+  assert.equal(duration(65.2), "1m 5s")
+  assert.equal(duration(-1), "0s")
+})
+
+test("a script's steps show what was skipped, what is to come and where a job stopped", () => {
+  const steps = (job: Parameters<typeof scriptParts>[0]) =>
+    scriptParts(job, 100).map((part) => ({
+      ...part,
+      steps: part.steps.map(({ number, label, state, seconds }) => [number, label, state, seconds]),
+    }))
+  const running = steps({
+    status: "running",
+    finished_at: null,
+    script: {
+      parts: [
+        { name: "Base", started_at: 10, finished_at: 10, cached: true },
+        {
+          name: "Ghidra",
+          started_at: 20,
+          stages: 10,
+          steps: [
+            { stage: 1, label: "Download", started_at: 20, finished_at: 40 },
+            { stage: 2, label: "Wine", skipped: true },
+            { stage: 5, started_at: 40 },
+          ],
+        },
+        { name: "GDB" },
+      ],
+    },
+  })
+  assert.deepEqual(
+    running.map(({ name, state, seconds, cached }) => [name, state, seconds, cached]),
+    [
+      ["Base", "done", 0, true],
+      ["Ghidra", "running", 80, false],
+      ["GDB", "pending", null, false],
+    ]
+  )
+  assert.deepEqual(running[1].steps, [
+    ["1/10", "Download", "done", 20],
+    ["2/10", "Wine", "skipped", null],
+    [undefined, "Steps 3-4", "skipped", null],
+    ["5/10", "Step 5", "running", 60],
+    [undefined, "5 more steps", "pending", null],
+  ])
+  // A part that ended well skipped the steps it never named; the one a failed job stopped in
+  // did not reach them.
+  const ended = steps({
+    status: "failed",
+    finished_at: 90,
+    script: {
+      parts: [
+        {
+          name: "A",
+          started_at: 10,
+          finished_at: 20,
+          stages: 3,
+          steps: [{ stage: 1, started_at: 10 }],
+        },
+        { name: "B", started_at: 20, stages: 3, steps: [{ stage: 2, started_at: 30 }] },
+      ],
+    },
+  })
+  assert.deepEqual(ended[0].steps, [
+    ["1/3", "Step 1", "done", 10],
+    [undefined, "Steps 2-3", "skipped", null],
+  ])
+  assert.equal(ended[1].state, "failed")
+  assert.deepEqual(ended[1].steps, [
+    [undefined, "Step 1", "skipped", null],
+    ["2/3", "Step 2", "failed", 60],
+    [undefined, "1 step not reached", "pending", null],
+  ])
+  assert.deepEqual(scriptParts({ status: "completed", finished_at: 5, script: null }, 100), [])
+})
+
+// The manager writes the progress and the report the interface reads; a field renamed there
+// would leave the panel without its steps.
+test("the manager writes every script field the interface reads", () => {
+  const source = readFileSync(
+    new URL("../../manager/src/script_progress.rs", import.meta.url),
+    "utf8"
+  )
+  for (const key of [
+    "part",
+    "parts",
+    "name",
+    "stage",
+    "stages",
+    "label",
+    "skipped",
+    "line",
+    "lines",
+    "percent",
+  ])
+    assert.ok(
+      source.includes(`"${key}"`) || source.includes(`summary["${key}"]`),
+      `progress ${key}`
+    )
+  for (const field of [
+    "parts",
+    "name",
+    "started_at",
+    "finished_at",
+    "cached",
+    "stages",
+    "steps",
+    "stage",
+    "label",
+    "skipped",
+  ])
+    assert.ok(new RegExp(String.raw`pub ${field}:`).test(source), `report ${field}`)
+  assert.ok(source.includes(`json!({ "script": summary })`))
 })
 
 test("a running container shows its compose setup until the setup completes", () => {
