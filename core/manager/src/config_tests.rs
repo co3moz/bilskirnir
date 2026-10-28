@@ -91,9 +91,25 @@ fn a_secret_says_only_whether_it_is_set() {
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.password_hash = Some("$argon2id$v=19$stored-password-hash".into());
     config.mcp_token = Some("token-of-the-agent-endpoint".into());
+    config.proxy = crate::outbound::installation(
+        &|key: &str| {
+            Some(
+                match key {
+                    "PROXY_URL" => "http://proxy.example:3128",
+                    "PROXY_USERNAME" => "corp",
+                    "PROXY_PASSWORD" => "password-of-the-proxy",
+                    _ => return None,
+                }
+                .into(),
+            )
+        },
+        &mut Vec::new(),
+    )
+    .unwrap();
     let shown = serde_json::to_string(&config.shown()).unwrap();
     assert!(!shown.contains("stored-password-hash"), "{shown}");
     assert!(!shown.contains("token-of-the-agent-endpoint"), "{shown}");
+    assert!(!shown.contains("password-of-the-proxy"), "{shown}");
     let setting = |config: &Config, name: &str| {
         config
             .shown()
@@ -106,6 +122,8 @@ fn a_secret_says_only_whether_it_is_set() {
         json!({"name": "MCP_TOKEN", "secret": true, "set": true})
     );
     assert_eq!(setting(config, "ADMIN_PASSWORD")["set"], true);
+    assert_eq!(setting(config, "PROXY_PASSWORD")["set"], true);
+    assert_eq!(setting(config, "PROXY_USERNAME")["value"], "corp");
     config.mcp_token = None;
     config.password_hash = None;
     assert_eq!(setting(config, "MCP_TOKEN")["set"], false);
@@ -349,7 +367,7 @@ fn a_default_gives_nothing_while_its_feature_is_switched_off() {
         .collect();
     assert_eq!(
         paired,
-        ["INTERNET", "SUDO", "AUDIO", "MICROPHONE", "GAMEPAD"]
+        ["INTERNET", "SUDO", "AUDIO", "MICROPHONE", "GAMEPAD", "VPN"]
     );
     let defaults = |off: &[&str]| {
         let mut changes: BTreeMap<String, String> = paired

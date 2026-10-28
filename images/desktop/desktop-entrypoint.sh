@@ -11,6 +11,11 @@ if [[ ${DESKTOP_SUDO:-true} == true ]]; then
 else
     rm -f /etc/sudoers.d/desktop
 fi
+# Thoric gives a container's proxy as these variables, and a command run with sudo, such as
+# apt, goes through the proxy too.
+printf 'Defaults env_keep += "HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy"\n' \
+    > /etc/sudoers.d/thoric-proxy
+chmod 0440 /etc/sudoers.d/thoric-proxy
 if [[ ${DESKTOP_GPU:-false} == true ]]; then
     if [[ -e /dev/dxg ]]; then
         export LD_LIBRARY_PATH="/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}"

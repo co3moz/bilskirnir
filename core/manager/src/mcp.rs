@@ -783,6 +783,8 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "microphone":{"type":"boolean","description":"Needs audio. Left out, it follows get_settings defaults.microphone when the container gets audio. Refused while microphone_enabled is false."},
                 "sudo":{"type":"boolean","description":"Leave out for the installation's default, get_settings defaults.sudo. Refused while sudo_enabled is false."},
                 "gamepad":{"type":"boolean","description":"Attach /dev/uinput so gamepad_input can create a virtual controller. Leave out for the installation's default, get_settings defaults.gamepad. Refused while gamepad_enabled is false."},
+                "vpn":{"type":"boolean","description":"Give the desktop NET_ADMIN and /dev/net/tun so a VPN client inside it (WireGuard, OpenVPN, Tailscale) can open a tunnel; Thoric installs no client. Leave out for the installation's default, get_settings defaults.vpn. Refused while vpn_enabled is false."},
+                "proxy":proxy_schemas().0,"proxy_password":proxy_schemas().1,
                 "hostname":{"type":"string","maxLength":63,"description":"Machine identity, kept across resets, retries and settings changes; leave out for the Docker container name. Set it, with mac_address and machine_id, only to take over the identity of a container this one replaces."},
                 "mac_address":{"type":"string","description":"Unicast MAC address such as 02:42:ac:11:00:02, on every network interface; leave out for a random one."},
                 "machine_id":{"type":"string","description":"32 hex digits written to /etc/machine-id and /var/lib/dbus/machine-id; leave out for a random one."},
@@ -817,13 +819,13 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place. resolution, gpu, audio, microphone, sudo, gamepad, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports and a new or changed cpus/memory_mb limit apply in place, as do proxy_password and changes to a proxy the container has. resolution, gpu, audio, microphone, sudo, gamepad, vpn, turning proxy on or off, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
                 "resolution":{"type":"string"},"gpu":{"type":"boolean"},"internet":{"type":"boolean"},
                 "audio":{"type":"boolean"},"microphone":{"type":"boolean"},"sudo":{"type":"boolean"},
-                "gamepad":{"type":"boolean"},"ports":ports_schema(),
+                "gamepad":{"type":"boolean"},"vpn":{"type":"boolean"},"proxy":proxy_schemas().0,"proxy_password":proxy_schemas().1,"ports":ports_schema(),
                 "hostname":{"type":"string","maxLength":63},"mac_address":{"type":"string"},"machine_id":{"type":"string"},
                 "cpus":{"type":["number","null"],"exclusiveMinimum":0},"memory_mb":{"type":["integer","null"],"minimum":256},
                 "shm_mb":{"type":"integer","minimum":64},
@@ -1344,5 +1346,13 @@ fn transfer_tool(id: Value) -> Tool {
         false,
         true,
         false,
+    )
+}
+/// A container's `proxy` and the password of its own proxy, for `create_container` and
+/// `update_container`.
+fn proxy_schemas() -> (Value, Value) {
+    (
+        json!({"type":["object","null"],"description":"The proxy the desktop's programs go through: {\"mode\":\"installation\"} for the installation's (get_settings proxy, the default when it has one), {\"mode\":\"custom\",\"url\":\"http://proxy.example:3128\",\"username\":\"name\",\"bypass\":[\"intranet.example\",\"10.0.0.0/8\"]} for one of its own (http, https or socks5), or null for none. Programs reach it through HTTP_PROXY; a proxy inside the desktop adds the credentials. Turning it on or off recreates the container; any other change applies in place.","properties":{"mode":{"type":"string","enum":["installation","custom"]},"url":{"type":"string"},"username":{"type":"string","maxLength":255},"bypass":{"type":"array","maxItems":64,"items":{"type":"string"}}},"required":["mode"]}),
+        json!({"type":["string","null"],"maxLength":255,"description":"The password of the container's own proxy (mode custom). It is kept apart from the settings and never returned; get_container shows only proxy.password true. Leave it out to keep the one there is, or send an empty string or null to remove it. Changing the proxy's host drops it unless a new one is given."}),
     )
 }

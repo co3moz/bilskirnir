@@ -13,6 +13,13 @@ fn container(action: &str, managed: bool) -> Value {
 }
 
 #[test]
+fn only_a_desktop_of_this_manager_starting_wakes_the_proxies() {
+    assert!(starts_a_desktop(&container("start", true)));
+    assert!(!starts_a_desktop(&container("start", false)));
+    assert!(!starts_a_desktop(&container("die", true)));
+}
+
+#[test]
 fn only_what_a_list_shows_names_it() {
     for action in ["start", "die", "destroy", "health_status: unhealthy"] {
         assert_eq!(

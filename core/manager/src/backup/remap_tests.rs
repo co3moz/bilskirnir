@@ -35,6 +35,7 @@ fn records() -> Records {
         images: vec![built, snapshot, registered],
         composes: Vec::new(),
         endpoints: Vec::new(),
+        proxy_passwords: Vec::new(),
     }
 }
 

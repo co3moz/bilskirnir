@@ -5,11 +5,12 @@ use super::*;
 use crate::backup::tests::{SECRET, container, endpoint, image, pinned};
 
 /// The database kinds a backup carries, one for each field of `Records`.
-const INCLUDED_KINDS: [&str; 4] = [
+const INCLUDED_KINDS: [&str; 5] = [
     crate::model::CONTAINERS,
     "image",
     crate::compose::PINNED,
     crate::desktop_mcp::ENDPOINTS,
+    crate::outbound::CREDENTIALS,
 ];
 /// The kinds a backup leaves out on purpose: history with the requests kept to retry it, the
 /// processes of running desktops, and the tool lists the manager reads again from a desktop once
@@ -22,6 +23,15 @@ const EXCLUDED_KINDS: [&str; 6] = [
     "recording",
     crate::desktop_mcp::SERVERS,
 ];
+
+/// The password of a container's own proxy.
+const PROXY_SECRET: &str = "proxy-password-of-c1";
+
+fn proxy_password() -> crate::outbound::Credentials {
+    crate::outbound::Credentials {
+        password: PROXY_SECRET.into(),
+    }
+}
 
 fn installation() -> Installation {
     Installation {
@@ -44,6 +54,11 @@ fn installation() -> Installation {
             ("orphan".into(), pinned()),
         ],
         endpoints: vec![endpoint("desk", &["c1"])],
+        proxy_passwords: vec![
+            ("c1".into(), proxy_password()),
+            // A password whose container is gone is not the installation's any more.
+            ("orphan".into(), proxy_password()),
+        ],
         available_images: HashSet::from(["i1".into()]),
         with_files: HashSet::from(["c1".into()]),
         volumes: BTreeMap::from([
@@ -189,6 +204,8 @@ fn secret_values_leave_only_when_asked_for() {
     assert_eq!(manifest.secrets_left_out, ["c1"]);
     let written = serde_json::to_string(&(&manifest, &records)).unwrap();
     assert!(!written.contains(SECRET));
+    assert!(!written.contains(PROXY_SECRET));
+    assert!(records.proxy_passwords.is_empty());
     // The names of secret parameters stay on the container, as they do in every list.
     assert_eq!(
         records.containers[0].setup.as_ref().unwrap().secrets,
@@ -206,8 +223,17 @@ fn secret_values_leave_only_when_asked_for() {
     );
     assert!(manifest.secrets_left_out.is_empty());
     assert_eq!(records.composes[0].pinned.values["PASSWORD"], SECRET);
+    // The orphan's password stays behind with its container.
+    assert_eq!(
+        records.proxy_passwords,
+        [super::ProxyPassword {
+            container_id: "c1".into(),
+            credentials: proxy_password(),
+        }]
+    );
     // The manifest, which the browser reads to preview a restore, never holds one.
-    assert!(!serde_json::to_string(&manifest).unwrap().contains(SECRET));
+    let manifest_text = serde_json::to_string(&manifest).unwrap();
+    assert!(!manifest_text.contains(SECRET) && !manifest_text.contains(PROXY_SECRET));
     // Token hashes always come along, so the endpoints' tokens keep working.
     assert_eq!(
         records.endpoints[0].token_hash.as_deref(),
@@ -248,7 +274,16 @@ fn the_included_kinds_are_the_fields_of_the_records() {
         .cloned()
         .collect::<Vec<_>>();
     fields.sort();
-    assert_eq!(fields, ["composes", "containers", "endpoints", "images"]);
+    assert_eq!(
+        fields,
+        [
+            "composes",
+            "containers",
+            "endpoints",
+            "images",
+            "proxy_passwords"
+        ]
+    );
     assert_eq!(INCLUDED_KINDS.len(), fields.len());
 }
 
@@ -262,6 +297,7 @@ fn every_record_kind_is_either_carried_or_left_out() {
         ("ENDPOINTS", crate::desktop_mcp::ENDPOINTS),
         ("SERVERS", crate::desktop_mcp::SERVERS),
         ("REQUESTS", crate::jobs::retry::REQUESTS),
+        ("CREDENTIALS", crate::outbound::CREDENTIALS),
     ];
     let put = regex::Regex::new(r"\bdb\s*\.\s*put(?:::<[^>]*>)?\s*\(\s*([^,]+?)\s*,").unwrap();
     let mut found = BTreeSet::new();

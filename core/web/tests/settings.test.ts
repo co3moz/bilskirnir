@@ -164,6 +164,7 @@ test("a new container starts from the installation's defaults, and a manager wit
       audio: true,
       microphone: true,
       gamepad: true,
+      vpn: true,
     },
   } as Settings
   assert.deepEqual(featureDraft({}, settings), {
@@ -173,6 +174,7 @@ test("a new container starts from the installation's defaults, and a manager wit
     audio: true,
     microphone: true,
     gamepad: true,
+    vpn: true,
   })
   // A container's own settings win, and the microphone stays off without sound.
   assert.deepEqual(featureDraft({ audio: false, internet: true }, settings), {
@@ -182,6 +184,7 @@ test("a new container starts from the installation's defaults, and a manager wit
     audio: false,
     microphone: false,
     gamepad: true,
+    vpn: true,
   })
   assert.deepEqual(featureDraft({}, { gpu_enabled: false } as Settings), {
     gpu: false,
@@ -190,6 +193,7 @@ test("a new container starts from the installation's defaults, and a manager wit
     audio: false,
     microphone: false,
     gamepad: false,
+    vpn: false,
   })
 })
 
@@ -228,12 +232,14 @@ const FEATURE_SWITCHES: ConfigVariable[] = [
   "INTERNET_ENABLED",
   "SUDO_ENABLED",
   "GAMEPAD_ENABLED",
+  "VPN_ENABLED",
   "GPU_DEFAULT",
   "INTERNET_DEFAULT",
   "SUDO_DEFAULT",
   "AUDIO_DEFAULT",
   "MICROPHONE_DEFAULT",
   "GAMEPAD_DEFAULT",
+  "VPN_DEFAULT",
 ].map((name) => ({ name, value: true, editable: true }))
 
 test("a feature's switch and its default for new containers share a row", () => {
@@ -245,6 +251,7 @@ test("a feature's switch and its default for new containers share a row", () => 
     ["INTERNET_ENABLED", "INTERNET_DEFAULT"],
     ["SUDO_ENABLED", "SUDO_DEFAULT"],
     ["GAMEPAD_ENABLED", "GAMEPAD_DEFAULT"],
+    ["VPN_ENABLED", "VPN_DEFAULT"],
     // The GPU has routes rather than a switch of its own.
     ["GPU_DEFAULT"],
   ])

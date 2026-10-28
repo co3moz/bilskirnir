@@ -2,6 +2,14 @@
 
 export type Mount = { volume: string; target: string; readonly: boolean }
 
+/**
+ * The proxy a container's programs go through: the installation's, or one of its own whose
+ * `password` says only whether one is kept. `null` is none.
+ */
+export type ProxyChoice =
+  | { mode: "installation" }
+  | { mode: "custom"; url: string; username?: string | null; bypass: string[]; password?: boolean }
+
 export type ContainerSpec = {
   name: string
   image: string
@@ -12,6 +20,10 @@ export type ContainerSpec = {
   microphone: boolean
   sudo: boolean
   gamepad: boolean
+  /** NET_ADMIN and /dev/net/tun, for a VPN client inside the desktop. */
+  vpn: boolean
+  /** Absent only before a container exists; `null` is none. */
+  proxy?: ProxyChoice | null
   /** The machine identity; `null` on containers created before identities were kept. */
   hostname?: string | null
   mac_address?: string | null
@@ -401,8 +413,14 @@ export type Settings = {
   internet_enabled?: boolean
   sudo_enabled?: boolean
   gamepad_enabled?: boolean
+  vpn_enabled?: boolean
+  /** The installation's proxy (PROXY_URL), without its password; `null` when it has none. */
+  proxy?: { url: string; username: string | null; bypass: string[] } | null
   /** What a new container gets of each feature unless it asks otherwise. */
-  defaults?: Record<"gpu" | "internet" | "sudo" | "audio" | "microphone" | "gamepad", boolean>
+  defaults?: Record<
+    "gpu" | "internet" | "sudo" | "audio" | "microphone" | "gamepad" | "vpn",
+    boolean
+  >
 }
 
 /** `GET update`: this release, the newest one and whether the dashboard can update to it. */

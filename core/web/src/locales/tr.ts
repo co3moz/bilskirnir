@@ -364,6 +364,8 @@ export const tr: Messages = {
   "restart.field.microphone": "mikrofon",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "gamepad",
+  "restart.field.vpn": "VPN erişimi",
+  "restart.field.proxy": "proxy'yi açıp kapatmak",
   "restart.field.hostname": "ana makine adı",
   "restart.field.mac_address": "MAC adresi",
   "restart.field.machine_id": "makine ID'si",
@@ -599,7 +601,7 @@ export const tr: Messages = {
     "{count} adlandırılmış volume. Yöneticinin kendi volume'leri asla yedeklenmez.",
   "backup.secrets": "Gizli değerler",
   "backup.secretsHint":
-    "Compose'ların gizli parametrelerinin değerleri, örneğin lisans parolaları.",
+    "Compose'ların gizli parametrelerinin değerleri, örneğin lisans parolaları, ve konteynerlerin kendi proxy'lerinin parolaları.",
   "backup.secretsWarning":
     "Dosya bu değerleri düz metin olarak içerecek. Yalnızca sizin okuyabileceğiniz bir yerde saklayın ve geri yükledikten sonra silin.",
   "backup.download": "Yedeği indir",
@@ -954,6 +956,7 @@ export const tr: Messages = {
   "settings.section.mcp": "Ajan erişimi (MCP)",
   "settings.section.desktops": "Masaüstleri",
   "settings.section.features": "Konteyner özellikleri",
+  "settings.section.proxy": "Proxy",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Sınırlar",
   "settings.section.content": "Şablonlar ve volume'lar",
@@ -1016,6 +1019,8 @@ export const tr: Messages = {
   "settings.about.INTERNET_ENABLED": "Konteynerlerin internet erişimi olup olamayacağı.",
   "settings.about.SUDO_ENABLED": "Konteynerlerin masaüstü kullanıcısına sudo verip veremeyeceği.",
   "settings.about.GAMEPAD_ENABLED": "Konteynerlerin sanal gamepad'e sahip olup olamayacağı.",
+  "settings.about.VPN_ENABLED":
+    "Konteynerlerin VPN erişimine (NET_ADMIN ve /dev/net/tun) sahip olup olamayacağı.",
   "settings.about.GPU_DEFAULT":
     "Yeni bir konteynerin, aksi istenmedikçe GPU erişimi alıp almayacağı.",
   "settings.about.INTERNET_DEFAULT":
@@ -1027,6 +1032,14 @@ export const tr: Messages = {
     "Sesli yeni bir konteynerin, aksi istenmedikçe mikrofon alıp almayacağı.",
   "settings.about.GAMEPAD_DEFAULT":
     "Yeni bir konteynerin, aksi istenmedikçe sanal gamepad alıp almayacağı.",
+  "settings.about.VPN_DEFAULT":
+    "Yeni bir konteynerin, aksi istenmedikçe VPN erişimi alıp almayacağı.",
+  "settings.about.PROXY_URL":
+    "Kurulumunkini izleyen konteynerlerin geçtiği proxy: host ve port ile http://, https:// ya da socks5://. Boşsa proxy yok.",
+  "settings.about.PROXY_USERNAME": "Proxy isterse proxy kullanıcı adı.",
+  "settings.about.PROXY_PASSWORD":
+    "Proxy parolası. Yalnızca .env içinde, thoric settings ile değişir.",
+  "settings.about.PROXY_BYPASS": "Proxy'yi atlayan host, alan adı ve ağlar, virgülle ayrılmış.",
   "settings.about.WSL_GPU": "Host'ta varsa WSL GPU'su üzerinden grafik hızlandırma.",
   "settings.about.NVIDIA_COMPUTE":
     "NVIDIA Container Toolkit ile NVIDIA GPU'su: CUDA, WSL dışında OpenGL de.",
@@ -1148,6 +1161,7 @@ export const tr: Messages = {
   "spec.audio": "Ses",
   "spec.microphone": "Mikrofon",
   "spec.gamepad": "Gamepad",
+  "spec.vpn": "VPN",
   "spec.internet": "İnternet",
   "spec.flag.gpu": "GPU",
   "spec.flag.gpu.description": "Ana makinenin GPU'sunda donanımsal render.",
@@ -1161,6 +1175,25 @@ export const tr: Messages = {
   "spec.flag.microphone.description": "Tarayıcı mikrofonu, masaüstünün içinde.",
   "spec.flag.gamepad": "Gamepad",
   "spec.flag.gamepad.description": "Sanal bir kumanda aygıtı.",
+  "spec.flag.vpn": "VPN",
+  "spec.flag.vpn.description": "İçindeki bir VPN istemcisi tünel açabilir.",
+  "spec.proxy": "Proxy",
+  "spec.proxy.summary": "Proxy üzerinden",
+  "spec.proxy.mode.none": "Yok",
+  "spec.proxy.mode.installation": "Kurulumun proxy'si",
+  "spec.proxy.mode.custom": "Kendi proxy'si",
+  "spec.proxy.none.description": "Programlar her adrese doğrudan gider.",
+  "spec.proxy.installation.description": "Kurulumun belirlediği gibi {url} üzerinden.",
+  "spec.proxy.installation.missing":
+    "Bu kurulumun şu an proxy'si yok, programlar her adrese doğrudan gider.",
+  "spec.proxy.custom.description":
+    "Masaüstündeki bir proxy kullanıcı adını ve parolayı ekler, programlar bunları hiç görmez.",
+  "spec.proxy.url": "Adres",
+  "spec.proxy.username": "Kullanıcı adı",
+  "spec.proxy.password": "Parola",
+  "spec.proxy.passwordKept": "Kayıtlı; değiştirmek için yazın",
+  "spec.proxy.removePassword": "Kayıtlı parolayı kaldır",
+  "spec.proxy.bypass": "Proxy'siz gidilecekler",
   "spec.resolution": "Çözünürlük",
   "spec.sharedMemory": "Paylaşılan bellek (MB)",
   "spec.cpuLimit": "CPU sınırı",

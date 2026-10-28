@@ -30,6 +30,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             internet: true,
             sudo: true,
             gamepad: true,
+            vpn: true,
             defaults: config::Features {
                 gpu: true,
                 internet: true,
@@ -50,6 +51,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             mcp_token: Some(String::new()),
             templates_url: None,
             volume_filter: None,
+            proxy: None,
             update_check: false,
             update_dir: "update".into(),
             notices: Vec::new(),
@@ -72,6 +74,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         releases: releases::Releases::default(),
         events: events::Hub::default(),
         human: human::Requests::default(),
+        outbound: outbound::Outbound::default(),
     })
 }
 fn spec() -> model::ContainerSpec {
@@ -2292,6 +2295,7 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     spec.audio = true;
     spec.gpu = true;
     spec.gamepad = true;
+    spec.vpn = true;
     spec.shm_mb = 1024;
     spec.memory_mb = Some(2048);
     spec.mounts = vec![model::Mount {
@@ -2329,6 +2333,9 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
         "--gpus all",
         "--device /dev/dxg",
         "--device /dev/uinput",
+        "--cap-add NET_ADMIN",
+        "--device /dev/net/tun",
+        "--sysctl net.ipv4.conf.all.src_valid_mark=1",
         "--label thoric.environment=args-id",
     ] {
         assert!(args.contains(flag), "{flag} missing from {args}");
@@ -2340,6 +2347,37 @@ fn a_recreated_container_gets_every_setting_from_the_commit_that_holds_its_files
     });
     assert!(joined(&env).ends_with(" sha256:working"));
     assert_eq!(env.source_image_id, "sha256:source");
+}
+#[test]
+fn a_host_without_the_tun_device_names_the_vpn_setting() {
+    let app = app(false);
+    let mut env = model::Container {
+        id: "vpn-id".into(),
+        container: "thoric-vpn-id".into(),
+        private_network: "thoric-vpn-id-private".into(),
+        egress_network: "thoric-vpn-id-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    let docker = || {
+        anyhow::anyhow!(
+            "error gathering device information while adding custom device \"/dev/net/tun\": no such file or directory"
+        )
+    };
+    // Without VPN access the device is not the container's, and Docker's words stay as they are.
+    assert!(!format!("{:#}", app.device_error(&env, docker())).contains("vpn"));
+    env.spec.vpn = true;
+    let error = format!("{:#}", app.device_error(&env, docker()));
+    assert!(
+        error.starts_with("VPN access needs /dev/net/tun"),
+        "{error}"
+    );
+    assert!(error.contains("without vpn"), "{error}");
 }
 #[test]
 fn an_installation_without_user_namespaces_leaves_dockers_seccomp_profile_in_place() {
@@ -2403,12 +2441,14 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
         config.internet = false;
         config.sudo = false;
         config.gamepad = false;
+        config.vpn = false;
     }
     let without = || {
         let mut spec = spec();
         spec.internet = false;
         spec.sudo = false;
         spec.gamepad = false;
+        spec.vpn = false;
         spec
     };
     // A new container cannot have them.
@@ -2416,12 +2456,14 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
         ("internet", "INTERNET_ENABLED"),
         ("sudo", "SUDO_ENABLED"),
         ("gamepad", "GAMEPAD_ENABLED"),
+        ("vpn", "VPN_ENABLED"),
     ] {
         let mut spec = without();
         match feature {
             "internet" => spec.internet = true,
             "sudo" => spec.sudo = true,
-            _ => spec.gamepad = true,
+            "gamepad" => spec.gamepad = true,
+            _ => spec.vpn = true,
         }
         let error = app
             .create_container("refused", spec.clone(), Default::default(), "create-job")
@@ -2448,9 +2490,10 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
             .unwrap_err();
         assert!(error.to_string().contains(says), "{error}");
     }
-    // A container created before the switch keeps all three, also when it is created again.
+    // A container created before the switch keeps them all, also when it is created again.
     let mut kept = spec();
     kept.gamepad = true;
+    kept.vpn = true;
     let env = model::Container {
         id: "kept".into(),
         container: "thoric-kept".into(),
@@ -2473,6 +2516,7 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
     assert_eq!(changes.live, ["name"]);
     let args = app.container_args(&env);
     assert!(args.iter().any(|arg| arg == "/dev/uinput"), "{args:?}");
+    assert!(args.iter().any(|arg| arg == "NET_ADMIN"), "{args:?}");
     assert!(
         args.iter().any(|arg| arg == "DESKTOP_SUDO=true"),
         "{args:?}"
@@ -2549,7 +2593,7 @@ async fn the_settings_route_tells_the_features_and_their_defaults() {
     // The configured defaults turn GPU access and sudo on, which the installation has off.
     assert_eq!(
         body["defaults"],
-        serde_json::json!({"gpu": false, "internet": true, "sudo": false, "audio": false, "microphone": false, "gamepad": false})
+        serde_json::json!({"gpu": false, "internet": true, "sudo": false, "audio": false, "microphone": false, "gamepad": false, "vpn": false})
     );
     // DRI_GPU is the one GPU setting left on, and the manager cannot see this host.
     assert_eq!(

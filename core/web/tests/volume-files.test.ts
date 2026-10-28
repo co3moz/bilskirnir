@@ -30,6 +30,7 @@ const spec: ContainerSpec = {
   microphone: false,
   sudo: true,
   gamepad: false,
+  vpn: false,
   ports: [],
   cpus: null,
   memory_mb: null,

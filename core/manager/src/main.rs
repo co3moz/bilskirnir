@@ -31,6 +31,7 @@ mod mcp;
 mod media;
 mod model;
 mod mount_parents;
+mod outbound;
 mod package_requests;
 mod process;
 mod proxy;
@@ -89,6 +90,8 @@ pub struct App {
     events: events::Hub,
     /// Agents' requests for a person, in memory only.
     human: human::Requests,
+    /// The proxies inside the desktops that use one.
+    outbound: outbound::Outbound,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
 /// and their icons from another host, which is the one exception to `'self'`.
@@ -463,11 +466,13 @@ async fn main() -> anyhow::Result<()> {
         releases: releases::Releases::default(),
         events: events::Hub::default(),
         human: human::Requests::default(),
+        outbound: outbound::Outbound::default(),
     });
     usage::spawn(app.clone());
     events::docker::spawn(app.clone());
     desktop_mcp::spawn(app.clone());
     releases::spawn(app.clone());
+    outbound::spawn(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
     }

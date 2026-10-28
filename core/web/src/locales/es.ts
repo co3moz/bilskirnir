@@ -365,6 +365,8 @@ export const es: Messages = {
   "restart.field.microphone": "el micrófono",
   "restart.field.sudo": "sudo",
   "restart.field.gamepad": "el gamepad",
+  "restart.field.vpn": "el acceso VPN",
+  "restart.field.proxy": "activar o desactivar el proxy",
   "restart.field.hostname": "el nombre de host",
   "restart.field.mac_address": "la dirección MAC",
   "restart.field.machine_id": "el ID de máquina",
@@ -599,7 +601,7 @@ export const es: Messages = {
   "backup.volumesHint.other": "{count} volúmenes con nombre, nunca los del gestor.",
   "backup.secrets": "Valores secretos",
   "backup.secretsHint":
-    "Los valores de los parámetros secretos de los composes, como contraseñas de licencias.",
+    "Los valores de los parámetros secretos de los composes, como contraseñas de licencias, y las contraseñas de los proxies propios de los contenedores.",
   "backup.secretsWarning":
     "El archivo contendrá estos valores en texto sin cifrar. Guárdalo donde solo tú puedas leerlo y bórralo cuando lo hayas restaurado.",
   "backup.download": "Descargar copia",
@@ -958,6 +960,7 @@ export const es: Messages = {
   "settings.section.mcp": "Acceso de agentes (MCP)",
   "settings.section.desktops": "Escritorios",
   "settings.section.features": "Funciones de los contenedores",
+  "settings.section.proxy": "Proxy",
   "settings.section.gpu": "GPU",
   "settings.section.limits": "Límites",
   "settings.section.content": "Plantillas y volúmenes",
@@ -1023,6 +1026,8 @@ export const es: Messages = {
   "settings.about.INTERNET_ENABLED": "Si los contenedores pueden tener acceso a internet.",
   "settings.about.SUDO_ENABLED": "Si los contenedores pueden dar sudo al usuario del escritorio.",
   "settings.about.GAMEPAD_ENABLED": "Si los contenedores pueden tener el mando virtual.",
+  "settings.about.VPN_ENABLED":
+    "Si los contenedores pueden tener acceso VPN, NET_ADMIN y /dev/net/tun.",
   "settings.about.GPU_DEFAULT":
     "Si un contenedor nuevo tiene acceso a la GPU, salvo que pida otra cosa.",
   "settings.about.INTERNET_DEFAULT":
@@ -1034,6 +1039,15 @@ export const es: Messages = {
     "Si un contenedor nuevo con sonido tiene micrófono, salvo que pida otra cosa.",
   "settings.about.GAMEPAD_DEFAULT":
     "Si un contenedor nuevo tiene el mando virtual, salvo que pida otra cosa.",
+  "settings.about.VPN_DEFAULT":
+    "Si un contenedor nuevo tiene acceso VPN, salvo que pida otra cosa.",
+  "settings.about.PROXY_URL":
+    "El proxy de los contenedores que siguen el de la instalación: http://, https:// o socks5:// con un host y un puerto. Vacío para ninguno.",
+  "settings.about.PROXY_USERNAME": "El usuario del proxy, si lo pide.",
+  "settings.about.PROXY_PASSWORD":
+    "La contraseña del proxy. Solo cambia en .env, con thoric settings.",
+  "settings.about.PROXY_BYPASS":
+    "Hosts, dominios y redes que no pasan por el proxy, separados por comas.",
   "settings.about.WSL_GPU": "Aceleración gráfica mediante la GPU de WSL, donde el host la tiene.",
   "settings.about.NVIDIA_COMPUTE":
     "La GPU NVIDIA mediante NVIDIA Container Toolkit: CUDA y, fuera de WSL, también OpenGL.",
@@ -1158,6 +1172,7 @@ export const es: Messages = {
   "spec.audio": "Audio",
   "spec.microphone": "Micrófono",
   "spec.gamepad": "Gamepad",
+  "spec.vpn": "VPN",
   "spec.internet": "Internet",
   "spec.flag.gpu": "GPU",
   "spec.flag.gpu.description": "Renderizado por hardware en la GPU del host.",
@@ -1171,6 +1186,25 @@ export const es: Messages = {
   "spec.flag.microphone.description": "El micrófono del navegador, dentro del escritorio.",
   "spec.flag.gamepad": "Gamepad",
   "spec.flag.gamepad.description": "Un dispositivo de mando virtual.",
+  "spec.flag.vpn": "VPN",
+  "spec.flag.vpn.description": "Un cliente VPN dentro puede abrir un túnel.",
+  "spec.proxy": "Proxy",
+  "spec.proxy.summary": "A través de un proxy",
+  "spec.proxy.mode.none": "Ninguno",
+  "spec.proxy.mode.installation": "Proxy de la instalación",
+  "spec.proxy.mode.custom": "Proxy propio",
+  "spec.proxy.none.description": "Los programas van directamente a cada dirección.",
+  "spec.proxy.installation.description": "A través de {url}, como lo fija la instalación.",
+  "spec.proxy.installation.missing":
+    "Esta instalación no tiene proxy ahora, así que los programas van directamente a cada dirección.",
+  "spec.proxy.custom.description":
+    "Un proxy dentro del escritorio añade el usuario y la contraseña, así que los programas nunca los ven.",
+  "spec.proxy.url": "Dirección",
+  "spec.proxy.username": "Usuario",
+  "spec.proxy.password": "Contraseña",
+  "spec.proxy.passwordKept": "Guardada; escribe para reemplazarla",
+  "spec.proxy.removePassword": "Quitar la contraseña guardada",
+  "spec.proxy.bypass": "Sin proxy para",
   "spec.resolution": "Resolución",
   "spec.sharedMemory": "Memoria compartida (MB)",
   "spec.cpuLimit": "Límite de CPU",

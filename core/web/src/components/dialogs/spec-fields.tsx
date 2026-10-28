@@ -8,6 +8,7 @@ import {
   RiGamepadLine,
   RiGlobalLine,
   RiMicLine,
+  RiShieldKeyholeLine,
   RiShieldUserLine,
   RiVolumeUpLine,
   type RemixiconComponentType,
@@ -40,6 +41,13 @@ import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatList, formatNumber, plural, t } from "@/lib/i18n"
 import { formatPorts, parsePorts, PORTS_PATTERN } from "@/lib/ports"
+import {
+  PROXY_URL_PATTERN,
+  proxyBody,
+  proxyDraft,
+  type ProxyDraft,
+  type ProxyMode,
+} from "@/lib/proxy"
 import { featureDraft, FEATURES, type Feature } from "@/lib/settings"
 import type { ContainerSpec, Mount, Settings, Volume } from "@/lib/types"
 import { mountableVolumes } from "@/lib/volume-files"
@@ -55,6 +63,7 @@ const FLAG_ICONS: Record<Flag, RemixiconComponentType> = {
   audio: RiVolumeUpLine,
   microphone: RiMicLine,
   gamepad: RiGamepadLine,
+  vpn: RiShieldKeyholeLine,
 }
 
 export type MountDraft = Mount & { key: number }
@@ -65,6 +74,7 @@ export type SpecDraft = {
   memory_mb: string
   ports: string
   mounts: MountDraft[]
+  proxy: ProxyDraft
 } & Record<Flag, boolean>
 
 let mountKey = 0
@@ -79,6 +89,7 @@ export function specDraft(spec: Partial<ContainerSpec>, settings?: Settings): Sp
     ...featureDraft(spec, settings),
     ports: formatPorts(spec.ports),
     mounts: (spec.mounts ?? []).map((mount) => ({ ...mount, key: ++mountKey })),
+    proxy: proxyDraft(spec, settings),
   }
 }
 
@@ -93,6 +104,7 @@ export function specBody(draft: SpecDraft) {
     ...Object.fromEntries(FLAGS.map((flag) => [flag, draft[flag]])),
     ports: parsePorts(draft.ports),
     mounts: draft.mounts.map(({ volume, target, readonly }) => ({ volume, target, readonly })),
+    ...proxyBody(draft.proxy),
   }
 }
 
@@ -114,6 +126,7 @@ function advancedSummary(draft: SpecDraft) {
   if (ports) parts.push(plural(ports, { one: "spec.ports.one", other: "spec.ports.other" }))
   if (draft.mounts.length)
     parts.push(plural(draft.mounts.length, { one: "spec.mounts.one", other: "spec.mounts.other" }))
+  if (draft.proxy.mode !== "none") parts.push(t("spec.proxy.summary"))
   return parts.join(" · ")
 }
 
@@ -150,6 +163,7 @@ export function SpecFields({
     internet: settings?.internet_enabled ?? true,
     sudo: settings?.sudo_enabled ?? true,
     gamepad: settings?.gamepad_enabled ?? true,
+    vpn: settings?.vpn_enabled ?? true,
   }
   const blocked = FLAGS.filter((flag) => !enabled[flag] && !spec?.[flag])
   // The settings allow a GPU, but the host has none of the ones they allow.
@@ -313,11 +327,132 @@ export function SpecFields({
                 </FieldDescription>
               </Field>
             </div>
+            <ProxyFields draft={draft.proxy} set={(proxy) => set({ proxy })} settings={settings} />
             <Mounts draft={draft} set={set} volumes={mountableVolumes(volumes)} />
           </FieldGroup>
         </div>
       </div>
     </FieldGroup>
+  )
+}
+
+/**
+ * The proxy the desktop's programs go through: none, the installation's, which is offered while
+ * the installation has one or the container follows it, or one of its own with its credentials.
+ */
+function ProxyFields({
+  draft,
+  set,
+  settings,
+}: {
+  draft: ProxyDraft
+  set: (proxy: ProxyDraft) => void
+  settings?: Settings
+}) {
+  const id = React.useId()
+  const update = (patch: Partial<ProxyDraft>) => set({ ...draft, ...patch })
+  const installation = settings?.proxy
+  const modes: ProxyMode[] =
+    installation || draft.mode === "installation"
+      ? ["none", "installation", "custom"]
+      : ["none", "custom"]
+  const description =
+    draft.mode === "none"
+      ? t("spec.proxy.none.description")
+      : draft.mode === "custom"
+        ? t("spec.proxy.custom.description")
+        : installation
+          ? t("spec.proxy.installation.description", { url: installation.url })
+          : t("spec.proxy.installation.missing")
+
+  return (
+    <FieldSet>
+      <FieldLegend variant="label" className="mb-0">
+        {t("spec.proxy")}
+      </FieldLegend>
+      <Field>
+        <Select value={draft.mode} onValueChange={(mode) => update({ mode: mode as ProxyMode })}>
+          <SelectTrigger
+            aria-label={t("spec.proxy")}
+            aria-describedby={`${id}-hint`}
+            className="w-full sm:w-64"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {modes.map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {t(`spec.proxy.mode.${mode}`)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <FieldDescription id={`${id}-hint`} className="text-xs break-words">
+          {description}
+        </FieldDescription>
+      </Field>
+      {draft.mode === "custom" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor={`${id}-url`}>{t("spec.proxy.url")}</FieldLabel>
+            <Input
+              id={`${id}-url`}
+              required
+              pattern={PROXY_URL_PATTERN}
+              placeholder="http://proxy.example:3128"
+              autoComplete="off"
+              value={draft.url}
+              onChange={(event) => update({ url: event.target.value })}
+              className="font-mono"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-username`}>{t("spec.proxy.username")}</FieldLabel>
+            <Input
+              id={`${id}-username`}
+              maxLength={255}
+              autoComplete="off"
+              value={draft.username}
+              onChange={(event) => update({ username: event.target.value })}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-password`}>{t("spec.proxy.password")}</FieldLabel>
+            <Input
+              id={`${id}-password`}
+              type="password"
+              maxLength={255}
+              autoComplete="new-password"
+              placeholder={draft.stored && !draft.clear ? t("spec.proxy.passwordKept") : undefined}
+              value={draft.password}
+              onChange={(event) => update({ password: event.target.value, clear: false })}
+            />
+            {draft.stored && (
+              <Label className="flex items-center gap-2 text-xs font-normal">
+                <Checkbox
+                  checked={draft.clear}
+                  onCheckedChange={(value) => update({ clear: !!value, password: "" })}
+                />
+                {t("spec.proxy.removePassword")}
+              </Label>
+            )}
+          </Field>
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor={`${id}-bypass`}>{t("spec.proxy.bypass")}</FieldLabel>
+            <Input
+              id={`${id}-bypass`}
+              placeholder="intranet.example, 10.0.0.0/8"
+              autoComplete="off"
+              value={draft.bypass}
+              onChange={(event) => update({ bypass: event.target.value })}
+              className="font-mono"
+            />
+          </Field>
+        </div>
+      )}
+    </FieldSet>
   )
 }
 

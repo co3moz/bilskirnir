@@ -338,13 +338,14 @@ fn a_create_request_gets_the_installations_defaults_for_the_features_it_leaves_o
             spec.audio,
             spec.microphone,
             spec.gamepad,
+            spec.vpn,
         ]
     };
     let plain = json!({"name": "Plain", "image": "sha256:a"});
     // The defaults as they were: GPU access where the installation has it, internet and sudo.
     assert_eq!(
         features(request(plain.clone())),
-        [true, true, true, false, false, false]
+        [true, true, true, false, false, false, false]
     );
     config.defaults = crate::config::Features {
         gpu: false,
@@ -353,18 +354,19 @@ fn a_create_request_gets_the_installations_defaults_for_the_features_it_leaves_o
         audio: true,
         microphone: true,
         gamepad: true,
+        vpn: true,
     };
     let config = &*config;
     let request = |body: Value| creation_request(config, body).unwrap().spec;
     assert_eq!(
         features(request(plain.clone())),
-        [false, false, false, true, true, true]
+        [false, false, false, true, true, true, true]
     );
     // What a request asks for is kept, and the microphone follows the request's audio.
     let asked = json!({"name": "Asked", "image": "sha256:a", "gpu": true, "audio": false});
     assert_eq!(
         features(request(asked)),
-        [true, false, false, false, false, true]
+        [true, false, false, false, false, true, true]
     );
     // A malformed request is refused as one.
     let error = creation_request(
@@ -387,21 +389,64 @@ fn a_switched_off_feature_is_never_a_default_and_stored_records_keep_theirs() {
         audio: true,
         microphone: true,
         gamepad: true,
+        vpn: true,
     };
     config.wsl_gpu = false;
     config.cuda = false;
     config.internet = false;
     config.sudo = false;
     config.gamepad = false;
+    config.vpn = false;
     config.microphone = false;
     let spec = creation_request(config, json!({"name": "Off", "image": "sha256:a"}))
         .unwrap()
         .spec;
-    assert!(!spec.gpu && !spec.internet && !spec.sudo && !spec.microphone && !spec.gamepad);
+    assert!(
+        !spec.gpu && !spec.internet && !spec.sudo && !spec.microphone && !spec.gamepad && !spec.vpn
+    );
     assert!(spec.audio);
     // A record saved before the features existed reads as it always did, whatever the
     // installation's defaults: the serde defaults are not the configured ones.
     let stored: ContainerSpec =
         serde_json::from_value(json!({"name": "Old", "image": "sha256:a"})).unwrap();
-    assert!(!stored.gpu && stored.internet && stored.sudo && !stored.audio && !stored.gamepad);
+    assert!(
+        !stored.gpu
+            && stored.internet
+            && stored.sudo
+            && !stored.audio
+            && !stored.gamepad
+            && !stored.vpn
+    );
+}
+
+#[test]
+fn a_new_container_follows_the_installations_proxy_unless_it_asks_otherwise() {
+    let mut app = crate::tests::app(false);
+    let config = &mut Arc::get_mut(&mut app).unwrap().config;
+    let plain = json!({"name": "Plain", "image": "sha256:a"});
+    let proxy = |config: &crate::config::Config, body: Value| {
+        creation_request(config, body).unwrap().spec.proxy
+    };
+    assert_eq!(proxy(config, plain.clone()), None);
+    config.proxy = crate::outbound::installation(
+        &|key: &str| (key == "PROXY_URL").then(|| "http://proxy.example:3128".into()),
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        proxy(config, plain),
+        Some(crate::outbound::ProxyChoice::Installation)
+    );
+    let none = json!({"name": "Direct", "image": "sha256:a", "proxy": null});
+    assert_eq!(proxy(config, none), None);
+    // The password goes beside the settings, never into them.
+    let own = json!({"name": "Own", "image": "sha256:a", "proxy_password": "pw",
+        "proxy": {"mode": "custom", "url": "http://own.example:1"}});
+    let request = creation_request(config, own).unwrap();
+    assert_eq!(request.proxy_password.as_deref(), Some("pw"));
+    assert!(
+        !serde_json::to_string(&request.spec)
+            .unwrap()
+            .contains("\"pw\"")
+    );
 }
