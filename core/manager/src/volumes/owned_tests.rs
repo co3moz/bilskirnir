@@ -258,11 +258,7 @@ async fn the_creation_job_makes_the_volume_before_the_record_and_a_retry_never_r
             readonly: false
         }]
     );
-    let log = app
-        .db
-        .get::<crate::model::Job>("job", "create-job")
-        .unwrap()
-        .log;
+    let log = app.db.job("create-job").unwrap().log;
     assert!(
         log.contains(&format!("Created the volume {volume} for UNITY_WORKSPACE.")),
         "{log}"
@@ -313,11 +309,7 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
         result,
         json!({"deleted": "e", "name": "Desktop e", "volumes_preserved": true, "images_preserved": true})
     );
-    let log = app
-        .db
-        .get::<crate::model::Job>("job", "keep-job")
-        .unwrap()
-        .log;
+    let log = app.db.job("keep-job").unwrap().log;
     assert!(
         log.contains("Named volumes and saved images were preserved."),
         "{log}"
@@ -350,11 +342,7 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
         ["volume rm thoric-e-cache", "volume rm thoric-e-workspace"],
         "{made}"
     );
-    let log = app
-        .db
-        .get::<crate::model::Job>("job", "delete-job")
-        .unwrap()
-        .log;
+    let log = app.db.job("delete-job").unwrap().log;
     for line in [
         "Keeping the volume thoric-e-shared: \"Desktop b\" mounts it too.",
         "Deleted the volume thoric-e-workspace.",
@@ -426,11 +414,7 @@ async fn a_delete_reads_the_records_under_the_volumes_locks() {
         }
     );
     assert!(!calls(&dir).contains("volume rm"), "{}", calls(&dir));
-    let log = app
-        .db
-        .get::<crate::model::Job>("job", "delete-job")
-        .unwrap()
-        .log;
+    let log = app.db.job("delete-job").unwrap().log;
     assert!(
         log.contains("Keeping the volume thoric-e-workspace: \"Desktop b\" mounts it too."),
         "{log}"

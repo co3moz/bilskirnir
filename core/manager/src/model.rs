@@ -453,6 +453,9 @@ pub struct Job {
     pub status: String,
     pub created_at: u64,
     pub finished_at: Option<u64>,
+    /// The log as the API shows it, from `Db::job`. A saved record keeps only what managers
+    /// before the `job_log` table wrote into it, and an empty log otherwise, which those
+    /// managers still read; the rest is in that table.
     pub log: String,
     pub result: Option<serde_json::Value>,
     /// Measured progress of the running step, such as an image download.
@@ -466,11 +469,14 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<crate::script_progress::ScriptReport>,
 }
+/// How many bytes of a job's log are kept: the last ones.
+pub(crate) const LOG_LIMIT: usize = 262_144;
 impl Job {
+    /// Keep the last [`LOG_LIMIT`] bytes of the log, from the first character that starts in
+    /// them.
     pub fn trim_log(&mut self) {
-        const LIMIT: usize = 262_144;
-        if self.log.len() > LIMIT {
-            let mut at = self.log.len() - LIMIT;
+        if self.log.len() > LOG_LIMIT {
+            let mut at = self.log.len() - LOG_LIMIT;
             while !self.log.is_char_boundary(at) {
                 at += 1;
             }

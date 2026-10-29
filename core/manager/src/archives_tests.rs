@@ -36,7 +36,7 @@ async fn error_message(response: Response) -> String {
 
 async fn finished(app: &App, id: &str) -> Job {
     for _ in 0..200 {
-        let job: Job = app.db.get("job", id).unwrap();
+        let job: Job = app.db.job(id).unwrap();
         if job.status != "queued" && job.status != "running" {
             return job;
         }

@@ -1,0 +1,23 @@
+# cargo audit reads this file from the repository root: the audit job of
+# .github/workflows/publish.yml runs it on every pull request, and a release runs it again
+# (AGENTS.md, rule 32).
+#
+# It fails on a vulnerability and on an unsound advisory, a memory-safety bug in a crate the manager
+# links. An unmaintained or yanked crate is a warning in the log, to be replaced or updated when
+# there is something to move to.
+
+[advisories]
+# An advisory that no release of the crate fixes yet and that cannot reach Thoric, each with the
+# reason and the date it was looked at, for example:
+#   "RUSTSEC-0000-0000", # 2026-10-29: only the Windows backend of the crate is affected.
+# Prefer updating the crate, or the one that pulls it in, to listing it here.
+ignore = []
+
+[output]
+deny = ["unsound"]
+quiet = false
+
+# The manager is built for linux/amd64 only, so advisories for other systems do not apply.
+[target]
+arch = ["x86_64"]
+os = ["linux"]

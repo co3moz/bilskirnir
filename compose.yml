@@ -91,7 +91,7 @@ services:
 
   https:
     profiles: [https]
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     restart: unless-stopped
     logging: *logging
     ports:

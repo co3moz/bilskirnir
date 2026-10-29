@@ -369,7 +369,7 @@ pub async fn create_endpoint(
     let _guard = lock.lock().await;
     // Under the lock, so a container deleted meanwhile cannot be granted.
     let grants = grants(&app, body.grants)?;
-    if app.db.get::<Endpoint>(ENDPOINTS, &body.name).is_ok() {
+    if app.db.contains(ENDPOINTS, &body.name)? {
         return Err(Error(
             StatusCode::CONFLICT,
             format!("An MCP endpoint named {} exists", body.name),
@@ -497,12 +497,8 @@ pub async fn scopes_list() -> Json<Value> {
 pub(crate) async fn automatic_endpoint(app: &App, container: &Container) -> anyhow::Result<String> {
     let lock = app.resource_lock("mcp-endpoints");
     let _guard = lock.lock().await;
-    let taken = app
-        .db
-        .list::<Endpoint>(ENDPOINTS)?
-        .into_iter()
-        .map(|e| e.name)
-        .collect::<Vec<_>>();
+    // An endpoint is saved under its name, and one that does not read keeps its name too.
+    let taken = app.db.ids(ENDPOINTS)?;
     let name = unique(&slug_of(&container.spec.name, 48, "desktop"), 48, |n| {
         taken.iter().any(|t| t == n)
     });

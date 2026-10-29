@@ -209,12 +209,17 @@ pub(crate) fn finish(
         }
         Err(e) => {
             job.status = "failed".into();
-            job.log.push_str(&format!("\nERROR: {e:#}\n"));
             Err(format!("{e:#}"))
         }
     };
-    job.trim_log();
-    if let Err(e) = app.db.put("job", id, &job) {
+    // A failed job's error is in its log by the time anyone reads that it failed.
+    let saved = match &reported {
+        Ok(_) => app.db.put("job", id, &job),
+        Err(error) => app
+            .db
+            .put_job_logged(&job, &format!("\nERROR: {error}\n"), false),
+    };
+    if let Err(e) = saved {
         tracing::error!("Could not save job result: {e}");
     }
     app.events
