@@ -1,9 +1,18 @@
 //! Pins down what a create request carries and gets: its compose values beside the settings, the
 //! installation's defaults for the features and the proxy it leaves out, a refusal before any job
-//! when a required value is missing, and the name of what a creation job makes, which the job
-//! list shows before the record exists.
+//! when a required value is missing, and the name of what a creation job makes, which the job list
+//! shows before the record exists. Also that one container's route answers as the list does, and
+//! that a settings change is checked before any job.
 use super::*;
 use crate::api::build;
+use crate::test_support::{app, spec};
+use crate::{model, router};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use std::sync::Arc;
+use tower::ServiceExt;
 
 #[test]
 fn a_create_request_carries_compose_values_beside_the_settings() {
@@ -30,7 +39,7 @@ fn a_create_request_carries_compose_values_beside_the_settings() {
 
 #[tokio::test]
 async fn a_create_request_missing_a_required_value_is_refused_before_a_job() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let image: ImageRecord = serde_json::from_value(json!({
         "id": "unity", "name": "snapshot image", "image_id": "sha256:unity",
         "reference": "thoric/snapshot:unity", "kind": "snapshot", "created_at": 1,
@@ -52,7 +61,7 @@ async fn a_create_request_missing_a_required_value_is_refused_before_a_job() {
 #[tokio::test]
 async fn creation_jobs_carry_the_name_of_what_they_make() {
     // The test manager has no Docker CLI and no manager container, so both jobs fail quickly.
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let request = json!({"name": "Agent desktop", "image": "example/desktop:1"});
     let created = create(
         State(app.clone()),
@@ -104,7 +113,7 @@ async fn creation_jobs_carry_the_name_of_what_they_make() {
 
 #[test]
 fn a_create_request_gets_the_installations_defaults_for_the_features_it_leaves_out() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     let request = |body: Value| creation_request(config, body).unwrap().spec;
     let features = |spec: ContainerSpec| {
@@ -157,7 +166,7 @@ fn a_create_request_gets_the_installations_defaults_for_the_features_it_leaves_o
 
 #[test]
 fn a_switched_off_feature_is_never_a_default_and_stored_records_keep_theirs() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.defaults = crate::config::Features {
         gpu: true,
@@ -198,7 +207,7 @@ fn a_switched_off_feature_is_never_a_default_and_stored_records_keep_theirs() {
 
 #[test]
 fn a_new_container_follows_the_installations_proxy_unless_it_asks_otherwise() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     let plain = json!({"name": "Plain", "image": "sha256:a"});
     let proxy = |config: &crate::config::Config, body: Value| {
@@ -226,4 +235,126 @@ fn a_new_container_follows_the_installations_proxy_unless_it_asks_otherwise() {
             .unwrap()
             .contains("\"pw\"")
     );
+}
+
+#[tokio::test]
+async fn single_container_api_returns_the_same_state_as_the_list() {
+    let app = app(false);
+    let env = model::Container {
+        id: "test-id".into(),
+        container: "test-container".into(),
+        private_network: "test-private".into(),
+        egress_network: "test-egress".into(),
+        source_image_id: "sha256:test".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .uri("/api/containers/test-id")
+                .header("host", "localhost")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    // The record's own fields and Docker's view of it sit side by side.
+    assert_eq!(body["id"], "test-id");
+    assert_eq!(body["spec"]["name"], spec().name);
+    assert_eq!(body["state"], "unavailable");
+}
+
+#[tokio::test]
+async fn container_settings_are_checked_before_any_job_or_docker_work() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.audio = false;
+        config.microphone = false;
+    }
+    let mut existing = spec();
+    existing.gpu = true;
+    let env = model::Container {
+        id: "edit-id".into(),
+        container: "thoric-edit-id".into(),
+        private_network: "thoric-edit-id-private".into(),
+        egress_network: "thoric-edit-id-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: existing,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    let post = |id: &str, body: serde_json::Value| {
+        let app = app.clone();
+        let request = Request::builder()
+            .header("host", "localhost:8080")
+            .header("x-thoric-request", "1")
+            .header("content-type", "application/json")
+            .method("POST")
+            .uri(format!("/api/containers/{id}/settings"))
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        async move {
+            let response = router(app).oneshot(request).await.unwrap();
+            let status = response.status();
+            let bytes = axum::body::to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap();
+            (
+                status,
+                serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+            )
+        }
+    };
+    let (status, body) = post(
+        "edit-id",
+        serde_json::json!({"name": "Renamed", "cpus": 2, "resolution": "1280x720", "dry_run": true}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["live"], serde_json::json!(["name", "cpus"]));
+    assert_eq!(body["restart"], serde_json::json!(["resolution"]));
+    // A feature the installation switched off cannot be turned on, but a desktop that has one
+    // (GPU here, created before the switch) can still change its other settings.
+    for (request, expected) in [
+        (
+            serde_json::json!({"audio": true, "dry_run": true}),
+            "Audio is disabled",
+        ),
+        (
+            serde_json::json!({"image": "thoric/custom:other"}),
+            "cannot change",
+        ),
+        (serde_json::json!({"dry_run": "yes"}), "dry_run"),
+        (
+            serde_json::json!({"volume": "x"}),
+            "Unknown container setting",
+        ),
+    ] {
+        let (status, body) = post("edit-id", request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert!(body["error"].as_str().unwrap().contains(expected), "{body}");
+    }
+    let (status, _) = post("missing-id", serde_json::json!({"dry_run": true})).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    let saved: model::Container = app.db.get(model::CONTAINERS, "edit-id").unwrap();
+    assert_eq!(saved.spec.name, "Unity");
 }

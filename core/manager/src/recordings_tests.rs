@@ -1,5 +1,6 @@
 //! Pins down what a recording reports about its video: the helper's status as it is, and a
-//! dashboard link to the video file when there is one, an MP4 or the MJPEG AVI fallback alike.
+//! dashboard link to the video file when there is one, an MP4 or the MJPEG AVI fallback alike. Also
+//! which recording and export requests are refused.
 use super::*;
 
 fn recording() -> Recording {
@@ -63,4 +64,39 @@ fn no_link_without_a_video_file() {
     );
     let running = describe(&recording(), json!({"state": "recording", "frames": 3}));
     assert!(running.get("video").is_none());
+}
+
+#[test]
+fn recording_requests_are_validated() {
+    let start = |value: serde_json::Value| {
+        serde_json::from_value::<StartRecording>(value)
+            .unwrap()
+            .validate()
+    };
+    assert!(start(serde_json::json!({})).is_ok());
+    assert!(
+        start(
+            serde_json::json!({"fps":5,"max_seconds":600,"max_width":320,"region":"0,0,100,100"})
+        )
+        .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"fps":0}),
+        serde_json::json!({"fps":6}),
+        serde_json::json!({"max_seconds":601}),
+        serde_json::json!({"max_width":8}),
+        serde_json::json!({"region":"1,2"}),
+    ] {
+        assert!(start(bad).is_err());
+    }
+    let export =
+        |value: serde_json::Value| serde_json::from_value::<Export>(value).unwrap().validate();
+    assert!(
+        export(serde_json::json!({"destination":"/home/desktop/Downloads","name":"run.tar.gz","recording_ids":["a"]}))
+            .is_ok()
+    );
+    assert!(
+        export(serde_json::json!({"destination":"/home/desktop/Downloads","name":"run.tar.gz"}))
+            .is_err()
+    );
 }

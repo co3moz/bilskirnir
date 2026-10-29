@@ -93,3 +93,6 @@ pub(crate) fn private_subnet(network: &Value) -> Option<&str> {
                 .is_some_and(|(address, _)| address.parse::<std::net::Ipv4Addr>().is_ok())
         })
 }
+#[cfg(test)]
+#[path = "networks_tests.rs"]
+mod tests;

@@ -43,7 +43,7 @@ fn streams_follow_exactly_the_running_containers() {
 
 #[tokio::test]
 async fn without_the_engine_socket_usage_says_why() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     run(app.clone(), Duration::from_millis(10)).await;
     let store = app.usage.store();
     assert!(store.error.as_deref().unwrap().contains("DOCKER_HOST"));
@@ -143,7 +143,7 @@ mod engine_socket {
         let streams = Arc::new(AtomicUsize::new(0));
         let server = tokio::spawn(engine(listener, listed.clone(), streams.clone()));
 
-        let mut app = crate::tests::app(false);
+        let mut app = crate::test_support::app(false);
         Arc::get_mut(&mut app).unwrap().config.docker_socket = Some(socket);
         let record = crate::model::Container {
             id: "a".into(),

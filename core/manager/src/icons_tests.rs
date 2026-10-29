@@ -123,7 +123,7 @@ async fn fetch(app: Arc<App>, uri: &str, tag: Option<&str>) -> Response {
 
 #[tokio::test]
 async fn the_icon_route_serves_the_picture_a_list_names() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("image", "a", &record("a", None)).unwrap();
     let missing = fetch(app.clone(), "/api/images/a/icon", None).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
@@ -179,7 +179,7 @@ async fn the_icon_route_serves_the_picture_a_list_names() {
 
 #[tokio::test]
 async fn only_a_saved_image_takes_a_usable_icon() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("image", "a", &record("a", None)).unwrap();
     let catalog = set(
         State(app.clone()),

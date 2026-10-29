@@ -2,7 +2,7 @@
 //! compression, never beyond the unpacked limit, and an import is refused before anything is
 //! created when its request cannot work.
 use super::*;
-use crate::tests::app;
+use crate::test_support::app;
 use axum::http::Request;
 use flate2::{Compression, write::GzEncoder};
 use tower::ServiceExt;

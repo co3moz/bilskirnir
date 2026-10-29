@@ -234,3 +234,6 @@ pub(crate) fn check_arguments(tool: &Tool, args: &Value) -> Result<(), ErrorData
 pub(crate) fn listed_tool(name: &str) -> Option<Tool> {
     TOOLS.iter().find(|t| t.name == name).cloned()
 }
+#[cfg(test)]
+#[path = "mcp_tests.rs"]
+mod tests;

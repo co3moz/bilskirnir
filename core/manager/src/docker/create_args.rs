@@ -124,3 +124,6 @@ impl App {
         args
     }
 }
+#[cfg(test)]
+#[path = "create_args_tests.rs"]
+mod tests;

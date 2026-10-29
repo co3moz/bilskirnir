@@ -147,7 +147,7 @@ fn programs_are_led_to_the_desktops_proxy_only_while_there_is_one() {
 
 #[test]
 fn the_desktops_proxy_is_given_the_chosen_proxy_with_its_credentials() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     assert_eq!(settings(config, &spec(Value::Null), None, Vec::new()), None);
     // Following an installation without a proxy goes straight to every address.
@@ -275,7 +275,7 @@ fn a_password_belongs_to_the_proxy_it_was_given_for() {
 
 #[test]
 fn the_password_is_kept_apart_from_the_container_and_follows_its_settings() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let mut own = custom("http://p.example:1");
     PasswordChange::Set("pw".into())
         .settle(None, &mut own)

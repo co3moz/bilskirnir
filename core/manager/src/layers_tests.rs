@@ -380,7 +380,7 @@ fn a_snapshot_of_a_snapshot_takes_its_parents_layer_from_the_parent() {
 
 #[tokio::test]
 async fn without_docker_sizes_are_null_and_layers_are_refused() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let list = crate::router(app.clone())
         .oneshot(
             Request::get("/api/images")
@@ -517,7 +517,7 @@ async fn get(app: &Arc<App>, path: &str) -> Value {
 #[cfg(unix)]
 #[tokio::test]
 async fn each_image_is_read_once_and_leaves_the_cache_with_its_image() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let dir = layered_docker(&mut app);
     let images = get(&app, "/api/images").await;
     let by_id = |images: &Value, id: &str| {

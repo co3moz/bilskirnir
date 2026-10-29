@@ -597,3 +597,6 @@ pub(crate) fn image_volumes_mounted(image: &Value, mounts: &[Mount]) -> Result<(
     }
     Ok(())
 }
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod tests;

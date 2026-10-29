@@ -26,7 +26,7 @@ enum Served {
 /// list and hands the request to its handler, which in this fixture refuses it: the root MCP is
 /// off and no token or link exists.
 async fn served() -> BTreeMap<String, Served> {
-    let router = crate::router(crate::tests::app(true));
+    let router = crate::router(crate::test_support::app(true));
     let debug = format!("{router:?}");
     // The fallback's own paths, `/` and its catch-all, come after the routes'.
     let (routes, _) = debug
@@ -260,7 +260,7 @@ fn a_create_request_names_no_fixed_default_for_what_the_installation_fills() {
     // What `creation_request` fills from the installation: the fields of a request that leaves
     // everything out that come back different with every default on and with every one off.
     let created = |on: bool| {
-        let mut app = crate::tests::app(false);
+        let mut app = crate::test_support::app(false);
         let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
         config.defaults = crate::config::Features {
             gpu: on,
@@ -396,7 +396,7 @@ async fn errors_and_queued_jobs_answer_as_the_document_says() {
         keys(&document["components"]["schemas"]["Error"]["properties"])
     );
     let Ok(axum::Json(queued)) = crate::jobs::launch(
-        crate::tests::app(false),
+        crate::test_support::app(false),
         "test",
         "test".into(),
         |_, _| async { Ok(json!({})) },
@@ -412,7 +412,7 @@ async fn errors_and_queued_jobs_answer_as_the_document_says() {
 #[tokio::test]
 async fn the_document_needs_the_session_as_the_rest_of_the_api_does() {
     let ask = |auth| async move {
-        crate::router(crate::tests::app(auth))
+        crate::router(crate::test_support::app(auth))
             .oneshot(
                 Request::builder()
                     .uri("/api/openapi.json")

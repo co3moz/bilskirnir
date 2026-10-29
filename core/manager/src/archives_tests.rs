@@ -47,7 +47,7 @@ async fn finished(app: &App, id: &str) -> Job {
 
 #[tokio::test]
 async fn imports_are_checked_before_any_job_or_docker_work() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let long_name = format!("size=16&name={}", "x".repeat(101));
     // An archive streamed without a size is checked the same way.
     let streamed = format!("name={}", "x".repeat(101));
@@ -95,7 +95,7 @@ async fn imports_are_checked_before_any_job_or_docker_work() {
 #[tokio::test]
 async fn a_refused_import_answers_with_its_jobs_error() {
     // The test manager has no Docker CLI, so the job fails before it reads the archive.
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let response = crate::router(app.clone())
         .oneshot(import_request(
             "size=16&name=Saved",
@@ -123,7 +123,7 @@ async fn a_refused_import_answers_with_its_jobs_error() {
 
 #[tokio::test]
 async fn a_failed_export_breaks_the_download_and_fails_its_job() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let record = ImageRecord {
         id: "saved".into(),
         name: "Geliştirme masası".into(),

@@ -97,7 +97,7 @@ fn a_kept_build_is_the_body_its_route_was_sent() {
 
 #[tokio::test]
 async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let first = started(crate::api::build(State(app.clone()), Json(build())).await);
     assert_eq!(
         app.db.get::<Request>(REQUESTS, &first).unwrap(),
@@ -130,7 +130,7 @@ async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
 
 #[tokio::test]
 async fn a_retried_snapshot_snapshots_the_same_container() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let container = Container {
         id: "c1".into(),
         container: "thoric-c1".into(),
@@ -168,7 +168,7 @@ async fn a_retried_snapshot_snapshots_the_same_container() {
 
 #[tokio::test]
 async fn only_a_failed_or_interrupted_job_with_its_request_is_retried() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let pull = Request::ImagePull {
         image_id: "missing".into(),
     };
@@ -220,7 +220,7 @@ async fn only_a_failed_or_interrupted_job_with_its_request_is_retried() {
 
 #[tokio::test]
 async fn a_completed_job_drops_its_request() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let request = Request::SourceBuild {
         image_id: "xfce".into(),
     };

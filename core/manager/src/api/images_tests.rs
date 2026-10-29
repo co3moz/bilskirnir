@@ -1,7 +1,15 @@
 //! Pins down how a script build's configuration is kept: the configuration route hands back the
 //! exact request that built the image, image lists and job results leave the script out, and
-//! records saved before the configuration existed still load.
+//! records saved before the configuration existed still load. Also that only a catalog image is
+//! built or pulled.
 use super::*;
+use crate::test_support::app;
+use crate::{model, router};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use tower::ServiceExt;
 
 fn record(id: &str, kind: &str, build: Option<BuildConfig>) -> ImageRecord {
     ImageRecord {
@@ -35,7 +43,7 @@ fn unity_tools() -> BuildConfig {
 
 #[tokio::test]
 async fn configuration_is_the_request_that_built_the_image() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let built = ImageRecord {
         description: "Git for Unity projects".into(),
         icon: Some(crate::icons::sample(256, 256)),
@@ -165,7 +173,7 @@ fn a_merged_build_has_parts_instead_of_a_script() {
 
 #[tokio::test]
 async fn a_merged_build_exports_its_parts_and_lists_leave_every_script_out() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let part = |id: &str, name: &str| BuildPart {
         id: id.into(),
         name: name.into(),
@@ -226,7 +234,7 @@ fn records_from_before_merged_templates_name_their_template_alone() {
 
 #[tokio::test]
 async fn images_without_a_recorded_build_have_no_configuration() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put("image", "s", &record("s", "snapshot", None))
         .unwrap();
@@ -240,7 +248,7 @@ async fn images_without_a_recorded_build_have_no_configuration() {
 
 #[tokio::test]
 async fn image_list_leaves_out_build_scripts() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put("image", "a", &record("a", "build", Some(unity_tools())))
         .unwrap();
@@ -257,4 +265,26 @@ async fn image_list_leaves_out_build_scripts() {
     );
     let older = listed.iter().find(|image| image["id"] == "b").unwrap();
     assert!(older.get("build").is_none());
+}
+
+#[tokio::test]
+async fn only_catalog_images_are_built_or_pulled() {
+    let app = app(false);
+    // A free-form reference or a saved image never reaches a registry or the bundled context.
+    for action in ["build", "pull"] {
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .header("host", "localhost:8080")
+                    .method("POST")
+                    .uri(format!("/api/images/not-in-catalog/{action}"))
+                    .header("x-thoric-request", "1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{action}");
+    }
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }

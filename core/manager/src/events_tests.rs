@@ -3,7 +3,7 @@
 //! everything again instead of holding up whoever publishes, and whether Docker's own events
 //! reach it is told once per change and to every new stream.
 use super::*;
-use crate::tests::app;
+use crate::test_support::app;
 use axum::{
     body::Body,
     http::{Request, StatusCode},

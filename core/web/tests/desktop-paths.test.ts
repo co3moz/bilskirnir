@@ -21,8 +21,8 @@ const mount = (volume: string, target: string, readonly = false): Mount => ({
 })
 
 // The cases of uploads_only_accept_canonical_paths_in_writable_locations in
-// core/manager/src/tests.rs, so the dialog refuses what the manager would and lets through what it
-// accepts.
+// core/manager/src/uploads_tests.rs, so the dialog refuses what the manager would and lets through
+// what it accepts.
 const container = (mounts: Mount[] = []): Pick<Container, "spec" | "setup"> => ({
   spec: { mounts } as Container["spec"],
   setup: {

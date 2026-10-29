@@ -469,3 +469,6 @@ pub async fn stop(
         stop_application(&app, &id, &application, grace_seconds).await?,
     ))
 }
+#[cfg(test)]
+#[path = "apps_tests.rs"]
+mod tests;

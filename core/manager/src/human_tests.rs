@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     model::CONTAINERS,
-    tests::{mcp_app, mcp_request},
+    test_support::{mcp_app, mcp_request},
 };
 use axum::body::Body;
 use tower::ServiceExt;

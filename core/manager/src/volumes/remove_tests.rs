@@ -102,7 +102,7 @@ async fn answer(app: Arc<App>, name: &str) -> (StatusCode, Value) {
 #[tokio::test]
 async fn an_invalid_name_is_refused_before_docker() {
     // The test app's Docker CLI does not exist, so any call would fail differently.
-    let (status, body) = answer(crate::tests::app(false), "-bad").await;
+    let (status, body) = answer(crate::test_support::app(false), "-bad").await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
     assert_eq!(body["error"], "Invalid volume name");
 }
@@ -119,7 +119,7 @@ fn the_route_is_documented() {
 #[tokio::test]
 async fn a_volume_called_import_is_not_taken_for_the_import_route() {
     // `POST /api/volumes/import` is a route of its own, which wins over `{name}`.
-    let response = crate::router(crate::tests::app(false))
+    let response = crate::router(crate::test_support::app(false))
         .oneshot(request("import"))
         .await
         .unwrap();
@@ -146,7 +146,7 @@ fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.manager = Some("thoric-manager".into());

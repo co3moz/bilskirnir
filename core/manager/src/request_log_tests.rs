@@ -36,7 +36,7 @@ async fn logged(uri: &str, id: Option<&str>) -> (String, String) {
     if let Some(id) = id {
         request = request.header("x-request-id", id);
     }
-    let response = crate::router(crate::tests::app(false))
+    let response = crate::router(crate::test_support::app(false))
         .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap();

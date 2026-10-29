@@ -84,3 +84,6 @@ pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<
 fn default_true() -> bool {
     true
 }
+#[cfg(test)]
+#[path = "api_tests.rs"]
+mod tests;

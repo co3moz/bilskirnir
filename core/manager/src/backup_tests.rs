@@ -106,7 +106,7 @@ pub(super) fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathB
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.manager = Some("thoric-manager".into());
@@ -167,7 +167,7 @@ fn a_backup_file_is_named_by_its_time_in_utc() {
 
 #[test]
 fn only_one_backup_or_restore_runs_at_a_time() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let held = installation(&app).unwrap();
     let refused = installation(&app).unwrap_err();
     assert_eq!(refused.0, StatusCode::CONFLICT);

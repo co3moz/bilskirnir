@@ -223,7 +223,7 @@ fn without_its_own_container_a_record_gets_a_new_identity() {
 
 #[test]
 fn every_created_container_gets_the_hostname_and_mac_address() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let mut identified =
         spec(json!({"hostname": "unity-build", "mac_address": "02:00:00:00:00:01"}));
     identified.machine_id = Some(generate_machine_id());

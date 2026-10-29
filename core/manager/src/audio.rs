@@ -172,3 +172,6 @@ pub async fn inject(
 ) -> Result<Json<Value>> {
     Ok(Json(inject_audio(&app, &id, &body).await?))
 }
+#[cfg(test)]
+#[path = "audio_tests.rs"]
+mod tests;

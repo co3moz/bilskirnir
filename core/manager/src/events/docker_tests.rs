@@ -99,7 +99,7 @@ async fn next(events: &mut broadcast::Receiver<Arc<str>>) -> Value {
 
 #[tokio::test]
 async fn a_burst_is_published_once_with_every_list_it_changed() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let mut events = app.events.subscribe();
     let changes = Arc::new(Changes::default());
     let publisher = tokio::spawn(publish(
@@ -179,7 +179,7 @@ mod engine_socket {
         let (lines, received) = mpsc::channel(8);
         let server = tokio::spawn(engine(listener, received));
 
-        let mut app = crate::tests::app(false);
+        let mut app = crate::test_support::app(false);
         Arc::get_mut(&mut app).unwrap().config.docker_socket = Some(socket);
         let mut events = app.events.subscribe();
         spawn(app.clone());
