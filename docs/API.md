@@ -33,7 +33,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Management** page; secrets only say whether they are set. See [configuration](#configuration). |
 | POST | `/api/configuration` | Check a change of the editable settings, or have the WSL package write it to `.env` and recreate the manager; returns a job. See [configuration](#configuration). |
 | GET | `/api/system` | Docker connection and host summary. |
-| GET | `/api/update` | This manager's release, the newest one and whether this installation can update to it; see [updates](#updates). |
+| GET | `/api/update` | This manager's release or `edge` commit, the newest release and whether this installation can update to it; see [updates](#updates). |
 | POST | `/api/update` | Ask the WSL package to run `thoric update`; returns a job. See [updates](#updates). |
 | POST | `/api/update/check` | Ask GitHub for the newest release now; answers as `GET /api/update` does. See [updates](#updates). |
 | GET | `/api/backup` | Download a [backup](#backup-and-restore) of the whole installation; `images`, `volumes`, `files` and `secrets` choose its optional parts. The transfer is a `backup` job. |
@@ -572,6 +572,7 @@ The archive streams into `docker load` as it arrives. On the way, the manager re
 
 - It holds exactly one image, with its `manifest.json` and configuration.
 - The image has the `thoric.desktop=true` label.
+- Its `thoric.desktop-level` label, 0 when it has none, is one this Thoric handles. An image made for a newer Thoric is refused with a reason that says to update Thoric; containers, builds and image records refuse it the same way, and the image list reports a catalog image that carries one with `"available": false` and that reason as its `error`.
 - It is at most `IMAGE_ARCHIVE_MAX_MB` after decompression.
 
 The response arrives once the whole archive has passed: `{"job_id":...}` while Docker finishes loading in that `image-import` job, or status 400 with the reason it was refused. A `size` above the limit is refused at once with 413, and a third transfer while two archives are moving with 429. Without `size`, as for `docker save IMAGE_ID | curl ... --upload-file -`, the archive is held to the limit as it arrives, the job's `progress` has no `total`, and an archive cut short is refused because it lacks the manifest, the configuration or a layer that loading needs. The finished job's result is the new image record, of kind `archive`, with the reference `thoric/imported:<id>`.
@@ -896,6 +897,7 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 
 - `enabled`: whether the manager looks for releases at all.
 - `current`: this manager's release.
+- `commit`: for an `edge` build of `master`, the commit it was built from, since it still carries the version of the release before it; `null` for a release or a build from the source.
 - `newest`, `release_url` and `checked_at`: the newest release, the page of its notes and when GitHub was last asked, `null` before the first answer. `error` says why the last look failed; `newest` then keeps the release seen before.
 - `available`: whether `newest` is later than `current`.
 - `installable`: whether this installation runs the update itself, which only the [WSL package](WSL_PACKAGE.md#update-from-the-dashboard) does.

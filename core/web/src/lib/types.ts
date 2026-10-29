@@ -441,6 +441,11 @@ export type UpdateStatus = {
   /** Whether the manager looks for new releases (UPDATE_CHECK). */
   enabled: boolean
   current: string
+  /**
+   * The commit of an `edge` build of master, which still carries the version of the release
+   * before it; `null` for a release or a build from the source.
+   */
+  commit: string | null
   /** The newest release GitHub named, or `null` before the first answer. */
   newest: string | null
   /** Whether `newest` is later than `current`. */

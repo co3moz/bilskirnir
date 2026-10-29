@@ -216,6 +216,7 @@ async fn the_dashboard_updates_only_a_watched_package_to_a_newer_release() {
         (&body["enabled"], &body["installable"], &body["current"]),
         (&json!(false), &json!(false), &json!(VERSION))
     );
+    assert_eq!(body["commit"], json!(crate::catalog::edge_commit()));
     let (status, body) = call(off, "POST").await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(

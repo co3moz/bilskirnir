@@ -233,6 +233,19 @@ fn rebuilt_manifest_drops_case_variants_go_would_still_read() {
 }
 
 #[test]
+fn a_desktop_image_made_for_a_newer_thoric_stops_before_docker_loads_it() {
+    let labels = json!({
+        "thoric.desktop": "true",
+        "thoric.desktop-level": (crate::catalog::DESKTOP_LEVEL + 1).to_string(),
+    });
+    let newer = serde_json::to_vec(
+        &json!({"architecture": "amd64", "os": "linux", "config": {"Labels": labels}}),
+    )
+    .unwrap();
+    assert!(error(&archive(&newer)).contains("made for a newer Thoric"));
+}
+
+#[test]
 fn only_a_desktop_image_and_only_one_is_accepted() {
     assert!(error(&archive(&config(false))).contains("not contain a Thoric desktop image"));
     let two = serde_json::to_vec(&json!([

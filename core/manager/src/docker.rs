@@ -192,6 +192,7 @@ impl App {
         if image["Config"]["Labels"]["thoric.desktop"] != "true" {
             bail!("Image must be derived from a Thoric desktop image");
         }
+        crate::catalog::check_level(&image["Config"]["Labels"])?;
         let image_id = image["Id"].as_str().context("Missing image ID")?;
         let compose = self.pin_compose(id, &spec.image, image_id, &parameters)?;
         let compose_mounts = compose

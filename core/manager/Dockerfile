@@ -29,8 +29,9 @@ COPY core/manager/Cargo.toml core/manager/Cargo.toml
 COPY core/manager/src core/manager/src
 COPY core/manager/helpers core/manager/helpers
 COPY images/desktop/profiles.json images/desktop/profiles.json
-# A release build names its version, and the manager then downloads the desktop images published
-# with it. Without it, the manager downloads each catalog image's reference.
+# The publishing workflow names the tag of the desktop images it publishes with this manager, the
+# version for a release and sha-<commit> for a build of master, and the manager then downloads
+# those. A build without it, such as one from the source, downloads each catalog image's reference.
 ARG THORIC_RELEASE
 # Only the binary is left in this layer, so the build cache keeps one copy of the compiled
 # dependencies, the one above, instead of one with every commit.
@@ -75,8 +76,8 @@ WORKDIR /app
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=3s CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/thoric"]
-# The same release as a label, which `thoric update` in the WSL package reads to download the
-# desktop images this manager would. Declared last so it leaves the cache of the layers above alone.
+# The same tag as a label, which `thoric update` in the WSL package reads to download the desktop
+# images this manager would. Declared last so it leaves the cache of the layers above alone.
 ARG THORIC_RELEASE
 LABEL thoric.release="${THORIC_RELEASE}"
 

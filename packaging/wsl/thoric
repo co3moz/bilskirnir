@@ -135,9 +135,10 @@ newest_release() {
     fi
     echo "$version"
 }
-# Desktop profiles download on first use, so refresh only the ones this host already has. A release
-# manager, labelled with its version, downloads the desktop images published with it and tags them
-# as the catalog reference; any other manager downloads the reference itself. This does the same.
+# Desktop profiles download on first use, so refresh only the ones this host already has. A published
+# manager, labelled with its version or, for an edge build, sha-<commit>, downloads the desktop images
+# published with it and tags them as the catalog reference; a manager built from the source downloads
+# the reference itself. This does the same.
 update_profiles() {
     local catalog release ref source source_was_here
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||

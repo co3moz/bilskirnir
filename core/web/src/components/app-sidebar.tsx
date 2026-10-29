@@ -119,8 +119,11 @@ export function AppSidebar({
   page,
   ...props
 }: React.ComponentProps<typeof Sidebar> & { page: Page }) {
-  // The release this manager runs, also while release checks are turned off.
-  const version = useUpdate().data?.current
+  // The release this manager runs, also while release checks are turned off. An edge build of
+  // master carries the version of the release before it, so it shows its commit instead.
+  const update = useUpdate().data
+  const version = update?.current
+  const commit = update?.commit
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -130,11 +133,19 @@ export function AppSidebar({
               <a href={href({ page: "dashboard" })}>
                 <img src="/mark.svg" alt="" className="size-6!" />
                 <span className="text-base font-semibold tracking-wide">Thoric</span>
-                {version && (
-                  <span className="ml-auto font-mono text-xs text-muted-foreground">
-                    {t("nav.version", { version })}
-                  </span>
-                )}
+                {version &&
+                  (commit ? (
+                    <span
+                      className="ml-auto font-mono text-xs text-muted-foreground"
+                      title={t("nav.edgeTitle", { commit, version })}
+                    >
+                      {t("nav.edge", { commit: commit.slice(0, 7) })}
+                    </span>
+                  ) : (
+                    <span className="ml-auto font-mono text-xs text-muted-foreground">
+                      {t("nav.version", { version })}
+                    </span>
+                  ))}
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

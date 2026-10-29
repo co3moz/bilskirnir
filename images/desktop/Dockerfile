@@ -84,6 +84,12 @@ COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvn
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/thoric/chromium-gpu.so
 COPY gpu-terminal.desktop /usr/share/applications/gpu-terminal.desktop
 ENV DESKTOP_SESSION=xfce
+# thoric.desktop-level, the same in both images, is DESKTOP_LEVEL in core/manager/src/catalog.rs.
+# Raise both together when this image changes in a way an older manager cannot handle, such as a
+# script, path, user or label it relies on going away or changing its form, so an older manager
+# refuses the image, and anything built from it, instead of failing inside it. Images built,
+# committed or imported from this one keep the label.
+LABEL thoric.desktop-level=1
 LABEL thoric.profile=ubuntu-xfce thoric.session=xfce \
     org.opencontainers.image.title="Ubuntu 24.04 · Lightweight XFCE" \
     org.opencontainers.image.description="Ubuntu LTS with a lightweight XFCE desktop, independent VNC display and optional GPU/audio" \
@@ -110,6 +116,7 @@ COPY --from=scripts /usr/share/glvnd/egl_vendor.d/10_nvidia.json /usr/share/glvn
 COPY --from=chromium-gpu /out/chromium-gpu.so /usr/local/lib/thoric/chromium-gpu.so
 COPY gnome-container.session /usr/share/gnome-session/sessions/thoric-ubuntu.session
 ENV DESKTOP_SESSION=gnome
+LABEL thoric.desktop-level=1
 LABEL thoric.profile=ubuntu-gnome thoric.session=gnome \
     org.opencontainers.image.title="Ubuntu 24.04 · GNOME" \
     org.opencontainers.image.description="Ubuntu GNOME Shell with Ubuntu session and Yaru appearance, independent VNC display and optional GPU/audio" \

@@ -203,7 +203,8 @@ pub(crate) fn installable(dir: &Path) -> bool {
     dir.join(WATCHED).is_file()
 }
 
-/// `GET /api/update`: this release, the newest one and whether the dashboard can update to it.
+/// `GET /api/update`: this release, the commit of a build of `master`, the newest release and
+/// whether the dashboard can update to it.
 pub async fn status(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let check = app.releases.last.lock().unwrap().clone();
     let running = app
@@ -214,6 +215,7 @@ pub async fn status(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     Ok(Json(json!({
         "enabled": app.config.update_check,
         "current": VERSION,
+        "commit": crate::catalog::edge_commit(),
         "newest": check.newest,
         "available": check.newest.as_deref().is_some_and(|newest| newer(newest, VERSION)),
         "release_url": check.newest.as_ref().map(|version| format!("{RELEASE_PAGE}{version}")),
