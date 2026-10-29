@@ -285,3 +285,12 @@ async fn a_record_that_does_not_read_fails_the_backup_instead_of_going_missing()
     assert!(!error.contains(SECRET), "{error}");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn a_parts_digest_is_blake2s_256_as_earlier_backups_wrote_it() {
+    // The BLAKE2s-256 example of RFC 7693, so a backup written before checks out on restore.
+    assert_eq!(
+        hex(&Blake2s256::digest(b"abc")),
+        "508c5e8c327c14e2e1a72ba34eeb452f37458b209ed63a294d999b4c86675982"
+    );
+}

@@ -4,7 +4,7 @@
 //! manager; see [`changes`].
 use crate::model::LABEL;
 use anyhow::{Context, Result, bail};
-use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
+use argon2::{Argon2, PasswordHasher};
 use serde_json::{Value, json};
 use std::{cell::RefCell, collections::BTreeMap, env, path::PathBuf};
 
@@ -340,11 +340,10 @@ impl Config {
                     "ADMIN_PASSWORD must have at least 8 characters and at most 4096 bytes (or use AUTH_MODE=none)"
                 );
             }
-            let salt = SaltString::encode_b64(uuid::Uuid::new_v4().as_bytes())
-                .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+            // A random salt of 16 bytes, from the system's generator.
             Some(
                 Argon2::default()
-                    .hash_password(password.as_bytes(), &salt)
+                    .hash_password(password.as_bytes())
                     .map_err(|e| anyhow::anyhow!(e.to_string()))?
                     .to_string(),
             )

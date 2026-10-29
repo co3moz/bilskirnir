@@ -1,7 +1,8 @@
 //! What the settings page is shown of the configuration: every setting Compose passes to the
 //! manager, as `.env.example` names it, and never a secret's value. Also how `TEMPLATES_URL`,
-//! `VOLUME_FILTER` and the MCP token are read, with the limits of a script request, and that the
-//! desktop seccomp profile adds only user namespaces to Docker's default.
+//! `VOLUME_FILTER` and the MCP token are read, with the limits of a script request, that the
+//! desktop seccomp profile adds only user namespaces to Docker's default, and that the
+//! administrator's password is hashed with Argon2id only at startup.
 use super::*;
 use crate::exec;
 use crate::test_support::DESKTOP_CONTEXT;
@@ -137,6 +138,45 @@ fn a_secret_says_only_whether_it_is_set() {
     config.upload_limit = 1024 * 1024 * 1024;
     assert_eq!(setting(config, "TEMPLATES_URL")["value"], "none");
     assert_eq!(setting(config, "UPLOAD_MAX_MB")["value"], 1024);
+}
+
+#[test]
+fn the_administrator_password_is_hashed_at_startup_only() {
+    use argon2::{PasswordHash, PasswordVerifier};
+    let get = |key: &str| match key {
+        "ADMIN_PASSWORD" => Some("correct horse".to_owned()),
+        // The seccomp profile is a file of the repository root, not of the test's folder.
+        "DESKTOP_USER_NAMESPACES" => Some("false".to_owned()),
+        _ => None,
+    };
+    let hash = Config::parse(&get, Reading::Startup)
+        .unwrap()
+        .password_hash
+        .unwrap();
+    // Argon2id with its default parameters and a salt of 16 bytes, which is 22 base64 letters.
+    let parts: Vec<&str> = hash.split('$').collect();
+    assert_eq!(
+        parts[..4],
+        ["", "argon2id", "v=19", "m=19456,t=2,p=1"],
+        "{hash}"
+    );
+    assert_eq!(parts[4].len(), 22, "{hash}");
+    let parsed = PasswordHash::new(&hash).unwrap();
+    assert!(
+        Argon2::default()
+            .verify_password(b"correct horse", &parsed)
+            .is_ok()
+    );
+    assert!(
+        Argon2::default()
+            .verify_password(b"wrong horse", &parsed)
+            .is_err()
+    );
+    // Every start salts anew, and a change from the dashboard never hashes.
+    let again = Config::parse(&get, Reading::Startup).unwrap().password_hash;
+    assert_ne!(again.as_deref(), Some(hash.as_str()));
+    let change = Config::parse(&get, Reading::Change).unwrap().password_hash;
+    assert_eq!(change, None);
 }
 
 #[tokio::test]
