@@ -36,7 +36,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | VNC, audio and microphone proxies | `core/manager/src/media.rs`, `core/manager/helpers/audio_output.py` |
 | MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs` |
 | Background applications, windows, screenshots and waits | `core/manager/src/apps.rs`, `core/manager/helpers/app_runner.py`, `core/manager/helpers/app_control.py`, `core/manager/src/windows.rs`, `core/manager/src/capture.rs`, `core/manager/src/waits.rs` |
-| Recordings and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/export_artifacts.py` |
+| Recordings, their video and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/recording_video.py`, `core/manager/helpers/export_artifacts.py` |
 | Audio capture and injection | `core/manager/src/audio.rs`, `core/manager/helpers/audio_tools.py` |
 | Interactive terminals | `core/manager/src/terminal.rs`, `core/manager/helpers/terminal_runner.py`, `core/manager/helpers/terminal_control.py` |
 | Virtual gamepad | `core/manager/src/gamepad.rs`, `core/manager/helpers/gamepad_daemon.py`, `core/manager/helpers/gamepad_control.py` |
@@ -277,7 +277,7 @@ For Docker or GPU lifecycle changes, build both catalog images and the manager, 
 python3 tests/integration.py
 ```
 
-The suite creates uniquely named resources and cleans only resources it owns. It covers both catalog images, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and MJPEG video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
+The suite creates uniquely named resources and cleans only resources it owns. It covers both catalog images, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and their H.264 video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
 
 ### GPU on a Linux host
 

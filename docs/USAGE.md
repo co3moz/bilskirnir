@@ -111,6 +111,8 @@ Some steps are for a person only, such as a CAPTCHA, a second sign-in factor, a 
 
 What an agent typed, wrote into a file or passed as a secret or a token shows only as its size, as [the MCP guide](MCP.md#agent-activity) describes; `exec_container`'s script is kept. A container's details panel shows its latest calls, and **Agent activity** in an endpoint's menu on **Endpoints** opens the list for that endpoint. The newest 10,000 calls are kept.
 
+An agent can also record the screen, as [the MCP guide](MCP.md#record-and-export-evidence) describes. Each recording becomes `recording.mp4` beside its frames in `/tmp/thoric-recordings/<recording_id>`, a video at the speed the screen changed that plays in any browser: open that folder on **Files** to download it, or follow the `download_url` the agent gets. A desktop from an image of Thoric 0.8.4 or earlier gets `recording.avi` instead, an MJPEG video for VLC or mpv. The folder lives in the desktop's memory, so download the video or have the agent export it before the container restarts.
+
 ## Save a container as a snapshot
 
 Use **Snapshot** after installing applications or changing settings in a container. Thoric briefly pauses the container and uses Docker commit to save its filesystem changes as a new image layer.
