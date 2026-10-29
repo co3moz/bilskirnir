@@ -2182,6 +2182,18 @@ try:
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
     assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    # A recreated desktop gets the pids limit and, under Docker's default driver, a log that rotates.
+    # One that lost its limit gets it back from the manager's next check, without a restart.
+    assert second["HostConfig"]["PidsLimit"] == 16384, second["HostConfig"]
+    if docker("info", "--format", "{{.LoggingDriver}}").decode().strip() == "json-file":
+        log_config = second["HostConfig"]["LogConfig"]
+        assert log_config["Type"] == "json-file" and {key: log_config["Config"].get(key) for key in ("max-size", "max-file")} == {"max-size": "10m", "max-file": "3"}, log_config
+    docker("update", "--pids-limit", "-1", edit_container)
+    limit = lambda: json.loads(docker("inspect", edit_container))[0]["HostConfig"]["PidsLimit"]
+    assert limit() in (None, 0, -1)
+    assert wait_for(lambda: limit() == 16384, 60), limit()
+    assert json.loads(docker("inspect", edit_container))[0]["State"]["StartedAt"] == second["State"]["StartedAt"]
+    print("PASS a desktop gets the pids limit, back in place when it loses it, and a log that rotates", flush=True)
     # The new container has the old one's identity; another identity is a change that recreates it.
     assert machine(edit_container) == recorded(edit_identity)
     takeover = {"hostname": "unity-build", "mac_address": "02-00-00-00-00-0A", "machine_id": "8AED3E38-BA43-5C50-DEAD-B0896ACE189B"}
