@@ -78,6 +78,11 @@ services:
     image: ghcr.io/co3moz/thoric:latest
     container_name: thoric-manager
     restart: unless-stopped
+    logging: # Keeps the manager's log to three files of 10 MB.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     ports:
       - "127.0.0.1:8080:8080" # Use 0.0.0.0 instead for LAN access.
     labels:

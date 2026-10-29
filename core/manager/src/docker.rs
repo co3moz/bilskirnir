@@ -522,6 +522,8 @@ impl App {
         if let Some(m) = env.spec.memory_mb {
             args.extend(["--memory".into(), format!("{m}m")]);
         }
+        // What keeps it from exhausting the host: its pids limit and a log that rotates.
+        args.extend(crate::desktop_limits::docker_args(&self.config));
         for m in env.mounts() {
             args.extend([
                 "--mount".into(),
