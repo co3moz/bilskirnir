@@ -220,13 +220,16 @@ where
                 .ok()
                 .and_then(|value| value["message"].as_str().map(str::to_owned))
                 .unwrap_or_else(|| String::from_utf8_lossy(&body).trim().to_owned());
-            bail!("Docker: {message} ({status})");
+            return Err(crate::error::engine_failure(
+                status,
+                format!("Docker: {message} ({status})"),
+            ));
         }
         anyhow::Ok(())
     };
     let result = tokio::time::timeout(Duration::from_secs(120), exchange)
         .await
-        .unwrap_or_else(|_| Err(anyhow::anyhow!("Docker operation timed out")));
+        .unwrap_or_else(|_| Err(crate::process::timed_out()));
     connection.abort();
     result
 }

@@ -64,9 +64,11 @@ fn a_record_that_mounts_the_volume_is_named_with_what_frees_it() {
 
 #[test]
 fn dockers_refusal_keeps_its_meaning() {
+    // As the Docker CLI answers when it refuses.
     let status = |message: &str| {
-        refused(anyhow::anyhow!(
-            "Docker: Error response from daemon: {message}"
+        refused(crate::error::docker_failure(
+            format!("Error response from daemon: {message}\n").as_bytes(),
+            Some(1),
         ))
         .0
     };
@@ -75,7 +77,7 @@ fn dockers_refusal_keeps_its_meaning() {
         StatusCode::CONFLICT
     );
     assert_eq!(status("get gone: no such volume"), StatusCode::NOT_FOUND);
-    assert_eq!(status("something else"), StatusCode::BAD_REQUEST);
+    assert_eq!(status("something else"), StatusCode::BAD_GATEWAY);
 }
 
 fn request(name: &str) -> Request<Body> {

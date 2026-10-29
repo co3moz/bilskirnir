@@ -36,7 +36,9 @@ pub(crate) fn mounted_by<'a>(name: &str, containers: &'a [Container]) -> Option<
 }
 
 impl App {
-    /// Delete the volume `name` and its files. The caller holds the volume's lock.
+    /// Delete the volume `name` and its files. The caller holds the volume's lock, which a
+    /// creation holds too from its check of the volume until its record is saved, so the records
+    /// read here name every container that mounts it.
     async fn delete_volume(&self, name: &str) -> Result<()> {
         // Without MANAGER_CONTAINER the manager runs outside Docker and mounts no volume; one that
         // names another container is refused rather than taken to mean the same.

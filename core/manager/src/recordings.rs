@@ -343,15 +343,7 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
     )
     .await?;
     if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error(
-            if message.starts_with("CONFLICT:") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            message,
-        ));
+        return Err(Error::helper(&output));
     }
     let mut value: Value =
         serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e))?;

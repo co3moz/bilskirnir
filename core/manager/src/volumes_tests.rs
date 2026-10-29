@@ -1,8 +1,9 @@
 //! Pins down how a volume is opened: the helper container reaches nothing but the volume and
 //! works as the desktop user, its paths stay inside the volume, the manager's own volume is
 //! refused to helpers and desktops alike and marked in the volume list, `VOLUME_FILTER` hides
-//! and refuses what it leaves out while every volume the manager creates passes it, and a
-//! request is checked before Docker is asked anything.
+//! and refuses what it leaves out while every volume the manager creates passes it, a request is
+//! checked before Docker is asked anything, and the locks of several volumes are taken in one
+//! order.
 use super::*;
 use crate::tests::app;
 use axum::{body::Body, http::Request};
@@ -354,7 +355,37 @@ fn helper_failures_keep_their_meaning() {
         docker.1,
         "docker: Error response from daemon: no such image."
     );
+    assert_eq!(docker.0, StatusCode::BAD_REQUEST);
     assert_eq!(helper_error(b"").0, StatusCode::BAD_GATEWAY);
+    // Docker that cannot be reached, or a helper that crashed, is not the request's to fix.
+    let unreachable = helper_error(
+        b"docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\nSee 'docker run --help'.\n",
+    );
+    assert_eq!(unreachable.0, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(unreachable.1.starts_with("docker: Cannot connect"));
+    let crashed =
+        helper_error(b"Traceback (most recent call last):\n  File \"<string>\"\nKeyError: 'x'\n");
+    assert_eq!(crashed.0, StatusCode::BAD_GATEWAY);
+}
+
+#[tokio::test]
+async fn several_volumes_are_locked_once_each_in_name_order() {
+    let app = app(false);
+    let first = app.resource_lock("volume:alpha").lock_owned().await;
+    let taking = {
+        let app = app.clone();
+        tokio::spawn(async move { app.lock_volumes(["beta", "alpha", "beta"]).await.len() })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    // It waits for the first name without holding a later one, as every holder of several takes
+    // them, so two of them cannot each hold what the other waits for.
+    assert!(!taking.is_finished());
+    assert!(app.resource_lock("volume:beta").try_lock().is_ok());
+    drop(first);
+    assert_eq!(taking.await.unwrap(), 2);
+    // Dropping the guards frees every lock.
+    assert!(app.resource_lock("volume:alpha").try_lock().is_ok());
+    assert!(app.resource_lock("volume:beta").try_lock().is_ok());
 }
 
 async fn post(app: Arc<App>, uri: &str, body: serde_json::Value) -> (StatusCode, String) {
