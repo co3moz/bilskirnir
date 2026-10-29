@@ -2,7 +2,7 @@
 //! restarts, and how its job follows `thoric apply-settings` through the folder the WSL
 //! package watches, also once the manager it started from has been replaced.
 use super::*;
-use crate::tests::DESKTOP_CONTEXT;
+use crate::test_support::DESKTOP_CONTEXT;
 use axum::{body::Body, http::Request};
 use std::path::PathBuf;
 use tower::ServiceExt;
@@ -21,7 +21,7 @@ fn folder() -> PathBuf {
 }
 
 fn app_in(dir: &Path) -> Arc<App> {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.update_dir = dir.into();
     config.environment = BTreeMap::from([

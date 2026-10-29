@@ -416,10 +416,10 @@ fn a_dash_gives_a_volume_parameter_no_volume() {
         interface.contains(&line),
         "core/web/src/lib/compose.ts must declare {line}"
     );
-    let mcp = include_str!("../mcp.rs");
+    let mcp = include_str!("../mcp/tools.rs");
     assert!(
         mcp.contains(&format!("\\\"{NO_VOLUME}\\\" gives it none")),
-        "the create_container parameters in core/manager/src/mcp.rs must explain {NO_VOLUME}"
+        "the create_container parameters in core/manager/src/mcp/tools.rs must explain {NO_VOLUME}"
     );
     assert!(
         include_str!("../../../../docs/API.md").contains(&format!("`\"{NO_VOLUME}\"` for none")),
@@ -653,11 +653,11 @@ fn kinds() -> [Kind; 7] {
 #[test]
 fn agents_and_the_api_guide_are_offered_every_type_and_display() {
     // The MCP schema lists the types and displays by hand, and the guide has a row per type.
-    let mcp = include_str!("../mcp.rs");
+    let mcp = include_str!("../mcp/tools.rs");
     let types = kinds().map(|kind| format!("\"{}\"", wire(kind))).join(",");
     assert!(
         mcp.contains(&format!("\"enum\":[{types}]")),
-        "the compose schema in core/manager/src/mcp.rs must offer the types [{types}]"
+        "the compose schema in core/manager/src/mcp/tools.rs must offer the types [{types}]"
     );
     let mut displays = Vec::new();
     for display in kinds().iter().flat_map(|kind| kind.displays()) {
@@ -669,7 +669,7 @@ fn agents_and_the_api_guide_are_offered_every_type_and_display() {
     let displays = displays.join(",");
     assert!(
         mcp.contains(&format!("\"enum\":[{displays}]")),
-        "the compose schema in core/manager/src/mcp.rs must offer the displays [{displays}]"
+        "the compose schema in core/manager/src/mcp/tools.rs must offer the displays [{displays}]"
     );
     let guide = include_str!("../../../../docs/API.md");
     for kind in kinds() {
@@ -873,7 +873,7 @@ fn every_field_reaches_agents_the_dashboard_and_the_guide() {
     };
     // The MCP schema refuses fields it does not list, a pasted configuration keeps only those
     // the dashboard reads, and the guide explains each one.
-    let mcp = include_str!("../mcp.rs");
+    let mcp = include_str!("../mcp/tools.rs");
     let reader = include_str!("../../../web/src/lib/compose.ts");
     let guide = include_str!("../../../../docs/API.md");
     for field in serde_json::to_value(&full)
@@ -884,7 +884,7 @@ fn every_field_reaches_agents_the_dashboard_and_the_guide() {
     {
         assert!(
             mcp.contains(&format!("\"{field}\":{{")),
-            "the compose schema in core/manager/src/mcp.rs must list {field}"
+            "the compose schema in core/manager/src/mcp/tools.rs must list {field}"
         );
         assert!(
             reader.contains(&format!("\"{field}\""))

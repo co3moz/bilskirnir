@@ -173,7 +173,7 @@ fn lines_wait_for_their_end() {
 
 #[test]
 fn build_output_names_each_stage_on_its_own_log_line() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("job", "build", &job(false)).unwrap();
     app.plan_stages("build", &BUILD_STAGES).unwrap();
     app.begin_stage("build", "base").unwrap();
@@ -297,7 +297,7 @@ fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.data = dir.join("data");

@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     model::{CONTAINERS, Container},
-    tests::{mcp_app, mcp_request},
+    test_support::{mcp_app, mcp_request},
 };
 use serde_json::json;
 
@@ -232,7 +232,7 @@ async fn get(app: &Arc<App>, uri: &str) -> (axum::http::StatusCode, Value) {
 #[tokio::test]
 async fn the_route_lists_the_newest_calls_with_their_filters_and_a_cursor() {
     // Without sign-in, so the dashboard's session is not needed here.
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     for (tool, container) in [("a", "c1"), ("b", "c2"), ("c", "c1")] {
         let entry = Entry {
             credential: "mcp_token".into(),

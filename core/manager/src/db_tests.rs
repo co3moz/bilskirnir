@@ -1,9 +1,11 @@
 //! Pins down that pruning keeps the newest jobs and every unfinished one, whatever its age, with
-//! the requests kept to retry them, and that the unfinished ones are found without reading the
-//! logs of the others. A record that does not read leaves the others of its kind readable, while
-//! the complete lists refuse without its data, and a copy of the database is whole.
+//! the requests kept to retry them, and that the unfinished ones are found without reading the logs
+//! of the others. A record that does not read leaves the others of its kind readable, while the
+//! complete lists refuse without its data, and a copy of the database is whole. Also that an image
+//! record keeps its snapshot parent, and that the job list is bounded and leaves the logs out.
 use super::*;
-use crate::model::Job;
+use crate::model::{self, Job};
+use crate::test_support::app;
 use serde::Deserialize;
 
 /// A record kind of the tests' own; a record without `name` does not read as one.
@@ -162,4 +164,64 @@ fn active_jobs_are_the_queued_and_running_ones_without_their_logs() {
     let ids: Vec<&str> = active.iter().map(|job| job.id.as_str()).collect();
     assert_eq!(ids, ["running", "queued"]);
     assert!(active.iter().all(|job| job.log.is_empty()));
+}
+
+#[test]
+fn job_list_is_bounded_and_strips_logs_before_deserialization() {
+    let app = app(false);
+    for i in 0..120 {
+        let id = i.to_string();
+        let j = model::Job {
+            id: id.clone(),
+            kind: "build".into(),
+            resource: None,
+            status: "completed".into(),
+            created_at: 1,
+            finished_at: Some(2),
+            log: "x".repeat(262144),
+            result: None,
+            progress: Some(serde_json::json!({"current": 1})),
+            stages: Vec::new(),
+            script: None,
+            name: None,
+        };
+        app.db.put("job", &id, &j).unwrap();
+    }
+    let jobs = app.db.jobs_summary().unwrap();
+    assert_eq!(jobs.len(), 100);
+    assert_eq!(jobs[0].id, "119");
+    assert!(jobs.iter().all(|j| j.log.is_empty()));
+    // Progress is small and is what the job list shows for a running download.
+    assert!(jobs.iter().all(|j| j.progress.is_some()));
+}
+
+#[test]
+fn database_round_trip_keeps_snapshot_parent() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let record = model::ImageRecord {
+        id: "a".into(),
+        name: "Snapshot".into(),
+        image_id: "sha256:new".into(),
+        reference: "snapshot:a".into(),
+        parent_image_id: Some("sha256:base".into()),
+        source_container: Some("env".into()),
+        kind: "snapshot".into(),
+        created_at: 1,
+        description: String::new(),
+        desktop: None,
+        build: None,
+        compose: None,
+        icon: None,
+        template_ids: Vec::new(),
+    };
+    db.put("image", "a", &record).unwrap();
+    assert_eq!(
+        db.get::<model::ImageRecord>("image", "a")
+            .unwrap()
+            .parent_image_id,
+        record.parent_image_id
+    );
+    assert_eq!(db.list::<model::ImageRecord>("image").unwrap().len(), 1);
+    db.remove("image", "a").unwrap();
+    assert!(db.list::<model::ImageRecord>("image").unwrap().is_empty());
 }

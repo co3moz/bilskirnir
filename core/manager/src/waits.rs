@@ -250,3 +250,6 @@ pub async fn wait(
 ) -> Result<Json<Value>> {
     Ok(Json(wait_for_condition(&app, &id, &body).await?))
 }
+#[cfg(test)]
+#[path = "waits_tests.rs"]
+mod tests;

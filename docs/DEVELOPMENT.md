@@ -26,18 +26,18 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 
 | Area | Files |
 | --- | --- |
-| HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs`, `core/manager/src/auth/` (the sign-in limit and the HTTPS proxy's forwarded address) |
+| HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/api/` (a container's routes and an image's), `core/manager/src/config.rs`, `core/manager/src/auth.rs`, `core/manager/src/auth/` (the sign-in limit and the HTTPS proxy's forwarded address) |
 | OpenAPI document of the HTTP API | `core/manager/src/openapi.rs`, `core/manager/src/openapi/routes.rs` |
 | Error statuses: a `bail!` is the request's (400), a failure of Docker, a helper or the manager is marked where it happens with `error::Fault`, or is an I/O or database error | `core/manager/src/error.rs` |
 | Request log, request IDs, health checks and repeated failures | `core/manager/src/request_log.rs`, `core/manager/src/health.rs`, `core/manager/src/reported.rs` |
-| Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
+| Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/docker/` (a container's lifecycle, its `docker create` arguments, its networks and the commands a job logs), `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
 | Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
 | Settings changes from the Management page through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/thoric-settings.path`, `packaging/wsl/thoric-settings.service` |
 | Settings changes after creation | `core/manager/src/reconfigure.rs` |
 | Composes and their setup runs | `core/manager/src/compose.rs`, `core/manager/helpers/setup_runner.py`, `core/manager/tests/test_setup_runner.py`, `core/web/src/lib/compose.ts`, `core/web/src/components/dialogs/compose-dialog.tsx` |
 | Metadata and image catalog | `core/manager/src/db.rs`, `core/manager/src/model.rs`, `core/manager/src/catalog.rs`, `images/desktop/profiles.json` |
 | VNC, audio and microphone proxies | `core/manager/src/media.rs`, `core/manager/helpers/audio_output.py` |
-| MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs`, `core/manager/src/desktop_input/relative.rs` |
+| MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/mcp/` (the tool catalog and what each tool runs), `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs`, `core/manager/src/desktop_input/relative.rs` |
 | Background applications, windows, screenshots and waits | `core/manager/src/apps.rs`, `core/manager/helpers/app_runner.py`, `core/manager/helpers/app_control.py`, `core/manager/src/windows.rs`, `core/manager/src/capture.rs`, `core/manager/src/waits.rs` |
 | Text on the screen with Tesseract OCR | `core/manager/src/ocr.rs`, `core/manager/src/ocr/words.rs`, `core/manager/src/capture/pixels.rs` |
 | Recordings, their video and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/recording_video.py`, `core/manager/helpers/export_artifacts.py` |

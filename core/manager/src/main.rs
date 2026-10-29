@@ -635,4 +635,7 @@ async fn reconcile_networks(app: &App, reported: &mut reported::Reported) -> any
 }
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
+#[path = "main_tests.rs"]
 mod tests;

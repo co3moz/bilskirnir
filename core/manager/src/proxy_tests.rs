@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     model,
-    tests::{app, mcp_app},
+    test_support::{app, mcp_app},
 };
 use axum::{
     Router,
@@ -463,7 +463,7 @@ async fn only_the_mcp_token_opens_a_listed_port() {
     let (code, _) = status(&app, "/api/containers/e/ports/http/", &token).await;
     assert_eq!(code, StatusCode::BAD_REQUEST);
     // Without MCP there is no proxy.
-    let off = crate::tests::app(true);
+    let off = crate::test_support::app(true);
     container(&off, &[8000]);
     let (code, _) = status(&off, "/api/containers/e/ports/8000/", &token).await;
     assert_eq!(code, StatusCode::NOT_FOUND);
@@ -471,7 +471,7 @@ async fn only_the_mcp_token_opens_a_listed_port() {
 
 #[tokio::test]
 async fn the_tools_and_guides_describe_the_ports_setting() {
-    let (_, reply) = crate::tests::mcp_request(mcp_app(), "tools/list", json!({})).await;
+    let (_, reply) = crate::test_support::mcp_request(mcp_app(), "tools/list", json!({})).await;
     let tools = reply["result"]["tools"].as_array().unwrap();
     for name in ["create_container", "update_container"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();

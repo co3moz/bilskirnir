@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     model::{CONTAINERS, Container},
-    tests::{app, mcp_app},
+    test_support::{app, mcp_app},
 };
 use axum::{
     Json,

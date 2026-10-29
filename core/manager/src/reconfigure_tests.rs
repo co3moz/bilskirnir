@@ -238,7 +238,7 @@ fn limits_change_with_a_swap_limit_that_keeps_dockers_default() {
 
 #[test]
 fn volume_settings_leave_the_compose_volumes_alone() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let compose = Mount {
         volume: "unity-installs".into(),
         target: "/opt/unity".into(),
@@ -285,8 +285,8 @@ fn volume_settings_leave_the_compose_volumes_alone() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_settings_change_cannot_mount_the_managers_own_volume() {
-    let mut app = crate::tests::app(false);
-    let calls = crate::tests::manager_docker(&mut app);
+    let mut app = crate::test_support::app(false);
+    let calls = crate::test_support::manager_docker(&mut app);
     let env = Container {
         id: "edit".into(),
         container: "thoric-edit".into(),
@@ -323,8 +323,8 @@ async fn a_settings_change_cannot_mount_the_managers_own_volume() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_volume() {
-    let mut app = crate::tests::app(false);
-    let calls = crate::tests::manager_docker(&mut app);
+    let mut app = crate::test_support::app(false);
+    let calls = crate::test_support::manager_docker(&mut app);
     // A compose volume parameter that named the data volume before creation refused it.
     let setup: crate::compose::Setup = serde_json::from_value(json!({
         "status": "completed", "image": "img", "parameters": {"DATA": "/opt/data"},
@@ -367,8 +367,8 @@ async fn a_recreated_container_cannot_keep_a_compose_mount_of_the_managers_own_v
 #[cfg(unix)]
 #[tokio::test]
 async fn a_settings_change_keeps_the_volumes_a_container_mounts_and_filters_new_ones() {
-    let mut app = crate::tests::app(false);
-    let calls = crate::tests::manager_docker(&mut app);
+    let mut app = crate::test_support::app(false);
+    let calls = crate::test_support::manager_docker(&mut app);
     std::sync::Arc::get_mut(&mut app)
         .unwrap()
         .config
@@ -455,7 +455,7 @@ fn proxied_ports_change_in_place_within_their_limits() {
 
 #[test]
 fn a_proxy_changes_in_place_and_only_turning_it_on_or_off_recreates_the_container() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let preview = |spec: ContainerSpec, change: Value| {
         let env = Container {
             id: "p".into(),
@@ -527,7 +527,7 @@ fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.data = dir.join("data");

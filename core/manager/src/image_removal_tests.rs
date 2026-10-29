@@ -140,16 +140,17 @@ async fn answer(app: Arc<App>, id: &str) -> (StatusCode, Value) {
 #[tokio::test]
 async fn an_unknown_image_is_missing() {
     // The test app's Docker CLI does not exist, so any call would fail differently.
-    let (status, body) = answer(crate::tests::app(false), "c0ffee").await;
+    let (status, body) = answer(crate::test_support::app(false), "c0ffee").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
 }
 
 #[tokio::test]
 async fn an_agent_deletes_through_the_same_route() {
-    let app = crate::tests::mcp_app();
+    let app = crate::test_support::mcp_app();
     let call =
         |image_id: &str| json!({"name": "delete_image", "arguments": {"image_id": image_id}});
-    let (_, body) = crate::tests::mcp_request(app.clone(), "tools/call", call("c0ffee")).await;
+    let (_, body) =
+        crate::test_support::mcp_request(app.clone(), "tools/call", call("c0ffee")).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
     assert_eq!(body["result"]["content"][0]["text"], "Record not found");
     // An import keeps its Docker image, so no Docker is needed to delete its record.
@@ -160,7 +161,7 @@ async fn an_agent_deletes_through_the_same_route() {
             &record("h", "import", "sha256:h", "someone/desktop:1"),
         )
         .unwrap();
-    let (_, body) = crate::tests::mcp_request(app.clone(), "tools/call", call("h")).await;
+    let (_, body) = crate::test_support::mcp_request(app.clone(), "tools/call", call("h")).await;
     assert_eq!(body["result"]["isError"], false, "{body}");
     assert_eq!(
         body["result"]["structuredContent"],
@@ -171,7 +172,7 @@ async fn an_agent_deletes_through_the_same_route() {
 
 #[tokio::test]
 async fn a_busy_image_is_refused_instead_of_waited_for() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put(
             "image",
@@ -209,7 +210,7 @@ fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)
 }
@@ -397,7 +398,7 @@ async fn tags_without_a_record_are_dropped_at_startup() {
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     app.db
         .put(

@@ -1,7 +1,8 @@
-//! Pins down where a catalog image downloads from: its own catalog reference, unless the
-//! manager was published, which takes the desktop image published under the same version or,
-//! for a build of `master`, the same commit. And which desktop levels a manager takes: those
-//! from its oldest to the one the desktop images it is built with carry.
+//! Pins down where a catalog image downloads from: its own catalog reference, unless the manager
+//! was published, which takes the desktop image published under the same version or, for a build of
+//! `master`, the same commit. And which desktop levels a manager takes: those from its oldest to
+//! the one the desktop images it is built with carry. Also that the catalog is unique and labeled,
+//! and that its images are listed with the saved ones whether they are downloaded or not.
 use super::*;
 
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -103,4 +104,71 @@ fn a_reference_without_a_tag_downloads_as_it_is() {
         image("localhost:5000/desktop:24.04").source_for(Some("1.2.3")),
         "localhost:5000/desktop:1.2.3"
     );
+}
+
+#[test]
+fn image_catalog_is_unique_and_metadata_is_explicit() {
+    let catalog = catalog();
+    assert_eq!(catalog.len(), 2);
+    assert_eq!(
+        catalog
+            .iter()
+            .map(|p| &p.id)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        catalog.len()
+    );
+    assert!(
+        catalog
+            .iter()
+            .any(|p| p.reference == DEFAULT_IMAGE && p.session == "xfce")
+    );
+    assert!(
+        catalog
+            .iter()
+            .any(|p| p.id == "ubuntu-gnome" && p.session == "gnome")
+    );
+    assert!(
+        from_image(&serde_json::json!({"Config":{"Labels":{"thoric.desktop":"true"}}})).is_none()
+    );
+    let info = from_image(&serde_json::json!({"Config":{"Labels":{"thoric.profile":"ubuntu-gnome","thoric.session":"gnome","org.opencontainers.image.title":"Ubuntu 24.04 · GNOME"}}})).unwrap();
+    assert_eq!(info.session, "gnome");
+    assert_eq!(info.catalog_id, "ubuntu-gnome");
+    // Records saved while catalog images were profiles still carry their desktop.
+    let old: DesktopInfo = serde_json::from_value(
+        serde_json::json!({"profile":"ubuntu-xfce","title":"Ubuntu 24.04 · Lightweight XFCE","session":"xfce"}),
+    )
+    .unwrap();
+    assert_eq!(old.catalog_id, "ubuntu-xfce");
+}
+
+#[test]
+fn catalog_images_are_listed_with_the_saved_images() {
+    let xfce = find("ubuntu-xfce").unwrap();
+    let labels = |id: &str, session: &str| serde_json::json!({"Id":"sha256:x","Config":{"Labels":{"thoric.profile":id,"thoric.session":session,"org.opencontainers.image.title":"XFCE"}}});
+    // Not downloaded yet: still listed, so a container can start from it and download it.
+    let missing = listed(&xfce, None, true);
+    assert_eq!(missing["kind"], "catalog");
+    assert_eq!(missing["reference"], xfce.reference);
+    assert!(missing["available"] == false && missing["downloaded"] == false);
+    assert!(missing["image_id"].is_null() && missing["error"].is_null());
+    let ready = listed(&xfce, Some(&labels("ubuntu-xfce", "xfce")), true);
+    assert!(ready["available"] == true && ready["image_id"] == "sha256:x");
+    assert_eq!(ready["desktop"]["catalog_id"], "ubuntu-xfce");
+    // A tag that points at another desktop is reported instead of being used.
+    let foreign = listed(&xfce, Some(&labels("ubuntu-gnome", "gnome")), true);
+    assert!(foreign["available"] == false && foreign["downloaded"] == true);
+    assert!(foreign["error"].is_string());
+    // A catalog reference made for a newer Thoric, such as one pulled by hand, says why it waits.
+    let mut newer = labels("ubuntu-xfce", "xfce");
+    newer["Config"]["Labels"]["thoric.desktop-level"] =
+        serde_json::json!((DESKTOP_LEVEL + 1).to_string());
+    let newer = listed(&xfce, Some(&newer), true);
+    assert!(newer["available"] == false && newer["downloaded"] == true);
+    assert!(
+        newer["error"].as_str().unwrap().contains("newer Thoric"),
+        "{newer}"
+    );
+    // Without Docker nobody knows.
+    assert!(listed(&xfce, None, false)["available"].is_null());
 }

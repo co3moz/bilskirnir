@@ -26,7 +26,7 @@ fn data(dir: &Path) -> PathBuf {
 }
 
 fn app_in(dir: &Path, check: bool) -> Arc<App> {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.update_check = check;
     config.update_dir = dir.into();

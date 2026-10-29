@@ -138,7 +138,7 @@ esac
 "#;
     std::fs::write(&docker, script.replace("DIR", &dir.display().to_string())).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.data = dir.join("data");

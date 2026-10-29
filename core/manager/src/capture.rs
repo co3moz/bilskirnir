@@ -266,3 +266,6 @@ pub async fn act(
     screenshot["jpeg_base64"] = json!(STANDARD.encode(&shot.jpeg));
     Ok(Json(json!({"input": input, "screenshot": screenshot})))
 }
+#[cfg(test)]
+#[path = "capture_tests.rs"]
+mod tests;

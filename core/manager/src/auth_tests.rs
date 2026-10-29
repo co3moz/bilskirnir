@@ -1,21 +1,26 @@
 //! Pins down that failed sign-ins are counted per address and successes not at all: one guessing
-//! neighbour is refused after its attempts while another address still reaches the password
-//! check, the administrator signs in as often as they like, the address behind the HTTPS proxy
-//! counts in place of the proxy's, and nobody else can name an address of their choosing.
+//! neighbour is refused after its attempts while another address still reaches the password check,
+//! the administrator signs in as often as they like, the address behind the HTTPS proxy counts in
+//! place of the proxy's, and nobody else can name an address of their choosing. Also the Host,
+//! Origin and session checks every route gets, whether sign-in is on or off, and that signing out
+//! ends the media connections of the session.
 use super::*;
+use crate::router;
+use crate::test_support::app;
 use axum::{
     body::Body,
     extract::ConnectInfo,
     http::{Request, StatusCode},
 };
+use std::{sync::Arc, time::Instant};
 use tower::ServiceExt;
 
 const PASSWORD: &str = "correct horse";
 const CADDY: &str = "172.18.0.3";
 
 /// A signed-in installation whose password hash is cheap to check, so a test can try it often.
-fn app() -> Arc<App> {
-    let mut app = crate::tests::app(true);
+fn with_password() -> Arc<App> {
+    let mut app = crate::test_support::app(true);
     let salt = argon2::password_hash::SaltString::encode_b64(b"thoric-test!").unwrap();
     let cheap = Argon2::new(
         argon2::Algorithm::Argon2id,
@@ -67,7 +72,7 @@ async fn attempt(app: &Arc<App>, from: Option<&str>) -> StatusCode {
 
 #[tokio::test]
 async fn failed_sign_ins_are_limited_per_address() {
-    let app = app();
+    let app = with_password();
     for _ in 0..limiter::ATTEMPTS {
         assert_eq!(
             attempt(&app, Some("192.168.1.20")).await,
@@ -93,7 +98,7 @@ async fn failed_sign_ins_are_limited_per_address() {
 
 #[tokio::test]
 async fn signing_in_never_uses_up_the_attempts() {
-    let app = app();
+    let app = with_password();
     let from = Some("192.168.1.20");
     for _ in 0..2 * limiter::ATTEMPTS {
         assert_eq!(
@@ -117,7 +122,7 @@ async fn signing_in_never_uses_up_the_attempts() {
 
 #[tokio::test]
 async fn the_https_proxy_counts_by_the_address_it_forwards() {
-    let app = &app();
+    let app = &with_password();
     app.https_proxy.set(vec![CADDY.parse().unwrap()]);
     let through = move |client| sign_in(app, "wrong", Some(CADDY), Some(client));
     for _ in 0..limiter::ATTEMPTS {
@@ -133,7 +138,7 @@ async fn the_https_proxy_counts_by_the_address_it_forwards() {
 
 #[tokio::test]
 async fn nobody_else_can_name_the_address_that_counts() {
-    let app = app();
+    let app = with_password();
     app.https_proxy.set(vec![CADDY.parse().unwrap()]);
     // A desktop on its private network, which the manager shares, names a new address each time.
     for n in 0..limiter::ATTEMPTS {
@@ -151,9 +156,178 @@ async fn nobody_else_can_name_the_address_that_counts() {
 
 #[tokio::test]
 async fn sign_in_without_a_password_is_an_error() {
-    let app = crate::tests::app(true);
+    let app = crate::test_support::app(true);
     assert_eq!(
         sign_in(&app, PASSWORD, Some("192.168.1.20"), None).await,
         StatusCode::INTERNAL_SERVER_ERROR
     );
+}
+
+#[tokio::test]
+async fn untrusted_host_is_rejected_even_with_matching_origin_and_no_login() {
+    let app = app(false);
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .uri("/api/session")
+                .header("host", "evil.example:8080")
+                .header("origin", "http://evil.example:8080")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn host_validation_accepts_local_ips_and_explicit_lan_names() {
+    let mut app = app(false);
+    Arc::get_mut(&mut app)
+        .unwrap()
+        .config
+        .allowed_hosts
+        .push("desktop.lan".into());
+    for host in [
+        "localhost:8080",
+        "127.0.0.1:8088",
+        "192.168.1.4:8080",
+        "[::1]:8080",
+        "[fd00::1]:8080",
+        "desktop.lan:8443",
+    ] {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert("host", host.parse().unwrap());
+        assert!(app.host_allowed(&h), "{host}");
+    }
+    for host in [
+        "example.org",
+        "localhost.evil.com",
+        "1.1.1.1",
+        "user@localhost",
+        "0.0.0.0",
+    ] {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert("host", host.parse().unwrap());
+        assert!(!app.host_allowed(&h), "{host}");
+    }
+}
+
+#[tokio::test]
+async fn logout_revokes_waiting_media_lease_and_expiry_ends_it() {
+    let app = app(true);
+    let expiry = Instant::now() + std::time::Duration::from_secs(60);
+    app.sessions.lock().unwrap().insert("media".into(), expiry);
+    let lease = app.session_revoked(Some("media".into()));
+    tokio::pin!(lease);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(5), &mut lease)
+            .await
+            .is_err()
+    );
+    let response = router(app.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/logout")
+                .header("host", "localhost:8080")
+                .header("cookie", "thoric_session=media")
+                .header("x-thoric-request", "1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    tokio::time::timeout(std::time::Duration::from_millis(100), lease)
+        .await
+        .unwrap();
+    app.sessions.lock().unwrap().insert(
+        "short".into(),
+        Instant::now() + std::time::Duration::from_millis(15),
+    );
+    tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        app.session_revoked(Some("short".into())),
+    )
+    .await
+    .unwrap();
+}
+
+#[test]
+fn websocket_origin_requires_exact_host_and_port() {
+    let mut h = axum::http::HeaderMap::new();
+    h.insert("host", "localhost:8080".parse().unwrap());
+    h.insert("origin", "http://localhost:8080".parse().unwrap());
+    assert!(origin_matches(&h));
+    h.insert("origin", "https://evil.example".parse().unwrap());
+    assert!(!origin_matches(&h));
+    h.insert("origin", "http://localhost:8081".parse().unwrap());
+    assert!(!origin_matches(&h));
+    h.remove("origin");
+    assert!(!origin_matches(&h));
+}
+
+#[tokio::test]
+async fn login_disabled_does_not_disable_csrf_protection() {
+    let router = router(app(false));
+    let response = router
+        .oneshot(
+            Request::builder()
+                .header("host", "localhost:8080")
+                .method("POST")
+                .uri("/api/containers")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn valid_session_still_rejects_cross_origin_mutation() {
+    let app = app(true);
+    app.sessions.lock().unwrap().insert(
+        "token".into(),
+        Instant::now() + std::time::Duration::from_secs(60),
+    );
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .header("host", "localhost:8080")
+                .method("POST")
+                .uri("/api/logout")
+                .header("cookie", "thoric_session=token")
+                .header("x-thoric-request", "1")
+                .header("host", "localhost:8080")
+                .header("origin", "https://evil.example")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn expired_session_is_not_accepted() {
+    let app = app(true);
+    app.sessions.lock().unwrap().insert(
+        "expired".into(),
+        Instant::now() - std::time::Duration::from_secs(1),
+    );
+    let response = router(app)
+        .oneshot(
+            Request::builder()
+                .header("host", "localhost:8080")
+                .uri("/api/jobs")
+                .header("cookie", "thoric_session=expired")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

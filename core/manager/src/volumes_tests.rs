@@ -5,7 +5,7 @@
 //! checked before Docker is asked anything, and the locks of several volumes are taken in one
 //! order.
 use super::*;
-use crate::tests::app;
+use crate::test_support::app;
 use axum::{body::Body, http::Request};
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -182,7 +182,7 @@ fn a_listing_marks_the_managers_own_volumes() {
 async fn the_volume_list_marks_what_the_manager_mounts() {
     use axum::extract::State;
     let mut app = app(false);
-    let calls = crate::tests::manager_docker(&mut app);
+    let calls = crate::test_support::manager_docker(&mut app);
     async fn marks(app: &Arc<App>) -> Vec<(String, bool)> {
         let listed = crate::api::volumes(State(app.clone())).await.unwrap().0;
         listed
@@ -312,7 +312,7 @@ fn volumes_are_created_in_one_place_only() {
 async fn a_volume_filter_hides_and_refuses_what_it_leaves_out() {
     use axum::extract::State;
     let mut app = app(false);
-    let calls = crate::tests::manager_docker(&mut app);
+    let calls = crate::test_support::manager_docker(&mut app);
     Arc::get_mut(&mut app).unwrap().config.volume_filter =
         crate::config::volume_filter(None).unwrap();
     let listing = crate::api::volumes(State(app.clone())).await.unwrap().0;

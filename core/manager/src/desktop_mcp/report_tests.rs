@@ -9,7 +9,7 @@ use crate::{
         scopes::Scope,
         tests::{endpoint, grant, server},
     },
-    tests::mcp_app,
+    test_support::mcp_app,
 };
 use axum::extract::{Path, State};
 use tokio::io::{AsyncBufReadExt, BufReader};

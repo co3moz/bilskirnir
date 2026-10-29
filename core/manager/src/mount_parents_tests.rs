@@ -208,7 +208,7 @@ fn container(targets: &[&str]) -> Container {
 #[cfg(unix)]
 #[tokio::test]
 async fn roots_folders_above_mount_points_go_to_the_desktop_user_before_the_start() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let dir = docker(
         &mut app,
         &[
@@ -257,7 +257,7 @@ async fn roots_folders_above_mount_points_go_to_the_desktop_user_before_the_star
 #[cfg(unix)]
 #[tokio::test]
 async fn nothing_is_written_when_the_desktop_user_owns_the_way() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let dir = docker(
         &mut app,
         &[(".config", docker_header(".config/", b"0001751", b'5'))],
@@ -270,7 +270,7 @@ async fn nothing_is_written_when_the_desktop_user_owns_the_way() {
         "cp thoric-e:/home/desktop/.config -\n"
     );
     // Without a way there is nothing to read either.
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let none = docker(&mut app, &[]);
     app.hand_over_mount_parents(&container(&["/home/desktop/Projects", "/srv/a/b"]))
         .await

@@ -134,7 +134,7 @@ fn fake_docker(listed: &str) -> (Arc<App>, std::path::PathBuf) {
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.manager = Some("thoric-manager".into());
