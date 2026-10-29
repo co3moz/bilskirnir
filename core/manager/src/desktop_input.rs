@@ -17,6 +17,8 @@ use tokio::{
     net::TcpStream,
 };
 
+mod relative;
+
 /// Longest single wait or key hold in one request.
 pub const MAX_WAIT_MS: u64 = 10_000;
 /// Combined waits, holds and gesture delays allowed in one request.
@@ -60,9 +62,11 @@ fn drag_duration() -> u64 {
 pub enum Action {
     /// Move the pointer to absolute desktop coordinates.
     Move { x: u16, y: u16 },
-    /// Move the pointer by an offset from its current position, clamped to the desktop. This is
-    /// emulated with absolute positions; applications that grab the pointer for raw motion may
-    /// not respond like they would to a physical mouse.
+    /// Move the pointer by an offset from its current position, in steps over duration_ms, as
+    /// relative motion through XTest in the desktop: applications that grab the pointer and read
+    /// raw motion, such as first-person cameras, get the offset even at the desktop's edge, where
+    /// the pointer itself stops. Without xdotool in the desktop it is emulated with absolute
+    /// positions, and the result's relative_motion says so.
     MoveRelative {
         dx: i32,
         dy: i32,
@@ -209,18 +213,81 @@ fn key(down: bool, keysym: u32) -> Vec<u8> {
     bytes.extend(keysym.to_be_bytes());
     bytes
 }
-type Plan = Vec<(Vec<u8>, u64)>;
+/// One step of a planned request, in the order it is sent.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Step {
+    /// RFB key messages.
+    Keys(Vec<u8>),
+    /// A pointer event at a position with `mask`'s buttons held, then a pause in milliseconds.
+    Pointer {
+        mask: u8,
+        x: u16,
+        y: u16,
+        pause: u64,
+    },
+    /// A pointer event that only changes the buttons held, wherever the pointer is: `expected` is
+    /// where the plan puts it, which relative motion may have left elsewhere.
+    Buttons {
+        mask: u8,
+        expected: (u16, u16),
+    },
+    /// A pause in milliseconds.
+    Wait(u64),
+    Relative(Relative),
+}
+/// The motion of a `move_relative`: `steps` moves that add up to `dx`, `dy`, each followed by a
+/// pause of `pause` milliseconds.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Relative {
+    pub dx: i32,
+    pub dy: i32,
+    pub steps: u8,
+    pub pause: u64,
+    /// The buttons held while it moves, which its emulation keeps pressed.
+    pub mask: u8,
+    /// Where the plan expects it to start.
+    pub from: (u16, u16),
+}
+impl Relative {
+    /// Where the motion is after `step` of its steps, from where it started.
+    fn offset(&self, step: i64) -> (i64, i64) {
+        let n = i64::from(self.steps);
+        (i64::from(self.dx) * step / n, i64::from(self.dy) * step / n)
+    }
+    /// Each step's own move.
+    pub fn moves(&self) -> Vec<(i32, i32)> {
+        (1..=i64::from(self.steps))
+            .map(|step| {
+                let ((x, y), (px, py)) = (self.offset(step), self.offset(step - 1));
+                ((x - px) as i32, (y - py) as i32)
+            })
+            .collect()
+    }
+    /// The absolute positions that emulate it from `start`, clamped to the desktop.
+    pub fn emulated(&self, start: (u16, u16), width: u16, height: u16) -> Vec<(u16, u16)> {
+        (1..=i64::from(self.steps))
+            .map(|step| {
+                let (x, y) = self.offset(step);
+                (
+                    (i64::from(start.0) + x).clamp(0, i64::from(width) - 1) as u16,
+                    (i64::from(start.1) + y).clamp(0, i64::from(height) - 1) as u16,
+                )
+            })
+            .collect()
+    }
+}
 pub struct Planned {
-    pub steps: Plan,
+    pub(crate) steps: Vec<Step>,
     pub released_keys: Vec<String>,
     pub released_buttons: Vec<&'static str>,
+    /// Where the plan leaves the pointer; relative motion through XTest may leave it elsewhere.
     pub pointer: Option<(u16, u16)>,
     pub delay_ms: u64,
 }
 struct Planner {
     width: u16,
     height: u16,
-    steps: Plan,
+    steps: Vec<Step>,
     delay: u64,
     chars: usize,
     pos: Option<(u16, u16)>,
@@ -238,22 +305,30 @@ impl Planner {
         }
         Ok(())
     }
-    fn pointer(&mut self, mask: u8, x: u16, y: u16, delay: u64) {
-        self.steps.push((pointer(mask, x, y), delay));
+    fn pointer(&mut self, mask: u8, x: u16, y: u16, pause: u64) {
+        self.steps.push(Step::Pointer { mask, x, y, pause });
         self.pos = Some((x, y));
-        self.delay += delay;
+        self.delay += pause;
     }
-    fn position(&self, x: Option<u16>, y: Option<u16>) -> anyhow::Result<(u16, u16)> {
+    /// Send the buttons now held, at x,y or wherever the pointer is.
+    fn buttons(&mut self, x: Option<u16>, y: Option<u16>) -> anyhow::Result<()> {
         match (x, y) {
             (Some(x), Some(y)) => {
                 self.check(x, y)?;
-                Ok((x, y))
+                self.pointer(self.mask, x, y, 0);
             }
-            (None, None) => self
-                .pos
-                .context("Provide x and y, or move the pointer earlier in the request"),
+            (None, None) => {
+                let expected = self
+                    .pos
+                    .context("Provide x and y, or move the pointer earlier in the request")?;
+                self.steps.push(Step::Buttons {
+                    mask: self.mask,
+                    expected,
+                });
+            }
             _ => bail!("Provide both x and y"),
         }
+        Ok(())
     }
     fn keys(keys: &[String]) -> anyhow::Result<Vec<u32>> {
         if keys.is_empty() || keys.len() > 8 {
@@ -273,7 +348,7 @@ impl Planner {
         if milliseconds > MAX_WAIT_MS {
             bail!("A single wait or hold is limited to {MAX_WAIT_MS} milliseconds");
         }
-        self.steps.push((Vec::new(), milliseconds));
+        self.steps.push(Step::Wait(milliseconds));
         self.delay += milliseconds;
         Ok(())
     }
@@ -285,7 +360,7 @@ impl Planner {
             keys.push(name);
         }
         if !bytes.is_empty() {
-            self.steps.push((bytes, 0));
+            self.steps.push(Step::Keys(bytes));
         }
         let mut buttons = Vec::new();
         if self.mask != 0 {
@@ -295,9 +370,11 @@ impl Planner {
                     .filter(|b| self.mask & b.mask() != 0)
                     .map(|b| b.name()),
             );
-            let (x, y) = self.pos.unwrap_or_default();
             self.mask = 0;
-            self.pointer(0, x, y, 0);
+            self.steps.push(Step::Buttons {
+                mask: 0,
+                expected: self.pos.unwrap_or_default(),
+            });
         }
         (keys, buttons)
     }
@@ -343,14 +420,18 @@ pub(crate) fn plan(
                 if *duration_ms > 2000 {
                     bail!("Relative movement duration must be at most 2000 milliseconds");
                 }
-                let n = i64::from(*steps);
-                for step in 1..=n {
-                    let x = (i64::from(x0) + i64::from(*dx) * step / n)
-                        .clamp(0, i64::from(width) - 1) as u16;
-                    let y = (i64::from(y0) + i64::from(*dy) * step / n)
-                        .clamp(0, i64::from(height) - 1) as u16;
-                    p.pointer(p.mask, x, y, duration_ms / u64::from(*steps));
-                }
+                let motion = Relative {
+                    dx: *dx,
+                    dy: *dy,
+                    steps: *steps,
+                    pause: duration_ms / u64::from(*steps),
+                    mask: p.mask,
+                    from: (x0, y0),
+                };
+                // Where the pointer itself stops; relative motion goes on past the edge.
+                p.pos = motion.emulated((x0, y0), width, height).last().copied();
+                p.delay += motion.pause * u64::from(*steps);
+                p.steps.push(Step::Relative(motion));
             }
             Action::Click {
                 x,
@@ -368,14 +449,12 @@ pub(crate) fn plan(
                 }
             }
             Action::ButtonDown { x, y, button } => {
-                let (x, y) = p.position(*x, *y)?;
                 p.mask |= button.mask();
-                p.pointer(p.mask, x, y, 0);
+                p.buttons(*x, *y)?;
             }
             Action::ButtonUp { x, y, button } => {
-                let (x, y) = p.position(*x, *y)?;
                 p.mask &= !button.mask();
-                p.pointer(p.mask, x, y, 0);
+                p.buttons(*x, *y)?;
             }
             Action::Drag {
                 from_x,
@@ -435,7 +514,7 @@ pub(crate) fn plan(
                 for symbol in symbols.iter().rev() {
                     bytes.extend(key(false, *symbol));
                 }
-                p.steps.push((bytes, 0));
+                p.steps.push(Step::Keys(bytes));
             }
             Action::KeyDown { keys } => {
                 let symbols = Planner::keys(keys)?;
@@ -447,7 +526,7 @@ pub(crate) fn plan(
                     bytes.extend(key(true, symbol));
                     p.held.push((name.clone(), symbol));
                 }
-                p.steps.push((bytes, 0));
+                p.steps.push(Step::Keys(bytes));
             }
             Action::KeyUp { keys } => {
                 let symbols = Planner::keys(keys)?;
@@ -456,7 +535,7 @@ pub(crate) fn plan(
                     bytes.extend(key(false, symbol));
                     p.held.retain(|(_, held)| *held != symbol);
                 }
-                p.steps.push((bytes, 0));
+                p.steps.push(Step::Keys(bytes));
             }
             Action::HoldKeys { keys, milliseconds } => {
                 if *milliseconds == 0 {
@@ -471,9 +550,9 @@ pub(crate) fn plan(
                 for symbol in symbols.iter().rev() {
                     up.extend(key(false, *symbol));
                 }
-                p.steps.push((down, 0));
+                p.steps.push(Step::Keys(down));
                 p.wait(*milliseconds)?;
-                p.steps.push((up, 0));
+                p.steps.push(Step::Keys(up));
             }
             Action::TypeText { text } => {
                 p.chars += text.chars().count();
@@ -486,7 +565,7 @@ pub(crate) fn plan(
                     bytes.extend(key(true, symbol));
                     bytes.extend(key(false, symbol));
                 }
-                p.steps.push((bytes, 0));
+                p.steps.push(Step::Keys(bytes));
             }
             Action::Wait { milliseconds } => p.wait(*milliseconds)?,
             Action::ReleaseAll => {
@@ -623,7 +702,7 @@ async fn fence(stream: &mut TcpStream) -> anyhow::Result<()> {
     }
 }
 async fn pointer_position(app: &App, env: &crate::model::Container) -> anyhow::Result<(u16, u16)> {
-    let info = app.owned(env).await?;
+    let container = relative::docker_id(app, env).await?;
     let output = app
         .docker(&[
             "exec",
@@ -631,7 +710,7 @@ async fn pointer_position(app: &App, env: &crate::model::Container) -> anyhow::R
             "desktop",
             "--env",
             "DISPLAY=:0",
-            info["Id"].as_str().context("Missing container ID")?,
+            &container,
             "xdotool",
             "getmouselocation",
             "--shell",
@@ -642,19 +721,85 @@ async fn pointer_position(app: &App, env: &crate::model::Container) -> anyhow::R
                 "Relative pointer actions need the current pointer position, which requires xdotool in the desktop image; move or click with coordinates first: {e:#}"
             )
         })?;
-    let text = String::from_utf8_lossy(&output);
-    let value = |prefix: &str| {
-        text.lines()
-            .find_map(|line| line.strip_prefix(prefix))
-            .and_then(|v| v.trim().parse::<i64>().ok())
-    };
-    match (value("X="), value("Y=")) {
-        (Some(x), Some(y)) => Ok((
-            x.clamp(0, i64::from(u16::MAX)) as u16,
-            y.clamp(0, i64::from(u16::MAX)) as u16,
-        )),
-        _ => bail!("Could not read the pointer position"),
+    relative::location(&String::from_utf8_lossy(&output))
+        .context("Could not read the pointer position")
+}
+/// How a request's steps went while they were sent.
+#[derive(Default)]
+struct Sending {
+    /// Where relative motion through XTest left the pointer, which later button changes use
+    /// instead of where the plan expects it; none while the plan's positions hold.
+    here: Option<(u16, u16)>,
+    /// The desktop's Docker ID, read for its first relative motion.
+    container: Option<String>,
+    /// Why relative motion is emulated, once XTest could not move the pointer.
+    emulated: Option<String>,
+    moved_relatively: bool,
+}
+async fn pause(milliseconds: u64) {
+    if milliseconds > 0 {
+        tokio::time::sleep(Duration::from_millis(milliseconds)).await;
     }
+}
+/// Send a plan's steps: RFB messages over the VNC connection and relative motion through XTest,
+/// in order, falling back to emulating the motion with positions when XTest cannot be used.
+async fn send(
+    app: &App,
+    env: &crate::model::Container,
+    stream: &mut TcpStream,
+    planned: &Planned,
+    (width, height): (u16, u16),
+) -> anyhow::Result<Sending> {
+    let mut sending = Sending::default();
+    for step in &planned.steps {
+        match step {
+            Step::Keys(bytes) => stream.write_all(bytes).await?,
+            Step::Pointer {
+                mask,
+                x,
+                y,
+                pause: wait,
+            } => {
+                stream.write_all(&pointer(*mask, *x, *y)).await?;
+                sending.here = None;
+                pause(*wait).await;
+            }
+            Step::Buttons { mask, expected } => {
+                let (x, y) = sending.here.unwrap_or(*expected);
+                stream.write_all(&pointer(*mask, x, y)).await?;
+            }
+            Step::Wait(wait) => pause(*wait).await,
+            Step::Relative(motion) => {
+                sending.moved_relatively = true;
+                if sending.emulated.is_none() {
+                    // The input sent so far is processed before the motion begins.
+                    fence(stream).await?;
+                    let moved = async {
+                        if sending.container.is_none() {
+                            sending.container = Some(relative::docker_id(app, env).await?);
+                        }
+                        let container = sending.container.as_deref().unwrap_or_default();
+                        relative::move_pointer(app, container, motion).await
+                    }
+                    .await;
+                    match moved {
+                        Ok(at) => {
+                            sending.here = Some(at);
+                            continue;
+                        }
+                        Err(error) => sending.emulated = Some(format!("{error:#}")),
+                    }
+                }
+                let start = sending.here.unwrap_or(motion.from);
+                for (x, y) in motion.emulated(start, width, height) {
+                    stream.write_all(&pointer(motion.mask, x, y)).await?;
+                    sending.here = Some((x, y));
+                    pause(motion.pause).await;
+                }
+            }
+        }
+    }
+    Ok(sending)
 }
 /// Send actions through a shared VNC connection; used by the HTTP route, MCP and act-and-observe.
 pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Value> {
@@ -684,28 +829,35 @@ pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Val
     } else {
         None
     };
-    let result = tokio::time::timeout(Duration::from_millis(MAX_TOTAL_DELAY_MS + 15_000), async {
+    // Each relative movement is a `docker exec` of its own, which takes time beyond its pauses.
+    let movements = actions
+        .iter()
+        .filter(|action| matches!(action, Action::MoveRelative { .. }))
+        .count() as u32;
+    let limit =
+        Duration::from_millis(MAX_TOTAL_DELAY_MS + 15_000) + relative::ALLOWANCE * movements;
+    let result = tokio::time::timeout(limit, async {
         let (mut stream, width, height) = connect(&address).await?;
         let planned = plan(actions, width, height, start)?;
-        for (bytes, delay) in &planned.steps {
-            if !bytes.is_empty() {
-                stream.write_all(bytes).await?;
-            }
-            if *delay > 0 {
-                tokio::time::sleep(Duration::from_millis(*delay)).await;
-            }
-        }
+        let sent = send(app, &env, &mut stream, &planned, (width, height)).await?;
         fence(&mut stream).await?;
         stream.shutdown().await?;
-        anyhow::Ok(json!({
+        let mut result = json!({
             "container_id": id,
             "applied_actions": actions.len(),
             "width": width,
             "height": height,
-            "pointer": planned.pointer.map(|(x, y)| json!({"x": x, "y": y})),
+            "pointer": sent.here.or(planned.pointer).map(|(x, y)| json!({"x": x, "y": y})),
             "released": {"keys": planned.released_keys, "buttons": planned.released_buttons},
             "delay_ms": planned.delay_ms,
-        }))
+        });
+        if sent.moved_relatively {
+            result["relative_motion"] = match sent.emulated {
+                None => json!({"method": "xtest"}),
+                Some(reason) => json!({"method": "emulated", "reason": reason}),
+            };
+        }
+        anyhow::Ok(result)
     })
     .await
     .context("VNC input timed out; inspect the desktop before retrying")??;

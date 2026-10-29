@@ -216,6 +216,51 @@ print(f"window={width}x{height} drawable={drawable[0].value}x{drawable[1].value}
 '''
 
 
+# Runs in a desktop for argv[1] seconds: prints every XInput2 raw motion as its source device and
+# deltas, what a game that grabs the pointer reads, which goes on past the edge where the pointer stops.
+RAW_MOTION_PROBE = r'''
+import select, sys, time
+from ctypes import CDLL, POINTER, Structure, Union, byref, c_char_p, c_double, c_int, c_long, c_ubyte, c_uint, c_ulong, c_void_p, cast
+class Mask(Structure): _fields_ = [("deviceid", c_int), ("mask_len", c_int), ("mask", POINTER(c_ubyte))]
+class Cookie(Structure): _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p), ("extension", c_int), ("evtype", c_int), ("cookie", c_uint), ("data", c_void_p)]
+class Event(Union): _fields_ = [("type", c_int), ("cookie", Cookie), ("pad", c_long * 24)]
+class Valuators(Structure): _fields_ = [("mask_len", c_int), ("mask", POINTER(c_ubyte)), ("values", POINTER(c_double))]
+class Raw(Structure): _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p), ("extension", c_int), ("evtype", c_int), ("time", c_ulong), ("deviceid", c_int), ("sourceid", c_int), ("detail", c_int), ("flags", c_int), ("valuators", Valuators), ("raw_values", POINTER(c_double))]
+x11, xi = CDLL("libX11.so.6"), CDLL("libXi.so.6")
+x11.XOpenDisplay.restype, x11.XOpenDisplay.argtypes = c_void_p, [c_char_p]
+x11.XDefaultRootWindow.restype, x11.XDefaultRootWindow.argtypes = c_ulong, [c_void_p]
+x11.XQueryExtension.argtypes = [c_void_p, c_char_p] + [POINTER(c_int)] * 3
+for name in ("XGetEventData", "XFreeEventData"):
+    getattr(x11, name).argtypes = [c_void_p, POINTER(Cookie)]
+x11.XNextEvent.argtypes = [c_void_p, POINTER(Event)]
+for name in ("XPending", "XConnectionNumber", "XFlush"):
+    getattr(x11, name).argtypes = [c_void_p]
+xi.XISelectEvents.argtypes = [c_void_p, c_ulong, POINTER(Mask), c_int]
+display = x11.XOpenDisplay(None)
+opcode, first_event, first_error = c_int(), c_int(), c_int()
+x11.XQueryExtension(display, b"XInputExtension", byref(opcode), byref(first_event), byref(first_error))
+bits = (c_ubyte * 4)()
+bits[17 >> 3] = 1 << (17 & 7)  # XI_RawMotion
+xi.XISelectEvents(display, x11.XDefaultRootWindow(display), byref(Mask(1, 4, bits)), 1)  # XIAllMasterDevices
+x11.XFlush(display)
+print("ready", flush=True)
+event, end = Event(), time.monotonic() + float(sys.argv[1])
+while time.monotonic() < end:
+    if not x11.XPending(display):
+        select.select([x11.XConnectionNumber(display)], [], [], 0.1)
+        continue
+    x11.XNextEvent(display, byref(event))
+    if event.cookie.type == 35 and event.cookie.extension == opcode.value and x11.XGetEventData(display, byref(event.cookie)):
+        if event.cookie.evtype == 17:
+            raw, values, n = cast(event.cookie.data, POINTER(Raw)).contents, {}, 0
+            for axis in range(raw.valuators.mask_len * 8):
+                if raw.valuators.mask[axis >> 3] & 1 << (axis & 7):
+                    values[axis], n = raw.raw_values[n], n + 1
+            print(f"{raw.sourceid} {values.get(0, 0):g} {values.get(1, 0):g}", flush=True)
+        x11.XFreeEventData(display, byref(event.cookie))
+'''
+
+
 def wait_for(fn, seconds=90):
     deadline, error = time.monotonic() + seconds, None
     while time.monotonic() < deadline:
@@ -1109,10 +1154,22 @@ try:
     assert observed["content"][0]["type"] == "image" and observed["structuredContent"]["width"] == 320, observed["structuredContent"]
     assert observed["structuredContent"]["input"]["released"]["keys"] == ["Shift"], observed["structuredContent"]
     assert observed["structuredContent"]["input"]["pointer"] == {"x":x+10,"y":y+5}, observed["structuredContent"]
+    assert observed["structuredContent"]["input"]["relative_motion"] == {"method":"xtest"}, observed["structuredContent"]
     location = docker("exec","--user","desktop","--env","DISPLAY=:0",container,"xdotool","getmouselocation","--shell").decode()
     assert f"X={x+10}\n" in location and f"Y={y+5}\n" in location, location
     relative_only = api(f"containers/{env_id}/input", {"actions":[{"type":"move_relative","dx":-10,"dy":-5}]})
-    assert relative_only["pointer"] == {"x":x,"y":y}, relative_only
+    assert relative_only["pointer"] == {"x":x,"y":y} and relative_only["relative_motion"] == {"method":"xtest"}, relative_only
+    # Relative motion goes through XTest: at the desktop's edge the pointer stops, while a program
+    # that grabs the pointer still reads both steps of the motion as raw deltas.
+    docker("exec","-i","--user","desktop",container,"sh","-c","cat > /tmp/thoric-raw-motion.py", data=RAW_MOTION_PROBE.encode())
+    listener = subprocess.Popen(["docker","exec","--user","desktop","--env","DISPLAY=:0",container,"python3","/tmp/thoric-raw-motion.py","4"], stdout=subprocess.PIPE)
+    assert listener.stdout.readline().strip() == b"ready"
+    edge = api(f"containers/{env_id}/input", {"actions":[{"type":"move","x":1279,"y":y},{"type":"move_relative","dx":40,"dy":0,"steps":2,"duration_ms":40},{"type":"button_down"},{"type":"button_up"}]})
+    assert edge["pointer"] == {"x":1279,"y":y} and edge["relative_motion"] == {"method":"xtest"}, edge
+    motion = [line.split() for line in listener.communicate(timeout=30)[0].decode().splitlines()]
+    deltas = [m for m in motion if m[1:] == ["20","0"]]
+    # The click where the motion left the pointer moves nothing: only the move and the two steps.
+    assert len(deltas) == 2 and deltas[0][0] == deltas[1][0] and len(motion) == 3, motion
     logs = tool("application_logs", {"container_id":env_id,"application_id":app_id,"tail_bytes":4096})["structuredContent"]
     assert "APP_LOG_LINE" in logs["log"], logs
     stopped = tool("stop_application", {"container_id":env_id,"application_id":app_id,"grace_seconds":3})["structuredContent"]

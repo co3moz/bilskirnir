@@ -664,17 +664,35 @@ fn file_paths_and_vnc_actions_reject_invalid_requests() {
         .unwrap()
         .steps;
     assert_eq!(
-        plan[0].0,
-        [
-            vec![4, 1, 0, 0, 0, 0, 255, 227],
-            vec![4, 1, 0, 0, 0, 0, 0, 97],
-            vec![4, 0, 0, 0, 0, 0, 0, 97],
-            vec![4, 0, 0, 0, 0, 0, 255, 227]
-        ]
-        .concat()
+        plan[0],
+        desktop_input::Step::Keys(
+            [
+                vec![4, 1, 0, 0, 0, 0, 255, 227],
+                vec![4, 1, 0, 0, 0, 0, 0, 97],
+                vec![4, 0, 0, 0, 0, 0, 0, 97],
+                vec![4, 0, 0, 0, 0, 0, 255, 227]
+            ]
+            .concat()
+        )
     );
-    assert_eq!(plan[1].0, vec![5, 1, 0, 20, 0, 30]);
-    assert_eq!(plan[2].0, vec![5, 0, 0, 20, 0, 30]);
+    assert_eq!(
+        plan[1],
+        desktop_input::Step::Pointer {
+            mask: 1,
+            x: 20,
+            y: 30,
+            pause: 40
+        }
+    );
+    assert_eq!(
+        plan[2],
+        desktop_input::Step::Pointer {
+            mask: 0,
+            x: 20,
+            y: 30,
+            pause: 80
+        }
+    );
 }
 
 #[tokio::test]
@@ -1504,10 +1522,35 @@ fn held_inputs_are_tracked_and_released_at_the_end_of_a_request() {
     assert_eq!(planned.released_buttons, vec!["right"]);
     assert_eq!(planned.pointer, Some((25, 0)));
     assert_eq!(planned.delay_ms, 1500);
-    // The relative move keeps the right button pressed and clamps to the desktop edge.
-    assert_eq!(planned.steps[1].0, vec![5, 4, 0, 10, 0, 20]);
-    assert_eq!(planned.steps[2].0, vec![5, 4, 0, 25, 0, 0]);
-    assert_eq!(planned.steps.last().unwrap().0, vec![5, 0, 0, 25, 0, 0]);
+    // The relative move keeps the right button pressed, and the plan expects the pointer to stop
+    // at the desktop's edge, where the button is released.
+    assert_eq!(
+        planned.steps[1],
+        desktop_input::Step::Pointer {
+            mask: 4,
+            x: 10,
+            y: 20,
+            pause: 0
+        }
+    );
+    assert_eq!(
+        planned.steps[2],
+        desktop_input::Step::Relative(desktop_input::Relative {
+            dx: 15,
+            dy: -30,
+            steps: 1,
+            pause: 0,
+            mask: 4,
+            from: (10, 20)
+        })
+    );
+    assert_eq!(
+        planned.steps.last().unwrap(),
+        &desktop_input::Step::Buttons {
+            mask: 0,
+            expected: (25, 0)
+        }
+    );
     assert!(!desktop_input::needs_start_position(&input.actions));
     let relative: desktop_input::Input = serde_json::from_value(
         serde_json::json!({"actions":[{"type":"move_relative","dx":1,"dy":1}]}),

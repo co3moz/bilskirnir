@@ -1126,7 +1126,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         .push(json!("container_id"));
     let mut input_tool = Tool::new(
         "desktop_input",
-        "Control a running desktop through its shared VNC session. Actions: move, move_relative, click, button_down, button_up, drag, scroll, key_press, key_down, key_up, hold_keys, type_text, wait and release_all. Coordinates are desktop pixels, matching a full-resolution screenshot. Keys and buttons held by key_down/button_down stay pressed for later actions in the same request and are released when the request ends. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
+        "Control a running desktop through its shared VNC session. Actions: move, move_relative, click, button_down, button_up, drag, scroll, key_press, key_down, key_up, hold_keys, type_text, wait and release_all. Coordinates are desktop pixels, matching a full-resolution screenshot. move_relative is relative motion through XTest, which applications that grab the pointer, such as games, read even at the desktop's edge; relative_motion in the result says whether it had to be emulated with positions. Keys and buttons held by key_down/button_down stay pressed for later actions in the same request and are released when the request ends. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
         input_schema.as_object().unwrap().clone(),
     );
     input_tool.annotations = Some(
