@@ -9,8 +9,11 @@ import { gplCompatible } from "./src/lib/licenses.ts"
 const root = import.meta.dirname
 // `bun run dev` proxies the API to a running manager, by default the one Compose publishes.
 const manager = process.env.THORIC_URL ?? "http://127.0.0.1:8080"
-const novncNotice =
-  "/*! Includes noVNC 1.5.0 (MPL-2.0). License: /novnc-LICENSE.txt; notices: /third-party-notices.txt. */"
+// The notice names the release that is installed, so raising noVNC cannot leave it behind.
+const novnc = JSON.parse(
+  await readFile(resolve(root, "node_modules/@novnc/novnc/package.json"), "utf8")
+) as { version: string }
+const novncNotice = `/*! Includes noVNC ${novnc.version} (MPL-2.0). License: /novnc-LICENSE.txt; notices: /third-party-notices.txt. */`
 
 /**
  * The text of a license for a package that ships none of its own, from `licenses/<SPDX>.txt`, or
@@ -31,30 +34,41 @@ async function licenseText(license: string) {
  */
 async function bundledLicenses(moduleIds: Iterable<string>) {
   const directories = new Set<string>()
+  // Another project's code that a package carries in its `vendor` folder, such as noVNC's pako.
+  const vendored = new Map<string, Set<string>>()
   for (const id of moduleIds) {
     const path = id.replaceAll("\\", "/")
     const at = path.lastIndexOf("/node_modules/")
     if (at < 0) continue
     const rest = path.slice(at + "/node_modules/".length).split("/")
-    directories.add(
-      path.slice(0, at) +
-        "/node_modules/" +
-        rest.slice(0, rest[0].startsWith("@") ? 2 : 1).join("/")
-    )
+    const depth = rest[0].startsWith("@") ? 2 : 1
+    const directory = path.slice(0, at) + "/node_modules/" + rest.slice(0, depth).join("/")
+    directories.add(directory)
+    if (rest[depth] === "vendor" && rest.length > depth + 2) {
+      if (!vendored.has(directory)) vendored.set(directory, new Set())
+      vendored.get(directory)!.add(rest.slice(depth, depth + 2).join("/"))
+    }
   }
+  const licenseFile = async (directory: string) =>
+    (await readdir(directory)).find((name) => /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(name))
   const sections: string[] = []
   const refused: string[] = []
   for (const directory of [...directories].sort()) {
     const manifest = JSON.parse(await readFile(`${directory}/package.json`, "utf8"))
-    const file = (await readdir(directory)).find((name) =>
-      /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(name)
-    )
+    const file = await licenseFile(directory)
     const text = file
       ? await readFile(`${directory}/${file}`, "utf8")
       : await licenseText(manifest.license)
     sections.push(`${manifest.name} ${manifest.version} (${manifest.license})\n\n${text.trim()}\n`)
     if (!gplCompatible(manifest.license))
       refused.push(`${manifest.name} ${manifest.version} (${manifest.license})`)
+    // The package's own license covers vendored code that ships no license of its own.
+    for (const folder of [...(vendored.get(directory) ?? [])].sort()) {
+      const own = await licenseFile(`${directory}/${folder}`)
+      if (!own) continue
+      const ownText = await readFile(`${directory}/${folder}/${own}`, "utf8")
+      sections.push(`${manifest.name} ${manifest.version}, ${folder}\n\n${ownText.trim()}\n`)
+    }
   }
   return { text: sections.join(`\n${"-".repeat(72)}\n\n`), refused }
 }
