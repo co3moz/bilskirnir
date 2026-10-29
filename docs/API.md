@@ -6,6 +6,8 @@ The dashboard and MCP server share Thoric's backend operations. You can also cal
 
 All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message; [errors](#errors) says what each status means.
 
+Every response carries an `X-Request-Id` header, and the manager's log line for the request names the same ID as `request_id`, so an error a script or the dashboard saw can be found in [the log](INSTALLATION.md#if-something-does-not-start). Send an `X-Request-Id` of your own, up to 128 letters, digits, `-`, `_`, `.` and `:`, to have it used instead; any other value is replaced with a new UUID.
+
 ## Sign in
 
 The HTTP API uses the same administrator session as the dashboard. Sign in and keep the returned cookie:
@@ -45,7 +47,7 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | Method | Path | Result or purpose |
 | --- | --- | --- |
 | GET | `/api/session` | Sign-in mode and current authentication state; available before login. |
-| POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` for the rest of the minute. |
+| POST | `/api/login` | Sign in with `username` and `password`. After 20 failed attempts from one address in a minute, that address gets `429` until its oldest failure is a minute old; a successful sign-in never counts and clears its address's failures. Behind the bundled [HTTPS proxy](INSTALLATION.md#https-and-microphone-access-over-lan) the address is the browser's, which the proxy forwards in `X-Forwarded-For`; that header counts only from the proxy. The manager logs each failed sign-in and each lockout with the address, never the name or password tried. |
 | POST | `/api/logout` | Sign out. |
 | GET | `/api/settings` | Defaults and supported features, without credentials, with the manager's `version` and the `templates_url` the [templates page](#templates) reads, `null` when it is turned off, and the `volume_filter` label a volume needs to be listed, `null` when every volume is, and `root_mcp_enabled`, whether the root `/mcp` answers (`ROOT_MCP_ENABLED`); the [MCP endpoints](#desktop-mcp-servers-and-endpoints) answer either way. Before 0.6.3 the field was `mcp_enabled`. The container features the installation allows are `gpu_enabled`, `internet_enabled`, `sudo_enabled`, `audio_enabled`, `microphone_enabled`, `gamepad_enabled` and `vpn_enabled`, `proxy` is the installation's proxy, `{"url", "username", "bypass"}` without its password or `null`, and `defaults` holds what a new container gets of each, `{"gpu", "internet", "sudo", "audio", "microphone", "gamepad", "vpn"}`; see [creating a container](#create-a-container-and-follow-the-job). `gpu_enabled` is true where the host has a GPU that `wsl_gpu`, `nvidia_compute` or `dri_gpu` allows, and `gpu` says which: `routes`, those GPU containers get (`wsl`, `nvidia`, `dri`), `unused`, each one its setting allows that they do not get with its `setting` and a `reason` (`no_wsl_gpu`, `no_nvidia_gpu`, `no_toolkit`, `no_render_device`, `beside_wsl` or `unseen`), and `found`, what the host showed when the manager started (`wsl`, `nvidia`, `toolkit`, `null` when Docker was not asked, and `render`, the vendors of its render devices), `null` where the manager cannot see the host; see [GPU on a Linux host](INSTALLATION.md#gpu-on-a-linux-host). |
 | GET | `/api/configuration` | The installation settings the manager runs with, for the dashboard's **Management** page; secrets only say whether they are set. See [configuration](#configuration). |
@@ -158,7 +160,8 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
 | GET | `/api/activity` | The [agent activity](#agent-activity) log: MCP tool calls and used transfer links, newest first, with filters and a cursor. |
 | GET | `/api/dependencies` | Every [dependency](#dependencies) the manager image was built from: interface packages, crates and infrastructure. `404` for a manager built without the list. |
-| GET | `/healthz` | Basic manager health; does not require sign-in. |
+| GET | `/healthz` | Liveness: `ok` while the manager answers requests, without asking the database or Docker; does not require sign-in. The manager image's `HEALTHCHECK` and the WSL package's wait at start use it. |
+| GET | `/readyz` | Readiness: `200` with `{"ready": true, "database": true, "docker": true}` when the database answers a query and Docker answers its Engine socket's ping (or `docker version` where the manager has no socket), `503` with the failed check `false` otherwise. Each check gives up after two seconds, so a probe never hangs; the answer never says why a check failed. Does not require sign-in. |
 
 The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/containers/{id}/audio/{direction}`, where direction is `output` or `input`. They use the browser session and require a matching Origin. VNC uses the binary subprotocol. Most automation clients can use screenshots and `/input` instead of implementing a VNC viewer.
 

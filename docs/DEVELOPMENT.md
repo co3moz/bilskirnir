@@ -26,8 +26,9 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 
 | Area | Files |
 | --- | --- |
-| HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs` |
+| HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs`, `core/manager/src/auth/` (the sign-in limit and the HTTPS proxy's forwarded address) |
 | Error statuses: a `bail!` is the request's (400), a failure of Docker, a helper or the manager is marked where it happens with `error::Fault`, or is an I/O or database error | `core/manager/src/error.rs` |
+| Request log, request IDs, health checks and repeated failures | `core/manager/src/request_log.rs`, `core/manager/src/health.rs`, `core/manager/src/reported.rs` |
 | Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
 | Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
 | Settings changes from the Management page through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/thoric-settings.path`, `packaging/wsl/thoric-settings.service` |

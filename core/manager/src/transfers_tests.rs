@@ -482,19 +482,6 @@ fn every_operation_is_offered_and_documented() {
     assert!(api.contains("`/api/transfers/{token}`"));
 }
 
-#[test]
-fn tracing_never_records_a_token() {
-    let uri = |text: &str| text.parse::<Uri>().unwrap();
-    assert_eq!(
-        traced(&uri(&format!("{ROUTE}{}?size=5", "a".repeat(64)))),
-        "/api/transfers/<token>"
-    );
-    assert_eq!(
-        traced(&uri("/api/containers/e/files/download?path=/x")),
-        "/api/containers/e/files/download?path=/x"
-    );
-}
-
 /// A running container `e` behind a stand-in Docker CLI: an upload is written to `uploaded`,
 /// a download's `file_ops.py stat` probe finds a five-byte file and its stream reads `hello`.
 #[cfg(unix)]

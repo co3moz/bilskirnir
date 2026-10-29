@@ -10,6 +10,7 @@ import io
 import json
 import math
 import os
+import re
 import socket
 import shutil
 import struct
@@ -780,6 +781,18 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
+    # Readiness asks the database and Docker, and every answer names its request in the log.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/readyz", timeout=10) as response:
+        assert json.loads(response.read()) == {"ready": True, "database": True, "docker": True}
+        assert uuid.UUID(response.headers["X-Request-Id"])
+    request_id = f"acceptance-{tag}"
+    with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/api/session", headers={"X-Request-Id": request_id}), timeout=10) as response:
+        assert response.headers["X-Request-Id"] == request_id
+    # The log colors field names unless NO_COLOR is set, so the colors go before matching.
+    plain = lambda: re.sub(r"\x1b\[[0-9;]*m", "", docker("logs", manager).decode(errors="replace"))
+    logged = wait_for(lambda: next((line for line in plain().splitlines() if f"request_id={request_id}" in line and "answered" in line), None), 10)
+    assert "method=GET" in logged and "path=/api/session" in logged and "status=200" in logged, logged
+    print("PASS readiness and request IDs in the log", flush=True)
     # The templates page reads the wiki's list in the browser, so the policy allows that host.
     assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json"
     # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
