@@ -99,7 +99,8 @@ impl App {
     /// own repositories are looked at, and the image goes with its last tag, which is this
     /// orphan's own.
     pub(crate) async fn drop_orphan_tags(&self) -> anyhow::Result<Vec<String>> {
-        let records = self.db.list::<ImageRecord>("image")?;
+        // A record that does not read may name a tag; nothing is dropped until all of them do.
+        let records = self.db.list_complete::<ImageRecord>("image")?;
         let named: std::collections::HashSet<&str> = records
             .iter()
             .map(|record| record.reference.as_str())
@@ -132,9 +133,10 @@ impl App {
         Ok(dropped)
     }
 
-    /// Refuse while a container record starts from the Docker image `image_id`.
+    /// Refuse while a container record starts from the Docker image `image_id`, and while one
+    /// does not read, since it may.
     fn refuse_used(&self, image_id: &str) -> Result<()> {
-        let containers = self.db.list::<Container>(CONTAINERS)?;
+        let containers = self.db.list_complete::<Container>(CONTAINERS)?;
         let users = started_from(image_id, &containers);
         if users.is_empty() {
             Ok(())

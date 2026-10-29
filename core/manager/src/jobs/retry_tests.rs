@@ -7,7 +7,7 @@ use crate::{api::BuildImage, model::Container};
 /// Wait for a job's end, which a test app without Docker reaches at its first Docker command.
 async fn ended(app: &App, id: &str) -> Job {
     for _ in 0..500 {
-        let job: Job = app.db.get("job", id).unwrap();
+        let job: Job = app.db.job(id).unwrap();
         if job.finished_at.is_some() {
             return job;
         }
@@ -125,7 +125,7 @@ async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
         Request::Build(build())
     );
     // The first can still be retried; each retry is a job of its own.
-    assert!(retryable(&app, &app.db.get("job", &first).unwrap()));
+    assert!(retryable(&app, &app.db.job(&first).unwrap()));
 }
 
 #[tokio::test]
@@ -243,7 +243,7 @@ async fn a_completed_job_drops_its_request() {
     assert_eq!(ended(&app, &ok).await.status, "completed");
     assert!(!app.db.contains(REQUESTS, &ok).unwrap());
     assert_eq!(ended(&app, &failed).await.status, "failed");
-    assert!(retryable(&app, &app.db.get("job", &failed).unwrap()));
+    assert!(retryable(&app, &app.db.job(&failed).unwrap()));
 }
 
 /// The routes are documented where the rest of the job routes are.

@@ -672,10 +672,22 @@ impl App {
         // the volume, and one still waiting for the lock finds the volume gone and stops.
         let mut removed = RemovedVolumes::default();
         let held = self.lock_volumes(owned.iter().map(String::as_str)).await;
+        // Every other record, since one that does not read may mount the same volume: then all
+        // of them stay, and the rest of the deletion goes on.
         let others = if owned.is_empty() {
             Vec::new()
         } else {
-            self.db.list::<Container>(CONTAINERS)?
+            match self.db.list_complete::<Container>(CONTAINERS) {
+                Ok(others) => others,
+                Err(error) => {
+                    self.append_log(
+                        job_id,
+                        &format!("Keeping the volumes created for it: {error:#}"),
+                    )?;
+                    removed.kept.append(&mut owned);
+                    Vec::new()
+                }
+            }
         };
         let others = others
             .into_iter()
@@ -811,12 +823,9 @@ impl App {
         }
         Ok(format!("{}:5900", private_ip(env, &info)?))
     }
+    /// Add a line to the job's log; only the new text is written.
     pub fn append_log(&self, id: &str, line: &str) -> Result<()> {
-        let mut job: Job = self.db.get("job", id)?;
-        job.log.push_str(line);
-        job.log.push('\n');
-        job.trim_log();
-        self.db.put("job", id, &job)
+        self.db.append_job_log(id, &format!("{line}\n"))
     }
     /// Replace the job's measured progress; `None` once the measured step is over.
     pub fn set_progress(&self, id: &str, progress: Option<Value>) -> Result<()> {

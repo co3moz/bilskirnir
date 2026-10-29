@@ -13,6 +13,10 @@
 //! `thoric-update.path` in the distribution starts `thoric-update.service`, which renames
 //! the request to [`STARTED`], runs the command as root with its output in [`LOG`] and writes how
 //! it ended to [`EXIT`]. The next manager follows the update to its end; see [`resumable`].
+//!
+//! Before it leaves the request, the manager writes a copy of its database beside it, named after
+//! the two releases, since the next manager may migrate the database so that this one no longer
+//! opens it. The newest [`KEPT_COPIES`] stay; a copy that cannot be written stops the update.
 use crate::{
     App,
     error::{Error, Result},
@@ -63,6 +67,12 @@ pub(crate) const UPDATE: Channel = Channel {
     path_unit: "thoric-update.path",
     command: "thoric update",
 };
+
+/// How many copies of the database the dashboard's updates keep beside it; older ones go.
+const KEPT_COPIES: usize = 3;
+/// A copy's name is `state-<this release>-to-<the next>.sqlite`.
+const COPY_PREFIX: &str = "state-";
+const COPY_SUFFIX: &str = ".sqlite";
 
 /// The service's own limit is two hours; a little more covers reading what it wrote last.
 pub(crate) const TIMING: Timing = Timing {
@@ -266,18 +276,79 @@ pub async fn start(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     })
 }
 
-/// Leave the request, wait for the distribution to take it and follow the update.
-pub(crate) async fn run(app: &App, id: &str, timing: Timing) -> anyhow::Result<Value> {
-    let target = app
-        .releases
-        .available()
-        .unwrap_or_else(|| "the newest release".into());
+/// Copy the database, leave the request, wait for the distribution to take it and follow the
+/// update.
+pub(crate) async fn run(app: &Arc<App>, id: &str, timing: Timing) -> anyhow::Result<Value> {
+    let newest = app.releases.available();
+    // The new manager may migrate the database so that this release no longer opens it; the
+    // copy is the way back. Without it the update does not start.
+    let copy = copy_database(app, newest.as_deref()).await.map_err(|error| {
+        anyhow::anyhow!(
+            "Could not copy the database before the update, so nothing was updated ({error:#}). Make room in the manager's data volume, or run 'thoric update' in a Thoric terminal, which updates without the copy"
+        )
+    })?;
+    app.append_log(
+        id,
+        &format!("Copied the database to {copy} in the manager's data volume, the way back to this release's records if the update has to be undone."),
+    )?;
+    let target = newest.unwrap_or_else(|| "the newest release".into());
     app.append_log(
         id,
         &format!("Asked the WSL distribution to run thoric update, which moves this installation to {target}."),
     )?;
     let ended = package_requests::request(app, &UPDATE, id, &[], timing).await?;
     outcome(&ended)
+}
+
+/// Write a copy of the database beside it, named after this manager and the release the update
+/// moves to, such as `state-0.8.4-to-0.9.0.sqlite`, and keep only the newest [`KEPT_COPIES`] of
+/// them. Returns its name.
+async fn copy_database(app: &Arc<App>, target: Option<&str>) -> anyhow::Result<String> {
+    // An edge build carries the version of the release before it, so its commit names it.
+    let from = match crate::catalog::edge_commit() {
+        Some(commit) => format!("sha-{}", &commit[..commit.len().min(12)]),
+        None => VERSION.into(),
+    };
+    let name = format!(
+        "{COPY_PREFIX}{from}-to-{}{COPY_SUFFIX}",
+        target.unwrap_or("newest")
+    );
+    let app = app.clone();
+    tokio::task::spawn_blocking(move || {
+        let dir = &app.config.data;
+        // Written under another name and renamed, so a copy cut short never passes for one.
+        let partial = dir.join(format!("{name}.partial"));
+        match std::fs::remove_file(&partial) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(error).context("Could not remove an earlier partial copy");
+            }
+            _ => {}
+        }
+        app.db.copy_to(&partial)?;
+        std::fs::rename(&partial, dir.join(&name))?;
+        if let Err(error) = prune_copies(dir, KEPT_COPIES) {
+            tracing::warn!("Could not remove older copies of the database: {error:#}");
+        }
+        Ok(name)
+    })
+    .await?
+}
+
+/// Remove the copies of the database beyond the newest `keep`.
+fn prune_copies(dir: &Path, keep: usize) -> anyhow::Result<()> {
+    let mut copies = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(COPY_PREFIX) && name.ends_with(COPY_SUFFIX) && name.contains("-to-") {
+            copies.push((entry.metadata()?.modified()?, entry.path()));
+        }
+    }
+    copies.sort_by(|a, b| b.cmp(a));
+    for (_, path) in copies.into_iter().skip(keep) {
+        std::fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 /// Whether an update job outlived the manager that started it; see

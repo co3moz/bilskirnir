@@ -52,7 +52,8 @@ impl App {
             .await?
             .filter(|info| self.lists_volume(info))
             .ok_or_else(missing)?;
-        let containers = self.db.list::<Container>(CONTAINERS)?;
+        // A container record that does not read may mount it, so none may be left out.
+        let containers = self.db.list_complete::<Container>(CONTAINERS)?;
         if let Some(container) = mounted_by(name, &containers) {
             return Err(Error(StatusCode::CONFLICT, mounted(name, container)));
         }

@@ -442,7 +442,7 @@ async fn main() -> anyhow::Result<()> {
     }
     tokio::fs::create_dir_all(&config.data).await?;
     uploads::cleanup_temporary_files(&config.data).await?;
-    let db = db::Db::open(&config.data.join("state.sqlite"))?;
+    let db = db::Db::open(&config.data.join(db::FILE))?;
     // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
     db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.
@@ -461,9 +461,11 @@ async fn main() -> anyhow::Result<()> {
             job.finished_at = Some(model::now());
             job.finish_stages(model::now());
             job.progress = None;
-            job.log.push_str("\nService restarted. The Docker operation may have continued; check resources before retrying.\n");
-            job.trim_log();
-            db.put("job", &job.id, &job)?;
+            db.put_job_logged(
+                &job,
+                "\nService restarted. The Docker operation may have continued; check resources before retrying.\n",
+                false,
+            )?;
             if job.kind == "build" {
                 interrupted_builds.push(job.id);
             }

@@ -1005,7 +1005,7 @@ pub async fn jobs(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     Ok(Json(json!(jobs)))
 }
 pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    let job: Job = app.db.get("job", &id)?;
+    let job: Job = app.db.job(&id)?;
     let mut value = json!(job);
     if retry::retryable(&app, &job) {
         value["retryable"] = json!(true);
