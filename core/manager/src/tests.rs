@@ -386,7 +386,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 76);
+    assert_eq!(tools.len(), 77);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);
@@ -668,17 +668,35 @@ fn file_paths_and_vnc_actions_reject_invalid_requests() {
         .unwrap()
         .steps;
     assert_eq!(
-        plan[0].0,
-        [
-            vec![4, 1, 0, 0, 0, 0, 255, 227],
-            vec![4, 1, 0, 0, 0, 0, 0, 97],
-            vec![4, 0, 0, 0, 0, 0, 0, 97],
-            vec![4, 0, 0, 0, 0, 0, 255, 227]
-        ]
-        .concat()
+        plan[0],
+        desktop_input::Step::Keys(
+            [
+                vec![4, 1, 0, 0, 0, 0, 255, 227],
+                vec![4, 1, 0, 0, 0, 0, 0, 97],
+                vec![4, 0, 0, 0, 0, 0, 0, 97],
+                vec![4, 0, 0, 0, 0, 0, 255, 227]
+            ]
+            .concat()
+        )
     );
-    assert_eq!(plan[1].0, vec![5, 1, 0, 20, 0, 30]);
-    assert_eq!(plan[2].0, vec![5, 0, 0, 20, 0, 30]);
+    assert_eq!(
+        plan[1],
+        desktop_input::Step::Pointer {
+            mask: 1,
+            x: 20,
+            y: 30,
+            pause: 40
+        }
+    );
+    assert_eq!(
+        plan[2],
+        desktop_input::Step::Pointer {
+            mask: 0,
+            x: 20,
+            y: 30,
+            pause: 80
+        }
+    );
 }
 
 #[tokio::test]
@@ -693,6 +711,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "files/delete",
         "input",
         "act-and-observe",
+        "find-text",
         "wait",
         "reset",
         "recordings",
@@ -1504,10 +1523,35 @@ fn held_inputs_are_tracked_and_released_at_the_end_of_a_request() {
     assert_eq!(planned.released_buttons, vec!["right"]);
     assert_eq!(planned.pointer, Some((25, 0)));
     assert_eq!(planned.delay_ms, 1500);
-    // The relative move keeps the right button pressed and clamps to the desktop edge.
-    assert_eq!(planned.steps[1].0, vec![5, 4, 0, 10, 0, 20]);
-    assert_eq!(planned.steps[2].0, vec![5, 4, 0, 25, 0, 0]);
-    assert_eq!(planned.steps.last().unwrap().0, vec![5, 0, 0, 25, 0, 0]);
+    // The relative move keeps the right button pressed, and the plan expects the pointer to stop
+    // at the desktop's edge, where the button is released.
+    assert_eq!(
+        planned.steps[1],
+        desktop_input::Step::Pointer {
+            mask: 4,
+            x: 10,
+            y: 20,
+            pause: 0
+        }
+    );
+    assert_eq!(
+        planned.steps[2],
+        desktop_input::Step::Relative(desktop_input::Relative {
+            dx: 15,
+            dy: -30,
+            steps: 1,
+            pause: 0,
+            mask: 4,
+            from: (10, 20)
+        })
+    );
+    assert_eq!(
+        planned.steps.last().unwrap(),
+        &desktop_input::Step::Buttons {
+            mask: 0,
+            expected: (25, 0)
+        }
+    );
     assert!(!desktop_input::needs_start_position(&input.actions));
     let relative: desktop_input::Input = serde_json::from_value(
         serde_json::json!({"actions":[{"type":"move_relative","dx":1,"dy":1}]}),
@@ -2010,6 +2054,15 @@ fn wait_conditions_are_validated() {
             .is_ok()
     );
     assert!(check(serde_json::json!({"screen_stable_ms":1000,"region":"0,0,100,100"})).is_ok());
+    // The screen can be waited on to change, and text to appear or go, in a region or not.
+    assert!(check(serde_json::json!({"screen_changed":true})).is_ok());
+    assert!(
+        check(serde_json::json!({"screen_changed":true,"screen_change_percent":0.01,"region":"0,0,100,100"}))
+            .is_ok()
+    );
+    assert!(
+        check(serde_json::json!({"text":"Play","text_state":"gone","region":"0,0,1,1"})).is_ok()
+    );
     for bad in [
         serde_json::json!({}),
         serde_json::json!({"application_state":"running"}),
@@ -2018,6 +2071,14 @@ fn wait_conditions_are_validated() {
         serde_json::json!({"window_title":"x","timeout_ms":60001}),
         serde_json::json!({"screen_stable_ms":20000,"timeout_ms":10000}),
         serde_json::json!({"window_title":"x","region":"0,0,1,1"}),
+        serde_json::json!({"screen_changed":false}),
+        serde_json::json!({"window_title":"x","screen_change_percent":5.0}),
+        serde_json::json!({"screen_changed":true,"screen_change_percent":0.0}),
+        serde_json::json!({"screen_changed":true,"screen_change_percent":100.5}),
+        serde_json::json!({"text":"   "}),
+        serde_json::json!({"text":"x".repeat(257)}),
+        serde_json::json!({"window_title":"x","text_state":"gone"}),
+        serde_json::json!({"text":"Play","text_state":"hidden"}),
     ] {
         assert!(check(bad).is_err());
     }

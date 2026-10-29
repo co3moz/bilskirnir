@@ -71,6 +71,7 @@ impl Scope {
                 "save_screenshot",
                 "list_windows",
                 "inspect_ui",
+                "find_text",
                 "wait_for_condition",
             ],
             // Asking a person for help changes nothing in the container, and the agents that

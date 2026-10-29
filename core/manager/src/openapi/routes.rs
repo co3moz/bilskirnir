@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     activity, api, apps, archives, audio, auth, backup, capture, compose, config, desktop_input,
-    desktop_mcp, exec, files, gamepad, human, icons, model, recordings, terminal, transfers,
+    desktop_mcp, exec, files, gamepad, human, icons, model, ocr, recordings, terminal, transfers,
     uploads, usage, volumes, waits, windows,
 };
 
@@ -253,6 +253,13 @@ pub(super) fn all() -> Vec<Route> {
             "Save a screenshot inside the desktop and return its `download_url`.",
         )
         .json::<capture::SaveCapture>(),
+        post(
+            "/api/containers/{id}/find-text",
+            DESKTOP,
+            "Text on the screen, read with OCR, with boxes in desktop pixels; 501 from a manager without Tesseract.",
+        )
+        .json::<ocr::FindText>()
+        .returns::<ocr::FoundText>(),
         get(
             "/api/containers/{id}/applications",
             DESKTOP,
@@ -295,7 +302,7 @@ pub(super) fn all() -> Vec<Route> {
         post(
             "/api/containers/{id}/wait",
             DESKTOP,
-            "Wait for a window, an application state, log text or a stable screen.",
+            "Wait for a window, an application state, log text, a stable or changed screen, or text on it.",
         )
         .json::<waits::WaitFor>(),
         get(

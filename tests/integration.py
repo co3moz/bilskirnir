@@ -217,6 +217,51 @@ print(f"window={width}x{height} drawable={drawable[0].value}x{drawable[1].value}
 '''
 
 
+# Runs in a desktop for argv[1] seconds: prints every XInput2 raw motion as its source device and
+# deltas, what a game that grabs the pointer reads, which goes on past the edge where the pointer stops.
+RAW_MOTION_PROBE = r'''
+import select, sys, time
+from ctypes import CDLL, POINTER, Structure, Union, byref, c_char_p, c_double, c_int, c_long, c_ubyte, c_uint, c_ulong, c_void_p, cast
+class Mask(Structure): _fields_ = [("deviceid", c_int), ("mask_len", c_int), ("mask", POINTER(c_ubyte))]
+class Cookie(Structure): _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p), ("extension", c_int), ("evtype", c_int), ("cookie", c_uint), ("data", c_void_p)]
+class Event(Union): _fields_ = [("type", c_int), ("cookie", Cookie), ("pad", c_long * 24)]
+class Valuators(Structure): _fields_ = [("mask_len", c_int), ("mask", POINTER(c_ubyte)), ("values", POINTER(c_double))]
+class Raw(Structure): _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p), ("extension", c_int), ("evtype", c_int), ("time", c_ulong), ("deviceid", c_int), ("sourceid", c_int), ("detail", c_int), ("flags", c_int), ("valuators", Valuators), ("raw_values", POINTER(c_double))]
+x11, xi = CDLL("libX11.so.6"), CDLL("libXi.so.6")
+x11.XOpenDisplay.restype, x11.XOpenDisplay.argtypes = c_void_p, [c_char_p]
+x11.XDefaultRootWindow.restype, x11.XDefaultRootWindow.argtypes = c_ulong, [c_void_p]
+x11.XQueryExtension.argtypes = [c_void_p, c_char_p] + [POINTER(c_int)] * 3
+for name in ("XGetEventData", "XFreeEventData"):
+    getattr(x11, name).argtypes = [c_void_p, POINTER(Cookie)]
+x11.XNextEvent.argtypes = [c_void_p, POINTER(Event)]
+for name in ("XPending", "XConnectionNumber", "XFlush"):
+    getattr(x11, name).argtypes = [c_void_p]
+xi.XISelectEvents.argtypes = [c_void_p, c_ulong, POINTER(Mask), c_int]
+display = x11.XOpenDisplay(None)
+opcode, first_event, first_error = c_int(), c_int(), c_int()
+x11.XQueryExtension(display, b"XInputExtension", byref(opcode), byref(first_event), byref(first_error))
+bits = (c_ubyte * 4)()
+bits[17 >> 3] = 1 << (17 & 7)  # XI_RawMotion
+xi.XISelectEvents(display, x11.XDefaultRootWindow(display), byref(Mask(1, 4, bits)), 1)  # XIAllMasterDevices
+x11.XFlush(display)
+print("ready", flush=True)
+event, end = Event(), time.monotonic() + float(sys.argv[1])
+while time.monotonic() < end:
+    if not x11.XPending(display):
+        select.select([x11.XConnectionNumber(display)], [], [], 0.1)
+        continue
+    x11.XNextEvent(display, byref(event))
+    if event.cookie.type == 35 and event.cookie.extension == opcode.value and x11.XGetEventData(display, byref(event.cookie)):
+        if event.cookie.evtype == 17:
+            raw, values, n = cast(event.cookie.data, POINTER(Raw)).contents, {}, 0
+            for axis in range(raw.valuators.mask_len * 8):
+                if raw.valuators.mask[axis >> 3] & 1 << (axis & 7):
+                    values[axis], n = raw.raw_values[n], n + 1
+            print(f"{raw.sourceid} {values.get(0, 0):g} {values.get(1, 0):g}", flush=True)
+        x11.XFreeEventData(display, byref(event.cookie))
+'''
+
+
 def wait_for(fn, seconds=90):
     deadline, error = time.monotonic() + seconds, None
     while time.monotonic() < deadline:
@@ -482,7 +527,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 76
+    assert len(mcp("tools/list")["tools"]) == 77
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1122,10 +1167,22 @@ try:
     assert observed["content"][0]["type"] == "image" and observed["structuredContent"]["width"] == 320, observed["structuredContent"]
     assert observed["structuredContent"]["input"]["released"]["keys"] == ["Shift"], observed["structuredContent"]
     assert observed["structuredContent"]["input"]["pointer"] == {"x":x+10,"y":y+5}, observed["structuredContent"]
+    assert observed["structuredContent"]["input"]["relative_motion"] == {"method":"xtest"}, observed["structuredContent"]
     location = docker("exec","--user","desktop","--env","DISPLAY=:0",container,"xdotool","getmouselocation","--shell").decode()
     assert f"X={x+10}\n" in location and f"Y={y+5}\n" in location, location
     relative_only = api(f"containers/{env_id}/input", {"actions":[{"type":"move_relative","dx":-10,"dy":-5}]})
-    assert relative_only["pointer"] == {"x":x,"y":y}, relative_only
+    assert relative_only["pointer"] == {"x":x,"y":y} and relative_only["relative_motion"] == {"method":"xtest"}, relative_only
+    # Relative motion goes through XTest: at the desktop's edge the pointer stops, while a program
+    # that grabs the pointer still reads both steps of the motion as raw deltas.
+    docker("exec","-i","--user","desktop",container,"sh","-c","cat > /tmp/thoric-raw-motion.py", data=RAW_MOTION_PROBE.encode())
+    listener = subprocess.Popen(["docker","exec","--user","desktop","--env","DISPLAY=:0",container,"python3","/tmp/thoric-raw-motion.py","4"], stdout=subprocess.PIPE)
+    assert listener.stdout.readline().strip() == b"ready"
+    edge = api(f"containers/{env_id}/input", {"actions":[{"type":"move","x":1279,"y":y},{"type":"move_relative","dx":40,"dy":0,"steps":2,"duration_ms":40},{"type":"button_down"},{"type":"button_up"}]})
+    assert edge["pointer"] == {"x":1279,"y":y} and edge["relative_motion"] == {"method":"xtest"}, edge
+    motion = [line.split() for line in listener.communicate(timeout=30)[0].decode().splitlines()]
+    deltas = [m for m in motion if m[1:] == ["20","0"]]
+    # The click where the motion left the pointer moves nothing: only the move and the two steps.
+    assert len(deltas) == 2 and deltas[0][0] == deltas[1][0] and len(motion) == 3, motion
     logs = tool("application_logs", {"container_id":env_id,"application_id":app_id,"tail_bytes":4096})["structuredContent"]
     assert "APP_LOG_LINE" in logs["log"], logs
     stopped = tool("stop_application", {"container_id":env_id,"application_id":app_id,"grace_seconds":3})["structuredContent"]
@@ -1141,6 +1198,34 @@ try:
     assert stable["satisfied"] and stable["screen_stable_for_ms"] >= 600, stable
     unmet = tool("wait_for_condition", {"container_id":env_id,"window_title":"no such window","timeout_ms":600,"interval_ms":200})["structuredContent"]
     assert not unmet["satisfied"] and unmet["window"] is None, unmet
+    # Text on the screen, read with OCR in the manager, and waits for the screen to change and for
+    # text to appear and go. Nothing else draws in the region until the clock opens there.
+    area = "600,40,520,200"
+    unchanged = api(f"containers/{env_id}/wait", {"screen_changed":True,"region":area,"timeout_ms":1200,"interval_ms":300})
+    assert not unchanged["satisfied"] and unchanged["screen_changed_percent"] < 0.5, unchanged
+    changed = {}
+    watcher = threading.Thread(target=lambda: changed.update(tool("wait_for_condition", {"container_id":env_id,"screen_changed":True,"region":area,"timeout_ms":20000,"interval_ms":200})["structuredContent"]))
+    watcher.start()
+    time.sleep(1)
+    text_app = tool("launch_application", {"container_id":env_id,"command":"xclock","args":["-digital","-strftime","Thoric reads 4217","-face","DejaVu Sans:size=20","-geometry","+640+80","-title","Thoric text test"]})["structuredContent"]["application_id"]
+    watcher.join(30)
+    assert changed.get("satisfied") and changed["screen_changed_percent"] >= 0.5, changed
+    appeared = tool("wait_for_condition", {"container_id":env_id,"text":"reads 4217","timeout_ms":20000,"interval_ms":500})["structuredContent"]
+    assert appeared["satisfied"] and appeared["text_found"] and appeared["text_match"]["text"] == "reads 4217", appeared
+    # The clock opens at 640,80 inside the area; a box read from the area alone is still placed
+    # in desktop pixels, not the area's own.
+    inside = lambda box: 640 <= box["center_x"] < 1120 and 80 <= box["center_y"] < 240
+    found = tool("find_text", {"container_id":env_id,"text":"thoric  READS 4217"})["structuredContent"]
+    assert found["found"] and found["width"] == 1280 and inside(found["matches"][0]), found
+    assert any(line["text"].endswith("Thoric reads 4217") for line in found["lines"]), found["lines"]
+    # A region is read in desktop pixels too, and words come one by one.
+    words = api(f"containers/{env_id}/find-text", {"region":area,"level":"word","text":"4217","case_sensitive":True})
+    assert words["found"] and words["width"] == 520 and inside(words["matches"][0]) and "4217" in [w["text"] for w in words["words"]], words
+    assert not tool("find_text", {"container_id":env_id,"text":"no such text on screen"})["structuredContent"]["found"]
+    tool("stop_application", {"container_id":env_id,"application_id":text_app,"grace_seconds":3})
+    gone = api(f"containers/{env_id}/wait", {"text":"reads 4217","text_state":"gone","timeout_ms":15000,"interval_ms":500})
+    assert gone["satisfied"] and not gone["text_found"] and gone["text_match"] is None, gone
+    print("PASS text on the screen with OCR, and waits for a changed screen and for text to appear and go", flush=True)
     diagnostics = tool("application_diagnostics", {"container_id":env_id,"application_id":second})["structuredContent"]
     assert diagnostics["processes"] and "READY_MARKER" in diagnostics["log_tail"] and diagnostics["open_files"], diagnostics
     sampled = tool("sample_metrics", {"container_id":env_id,"application_id":second,"duration_ms":300})["structuredContent"]

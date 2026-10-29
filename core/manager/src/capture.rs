@@ -17,6 +17,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
+mod pixels;
+pub(crate) use pixels::Gray;
+
 /// Screenshot options shared by the HTTP route, the MCP tool and act-and-observe.
 #[derive(Default, Deserialize, JsonSchema)]
 pub struct Capture {

@@ -84,13 +84,13 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 76 tools:
+The server currently exposes 77 tools:
 
 | Work | Tools |
 | --- | --- |
 | Installation | `get_settings`, `get_system`, `get_usage` |
 | Container lifecycle | `list_containers`, `get_container`, `create_container`, `update_container`, `container_action`, `set_internet`, `retry_container`, `reset_container`, `delete_container` |
-| Work inside a container | `exec_container`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `gamepad_input`, `capture_audio`, `inject_audio`, `container_logs`, `container_diagnostics` |
+| Work inside a container | `exec_container`, `read_file`, `write_file`, `upload_file`, `download_file`, `list_files`, `move_file`, `delete_file`, `screenshot`, `save_screenshot`, `desktop_input`, `act_and_observe`, `wait_for_condition`, `inspect_ui`, `find_text`, `gamepad_input`, `capture_audio`, `inject_audio`, `container_logs`, `container_diagnostics` |
 | Interactive terminals | `open_terminal`, `list_terminals`, `terminal_input`, `terminal_output`, `close_terminal` |
 | Applications and windows | `launch_application`, `list_applications`, `get_application`, `application_logs`, `application_diagnostics`, `sample_metrics`, `stop_application`, `list_windows`, `focus_window`, `set_window_geometry` |
 | Recordings and evidence | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts` |
@@ -185,7 +185,7 @@ Both tools reject path traversal and symlinks. Reads accept regular files only, 
 
 `get_usage` reads the history the manager keeps of every running container, one sample a second for 30 minutes, and returns the latest, average and peak over the last `seconds` (default 60, at most 1800) for one `container_id` or for all of them. A deleted container is still reported, with `removed: true` and the name it had, until its samples are 30 minutes old. `cpu_cores` counts host CPU cores in use, not a share of the container's `cpu_limit`; disk and network are bytes per second. Its `gpu` is the whole host GPU from `nvidia-smi` while a GPU container runs: neither WSL nor the driver attributes GPU use to a container, so never read it as one container's share. See [resource usage](API.md#resource-usage) for the figures and their limits.
 
-`wait_for_condition` replaces fixed delays: it polls until a window title appears, a launched application reaches `application_state` (default `exited`) or logs `log_contains`, or the screen (optionally a `region`) has not changed for `screen_stable_ms`. All supplied conditions must hold. After `timeout_ms` it returns `satisfied=false` with the last observation instead of an error.
+`wait_for_condition` replaces fixed delays: it polls until a window title appears, a launched application reaches `application_state` (default `exited`) or logs `log_contains`, the screen has not changed for `screen_stable_ms`, the screen differs from how it looked when the wait began (`screen_changed`), or `text` is read on the screen (`text_state` `visible`, the default) or no longer is (`gone`). `region` limits the screen and text conditions to `x,y,width,height`. A change counts pixels that turned noticeably brighter or darker, and `screen_change_percent` (default 0.5, from 0.01 to 100) is the share of them it takes, so a blinking cursor or the panel clock does not end the wait; to notice a small change, such as a label or a button, wait on its region. `text` is read with OCR as `find_text` reads it and matched the same way, within one line and ignoring case. All supplied conditions must hold. After `timeout_ms` it returns `satisfied=false` with the last observation instead of an error: `screen_changed_percent`, `text_found` and `text_match`, the box of the first place the text was read, among them.
 
 Supervisor files live under `/tmp` in the desktop, so they are not part of snapshots and do not survive a desktop restart; afterwards the state is `unknown`. Application records are removed with their container. A launched application does not hold the container lock, so scripts, file access and desktop input keep working while it runs.
 
@@ -203,7 +203,9 @@ Stopping a recording turns its frames into `recording.mp4` beside them, an H.264
 
 `open_terminal` starts bash on a pseudo-terminal and returns a `terminal_id`; `terminal_input` types text (with Enter by default) and `terminal_output` reads from a byte offset, returning `next_offset` for incremental reads and stripping escape sequences. Use it for installers that ask questions, debuggers and other interactive programs; `close_terminal` hangs up. `root=true` opens a root shell and is an explicit administrator choice. Terminal state lives in tmpfs and ends with a desktop restart.
 
-`inspect_ui` reads the AT-SPI accessibility tree of applications that expose one, such as GTK and Electron applications or Qt with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`. Nodes carry roles, names, states, screen extents, text and action names, which lets an agent find a button by name instead of guessing pixels. Games and Unity players usually expose no tree; use screenshots for those.
+`inspect_ui` reads the AT-SPI accessibility tree of applications that expose one, such as GTK and Electron applications or Qt with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`. Nodes carry roles, names, states, screen extents, text and action names, which lets an agent find a button by name instead of guessing pixels. Games and Unity players usually expose no tree; use `find_text` or screenshots for those.
+
+`find_text` reads the text on the screen itself with Tesseract OCR, so it works where `inspect_ui` sees nothing: games, Unity players, many Electron applications, a remote session or an image. It returns `lines`, or every word with `level=word`, each with its `text`, a box `x`, `y`, `width`, `height` in desktop pixels that `desktop_input` takes as they are, and a `confidence` from 0 to 100; words Tesseract is less sure of than `min_confidence` (default 50) are left out. With `text` it also returns `found` and `matches`, every place that text is read within one line, ignoring case unless `case_sensitive`, with its box and `center_x`, `center_y` to click. `region` reads only `x,y,width,height`, which is faster and keeps other text out. Tesseract runs in the manager, so it reads every desktop image; the published manager image includes it with English data, and a manager without it answers that it is missing. OCR reads English and misreads small, faint, stylized or low-contrast text, and a word it splits or joins differently is not found; look for a distinctive word and check a screenshot when nothing is found.
 
 `gamepad_input` drives a virtual Xbox-style controller in containers created with `gamepad=true`. Buttons stay pressed and axes keep their value between requests until `reset`, so holding a stick while pressing a button is a two-action request. The device appears as `/dev/input/eventN` inside the desktop; SDL applications normally detect it, and `SDL_JOYSTICK_DISABLE_UDEV=1` in `launch_application` env helps those that rely on udev.
 
@@ -229,7 +231,7 @@ Key chords press the supplied keys together, then release them in reverse order;
 
 `key_down` and `button_down` keep keys or buttons pressed for the following actions in the same request, so an agent can walk with W held while turning with the mouse, or drag with a held button. `hold_keys` presses keys for a given time. Everything still held is released when the request ends, and the response lists it under `released`; use `key_up`, `button_up` or `release_all` to release earlier. Held input does not carry over to the next request.
 
-`move_relative` moves the pointer by `dx`,`dy` from its current position, optionally over several `steps` and a `duration_ms`. The manager emulates it with absolute positions, starting from the pointer location reported by the desktop. Applications that grab the pointer and read raw motion, such as first-person cameras, may not respond like they would to a physical mouse; verify the application before relying on it.
+`move_relative` moves the pointer by `dx`,`dy` from its current position, optionally over several `steps` and a `duration_ms`. RFB, the VNC protocol, only carries positions, so the manager sends this motion through XTest inside the desktop instead, with `xdotool` run as the desktop user, in order with the rest of the request: applications that grab the pointer and read raw motion, such as first-person cameras built on SDL, receive the deltas like those of a physical mouse, also at the desktop's edge, where the pointer itself stops. Buttons pressed or released afterwards without coordinates act where the motion left the pointer, and held keys and buttons stay held through it. The response's `pointer` is where the pointer ended and `relative_motion` says how it moved: `{"method":"xtest"}`, or `{"method":"emulated","reason":"..."}` when the desktop image has no `xdotool`, in which case the motion is a series of absolute positions that stops at the edge and that such applications may not follow.
 
 Requests allow 1 to 100 actions, up to 10,000 typed characters, single waits or holds of at most 10 seconds and at most 30 seconds of combined waits, holds and gesture delays. The whole action batch is validated against the connected desktop's dimensions before input is sent.
 
@@ -340,7 +342,7 @@ A server is never published on a port and never reached over the desktop's netwo
 
 | Scope | Tools, bound to that container |
 | --- | --- |
-| `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `wait_for_condition` |
+| `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `find_text`, `wait_for_condition` |
 | `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input`, and `request_human`, which changes nothing in the container but asks a person to take over its screen |
 | `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
 | `files_read` | `list_files`, `read_file`, `download_file` |

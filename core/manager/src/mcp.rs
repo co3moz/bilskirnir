@@ -1,7 +1,7 @@
 use crate::{
     App, activity, api, apps, audio, auth, capture, compose, desktop_input, desktop_mcp, error,
-    exec, files, gamepad, human, image_removal, layers, recordings, terminal, transfers, uploads,
-    usage, volumes, waits, windows,
+    exec, files, gamepad, human, image_removal, layers, ocr, recordings, terminal, transfers,
+    uploads, usage, volumes, waits, windows,
 };
 use axum::{
     Json, Router,
@@ -561,6 +561,7 @@ impl ThoricMcp {
                     capture::act_and_observe(&self.app, &id.unwrap(), &body).await?;
                 return Ok(image(shot, Some(input)));
             }
+            "find_text" => Box::pin(ocr::find_text(&self.app, &id.unwrap(), &parse(args)?)).await?,
             "launch_application" => {
                 apps::launch_application(&self.app, &id.unwrap(), &parse(args)?).await?
             }
@@ -584,7 +585,12 @@ impl ThoricMcp {
                     .await?
             }
             "wait_for_condition" => {
-                waits::wait_for_condition(&self.app, &id.unwrap(), &parse(args)?).await?
+                Box::pin(waits::wait_for_condition(
+                    &self.app,
+                    &id.unwrap(),
+                    &parse(args)?,
+                ))
+                .await?
             }
             "application_diagnostics" => {
                 apps::application_diagnostics(
@@ -1008,6 +1014,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(derived::<capture::Capture>("screenshot", "Capture a running desktop as a JPEG image block at full desktop resolution by default, so pixel coordinates match desktop_input. max_width scales the image down, region crops x,y,width,height and window_id captures one window. structuredContent reports width, height and captured_at. The image reaches only the agent; use save_screenshot to hand it to the user.", std::slice::from_ref(&container), true, false, false));
     tools.push(derived::<capture::SaveCapture>("save_screenshot", "Capture the desktop with the same options as screenshot and save the JPEG inside the desktop at path, in the desktop home, a writable mounted volume or a folder in the container's setup.places, as the desktop user. Returns path, bytes, width, height and download_url, a dashboard link relative to this server's address for handing the image to the user. Existing files need replace=true.", std::slice::from_ref(&container), false, true, false));
     tools.push(derived::<capture::Observe>("act_and_observe", "Send desktop_input actions, wait settle_ms, then capture a screenshot in one call. Returns the image; structuredContent holds the input result, width, height and captured_at.", std::slice::from_ref(&container), false, true, true));
+    tools.push(derived::<ocr::FindText>("find_text", "Read the text on a running desktop with Tesseract OCR, also where inspect_ui sees nothing, such as games, Unity players and many Electron applications. Returns lines (or words with level=word), each with its text, a box x, y, width, height in desktop pixels that desktop_input takes as they are, and a confidence of 0 to 100. With text, matches lists every place that text is read within one line, ignoring case, with its box and center_x, center_y to click, and found says whether there is one. region reads only x,y,width,height. OCR reads English and can misread small, faint or stylized text; look for a distinctive word.", std::slice::from_ref(&container), true, false, false));
     tools.push(derived::<apps::Launch>("launch_application", "Start a desktop application in the background and return an application_id; the container stays available for input, screenshots and scripts. Output goes to a bounded log read with application_logs. Set gpu=true to run through gpu-run for hardware OpenGL.", std::slice::from_ref(&container), false, true, true));
     tools.push(tool(
         "list_applications",
@@ -1055,7 +1062,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(derived::<files::ListFiles>("list_files", "List a directory inside a running container as the desktop user: name, type (file, directory, symlink, special), size, modified_at and mode. Symlinks in the path are rejected.", std::slice::from_ref(&container), true, false, false));
     tools.push(derived::<files::MoveFile>("move_file", "Rename or move a file or directory within the same volume as the desktop user. Existing destinations need replace=true; path symlinks are rejected.", std::slice::from_ref(&container), false, true, false));
     tools.push(derived::<files::DeleteFile>("delete_file", "Delete a file, symlink or directory as the desktop user. Directories need recursive=true to remove their contents; top-level directories, the desktop home and mounted volume roots are refused.", std::slice::from_ref(&container), false, true, false));
-    tools.push(derived::<waits::WaitFor>("wait_for_condition", "Wait until conditions hold instead of sleeping: a window title appears, a launched application reaches a state or logs text, or the screen stops changing. Returns satisfied=false after timeout_ms with the last observation.", std::slice::from_ref(&container), true, false, false));
+    tools.push(derived::<waits::WaitFor>("wait_for_condition", "Wait until conditions hold instead of sleeping: a window title appears, a launched application reaches a state or logs text, the screen stops changing or changes from how it looked when the wait began, or text is read on it or no longer is (OCR, as find_text reads it). region limits the screen and text conditions. Returns satisfied=false after timeout_ms with the last observation.", std::slice::from_ref(&container), true, false, false));
     tools.push(tool("reset_container", "Recreate a container from its saved source image. Its unsaved changes are discarded; named volumes, networks and the container ID are kept. Returns job_id.", env(), &["container_id"], false, true, false));
     tools.push(tool("application_diagnostics", "Inspect a launched application: state, exit status, process tree with memory, open files, threads and the latest log lines.", json!({"container_id": id, "application_id": application}), &["container_id", "application_id"], true, false, false));
     tools.push(derived::<apps::Metrics>("sample_metrics", "Sample CPU and memory use of a launched application's processes over duration_ms, with container memory figures. Frame rate is not available.", &[container.clone(), ("application_id", application.clone(), true)], true, false, false));
@@ -1119,7 +1126,7 @@ static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         .push(json!("container_id"));
     let mut input_tool = Tool::new(
         "desktop_input",
-        "Control a running desktop through its shared VNC session. Actions: move, move_relative, click, button_down, button_up, drag, scroll, key_press, key_down, key_up, hold_keys, type_text, wait and release_all. Coordinates are desktop pixels, matching a full-resolution screenshot. Keys and buttons held by key_down/button_down stay pressed for later actions in the same request and are released when the request ends. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
+        "Control a running desktop through its shared VNC session. Actions: move, move_relative, click, button_down, button_up, drag, scroll, key_press, key_down, key_up, hold_keys, type_text, wait and release_all. Coordinates are desktop pixels, matching a full-resolution screenshot. move_relative is relative motion through XTest, which applications that grab the pointer, such as games, read even at the desktop's edge; relative_motion in the result says whether it had to be emulated with positions. Keys and buttons held by key_down/button_down stay pressed for later actions in the same request and are released when the request ends. Chords use keys such as [Control, a]; text newlines press Enter. Actions are validated before input, and VNC Fence confirms processing. This interacts with applications and may change or delete their data.",
         input_schema.as_object().unwrap().clone(),
     );
     input_tool.annotations = Some(
