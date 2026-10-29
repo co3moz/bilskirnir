@@ -40,13 +40,16 @@ while True:
         state["reason"] = "max_bytes"
         break
     tick = time.monotonic()
+    # The screen is read as the screenshot starts, before it is scaled and compressed, so a frame's
+    # name carries that moment: the video shows each frame from it.
+    captured = int(time.time() * 1000)
     try:
         result = subprocess.run(["/usr/local/bin/desktop-screenshot", max_width, region, ""],
                                 capture_output=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         result = None
     if result is not None and result.returncode == 0 and result.stdout.startswith(b"\xff\xd8"):
-        name = "frame-%05d-%d.jpg" % (state["frames"], int(time.time() * 1000))
+        name = "frame-%05d-%d.jpg" % (state["frames"], captured)
         temporary = os.path.join(directory, name + ".tmp")
         with open(temporary, "wb") as handle:
             handle.write(result.stdout)
