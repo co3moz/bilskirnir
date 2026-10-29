@@ -1,10 +1,14 @@
 # Thoric
 
-![Thoric dashboard with Ubuntu desktop previews](docs/screenshots/thoric.png)
+![An agent opens a terminal in a Thoric desktop, writes a Python script, runs it, looks at the chart and changes it, all through MCP tool calls](docs/screenshots/agent-demo.gif)
+
+*An agent at work in a real installation, recorded with `start_recording`. The bar under the desktop names each MCP tool call.*
 
 Thoric gives AI agents real Linux desktops. It runs Ubuntu desktops in Docker, on WSL2 or on a Linux host, with GPU acceleration, and its MCP server is built in: an agent connects with a URL and a token, then installs software, runs commands, reads and writes files, sees the screen, clicks and types, records what happened and hands the results back to you. There is no separate MCP container to set up.
 
 The same desktops open in your browser, so you can work in them yourself, save a prepared one as an image and start new containers from it.
+
+![Thoric dashboard with Ubuntu desktop previews](docs/screenshots/thoric.png)
 
 The name is a nod to Thor.
 
@@ -31,6 +35,14 @@ Both supplied desktops use Ubuntu 24.04:
 | GNOME | Ubuntu's GNOME Shell session and Yaru theme, with higher resource use. |
 
 Thoric serves one administrator on a local machine or LAN.
+
+## Examples
+
+[Examples](docs/EXAMPLES.md) follows an agent through three tasks, with the tools it calls at each step:
+
+- [Build an image from a template](docs/EXAMPLES.md#build-an-image-from-a-template-and-start-desktops-from-it) and start desktops from it, each with an MCP endpoint of its own for another agent.
+- [Test a web app in a real browser](docs/EXAMPLES.md#test-a-web-app-in-a-real-browser-and-hand-back-a-recording) and hand back a recording with the server's log.
+- [Ask a person when a CAPTCHA appears](docs/EXAMPLES.md#ask-a-person-when-a-captcha-appears) with `request_human`, then carry on.
 
 ## Getting started
 
@@ -124,6 +136,7 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 ## Where to go next
 
 - [Agent access with MCP](docs/MCP.md): connecting a client, the tool list and agent workflows.
+- [Examples](docs/EXAMPLES.md): three agent tasks from the request to the answer, step by step.
 - [Using Thoric](docs/USAGE.md): containers, GPU applications, images, snapshots, volumes, uploads and settings changes.
 - [WSL distribution package](docs/WSL_PACKAGE.md): installing, keeping it running, everyday commands, memory and disk size, and removal.
 - [Installation and maintenance](docs/INSTALLATION.md): settings, LAN access, HTTPS, updates and recovery.
