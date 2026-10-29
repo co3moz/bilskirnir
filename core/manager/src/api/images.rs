@@ -9,7 +9,7 @@ use crate::{
     model::*,
     script_progress::{ScriptPart, ScriptProgress, TRACE, TRACE_NAME},
 };
-use anyhow::Context;
+use anyhow::{Context, bail};
 use axum::{
     Json,
     extract::{Path, State},
@@ -549,6 +549,30 @@ pub async fn snapshot(
             Ok(image_summary(&rec))
         },
     )
+}
+impl App {
+    pub async fn cleanup_build(&self, id: &str) -> anyhow::Result<()> {
+        if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            bail!("Invalid build ID");
+        }
+        let dir = self.config.data.join("builds").join(id);
+        match tokio::fs::remove_dir_all(&dir).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+        let tag = format!("thoric/build-base:{id}");
+        let names = self
+            .docker(&["image", "ls", "--format", "{{.Repository}}:{{.Tag}}", &tag])
+            .await?;
+        if String::from_utf8_lossy(&names)
+            .lines()
+            .any(|name| name == tag)
+        {
+            self.docker(&["image", "rm", &tag]).await?;
+        }
+        Ok(())
+    }
 }
 #[cfg(test)]
 #[path = "images_tests.rs"]
