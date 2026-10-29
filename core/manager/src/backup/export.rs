@@ -423,11 +423,14 @@ impl App {
 
     /// The records of the included kinds and what Docker still has of them.
     async fn read_installation(&self) -> anyhow::Result<Installation> {
-        let mut containers: Vec<Container> = self.db.list(CONTAINERS)?;
-        let images: Vec<ImageRecord> = self.db.list("image")?;
-        let composes: Vec<(String, Pinned)> = self.db.entries(PINNED)?;
-        let endpoints: Vec<Endpoint> = self.db.list(ENDPOINTS)?;
-        let proxy_passwords: Vec<(String, Credentials)> = self.db.entries(CREDENTIALS)?;
+        // Every record or none: a backup that silently lacked one would look whole until the day
+        // it is restored, so a record this release cannot read fails it, as a part that cannot
+        // be read does.
+        let mut containers: Vec<Container> = self.db.list_complete(CONTAINERS)?;
+        let images: Vec<ImageRecord> = self.db.list_complete("image")?;
+        let composes: Vec<(String, Pinned)> = self.db.entries_complete(PINNED)?;
+        let endpoints: Vec<Endpoint> = self.db.list_complete(ENDPOINTS)?;
+        let proxy_passwords: Vec<(String, Credentials)> = self.db.entries_complete(CREDENTIALS)?;
         let image_ids = lines(
             &self
                 .docker(&["image", "ls", "-a", "--no-trunc", "--format", "{{.ID}}"])

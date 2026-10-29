@@ -158,13 +158,39 @@ New containers use the updated catalog images. Existing containers and snapshots
 
 `edge` is the newest build of `master`, published with every change before a release includes it. To follow it, set `MANAGER_IMAGE=ghcr.io/co3moz/thoric:edge` in `.env`, export the installation files from `ghcr.io/co3moz/thoric:edge` as [above](#use-the-full-installation-files), since a change on `master` may add a setting to them, and run the update commands. An edge manager downloads the desktop images published with it, those of its own commit, and the sidebar names that commit instead of a version, since an edge build still carries the version of the release before it. `ghcr.io/co3moz/thoric:sha-<full-commit>` stays on one build of `master` the same way. For the WSL package, see [Edge builds](WSL_PACKAGE.md#edge-builds) there.
 
-To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it may not read what the newer manager wrote, and it refuses the desktop images, and the images built on them, made for a newer Thoric.
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it refuses a database the newer manager moved to a later layout, as [below](#go-back-to-an-earlier-release), and it refuses the desktop images, and the images built on them, made for a newer Thoric.
+
+### Go back to an earlier release
+
+The database records the version of its layout. Each start brings it to the newest layout the manager knows, in one step that either completes or leaves it as it was, and a manager refuses a database a later release has moved further, rather than misread it: it does not start, and its log (`docker compose logs manager`) names both versions. Releases up to 0.8.4 know no layout version: they open any database, and may misread what a later release wrote.
+
+To go back, put a copy of the database from before the update in its place and start the earlier release. The WSL package's **Update** on the dashboard writes that copy itself, see [Go back after an update](WSL_PACKAGE.md#go-back-after-an-update). A Compose update takes none, so make one before you pull, with the manager stopped so the database and its journal files are whole. Replace `1.2.0` with the release you run and `thoric-data` with your `MANAGER_DATA_VOLUME`:
+
+```bash
+docker compose stop manager
+docker run --rm -v thoric-data:/data --entrypoint sh ghcr.io/co3moz/thoric:1.2.0 -c \
+  'mkdir -p /data/before-update && cp -p /data/state.sqlite* /data/before-update/'
+docker compose pull
+docker compose up -d
+```
+
+To put it back, stop the manager, set the newer database aside in `replaced`, copy the files back, set `MANAGER_IMAGE` in `.env` to the earlier release and start it:
+
+```bash
+docker compose stop manager
+docker run --rm -v thoric-data:/data --entrypoint sh ghcr.io/co3moz/thoric:1.2.0 -c \
+  'cd /data && mkdir -p replaced && mv state.sqlite* replaced/ && cp -p before-update/state.sqlite* .'
+docker compose up -d
+```
+
+The records then describe the installation as it was before the update: a container created or deleted since is missing from them or listed again, while its Docker container, images and volumes stay as they are.
 
 ## Know where your data lives
 
 | Data | Location | Effect of deleting a container |
 | --- | --- | --- |
 | Container settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
+| Copies of the database from the WSL package's last three updates | `/data/state-<release>-to-<release>.sqlite` beside it | Unaffected. |
 | Installed software and unmounted home files | The desktop container's writable layer | Lost unless saved in an image or snapshot. |
 | Files carried over by a settings change | An image tagged `thoric/container:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |

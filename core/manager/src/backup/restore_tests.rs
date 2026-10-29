@@ -11,6 +11,8 @@ use crate::{
         manifest::{Included, PartEnd},
         tests::{SECRET, calls, container, endpoint, fake_docker, image, job, pinned, saved_image},
     },
+    desktop_mcp::Endpoint,
+    model::ImageRecord,
     model::WorkingImage,
 };
 use axum::body::Bytes;

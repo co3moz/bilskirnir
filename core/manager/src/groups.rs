@@ -174,7 +174,8 @@ pub(crate) fn vnc_private(ps: &Value) -> bool {
 }
 
 impl App {
-    /// [`names_free`] against every other container record.
+    /// [`names_free`] against every other container record that reads. One that does not is
+    /// left out rather than refusing every change of every container's names.
     pub(crate) fn group_names_free(&self, id: &str, spec: &ContainerSpec) -> Result<()> {
         names_free(id, spec, &self.db.list::<Container>(CONTAINERS)?)
     }
@@ -268,9 +269,16 @@ impl App {
     }
 
     /// Remove a group's network once no container record but `leaving` lists the group. A stopped
-    /// member has no endpoint Docker would show, so the records decide, not the network.
+    /// member has no endpoint Docker would show, so the records decide, not the network, and the
+    /// network stays while one does not read.
     async fn drop_group_network(&self, group: &str, leaving: &str) -> Result<()> {
-        let members = self.db.list::<Container>(CONTAINERS)?;
+        let members = match self.db.list_complete::<Container>(CONTAINERS) {
+            Ok(members) => members,
+            Err(error) => {
+                tracing::warn!("Keeping the network of the group {group}: {error:#}");
+                return Ok(());
+            }
+        };
         if members
             .iter()
             .any(|other| other.id != leaving && other.spec.groups.iter().any(|g| g == group))

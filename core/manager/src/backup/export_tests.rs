@@ -260,3 +260,28 @@ async fn a_failing_part_fails_the_download_instead_of_ending_it_short() {
     assert!(error.to_string().contains("no such image"), "{error:#}");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// A record this release cannot read is not left out of a backup that would then look whole: the
+/// backup fails before its first entry and names the record, without its data.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_record_that_does_not_read_fails_the_backup_instead_of_going_missing() {
+    let (app, dir) = installation();
+    app.db
+        .put(
+            CONTAINERS,
+            "c2",
+            &serde_json::json!({"id": "c2", "spec": SECRET}),
+        )
+        .unwrap();
+    let error = format!(
+        "{:#}",
+        download(&app, Included::default()).await.unwrap_err()
+    );
+    assert!(
+        error.contains(&format!("{CONTAINERS} record c2")),
+        "{error}"
+    );
+    assert!(!error.contains(SECRET), "{error}");
+    std::fs::remove_dir_all(dir).unwrap();
+}

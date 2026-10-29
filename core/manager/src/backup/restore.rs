@@ -18,10 +18,10 @@ use crate::{
     archives::{arriving, check_upload, import_progress, transfer_permit},
     auth,
     compose::PINNED,
-    desktop_mcp::{ENDPOINTS, Endpoint},
+    desktop_mcp::ENDPOINTS,
     error::{Error, Result},
     jobs,
-    model::{CONTAINERS, Container, ImageRecord},
+    model::{CONTAINERS, Container},
     outbound::{CREDENTIALS, ProxyChoice},
 };
 use anyhow::{Context, anyhow, bail};
@@ -130,31 +130,13 @@ impl App {
                 .map(str::to_owned)
                 .collect()
         };
+        // By id, so a record this release cannot read still counts as taken. A container, an
+        // image and a pinned compose are saved under their id, an endpoint under its name.
         Ok(Present {
-            containers: self
-                .db
-                .list::<Container>(CONTAINERS)?
-                .into_iter()
-                .map(|c| c.id)
-                .collect(),
-            images: self
-                .db
-                .list::<ImageRecord>("image")?
-                .into_iter()
-                .map(|i| i.id)
-                .collect(),
-            composes: self
-                .db
-                .entries::<Value>(PINNED)?
-                .into_iter()
-                .map(|(id, _)| id)
-                .collect(),
-            endpoints: self
-                .db
-                .list::<Endpoint>(ENDPOINTS)?
-                .into_iter()
-                .map(|e| e.name)
-                .collect(),
+            containers: self.db.ids(CONTAINERS)?.into_iter().collect(),
+            images: self.db.ids("image")?.into_iter().collect(),
+            composes: self.db.ids(PINNED)?.into_iter().collect(),
+            endpoints: self.db.ids(ENDPOINTS)?.into_iter().collect(),
             docker_containers: names(self.docker(&["ps", "-a", "--format", "{{.Names}}"]).await?),
             networks: names(
                 self.docker(&["network", "ls", "--format", "{{.Name}}"])

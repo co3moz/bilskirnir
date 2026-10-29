@@ -423,7 +423,7 @@ async fn main() -> anyhow::Result<()> {
     }
     tokio::fs::create_dir_all(&config.data).await?;
     uploads::cleanup_temporary_files(&config.data).await?;
-    let db = db::Db::open(&config.data.join("state.sqlite"))?;
+    let db = db::Db::open(&config.data.join(db::FILE))?;
     // Finished jobs beyond the newest are history nobody reads, kept out of memory and the file.
     db.prune_jobs(jobs::KEPT_JOBS)?;
     // Interrupted work is explicit. Never silently retry a user script or remove a container.

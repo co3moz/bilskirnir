@@ -1,6 +1,7 @@
 //! What the manager makes of GitHub's answer, when the dashboard may start an update, and how an
 //! update job follows `thoric update` through the folder the WSL package watches, also once
-//! the update has replaced the manager that started it.
+//! the update has replaced the manager that started it. An update first copies the database,
+//! keeps the newest copies, and does not start without one.
 use super::*;
 use crate::package_requests::active;
 use axum::{body::Body, http::Request};
@@ -19,12 +20,29 @@ fn folder() -> PathBuf {
     dir
 }
 
+/// The manager's data folder beside the update folder, where an update copies the database.
+fn data(dir: &Path) -> PathBuf {
+    dir.join("data")
+}
+
 fn app_in(dir: &Path, check: bool) -> Arc<App> {
     let mut app = crate::tests::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.update_check = check;
     config.update_dir = dir.into();
+    config.data = data(dir);
+    std::fs::create_dir_all(&config.data).unwrap();
     app
+}
+
+/// The copies of the database in the data folder, by name.
+fn copies(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(data(dir))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
 }
 
 fn job(id: &str, kind: &str, status: &str) -> Job {
@@ -301,6 +319,78 @@ async fn an_update_follows_the_service_through_the_folder() {
         job.log
     );
     assert!(!job.log.contains("earlier output"), "{}", job.log);
+    assert!(!dir.join(REQUEST).exists());
+    // The database was copied before the request was left, and the copy holds this job.
+    let [copy] = &copies(&dir)[..] else {
+        panic!("{:?}", copies(&dir));
+    };
+    assert!(
+        copy.starts_with("state-") && copy.ends_with("-to-999.0.0.sqlite"),
+        "{copy}"
+    );
+    let copied = job.log.find(&format!("Copied the database to {copy}"));
+    let asked = job.log.find("Asked the WSL distribution");
+    assert!(copied.is_some() && copied < asked, "{}", job.log);
+    let copy = crate::db::Db::open(&data(&dir).join(copy)).unwrap();
+    assert_eq!(copy.get::<Job>("job", &id).unwrap().status, "running");
+    drop(copy);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+async fn an_update_keeps_the_newest_copies_of_the_database() {
+    let dir = folder();
+    let app = app_in(&dir, true);
+    let now = std::time::SystemTime::now();
+    let older = ["state-0.1.0-to-0.2.0.sqlite", "state-0.2.0-to-0.3.0.sqlite"];
+    let newer = ["state-0.3.0-to-0.4.0.sqlite", "state-0.4.0-to-0.5.0.sqlite"];
+    for (age, name) in older.iter().chain(&newer).rev().enumerate() {
+        let file = std::fs::File::create(data(&dir).join(name)).unwrap();
+        file.set_modified(now - Duration::from_secs(3600 * (age as u64 + 1)))
+            .unwrap();
+    }
+    // Not copies: the database itself, its journal and a file of someone else's.
+    for other in [crate::db::FILE, "state.sqlite-wal", "notes.txt"] {
+        std::fs::write(data(&dir).join(other), "").unwrap();
+    }
+    let copy = copy_database(&app, Some("999.0.0")).await.unwrap();
+    let mut kept = vec![
+        copy,
+        newer[0].to_owned(),
+        newer[1].to_owned(),
+        crate::db::FILE.to_owned(),
+        "state.sqlite-wal".to_owned(),
+        "notes.txt".to_owned(),
+    ];
+    kept.sort();
+    assert_eq!(copies(&dir), kept);
+    // The same update once more replaces its copy rather than failing on it.
+    copy_database(&app, Some("999.0.0")).await.unwrap();
+    assert_eq!(copies(&dir), kept);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+async fn an_update_does_not_start_without_a_copy_of_the_database() {
+    let dir = folder();
+    let mut app = app_in(&dir, true);
+    Arc::get_mut(&mut app).unwrap().config.data = dir.join("missing");
+    app.releases.record(Ok("999.0.0".into()));
+    let (id, outcome) = jobs::start(app.clone(), JOB, JOB.into(), true, |app, id| async move {
+        run(&app, &id, FAST).await
+    })
+    .unwrap();
+    let error = outcome.await.unwrap().unwrap_err();
+    assert!(
+        error.contains("Could not copy the database before the update, so nothing was updated"),
+        "{error}"
+    );
+    let job: Job = app.db.get("job", &id).unwrap();
+    assert!(
+        job.log.contains("ERROR: Could not copy the database"),
+        "{}",
+        job.log
+    );
     assert!(!dir.join(REQUEST).exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }

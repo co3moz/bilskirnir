@@ -623,9 +623,10 @@ impl App {
                     .as_ref()
                     .is_some_and(|m| crate::volumes::manager_volume(m, name))
             });
+            // Every other record, since one that does not read may mount the same volume.
             let others = self
                 .db
-                .list::<Container>(CONTAINERS)?
+                .list_complete::<Container>(CONTAINERS)?
                 .into_iter()
                 .filter(|other| other.id != env.id)
                 .collect::<Vec<_>>();
