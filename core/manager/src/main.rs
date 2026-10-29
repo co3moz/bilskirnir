@@ -12,6 +12,7 @@ mod config;
 mod db;
 mod dependencies;
 mod desktop_input;
+mod desktop_limits;
 mod desktop_mcp;
 mod docker;
 mod error;
@@ -428,8 +429,12 @@ async fn main() -> anyhow::Result<()> {
     for notice in &config.notices {
         tracing::warn!("{notice}");
     }
-    config.gpu_host = gpu::Host::detect(&config).await;
+    // One look at the daemon serves the GPU routes and the desktops' log options.
+    let docker_info = desktop_limits::docker_info(&config.docker_bin).await;
+    config.gpu_host = gpu::Host::detect(&config, docker_info.as_ref());
+    config.log_driver = desktop_limits::log_driver(docker_info.as_ref());
     gpu::log_routes(&config);
+    desktop_limits::log_logging(&config);
     if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
             "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"
@@ -550,6 +555,9 @@ const RECONCILIATION: &str = "Docker reconciliation";
 fn container_reconciliation(id: &str) -> String {
     format!("Container {id} network reconciliation")
 }
+fn container_pids_limit(id: &str) -> String {
+    format!("Container {id} pids limit")
+}
 async fn reconcile_networks(app: &App, reported: &mut reported::Reported) -> anyhow::Result<()> {
     let Some(manager) = &app.config.manager else {
         return Ok(());
@@ -562,9 +570,10 @@ async fn reconcile_networks(app: &App, reported: &mut reported::Reported) -> any
     // A deleted container's failure goes with it.
     reported.retain(|subject| {
         subject == RECONCILIATION
-            || containers
-                .iter()
-                .any(|env| subject == container_reconciliation(&env.id))
+            || containers.iter().any(|env| {
+                subject == container_reconciliation(&env.id)
+                    || subject == container_pids_limit(&env.id)
+            })
     });
     for mut env in containers {
         let lock = app.resource_lock(&format!("container:{}", env.id));
@@ -578,6 +587,10 @@ async fn reconcile_networks(app: &App, reported: &mut reported::Reported) -> any
         };
         let result = async {
             let info = app.owned(&env).await?;
+            // Also a desktop created before the installation's pids limit, or before it changed.
+            // Its networks are checked either way, and its failure is reported on its own.
+            let pids = app.keep_pids_limit(&info).await;
+            reported.outcome(&container_pids_limit(&env.id), &pids);
             let network = app.inspect("network", &env.private_network).await?;
             App::check_network(&env, &network, true)?;
             let egress = app.inspect("network", &env.egress_network).await?;
