@@ -147,6 +147,9 @@ struct Route {
     query: Option<Schematic>,
     body: Body,
     reply: Reply,
+    /// What a `503` of the route's own answers with, instead of the error that Docker cannot be
+    /// reached.
+    unavailable: Option<&'static str>,
 }
 
 fn route(
@@ -165,6 +168,7 @@ fn route(
         query: None,
         body: Body::None,
         reply: Reply::Json,
+        unavailable: None,
     }
 }
 fn get(path: &'static str, tag: &'static str, summary: &'static str) -> Route {
@@ -251,6 +255,11 @@ impl Route {
         self.reply = Reply::WebSocket;
         self
     }
+    /// A `503` that is the route's own JSON answer, such as a readiness check that failed.
+    fn unavailable(mut self, description: &'static str) -> Self {
+        self.unavailable = Some(description);
+        self
+    }
 }
 
 /// What every error status carries (`error::Error`).
@@ -268,6 +277,9 @@ struct JobStarted {
     /// Follow the job at `GET /api/jobs/{job_id}`.
     job_id: String,
 }
+
+/// The header that carries a request's ID both ways, as `request_log::REQUEST_ID` names it.
+const REQUEST_ID: &str = "X-Request-Id";
 
 /// The error statuses any route can answer with, as the table of errors in `docs/API.md` names
 /// them (`error::Error`, `error::Fault`): status, the name of its response and what it means.
@@ -404,12 +416,26 @@ fn document() -> Value {
                 .map(|(_, name, description)| {
                     let response = json!({
                         "description": description,
+                        "headers": {REQUEST_ID: {"$ref": "#/components/headers/RequestId"}},
                         "content": {"application/json": {"schema": error}},
                     });
                     (name.to_string(), response)
                 })
                 .collect::<Map<_, _>>(),
+            "headers": {
+                "RequestId": {
+                    "description": "The request's ID, which the manager's log line for it names as `request_id`: the one the request sent, or a new UUID.",
+                    "schema": {"type": "string"},
+                },
+            },
             "parameters": {
+                "RequestId": {
+                    "name": REQUEST_ID,
+                    "in": "header",
+                    "required": false,
+                    "description": "An ID of the caller's own for the request, used instead of a new UUID when it is up to 128 letters, digits, `-`, `_`, `.` and `:`.",
+                    "schema": {"type": "string"},
+                },
                 "Request": {
                     "name": "X-Thoric-Request",
                     "in": "header",
@@ -586,6 +612,7 @@ fn operation(
     if (route.access == Access::Session && change) || route.access == Access::SignIn {
         parameters.push(json!({"$ref": "#/components/parameters/Request"}));
     }
+    parameters.push(json!({"$ref": "#/components/parameters/RequestId"}));
     let security = match route.access {
         Access::Public | Access::SignIn | Access::TransferLink => json!([]),
         Access::Session => json!([{"session": []}]),
@@ -673,10 +700,22 @@ fn operation(
             responses[*status] = json!({"$ref": format!("#/components/responses/{name}")});
         }
     }
+    if let Some(description) = route.unavailable {
+        responses["503"] = json!({
+            "description": description,
+            "content": {"application/json": {"schema": {}}},
+        });
+    }
     responses["default"] = json!({
         "description": "Another error status that the route names, such as 413 or 429, with its message.",
         "content": {"application/json": {"schema": error}},
     });
+    // Every answer carries the request's ID (`request_log`); the shared ones say so themselves.
+    for response in responses.as_object_mut().unwrap().values_mut() {
+        if response.get("$ref").is_none() {
+            response["headers"] = json!({REQUEST_ID: {"$ref": "#/components/headers/RequestId"}});
+        }
+    }
     operation["responses"] = responses;
     if let Some(stream) = stream {
         operation["x-thoric-stream"] = json!(stream);

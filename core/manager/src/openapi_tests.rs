@@ -328,14 +328,56 @@ fn every_operation_names_the_error_statuses_of_the_guide() {
     for (path, item) in document["paths"].as_object().unwrap() {
         for (method, operation) in item.as_object().unwrap() {
             for status in ["400", "404", "409", "500", "502", "503", "504"] {
-                let reference = operation["responses"][status]["$ref"].as_str();
-                let resolves = reference
-                    .and_then(|reference| reference.strip_prefix('#'))
-                    .and_then(|pointer| document.pointer(pointer));
-                assert!(resolves.is_some(), "{method} {path} names {status}");
+                // The shared answer, or one of the route's own such as the 503 of `/readyz`.
+                let response = &operation["responses"][status];
+                let resolves = match response["$ref"].as_str() {
+                    Some(reference) => reference
+                        .strip_prefix('#')
+                        .and_then(|pointer| document.pointer(pointer))
+                        .is_some(),
+                    None => response["description"].is_string(),
+                };
+                assert!(resolves, "{method} {path} names {status}");
             }
         }
     }
+}
+
+#[test]
+fn every_answer_names_the_request_id_and_readiness_answers_its_own_503() {
+    assert!(
+        crate::request_log::REQUEST_ID
+            .as_str()
+            .eq_ignore_ascii_case(REQUEST_ID),
+        "the document names the header request_log uses"
+    );
+    let document = document();
+    let resolve = |response: &Value| -> Value {
+        match response["$ref"].as_str() {
+            Some(reference) => document.pointer(&reference[1..]).unwrap().clone(),
+            None => response.clone(),
+        }
+    };
+    let id = json!({"$ref": "#/components/parameters/RequestId"});
+    for (path, item) in document["paths"].as_object().unwrap() {
+        for (method, operation) in item.as_object().unwrap() {
+            assert!(
+                operation["parameters"].as_array().unwrap().contains(&id),
+                "{method} {path} takes an ID"
+            );
+            for (status, response) in operation["responses"].as_object().unwrap() {
+                assert!(
+                    resolve(response)["headers"][REQUEST_ID].is_object(),
+                    "{method} {path} {status} carries the ID"
+                );
+            }
+        }
+    }
+    let ready = &document["paths"]["/readyz"]["get"];
+    assert_eq!(ready["security"], json!([]));
+    assert!(ready["responses"]["503"]["$ref"].is_null());
+    assert!(ready["responses"]["503"]["content"]["application/json"].is_object());
+    assert!(ready["responses"]["401"].is_null());
 }
 
 #[tokio::test]

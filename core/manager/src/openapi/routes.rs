@@ -747,9 +747,20 @@ pub(super) fn all() -> Vec<Route> {
             "HTTP or a WebSocket to a path of a port inside the desktop.",
         )
         .access(Access::McpToken),
-        get("/healthz", INSTALLATION, "Basic health; answers `ok`.")
-            .access(Access::Public)
-            .text(),
+        get(
+            "/healthz",
+            INSTALLATION,
+            "Liveness: `ok` while the manager answers, without asking the database or Docker.",
+        )
+        .access(Access::Public)
+        .text(),
+        get(
+            "/readyz",
+            INSTALLATION,
+            "Readiness: `ready`, `database` and `docker` as booleans, true when the database and Docker answer.",
+        )
+        .access(Access::Public)
+        .unavailable("Not ready: the same booleans, with each check that failed false."),
     ]
 }
 

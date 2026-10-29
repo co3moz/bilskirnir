@@ -17,14 +17,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Failed sign-ins one address may make in a minute.
-const LOGIN_ATTEMPTS: usize = 20;
-/// Failed sign-ins kept in all, so a flood from many addresses stays bounded in memory and is
-/// refused as a whole.
-const LOGIN_ATTEMPTS_TOTAL: usize = 500;
+mod forwarded;
+mod limiter;
+pub(crate) use forwarded::{HttpsProxy, spawn as follow_https_proxy};
+pub(crate) use limiter::Limiter;
+use limiter::Verdict;
 
-/// The address a request came from, when the listener records one. A request made without a
-/// connection, as the tests do, has none, and such requests share one bucket.
+/// The address a connection came from, when the listener records one. A request made without a
+/// connection, as the tests do, has none, and such requests share one count of failed sign-ins.
 pub struct Peer(pub Option<IpAddr>);
 impl<S: Send + Sync> FromRequestParts<S> for Peer {
     type Rejection = std::convert::Infallible;
@@ -211,21 +211,28 @@ pub async fn login(
             "Credentials are too long".into(),
         ));
     }
-    {
-        // Failures count per address, so one guessing neighbour does not lock the administrator
-        // out from another machine; the total bounds what is kept.
-        let mut attempts = app.login_attempts.lock().unwrap();
-        attempts.retain(|(_, at)| at.elapsed() < Duration::from_secs(60));
-        let from_peer = attempts.iter().filter(|(from, _)| *from == peer).count();
-        if from_peer >= LOGIN_ATTEMPTS || attempts.len() >= LOGIN_ATTEMPTS_TOTAL {
-            return Err(Error(
-                StatusCode::TOO_MANY_REQUESTS,
-                "Try again in one minute".into(),
-            ));
+    let Some(hash) = app.config.password_hash.clone() else {
+        return Err(Error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Sign-in is on without an administrator password; set ADMIN_PASSWORD".into(),
+        ));
+    };
+    // Failures count per address, so one guessing neighbour does not lock the administrator out
+    // from another machine. Behind the HTTPS proxy the address is the one it forwards.
+    let client = forwarded::client(peer, &headers, &app.https_proxy);
+    let shown = client.map_or_else(|| "an unknown address".to_owned(), |ip| ip.to_string());
+    if let Verdict::Refused { first } = app.login_attempts.begin(client, Instant::now()) {
+        if first {
+            tracing::warn!(
+                "Sign-ins from {shown} are refused for up to a minute after {} failures",
+                limiter::ATTEMPTS
+            );
         }
-        attempts.push((peer, Instant::now()));
+        return Err(Error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Try again in one minute".into(),
+        ));
     }
-    let hash = app.config.password_hash.clone().unwrap();
     let valid_user = body.username == app.config.username;
     let valid = tokio::task::spawn_blocking(move || {
         PasswordHash::new(&hash).is_ok_and(|h| {
@@ -237,11 +244,14 @@ pub async fn login(
     .await
     .map_err(|e| anyhow::anyhow!(e))?;
     if !valid || !valid_user {
+        // Never the name or the password that was tried: either may be the real one mistyped.
+        tracing::warn!("Failed sign-in from {shown}");
         return Err(Error(
             StatusCode::UNAUTHORIZED,
             "Invalid username or password".into(),
         ));
     }
+    app.login_attempts.succeeded(client);
     let token = format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),
