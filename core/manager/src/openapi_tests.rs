@@ -308,6 +308,36 @@ fn a_create_request_names_no_fixed_default_for_what_the_installation_fills() {
     }
 }
 
+#[test]
+fn every_operation_names_the_error_statuses_of_the_guide() {
+    // The statuses of the table under `## Errors` in docs/API.md.
+    let guide = include_str!("../../../docs/API.md");
+    let (_, errors) = guide.split_once("\n## Errors\n").unwrap();
+    let (errors, _) = errors.split_once("\n## ").unwrap();
+    let table: BTreeSet<&str> = regex::Regex::new(r"(?m)^\| `(\d{3})` \|")
+        .unwrap()
+        .captures_iter(errors)
+        .map(|found| found.get(1).unwrap().as_str())
+        .collect();
+    let named: BTreeSet<&str> = ERRORS.iter().map(|(status, _, _)| *status).collect();
+    assert_eq!(
+        named, table,
+        "ERRORS must be the statuses docs/API.md lists"
+    );
+    let document = document();
+    for (path, item) in document["paths"].as_object().unwrap() {
+        for (method, operation) in item.as_object().unwrap() {
+            for status in ["400", "404", "409", "500", "502", "503", "504"] {
+                let reference = operation["responses"][status]["$ref"].as_str();
+                let resolves = reference
+                    .and_then(|reference| reference.strip_prefix('#'))
+                    .and_then(|pointer| document.pointer(pointer));
+                assert!(resolves.is_some(), "{method} {path} names {status}");
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn errors_and_queued_jobs_answer_as_the_document_says() {
     let document = document();

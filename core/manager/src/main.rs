@@ -12,6 +12,7 @@ mod config;
 mod db;
 mod dependencies;
 mod desktop_input;
+mod desktop_limits;
 mod desktop_mcp;
 mod docker;
 mod error;
@@ -416,8 +417,12 @@ async fn main() -> anyhow::Result<()> {
     for notice in &config.notices {
         tracing::warn!("{notice}");
     }
-    config.gpu_host = gpu::Host::detect(&config).await;
+    // One look at the daemon serves the GPU routes and the desktops' log options.
+    let docker_info = desktop_limits::docker_info(&config.docker_bin).await;
+    config.gpu_host = gpu::Host::detect(&config, docker_info.as_ref());
+    config.log_driver = desktop_limits::log_driver(docker_info.as_ref());
     gpu::log_routes(&config);
+    desktop_limits::log_logging(&config);
     if config.mcp_token.is_none() && config.root_mcp_enabled {
         tracing::warn!(
             "MCP_AUTH_MODE=none: /mcp and the MCP endpoints accept requests without a token from any allowed host"
@@ -551,6 +556,11 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
         };
         let result = async {
             let info = app.owned(&env).await?;
+            // Also a desktop created before the installation's pids limit, or before it changed.
+            // Its networks are checked either way.
+            if let Err(e) = app.keep_pids_limit(&info).await {
+                tracing::debug!("Container {} pids limit: {e:#}", env.id);
+            }
             let network = app.inspect("network", &env.private_network).await?;
             App::check_network(&env, &network, true)?;
             let egress = app.inspect("network", &env.egress_network).await?;

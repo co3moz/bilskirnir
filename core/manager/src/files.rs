@@ -166,15 +166,7 @@ pub async fn write(
     )
     .await?;
     if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error(
-            if message.starts_with("CONFLICT:") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            message,
-        ));
+        return Err(Error::helper(&output));
     }
     Ok(Json(json!({"path":body.path,"bytes":size})))
 }
@@ -284,15 +276,7 @@ async fn file_ops(app: &App, cid: &str, arguments: &[&str]) -> Result<Value> {
     )
     .await?;
     if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error(
-            if message.starts_with("CONFLICT:") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            message,
-        ));
+        return Err(Error::helper(&output));
     }
     serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e).into())
 }
@@ -466,10 +450,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
     )
     .await?;
     if !output.status.success() {
-        return Err(Error(
-            StatusCode::BAD_REQUEST,
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
+        return Err(Error::helper(&output));
     }
     Ok(json!({
         "path": body.path,

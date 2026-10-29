@@ -269,6 +269,56 @@ struct JobStarted {
     job_id: String,
 }
 
+/// The error statuses any route can answer with, as the table of errors in `docs/API.md` names
+/// them (`error::Error`, `error::Fault`): status, the name of its response and what it means.
+const ERRORS: &[(&str, &str, &str)] = &[
+    (
+        "400",
+        "Refused",
+        "The request was refused: a value that a check does not accept, or something it names that Docker does not have. Change the request before sending it again.",
+    ),
+    (
+        "401",
+        "SignedOut",
+        "There is no session, or it ended, or the token is missing or wrong.",
+    ),
+    (
+        "403",
+        "Forbidden",
+        "Not allowed: a foreign `Origin`, the manager's own volumes, or a file the desktop user cannot open.",
+    ),
+    (
+        "404",
+        "NotFound",
+        "The record, or what the route names, does not exist.",
+    ),
+    (
+        "409",
+        "Conflict",
+        "It conflicts with the state of something, such as another operation still running on the same container, image or volume. Send it again once that has changed.",
+    ),
+    (
+        "500",
+        "ManagerFailed",
+        "The manager itself failed: its database, its disk, or a task that ended unexpectedly.",
+    ),
+    (
+        "502",
+        "DockerFailed",
+        "Docker failed at what it was asked, or a helper that the manager runs in a desktop or a helper container crashed. The message carries their answer.",
+    ),
+    (
+        "503",
+        "DockerUnreachable",
+        "Docker cannot be reached: its daemon is stopped or its socket is missing. The same request works once Docker is back.",
+    ),
+    (
+        "504",
+        "DockerTimedOut",
+        "A Docker command did not finish within its time limit.",
+    ),
+];
+
 /// The fields of a create request that `api::creation_request` fills with the installation's
 /// defaults when the request leaves them out. The defaults their type names are those of records
 /// saved before a field existed, which a request never gets.
@@ -349,6 +399,16 @@ fn document() -> Value {
         "paths": paths,
         "components": {
             "schemas": schemas,
+            "responses": ERRORS
+                .iter()
+                .map(|(_, name, description)| {
+                    let response = json!({
+                        "description": description,
+                        "content": {"application/json": {"schema": error}},
+                    });
+                    (name.to_string(), response)
+                })
+                .collect::<Map<_, _>>(),
             "parameters": {
                 "Request": {
                     "name": "X-Thoric-Request",
@@ -607,8 +667,14 @@ fn operation(
         }
     };
     let mut responses = answer;
+    let signed_out = matches!(route.access, Access::Public | Access::TransferLink);
+    for (status, name, _) in ERRORS {
+        if !(signed_out && *status == "401") {
+            responses[*status] = json!({"$ref": format!("#/components/responses/{name}")});
+        }
+    }
     responses["default"] = json!({
-        "description": "An error status, with its message.",
+        "description": "Another error status that the route names, such as 413 or 429, with its message.",
         "content": {"application/json": {"schema": error}},
     });
     operation["responses"] = responses;

@@ -24,6 +24,7 @@ use crate::{
     model::{LABEL, Mount, volume_name},
     process,
 };
+use anyhow::Context;
 use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
@@ -189,6 +190,48 @@ impl App {
             anyhow::bail!("No such volume: {name}");
         }
         Ok(volume)
+    }
+
+    /// Look up the volumes a request chose for a desktop: those of its settings, and those its
+    /// compose was given, each named with the folder it was chosen for.
+    pub(crate) async fn chosen_volumes(
+        &self,
+        mounts: &[Mount],
+        compose: &[&Mount],
+    ) -> anyhow::Result<()> {
+        for mount in mounts {
+            self.chosen_volume(&mount.volume)
+                .await
+                .context("Volume not found")?;
+        }
+        for mount in compose {
+            self.chosen_volume(&mount.volume).await.with_context(|| {
+                format!(
+                    "Volume not found: {}, chosen for {}. Create it first, or choose another volume",
+                    mount.volume, mount.target
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Hold the locks of the volumes `names` until the guards are dropped, each once and in name
+    /// order. A job that reads the container records to decide about a volume, or saves a record
+    /// that mounts one, takes them this way after its container's lock, so two such jobs never
+    /// wait on each other: a creation from its check of the volumes to its record, and a delete
+    /// from its check of the records to the removal. It waits as a job waits for its resource,
+    /// while a request that waits for a volume gives up after [`crate::jobs::HOLD_WAIT`].
+    pub(crate) async fn lock_volumes<'a>(
+        &self,
+        names: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<tokio::sync::OwnedMutexGuard<()>> {
+        let names = names.into_iter().collect::<std::collections::BTreeSet<_>>();
+        let mut guards = Vec::with_capacity(names.len());
+        for name in names {
+            let lock = self.resource_lock(&format!("volume:{name}"));
+            guards.push(lock.lock_owned().await);
+        }
+        guards
     }
 
     /// Run `command` in a helper and return what it printed. A helper's own message on stderr
@@ -417,6 +460,10 @@ fn helper_error(stderr: &[u8]) -> Error {
             StatusCode::BAD_GATEWAY,
             "The volume helper ended without saying why".into(),
         );
+    }
+    // Docker that cannot be reached, its daemon's failure or a helper that crashed.
+    if let Some(status) = crate::error::answer_status(&text) {
+        return Error(status, message);
     }
     if message.contains("[Errno 13]") {
         return Error(

@@ -32,7 +32,7 @@ impl App {
         )
         .await?;
         if !out.status.success() {
-            bail!("Docker: {}", String::from_utf8_lossy(&out.stderr).trim());
+            return Err(crate::error::docker_failure(&out.stderr, out.status.code()));
         }
         Ok(out.stdout)
     }
@@ -177,13 +177,10 @@ impl App {
         if manager_info["Config"]["Labels"]["thoric.manager"] != "true" {
             bail!("MANAGER_CONTAINER does not point to the manager");
         }
-        // Cheap checks come before a catalog image download that can take minutes.
+        // Cheap checks come before a catalog image download that can take minutes. The volumes
+        // are checked again under their locks before the record is saved.
         crate::volumes::refuse_manager_volumes(&manager_info, &spec.mounts)?;
-        for m in &spec.mounts {
-            self.chosen_volume(&m.volume)
-                .await
-                .context("Volume not found")?;
-        }
+        self.chosen_volumes(&spec.mounts, &[]).await?;
         self.ensure_catalog_image(&spec.image, job_id).await?;
         let image = self
             .inspect("image", &spec.image)
@@ -207,25 +204,23 @@ impl App {
             .as_ref()
             .map(|(_, pinned)| pinned.new_volumes(id))
             .unwrap_or_default();
-        for mount in compose_mounts
+        let chosen = compose_mounts
             .iter()
             .filter(|mount| !own_volumes.iter().any(|(_, own)| *own == mount.volume))
-        {
-            self.chosen_volume(&mount.volume)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Volume not found: {}, chosen for {}. Create it first, or choose another volume",
-                        mount.volume, mount.target
-                    )
-                })?;
-        }
+            .collect::<Vec<_>>();
         let all_mounts = spec
             .mounts
             .iter()
             .chain(&compose_mounts)
             .cloned()
             .collect::<Vec<_>>();
+        // The volumes' locks are held from this check until the record is saved, as a delete holds
+        // them from its look at the records until the removal: the delete either sees this record
+        // and keeps the volume, or removed it first, and then this check stops the creation.
+        let volumes = self
+            .lock_volumes(all_mounts.iter().map(|mount| mount.volume.as_str()))
+            .await;
+        self.chosen_volumes(&spec.mounts, &chosen).await?;
         image_volumes_mounted(&image, &all_mounts)?;
         let container = format!("thoric-{id}");
         let mut spec = spec;
@@ -252,8 +247,6 @@ impl App {
         let mut created = Vec::new();
         let recorded = async {
             for (parameter, volume) in &own_volumes {
-                let lock = self.resource_lock(&format!("volume:{volume}"));
-                let _guard = lock.lock().await;
                 if self.container_volume(id, parameter, volume).await? {
                     created.push(volume.to_string());
                     self.append_log(
@@ -277,6 +270,7 @@ impl App {
             }
             return Err(error);
         }
+        drop(volumes);
         let result = self.provision(&env, manager).await;
         if let Err(ref e) = result {
             let mut failed = env.clone();
@@ -522,6 +516,8 @@ impl App {
         if let Some(m) = env.spec.memory_mb {
             args.extend(["--memory".into(), format!("{m}m")]);
         }
+        // What keeps it from exhausting the host: its pids limit and a log that rotates.
+        args.extend(crate::desktop_limits::docker_args(&self.config));
         for m in env.mounts() {
             args.extend([
                 "--mount".into(),
@@ -613,34 +609,17 @@ impl App {
             Some(m) => Some(m["Id"].as_str().context("Missing manager ID")?.to_owned()),
             None => None,
         };
-        let mut removed = RemovedVolumes::default();
-        let mut doomed = Vec::new();
+        // Listed before anything is deleted; whether another container mounts one is read just
+        // before the removal.
+        let mut owned = Vec::new();
         if volumes {
-            let mut owned = self.owned_volumes(&env.id).await?;
+            owned = self.owned_volumes(&env.id).await?;
             // A label alone never hands over the manager's own volumes.
             owned.retain(|name| {
                 !manager_info
                     .as_ref()
                     .is_some_and(|m| crate::volumes::manager_volume(m, name))
             });
-            let others = self
-                .db
-                .list::<Container>(CONTAINERS)?
-                .into_iter()
-                .filter(|other| other.id != env.id)
-                .collect::<Vec<_>>();
-            let (free, shared) = crate::volumes::removable(owned, &others);
-            for (name, other) in shared {
-                self.append_log(
-                    job_id,
-                    &format!(
-                        "Keeping the volume {name}: \"{}\" mounts it too.",
-                        other.spec.name
-                    ),
-                )?;
-                removed.kept.push(name);
-            }
-            doomed = free;
         }
         let mut networks = Vec::new();
         // Preflight ownership and every endpoint BEFORE deleting the container's writable layer.
@@ -688,6 +667,31 @@ impl App {
         if let Err(error) = self.leave_groups(env).await {
             self.append_log(job_id, &format!("Keeping a group's network: {error:#}"))?;
         }
+        // The records are read under the volumes' locks, which a creation holds from its check of
+        // the volumes until its record is saved: a container saved meanwhile is seen and keeps
+        // the volume, and one still waiting for the lock finds the volume gone and stops.
+        let mut removed = RemovedVolumes::default();
+        let held = self.lock_volumes(owned.iter().map(String::as_str)).await;
+        let others = if owned.is_empty() {
+            Vec::new()
+        } else {
+            self.db.list::<Container>(CONTAINERS)?
+        };
+        let others = others
+            .into_iter()
+            .filter(|other| other.id != env.id)
+            .collect::<Vec<_>>();
+        let (doomed, shared) = crate::volumes::removable(owned, &others);
+        for (name, other) in shared {
+            self.append_log(
+                job_id,
+                &format!(
+                    "Keeping the volume {name}: \"{}\" mounts it too.",
+                    other.spec.name
+                ),
+            )?;
+            removed.kept.push(name);
+        }
         // The container is gone, so Docker refuses only a volume something else still uses.
         for name in doomed {
             match self.docker(&["volume", "rm", &name]).await {
@@ -701,6 +705,7 @@ impl App {
                 }
             }
         }
+        drop(held);
         if let Some(image) = &env.working_image {
             self.release_working_image(image, job_id).await?;
         }
