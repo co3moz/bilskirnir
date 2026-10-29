@@ -1,7 +1,7 @@
 # Every base image names an exact version, which Dependabot raises, and tests/test_pinned_versions.py
 # refuses a moving tag. The ui stage builds with the Bun the checks install, the chef stage with the
 # Rust release of rust-toolchain.toml.
-FROM oven/bun:1.4.3-slim AS ui
+FROM oven/bun:1.4.4-slim AS ui
 WORKDIR /build
 COPY THIRD_PARTY_NOTICES.md LICENSE ./
 WORKDIR /build/core/web
