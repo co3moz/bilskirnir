@@ -37,7 +37,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | Composes and their setup runs | `core/manager/src/compose.rs`, `core/manager/helpers/setup_runner.py`, `core/manager/tests/test_setup_runner.py`, `core/web/src/lib/compose.ts`, `core/web/src/components/dialogs/compose-dialog.tsx` |
 | Metadata and image catalog | `core/manager/src/db.rs`, `core/manager/src/model.rs`, `core/manager/src/catalog.rs`, `images/desktop/profiles.json` |
 | VNC, audio and microphone proxies | `core/manager/src/media.rs`, `core/manager/helpers/audio_output.py` |
-| MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs`, `core/manager/src/desktop_input/relative.rs` |
+| MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/mcp/` (the tool catalog and what each tool runs), `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs`, `core/manager/src/desktop_input/relative.rs` |
 | Background applications, windows, screenshots and waits | `core/manager/src/apps.rs`, `core/manager/helpers/app_runner.py`, `core/manager/helpers/app_control.py`, `core/manager/src/windows.rs`, `core/manager/src/capture.rs`, `core/manager/src/waits.rs` |
 | Text on the screen with Tesseract OCR | `core/manager/src/ocr.rs`, `core/manager/src/ocr/words.rs`, `core/manager/src/capture/pixels.rs` |
 | Recordings, their video and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/recording_video.py`, `core/manager/helpers/export_artifacts.py` |

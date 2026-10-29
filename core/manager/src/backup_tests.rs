@@ -187,9 +187,15 @@ fn the_routes_are_documented_and_out_of_mcps_reach() {
     ] {
         assert!(api.contains(route), "docs/API.md must list {route}");
     }
-    let mcp = include_str!("mcp.rs");
-    assert!(
-        !mcp.contains("backup"),
-        "core/manager/src/mcp.rs must not reach backups"
-    );
+    // The administrator's channel: its transport, its tool catalog and what each tool runs.
+    for (file, source) in [
+        ("mcp.rs", include_str!("mcp.rs")),
+        ("mcp/tools.rs", include_str!("mcp/tools.rs")),
+        ("mcp/dispatch.rs", include_str!("mcp/dispatch.rs")),
+    ] {
+        assert!(
+            !source.contains("backup"),
+            "core/manager/src/{file} must not reach backups"
+        );
+    }
 }
