@@ -1,5 +1,5 @@
 import * as React from "react"
-import NoVNC from "@novnc/novnc"
+import RFB from "@novnc/novnc"
 import {
   RiArrowLeftLine,
   RiPlayCircleLine,
@@ -47,12 +47,6 @@ import { t } from "@/lib/i18n"
 import { DesktopMedia, type MediaState } from "@/lib/media"
 import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
-
-// noVNC 1.5 is CommonJS that sets `exports.default`. This package is `"type": "module"`, so the
-// bundler applies Node's rules and hands over the exports object as the default import; take the
-// class from it, and still accept the class itself should the interop change.
-type RFB = NoVNC
-const RFB: typeof NoVNC = (NoVNC as unknown as { default?: typeof NoVNC }).default ?? NoVNC
 
 type Connection = "connecting" | "connected" | "disconnected" | "failed"
 const connectionText = (connection: Connection) => t(`desktop.connection.${connection}`)
