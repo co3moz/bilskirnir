@@ -490,3 +490,6 @@ pub fn now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;

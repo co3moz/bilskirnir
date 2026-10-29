@@ -28,7 +28,7 @@ fn desktop() -> Container {
 
 /// The `docker create` arguments of a desktop on an installation with this driver and limit.
 fn created(log_driver: Option<&str>, pids_limit: u64) -> String {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.log_driver = log_driver.map(str::to_owned);
     config.pids_limit = pids_limit;
@@ -119,7 +119,7 @@ fn fake_docker(info: &str) -> (Arc<App>, std::path::PathBuf) {
     let script = "#!/bin/sh\ncd 'DIR'\necho \"$*\" >> calls\n[ \"$1\" = info ] && cat info\ntrue\n";
     std::fs::write(&docker, script.replace("DIR", &dir.display().to_string())).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)
 }

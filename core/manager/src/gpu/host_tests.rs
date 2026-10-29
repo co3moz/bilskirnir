@@ -153,7 +153,7 @@ fn the_toolkit_is_its_runtime_or_a_cdi_device() {
 
 #[test]
 fn a_remote_daemon_shows_nothing() {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_socket = None;
     // Not even the toolkit its `docker info` names: the GPU it would serve is on another host.

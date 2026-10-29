@@ -405,7 +405,7 @@ fn a_compose_volume_has_its_path_and_its_volume_to_itself() {
 
 #[test]
 fn every_new_container_mounts_the_volumes_its_compose_was_given() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let pinned = Pinned {
         compose: installs(),
         values: installs().resolve(&BTreeMap::new(), "e").unwrap(),
@@ -506,7 +506,7 @@ fn a_container_left_without_a_volume_gets_one_of_its_own_and_pins_it() {
 
 #[test]
 fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let pinned = Pinned {
         compose: workspace(),
         values: workspace().resolve(&BTreeMap::new(), "e").unwrap(),
@@ -532,7 +532,7 @@ fn a_container_keeps_its_own_volume_whenever_it_is_created_again() {
 
 #[tokio::test]
 async fn a_container_from_a_snapshot_gets_a_volume_of_its_own() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     // A snapshot keeps the compose of its container, not the values that container was given.
     let source = Pinned {
         compose: workspace(),
@@ -615,7 +615,7 @@ fn data_saved_while_composes_were_templates_keeps_its_compose() {
 
 #[tokio::test]
 async fn a_new_container_pins_the_compose_and_its_values() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put("image", "unity", &image("unity", Some(unity())))
         .unwrap();
@@ -649,7 +649,7 @@ async fn a_new_container_pins_the_compose_and_its_values() {
 
 #[tokio::test]
 async fn compose_routes_keep_the_script_out_of_image_lists() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("image", "unity", &image("unity", None)).unwrap();
     let missing = get(State(app.clone()), Path("unity".into()))
         .await
@@ -683,7 +683,7 @@ async fn compose_routes_keep_the_script_out_of_image_lists() {
 
 #[test]
 fn a_restart_before_setup_finished_leaves_it_failed_for_retry() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let pinned = Pinned {
         compose: unity(),
         values: given(&[("UNITY_EMAIL", "a"), ("UNITY_PASSWORD", "b")]),

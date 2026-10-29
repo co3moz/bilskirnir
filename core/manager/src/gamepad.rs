@@ -213,3 +213,6 @@ pub async fn input(
 ) -> Result<Json<Value>> {
     Ok(Json(gamepad_input(&app, &id, &body).await?))
 }
+#[cfg(test)]
+#[path = "gamepad_tests.rs"]
+mod tests;

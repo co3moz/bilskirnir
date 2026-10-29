@@ -1,6 +1,6 @@
 //! Pins down which copies are refused before any job, helper or new volume exists.
 use super::*;
-use crate::tests::app;
+use crate::test_support::app;
 use axum::{body::Body, http::Request};
 use tower::ServiceExt;
 

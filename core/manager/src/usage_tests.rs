@@ -42,7 +42,7 @@ fn measure(cpu: f32, net_rx: f32) -> stats::Measure {
 
 #[tokio::test]
 async fn the_list_holds_known_containers_after_the_cursor() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put(CONTAINERS, "a", &record("a", Some(2.0)))
         .unwrap();
@@ -87,7 +87,7 @@ async fn the_list_holds_known_containers_after_the_cursor() {
 
 #[tokio::test]
 async fn one_container_is_found_by_its_record() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put(CONTAINERS, "a", &record("a", None)).unwrap();
     let Json(empty) = container(
         State(app.clone()),
@@ -122,7 +122,7 @@ async fn one_container_is_found_by_its_record() {
 
 #[tokio::test]
 async fn a_deleted_container_stays_listed_until_its_samples_age_out() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put(CONTAINERS, "a", &record("a", Some(2.0)))
         .unwrap();
@@ -191,7 +191,7 @@ async fn a_deleted_container_stays_listed_until_its_samples_age_out() {
 
 #[tokio::test]
 async fn an_unreachable_docker_is_reported_beside_the_history() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.usage.set_error(Some(
         "Docker Engine socket /var/run/docker.sock: refused".into(),
     ));
@@ -223,7 +223,7 @@ fn a_summary_gives_latest_average_and_peak() {
 
 #[tokio::test]
 async fn the_tool_summarizes_recent_seconds() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db
         .put(CONTAINERS, "a", &record("a", Some(1.5)))
         .unwrap();
@@ -274,7 +274,7 @@ async fn the_tool_summarizes_recent_seconds() {
 
 #[tokio::test]
 async fn both_routes_are_served_and_documented() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put(CONTAINERS, "a", &record("a", None)).unwrap();
     for path in [
         "/api/usage",

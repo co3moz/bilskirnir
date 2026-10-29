@@ -230,6 +230,21 @@ pub(crate) fn finish(
     reported
 }
 
+impl App {
+    /// Add a line to the job's log; only the new text is written.
+    pub fn append_log(&self, id: &str, line: &str) -> anyhow::Result<()> {
+        self.db.append_job_log(id, &format!("{line}\n"))
+    }
+    /// Replace the job's measured progress; `None` once the measured step is over.
+    pub fn set_progress(&self, id: &str, progress: Option<Value>) -> anyhow::Result<()> {
+        let mut job: Job = self.db.get("job", id)?;
+        job.progress = progress;
+        self.db.put("job", id, &job)?;
+        self.events.progress(id, job.progress.as_ref());
+        Ok(())
+    }
+}
+
 /// How long a request waits for a resource a job holds before answering that it is busy.
 pub(crate) const HOLD_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 

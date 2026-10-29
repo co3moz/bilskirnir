@@ -296,3 +296,6 @@ pub(crate) async fn save_file(
         _ = revoked => Err(Error(StatusCode::UNAUTHORIZED, "Session expired. Sign in again.".into())),
     }
 }
+#[cfg(test)]
+#[path = "uploads_tests.rs"]
+mod tests;

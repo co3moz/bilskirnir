@@ -25,7 +25,7 @@ async fn readiness(app: Arc<App>) -> (StatusCode, Value) {
 #[tokio::test]
 async fn without_docker_the_manager_is_not_ready() {
     // The test manager's Docker CLI does not exist.
-    let (status, answer) = readiness(crate::tests::app(true)).await;
+    let (status, answer) = readiness(crate::test_support::app(true)).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
         answer,
@@ -42,7 +42,7 @@ fn with_cli(script: &str) -> (Arc<App>, std::path::PathBuf) {
     let docker = dir.join("docker");
     std::fs::write(&docker, format!("#!/bin/sh\n{script}\n")).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)
 }
@@ -103,7 +103,7 @@ fn engine(answer: Option<&'static str>) -> std::path::PathBuf {
 #[tokio::test]
 async fn docker_answers_through_its_socket() {
     let dir = engine(Some("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"));
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     Arc::get_mut(&mut app).unwrap().config.docker_socket = Some(dir.join("docker.sock"));
     assert!(docker(&app).await);
 

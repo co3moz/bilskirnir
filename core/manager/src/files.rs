@@ -550,3 +550,6 @@ pub async fn download(
     )
         .into_response())
 }
+#[cfg(test)]
+#[path = "files_tests.rs"]
+mod tests;
