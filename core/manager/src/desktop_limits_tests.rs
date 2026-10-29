@@ -111,14 +111,12 @@ fn a_container_is_updated_only_when_its_limit_differs() {
 /// A Docker CLI that answers `docker info` and logs every call.
 #[cfg(unix)]
 fn fake_docker(info: &str) -> (Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-limits-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("info"), info).unwrap();
     let docker = dir.join("docker");
     let script = "#!/bin/sh\ncd 'DIR'\necho \"$*\" >> calls\n[ \"$1\" = info ] && cat info\ntrue\n";
-    std::fs::write(&docker, script.replace("DIR", &dir.display().to_string())).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script.replace("DIR", &dir.display().to_string()));
     let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)

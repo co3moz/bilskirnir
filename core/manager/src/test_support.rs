@@ -1,6 +1,7 @@
 //! Fixtures the tests of several modules share: an installation without Docker on an in-memory
-//! database, its root MCP channel and a request to it, a container's settings, and a Docker CLI
-//! stand-in that answers as a manager with a data volume of its own.
+//! database, its root MCP channel and a request to it, a container's settings, a writer of the
+//! shell scripts tests run as stand-ins for programs, and a Docker CLI stand-in that answers as
+//! a manager with a data volume of its own.
 use crate::{
     App, config, db, desktop_limits, desktop_mcp, events, human, layers, model, outbound, releases,
     router, transfers, usage,
@@ -160,6 +161,30 @@ pub(crate) async fn mcp_request(
     (status, serde_json::from_slice(&bytes).unwrap())
 }
 
+/// Writes `text` to `path` as an executable script, such as a stand-in for the Docker CLI. A
+/// shell writes it and marks it executable, so this process never holds it open for writing: a
+/// child another test forks meanwhile keeps a copy of such a handle until its own exec, and
+/// running the script before that fails with "Text file busy".
+#[cfg(unix)]
+pub(crate) fn write_script(path: &std::path::Path, text: &str) {
+    let output = std::process::Command::new("sh")
+        .args([
+            "-c",
+            "printf '%s' \"$2\" > \"$1\" && chmod 755 \"$1\"",
+            "sh",
+        ])
+        .arg(path)
+        .arg(text)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "could not write {}: {}",
+        path.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// A Docker CLI stand-in for a manager named `thoric-manager` whose data volume is
 /// `thoric-data`. It answers the manager's inspect, lists no containers, lists that volume
 /// and `project` as `GET /api/volumes` asks for them, or only `project` under the default
@@ -167,7 +192,6 @@ pub(crate) async fn mcp_request(
 /// carries none, fails everything else and records its arguments in the returned file.
 #[cfg(unix)]
 pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-docker-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let calls = dir.join("calls");
@@ -178,9 +202,9 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
         "Mounts": [{"Type": "volume", "Name": "thoric-data", "Destination": "/data"}],
     }]);
     let docker = dir.join("docker");
-    std::fs::write(
+    write_script(
         &docker,
-        format!(
+        &format!(
             "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'container inspect thoric-manager') echo '{manager}' ;;\n  'ps -a'*) ;;\n  'volume ls --format {{{{json .}}}}') echo '{data}'; echo '{project}' ;;\n  'volume ls --filter label=thoric.managed=true --format {{{{json .}}}}') echo '{project}' ;;\n  'volume inspect project') echo '{labeled}' ;;\n  'volume inspect outside') echo '{outside}' ;;\n  *) exit 1 ;;\nesac\n",
             calls = calls.display(),
             data = serde_json::json!({"Name": "thoric-data", "Driver": "local"}),
@@ -190,9 +214,7 @@ pub(crate) fn manager_docker(app: &mut Arc<App>) -> std::path::PathBuf {
             ]),
             outside = serde_json::json!([{"Name": "outside", "Labels": null}]),
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let config = &mut Arc::get_mut(app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.manager = Some("thoric-manager".into());

@@ -108,7 +108,6 @@ fn a_container_has_an_address_on_each_network() {
 /// Compose project `thoric` and for the running `https` service `listed` names.
 #[cfg(unix)]
 fn fake_docker(listed: &str) -> (Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!(
         "thoric-forwarded-{}",
         uuid::Uuid::new_v4().simple()
@@ -132,8 +131,7 @@ fn fake_docker(listed: &str) -> (Arc<App>, std::path::PathBuf) {
         dir.display()
     );
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();

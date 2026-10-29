@@ -435,7 +435,6 @@ async fn without_docker_sizes_are_null_and_layers_are_refused() {
 /// the snapshot only while `present` exists, and records its arguments in `calls`.
 #[cfg(unix)]
 fn layered_docker(app: &mut Arc<App>) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-layers-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut snapshot = desktop_lines(DESKTOP);
@@ -472,8 +471,7 @@ esac
 "#
     .replace("DIR", &dir.display().to_string());
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     Arc::get_mut(app).unwrap().config.docker_bin = docker.display().to_string();
     let record = crate::model::ImageRecord {
         id: "snap".into(),

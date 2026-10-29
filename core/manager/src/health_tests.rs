@@ -36,12 +36,10 @@ async fn without_docker_the_manager_is_not_ready() {
 /// A manager whose Docker CLI is `script`, in a new directory of its own.
 #[cfg(unix)]
 fn with_cli(script: &str) -> (Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-health-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
-    std::fs::write(&docker, format!("#!/bin/sh\n{script}\n")).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &format!("#!/bin/sh\n{script}\n"));
     let mut app = crate::test_support::app(true);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)

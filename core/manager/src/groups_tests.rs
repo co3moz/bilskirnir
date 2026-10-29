@@ -118,7 +118,6 @@ fn the_list_says_whether_vnc_stays_in_the_private_network() {
 /// A Docker CLI that keeps networks as files and logs every call.
 #[cfg(unix)]
 fn fake_docker() -> (std::sync::Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-groups-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
@@ -136,8 +135,7 @@ case "$1 $2" in
   'network rm') rm "net-$3" ;;
 esac
 "#;
-    std::fs::write(&docker, script.replace("DIR", &dir.display().to_string())).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script.replace("DIR", &dir.display().to_string()));
     let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();

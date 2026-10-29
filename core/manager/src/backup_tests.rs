@@ -84,7 +84,6 @@ pub(super) fn endpoint(name: &str, containers: &[&str]) -> Endpoint {
 /// manager container is `thoric-manager` with its data volume `thoric-data`.
 #[cfg(unix)]
 pub(super) fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-backup-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
@@ -104,8 +103,7 @@ pub(super) fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathB
         dir.display()
     );
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();

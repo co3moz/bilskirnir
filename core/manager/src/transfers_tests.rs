@@ -486,19 +486,16 @@ fn every_operation_is_offered_and_documented() {
 /// a download's `file_ops.py stat` probe finds a five-byte file and its stream reads `hello`.
 #[cfg(unix)]
 fn docker(app: &mut Arc<App>) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-transfers-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
-    std::fs::write(
+    crate::test_support::write_script(
         &docker,
-        format!(
+        &format!(
             "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') echo '[{{\"Id\":\"c0ffee\",\"Config\":{{\"Labels\":{{\"thoric.managed\":\"true\",\"thoric.environment\":\"e\"}}}},\"State\":{{\"Running\":true}},\"Mounts\":[]}}]' ;;\n  'exec --interactive') cat > '{dir}/uploaded' ;;\n  'exec --user') if [ \"$8\" = stat ]; then echo '{{\"type\":\"file\",\"size\":5}}'; else printf hello; fi ;;\n  *) exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     // An upload is staged under the data folder before it is handed to the desktop.
     std::fs::create_dir_all(dir.join("uploads")).unwrap();
     let config = &mut Arc::get_mut(app).unwrap().config;

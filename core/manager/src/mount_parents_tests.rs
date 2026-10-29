@@ -154,7 +154,6 @@ fn a_handed_over_folder_keeps_its_mode_and_time() {
 /// endless zeros, records each call and keeps what is copied into the container.
 #[cfg(unix)]
 fn docker(app: &mut std::sync::Arc<App>, tars: &[(&str, Vec<u8>)]) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-parents-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut cases = String::new();
@@ -172,15 +171,13 @@ fn docker(app: &mut std::sync::Arc<App>, tars: &[(&str, Vec<u8>)]) -> std::path:
         );
     }
     let docker = dir.join("docker");
-    std::fs::write(
+    crate::test_support::write_script(
         &docker,
-        format!(
+        &format!(
             "#!/bin/sh\necho \"$*\" >> '{dir}/calls'\ncase \"$*\" in\n{cases}  'cp - thoric-e:/home/desktop') cat > '{dir}/written.tar' ;;\n  *) echo \"Error response from daemon: unexpected $*\" >&2; exit 1 ;;\nesac\n",
             dir = dir.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     std::sync::Arc::get_mut(app).unwrap().config.docker_bin = docker.display().to_string();
     dir
 }
