@@ -145,6 +145,46 @@ Agent access is off in this setup. [Enable agent access](docs/MCP.md#enable-agen
 - [Interface design](docs/DESIGN.md): visual choices and guidance for interface changes.
 - [Verification notes](docs/BUG_HUNT.md): the October 2026 bug audits, what they checked and what they did not prove.
 
+## See it in action
+
+Six short recordings of a new installation, in the order you would use it. The first four are the dashboard; in the last two an agent works over MCP while the dashboard shows what it does. The bar under each recording says what is happening.
+
+### Install a template
+
+![On the Templates page: a search for chrome, Install on Chrome with Playwright MCP, a name, then the build job running step by step until the image is ready](docs/screenshots/walkthrough-template.gif)
+
+A template is a ready-made desktop from the project wiki. Installing one asks for a name and a base image, then builds the image as a job whose steps and log you can follow. The build is sped up in the recording.
+
+### Start a desktop and use it
+
+![New container from the Chrome image, the creation job, the running container's preview, then its desktop in the browser with Google Chrome open on Wikipedia](docs/screenshots/walkthrough-desktop.gif)
+
+A container from that image comes with an MCP endpoint of its own. **Connect** opens its desktop in the browser, where you work as on any computer.
+
+### Connect your agent
+
+![The container's MCP endpoint and its 97 tools, the desktop's Playwright server among them, then a new token with the settings for Claude Code, Codex, VS Code and Cursor](docs/screenshots/walkthrough-connect.gif)
+
+The endpoint offers Thoric's tools for that one desktop and the tools of the MCP servers inside it. Its token is shown once, with the settings your client needs.
+
+### Try a tool before your agent does
+
+![The MCP inspector connected to the endpoint runs Playwright's browser_navigate, then Thoric's screenshot, which shows the page Playwright opened](docs/screenshots/walkthrough-inspector.gif)
+
+The MCP inspector lists every tool of an endpoint, a desktop server or `/mcp`, and runs one with a form made from its schema.
+
+### Let the agent do it all
+
+![An agent installs the template, starts a desktop, opens Chrome, searches Wikipedia and finds a word on the page, while the dashboard shows each step](docs/screenshots/walkthrough-agent.gif)
+
+The same steps over MCP alone: the agent reads the template list, builds the image and creates a container, then works in its desktop with `launch_application`, `desktop_input`, `wait_for_condition` and `find_text`.
+
+### Answer when your agent asks
+
+![The agent asks whether a refund goes back to the card or as store credit; the person answers above the desktop, the agent finishes the form, and the activity log lists its calls](docs/screenshots/walkthrough-ask.gif)
+
+`request_human` shows a question above every dashboard page and waits for your answer, or for you to take over the desktop. The activity log keeps every tool call an agent made.
+
 ## License
 
 Copyright (C) 2026 Thoric contributors
