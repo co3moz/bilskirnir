@@ -12,7 +12,7 @@ Thoric uses the components below to provide its browser desktop, GPU rendering a
 | [VirtualGL](https://github.com/VirtualGL/virtualgl) 3.1.5 | Upstream licenses. The Debian package installs its license files under `/opt/VirtualGL`. |
 | TigerVNC, XFCE, GNOME, Mesa, PulseAudio and other Ubuntu packages | Each package retains its own license. The desktop images include package documentation under `/usr/share/doc`. Recordings are encoded by GStreamer (LGPL-2.1-or-later) with its `x264enc` plugin from `gstreamer1.0-plugins-ugly`, which links x264 (GPL-2.0-or-later). |
 | Rust dependencies | Each dependency retains its own license. `Cargo.lock` records the exact versions used. |
-| [Docker CLI and Buildx](https://github.com/docker/cli) | Apache-2.0, Copyright Docker, Inc. The manager image copies the `docker` and `docker-buildx` binaries from the `docker:28-cli` image. |
+| [Docker CLI and Buildx](https://github.com/docker/cli) | Apache-2.0, Copyright Docker, Inc. The manager image copies the `docker` and `docker-buildx` binaries from a Docker 28 `docker:<version>-cli` image, the release `core/manager/Dockerfile` names. |
 | [Moby](https://github.com/moby/moby) seccomp profile | Apache-2.0. `images/desktop/seccomp.json` is Docker's default seccomp profile with one rule added, so browser sandboxes can create user namespaces. |
 | [Rust MCP SDK (rmcp)](https://github.com/modelcontextprotocol/rust-sdk) 3.5.1 | Apache-2.0. Provides the embedded MCP protocol and HTTP transport. |
 
