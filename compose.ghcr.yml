@@ -67,7 +67,7 @@ services:
 
   https:
     profiles: [https]
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-8443}:443"

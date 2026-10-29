@@ -1,8 +1,8 @@
 # Root filesystem for the Thoric WSL distribution: Ubuntu 24.04 with Docker Engine, Compose,
 # Buildx, the NVIDIA Container Toolkit and the Thoric installation files. The image is
 # exported with `packaging/wsl/build.sh` into a `.wsl` package that `wsl --install --from-file`
-# accepts.
-FROM ubuntu:24.04
+# accepts. The base is a dated build of Ubuntu 24.04, which Dependabot raises.
+FROM ubuntu:noble-20261024.1
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg sudo systemd systemd-sysv dbus iproute2 iptables \
