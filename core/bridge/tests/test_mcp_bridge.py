@@ -18,9 +18,12 @@ bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}\n\n'
+LOG = {"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "data": "logged"}}
 # What rmcp sends first on a session's stream, and between events.
 PRIMING = b"id: 0\nretry: 3000\ndata:\n\n"
 KEEP_ALIVE = b": keep-alive\n\n"
+INITIALIZE = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}\n'
+INITIALIZED = b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
 
 
 class Source:
@@ -49,6 +52,12 @@ class BridgeTest(unittest.TestCase):
         self.stream_replies = []
         self.keep_open = False
         self.closing = threading.Event()
+        # The sessions each initialize opens in turn, those the server has forgotten, the
+        # requests it answers 404 in any case, and the capabilities initialize answers with.
+        self.next_sessions = []
+        self.forgotten = set()
+        self.refused = lambda message, session: False
+        self.capabilities = None
         received = self.requests
         test = self
 
@@ -56,38 +65,50 @@ class BridgeTest(unittest.TestCase):
             def log_message(self, *_):
                 pass
 
+            def empty(self, status):
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
             def do_GET(self):
                 test.streams.append(dict(self.headers))
-                reply = test.stream_replies.pop(0) if test.stream_replies else 405
+                session = self.headers.get("Mcp-Session-Id")
+                if session in test.forgotten:
+                    reply = 404
+                else:
+                    reply = test.stream_replies.pop(0) if test.stream_replies else 405
                 if isinstance(reply, int):
-                    self.send_response(reply)
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
+                    self.empty(reply)
                     return
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
                 self.wfile.write(reply)
                 self.wfile.flush()
-                if test.keep_open:
-                    test.closing.wait(10)
+                # The stream stays open until the server forgets its session.
+                while test.keep_open and session not in test.forgotten and not test.closing.wait(0.01):
+                    pass
 
             def do_POST(self):
                 message = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 received.append((message, dict(self.headers)))
                 if self.headers.get("Authorization") != test.authorization:
-                    self.send_response(401)
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
+                    self.empty(401)
+                    return
+                session = self.headers.get("Mcp-Session-Id")
+                if session in test.forgotten or test.refused(message, session):
+                    self.empty(404)
                     return
                 if message.get("method", "").startswith("notifications/"):
-                    self.send_response(202)
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
+                    self.empty(202)
                     return
                 result = {"jsonrpc": "2.0", "id": message.get("id"), "result": {"ok": True}}
                 if message["method"] == "initialize":
+                    if test.next_sessions:
+                        test.session_id = test.next_sessions.pop(0)
                     result["result"]["protocolVersion"] = bridge.PROTOCOL
+                    if test.capabilities:
+                        result["result"]["capabilities"] = test.capabilities
                 data = json.dumps(result).encode()
                 stream = message["method"] == "stream"
                 if stream:
@@ -223,7 +244,8 @@ class BridgeTest(unittest.TestCase):
                 b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n',
             ])
             self.wait_for(lambda: len(self.streams) == 3)
-            # The 404 ends the listener: no fourth request however long the bridge runs.
+            # The 404 ends the listener: without a request that renews the session, no fourth
+            # request however long the bridge runs.
             time.sleep(0.3)
             source.close()
             thread.join(10)
@@ -231,6 +253,126 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual([m.get("method") for m in self.lines(output)],
                          [None, "notifications/tools/list_changed", "notifications/tools/list_changed"])
         self.assertEqual(errors.getvalue(), "")
+
+    @staticmethod
+    def sent(requests):
+        return [(message.get("method"), headers.get("Mcp-Session-Id")) for message, headers in requests]
+
+    def test_a_forgotten_session_is_opened_again_and_the_request_sent_once_more(self):
+        # An endpoint forgets a session after five idle minutes, or all of them when the manager
+        # restarts, and answers 404 to its ID from then on.
+        self.next_sessions = ["session-1", "session-2"]
+        self.capabilities = {"tools": {"listChanged": True}}
+        self.keep_open = True
+        self.stream_replies = [PRIMING, PRIMING + b"data: " + json.dumps(LOG).encode() + b"\n\n"]
+        with patch.object(bridge, "REOPEN_AFTER", 0.05):
+            source, output, errors, thread = self.start([INITIALIZE, INITIALIZED])
+            self.wait_for(lambda: len(self.streams) == 1)
+            self.forgotten.add("session-1")
+            # The forgotten session's stream ends, and opened again it is refused.
+            self.wait_for(lambda: len(self.streams) == 2)
+            source.lines.put(b'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n')
+            self.wait_for(lambda: len(self.lines(output)) == 4 and len(self.streams) == 3)
+            source.close()
+            thread.join(10)
+        replies = self.lines(output)
+        # The new session's stream reaches the client, whenever it comes.
+        self.assertIn(LOG, replies)
+        # The answer to the initialize sent again stays with the bridge, and the client lists the
+        # tools again, since nothing could tell of a change while there was no session.
+        capabilities = {"tools": {"listChanged": True}}
+        self.assertEqual([reply for reply in replies if reply != LOG], [
+            {"jsonrpc": "2.0", "id": 1, "result": {"ok": True, "protocolVersion": bridge.PROTOCOL,
+                                                   "capabilities": capabilities}},
+            {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"},
+            {"jsonrpc": "2.0", "id": 2, "result": {"ok": True}},
+        ])
+        self.assertEqual(errors.getvalue(), "")
+        self.assertEqual(self.sent(self.requests), [
+            ("initialize", None), ("notifications/initialized", "session-1"), ("tools/list", "session-1"),
+            ("initialize", None), ("notifications/initialized", "session-2"), ("tools/list", "session-2"),
+        ])
+        # The client's own initialize, with the protocol the bridge speaks.
+        self.assertEqual(self.requests[3][0], self.requests[0][0])
+        self.assertEqual(self.requests[3][0]["params"]["protocolVersion"], bridge.PROTOCOL)
+        self.assertEqual([headers["Mcp-Session-Id"] for headers in self.streams],
+                         ["session-1", "session-1", "session-2"])
+
+    def test_a_request_refused_in_the_new_session_too_fails_instead_of_renewing_again(self):
+        self.next_sessions = ["session-1", "session-2"]
+        self.refused = lambda message, session: session is not None and message.get("method") == "tools/call"
+        source, output, errors, thread = self.start([INITIALIZE, INITIALIZED])
+        self.wait_for(lambda: len(self.lines(output)) == 1 and len(self.requests) == 2)
+        source.lines.put(b'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"screenshot"}}\n')
+        self.wait_for(lambda: len(self.lines(output)) == 2)
+        time.sleep(0.3)
+        # The renewed session serves the next request.
+        source.lines.put(b'{"jsonrpc":"2.0","id":3,"method":"ping"}\n')
+        self.wait_for(lambda: len(self.lines(output)) == 3)
+        source.close()
+        thread.join(10)
+        replies = self.lines(output)
+        self.assertEqual(replies[1]["id"], 2)
+        self.assertEqual(replies[1]["error"]["code"], -32000)
+        self.assertIn("404", replies[1]["error"]["message"])
+        # A server that does not say it tells of tool changes is not said to have changed them.
+        self.assertEqual(replies[2], {"jsonrpc": "2.0", "id": 3, "result": {"ok": True}})
+        self.assertEqual(errors.getvalue(), "")
+        self.assertEqual(self.sent(self.requests), [
+            ("initialize", None), ("notifications/initialized", "session-1"), ("tools/call", "session-1"),
+            ("initialize", None), ("notifications/initialized", "session-2"), ("tools/call", "session-2"),
+            ("ping", "session-2"),
+        ])
+
+    def test_a_session_that_cannot_be_opened_again_fails_each_request_after_one_attempt(self):
+        self.next_sessions = ["session-1"]
+        source, output, errors, thread = self.start([INITIALIZE, INITIALIZED])
+        self.wait_for(lambda: len(self.lines(output)) == 1 and len(self.requests) == 2)
+        # As when the endpoint was deleted: the administrator's token is told 404.
+        self.forgotten.add("session-1")
+        self.refused = lambda message, session: message.get("method") == "initialize"
+        for n in (2, 3):
+            source.lines.put(b'{"jsonrpc":"2.0","id":%d,"method":"ping"}\n' % n)
+            self.wait_for(lambda: len(self.lines(output)) == n)
+        source.close()
+        thread.join(10)
+        replies = self.lines(output)[1:]
+        self.assertEqual([reply["id"] for reply in replies], [2, 3])
+        self.assertTrue(all(reply["error"]["code"] == -32000 for reply in replies))
+        self.assertEqual(errors.getvalue(), "")
+        self.assertEqual(self.sent(self.requests), [
+            ("initialize", None), ("notifications/initialized", "session-1"),
+            ("ping", "session-1"), ("initialize", None),
+            ("ping", "session-1"), ("initialize", None),
+        ])
+
+    def test_requests_refused_together_share_one_renewal(self):
+        self.next_sessions = ["session-1", "session-2"]
+        source, output, errors, thread = self.start([INITIALIZE, INITIALIZED])
+        self.wait_for(lambda: len(self.lines(output)) == 1 and len(self.requests) == 2)
+        self.forgotten.add("session-1")
+        for n in range(2, 8):
+            source.lines.put(b'{"jsonrpc":"2.0","id":%d,"method":"ping"}\n' % n)
+        self.wait_for(lambda: len(self.lines(output)) == 7)
+        source.close()
+        thread.join(10)
+        replies = self.lines(output)[1:]
+        self.assertEqual(sorted(reply["id"] for reply in replies), list(range(2, 8)))
+        self.assertTrue(all(reply["result"] == {"ok": True} for reply in replies))
+        self.assertEqual(errors.getvalue(), "")
+        methods = [method for method, _ in self.sent(self.requests)]
+        self.assertEqual(methods.count("initialize"), 2)
+        self.assertEqual(methods.count("notifications/initialized"), 2)
+        retried = [session for method, session in self.sent(self.requests) if method == "ping"]
+        self.assertEqual(retried.count("session-2"), 6)
+
+    def test_a_404_without_a_session_is_the_clients_answer(self):
+        # /mcp names no session, and 404 there is not a forgotten one.
+        self.refused = lambda message, session: True
+        replies, errors = self.invoke(INITIALIZE + b'{"jsonrpc":"2.0","id":2,"method":"ping"}\n')
+        self.assertEqual([(reply["id"], reply["error"]["code"]) for reply in replies], [(1, -32000), (2, -32000)])
+        self.assertEqual(errors, "")
+        self.assertEqual(self.sent(self.requests), [("initialize", None), ("ping", None)])
 
     def test_mcp_without_a_session_opens_no_stream(self):
         replies, _ = self.invoke(b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'

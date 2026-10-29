@@ -1052,6 +1052,8 @@ export const fr: Messages = {
   "settings.about.DESKTOP_IMAGE": "L'image que le formulaire de création choisit d'abord.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Permet aux navigateurs et aux applications Electron des bureaux de lancer leur sandbox.",
+  "settings.about.DESKTOP_PIDS_LIMIT":
+    "Le nombre maximal de processus et de threads d'un bureau, au moins 1024 ; 0 pour aucune limite.",
   "settings.about.AUDIO_ENABLED": "Le son du bureau dans le navigateur.",
   "settings.about.MICROPHONE_ENABLED": "Le micro du navigateur dans les bureaux ; requiert le son.",
   "settings.about.INTERNET_ENABLED": "Si les conteneurs peuvent avoir accès à Internet.",

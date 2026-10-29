@@ -151,10 +151,12 @@ fn the_toolkit_is_its_runtime_or_a_cdi_device() {
     assert!(!toolkit(&json!({"Runtimes": {"runc": {}}})));
 }
 
-#[tokio::test]
-async fn a_remote_daemon_shows_nothing() {
+#[test]
+fn a_remote_daemon_shows_nothing() {
     let mut app = crate::tests::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_socket = None;
-    assert_eq!(Host::detect(config).await, Host::default());
+    // Not even the toolkit its `docker info` names: the GPU it would serve is on another host.
+    let info = json!({"Runtimes": {"nvidia": {"path": "nvidia-container-runtime"}}});
+    assert_eq!(Host::detect(config, Some(&info)), Host::default());
 }

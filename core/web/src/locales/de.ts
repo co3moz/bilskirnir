@@ -1053,6 +1053,8 @@ export const de: Messages = {
   "settings.about.DESKTOP_IMAGE": "Das Image, das das Erstellformular zuerst auswählt.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Lässt Browser und Electron-Apps in Desktops ihre Sandbox starten.",
+  "settings.about.DESKTOP_PIDS_LIMIT":
+    "Wie viele Prozesse und Threads ein Desktop höchstens ausführt, mindestens 1024; 0 für keine Grenze.",
   "settings.about.AUDIO_ENABLED": "Desktop-Ton im Browser.",
   "settings.about.MICROPHONE_ENABLED": "Das Mikrofon des Browsers in Desktops; braucht Ton.",
   "settings.about.INTERNET_ENABLED": "Ob Container Internetzugang haben dürfen.",

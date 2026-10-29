@@ -1058,6 +1058,8 @@ export const en = {
   "settings.about.DESKTOP_IMAGE": "The image the create form selects first.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Lets browsers and Electron apps in desktops start their sandbox.",
+  "settings.about.DESKTOP_PIDS_LIMIT":
+    "The most processes and threads one desktop may run, at least 1024; 0 for no limit.",
   "settings.about.AUDIO_ENABLED": "Desktop sound in the browser.",
   "settings.about.MICROPHONE_ENABLED": "The browser's microphone in desktops; needs sound.",
   "settings.about.INTERNET_ENABLED": "Whether containers may have internet access.",

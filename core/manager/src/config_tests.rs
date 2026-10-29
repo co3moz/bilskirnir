@@ -346,6 +346,16 @@ fn a_change_is_read_as_the_manager_would_start_with_it() {
             .check_changes(&change(&[("WSL_GPU", "false")]))
             .is_empty()
     );
+    // A pids limit no desktop could start with is refused before the manager restarts.
+    let problems = config.check_changes(&change(&[("DESKTOP_PIDS_LIMIT", "100")]));
+    assert!(
+        problems.fields["DESKTOP_PIDS_LIMIT"].contains("from 1024"),
+        "{problems}"
+    );
+    let changed = config
+        .with_changes(&change(&[("DESKTOP_PIDS_LIMIT", "0")]))
+        .unwrap();
+    assert_eq!((config.pids_limit, changed.pids_limit), (16384, 0));
 }
 
 /// The Settings page puts each `<NAME>_DEFAULT` beside its `<NAME>_ENABLED` and switches it off

@@ -44,9 +44,16 @@ pub struct Config {
     /// The GPU devices the Docker host showed when the manager started. Not a setting: the GPU
     /// settings allow the routes, and these decide which of them desktops get; see [`crate::gpu`].
     pub gpu_host: crate::gpu::Host,
+    /// The logging driver Docker gives a container that names none, as `docker info` said when
+    /// the manager started, or `None` when it did not answer. Not a setting: desktops get log
+    /// options of their own only under json-file; see [`crate::desktop_limits`].
+    pub log_driver: Option<String>,
     /// Whether desktops may create user namespaces, which is how Chromium-based browsers and
     /// Electron applications sandbox their processes. See [`Config::seccomp_profile`].
     pub user_namespaces: bool,
+    /// How many processes and threads a desktop may have, `0` for no limit; see
+    /// [`crate::desktop_limits`].
+    pub pids_limit: u64,
     /// The names `ALLOWED_HOSTS` adds to the hosts the manager answers.
     pub allowed_hosts: Vec<String>,
     /// The name of the optional HTTPS service, which the manager answers as well. Compose passes
@@ -116,6 +123,7 @@ pub(crate) const EDITABLE: &[&str] = &[
     "ALLOWED_HOSTS",
     "DESKTOP_IMAGE",
     "DESKTOP_USER_NAMESPACES",
+    "DESKTOP_PIDS_LIMIT",
     "WSL_GPU",
     "NVIDIA_COMPUTE",
     "GPU_ADAPTER",
@@ -405,7 +413,9 @@ impl Config {
             dri_gpu: flag("DRI_GPU", true)?,
             adapter: var("GPU_ADAPTER").unwrap_or_default(),
             gpu_host: crate::gpu::Host::default(),
+            log_driver: None,
             user_namespaces: flag("DESKTOP_USER_NAMESPACES", true)?,
+            pids_limit: crate::desktop_limits::pids_limit(var("DESKTOP_PIDS_LIMIT").as_deref())?,
             allowed_hosts: host_names(var("ALLOWED_HOSTS").as_deref()),
             desktop_host: host_names(var("DESKTOP_HOST").as_deref())
                 .into_iter()
@@ -489,6 +499,7 @@ impl Config {
             ),
             value("DESKTOP_IMAGE", json!(self.base_image)),
             value("DESKTOP_USER_NAMESPACES", json!(self.user_namespaces)),
+            value("DESKTOP_PIDS_LIMIT", json!(self.pids_limit)),
             value("WSL_GPU", json!(self.wsl_gpu)),
             value("NVIDIA_COMPUTE", json!(self.cuda)),
             value("DRI_GPU", json!(self.dri_gpu)),
