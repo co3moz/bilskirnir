@@ -103,6 +103,27 @@ test("a pending badge says whether the job waits, downloads or creates", () => {
   )
 })
 
+test("a build reads as downloading only while it downloads its base image", () => {
+  assert.equal(pendingState({ kind: "build", status: "queued" }), "queued")
+  // The base stage downloads a catalog image; its first count has no layers announced yet.
+  const started = { current: 0, total: 0, layers: 0, layers_done: 0 }
+  assert.equal(pendingState({ kind: "build", status: "running", progress: started }), "downloading")
+  const base = { current: 5, total: 9, layers: 4, layers_done: 2 }
+  assert.equal(pendingState({ kind: "build", status: "running", progress: base }), "downloading")
+  // The setup script runs with a step and a share done, not bytes.
+  const script = {
+    script: { part: 1, parts: 1, line: 3, lines: 20, label: "apt-get update", percent: 16 },
+  }
+  assert.equal(pendingState({ kind: "build", status: "running", progress: script }), "creating")
+  // Saving the layer and tagging the image report no progress.
+  assert.equal(pendingState({ kind: "build", status: "running", progress: null }), "creating")
+  assert.equal(
+    pendingState({ kind: "image-pull", status: "running", progress: base }),
+    "downloading"
+  )
+  assert.equal(pendingState({ kind: "image-pull", status: "queued", progress: base }), "queued")
+})
+
 test("the lists are read again only when a creation job ends", () => {
   const running = [
     job({ id: "c", kind: "create" }),

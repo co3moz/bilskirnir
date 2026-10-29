@@ -73,10 +73,13 @@ export function catalogImageJobs(jobs: Job[]) {
   return found
 }
 
-/** What a pending record's badge says: queued, downloading an image, or creating. */
+/**
+ * What a pending record's badge says: queued, downloading an image, or creating. Only a download
+ * counts its layers; a build's or a setup's scripts and an archive transfer report progress too.
+ */
 export function pendingState(job: Pick<Job, "kind" | "status" | "progress">) {
   if (job.status === "queued") return "queued"
-  const downloading = job.kind === "image-pull" || (!!job.progress && !job.progress.transfer)
+  const downloading = job.kind === "image-pull" || job.progress?.layers != null
   return downloading ? "downloading" : "creating"
 }
 
