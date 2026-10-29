@@ -133,6 +133,8 @@ docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/ro
 
 Trust `caddy-root.crt` on the client device and open [desktop.lan:8443](https://desktop.lan:8443). Once secure cookies are enabled, sign in through HTTPS.
 
+Every browser reaches the manager from Caddy's address, so the manager counts failed sign-ins by the address Caddy forwards in `X-Forwarded-For`. It believes that header only from the running `https` service of its own Compose project, whose addresses it reads from Docker every 20 seconds and logs when they change; from anyone else, such as a desktop or a LAN client that connects to the manager's port, the connection's own address counts. A proxy of your own in front of the manager is not trusted this way, so all sign-ins through it share one count of 20 failures a minute.
+
 Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest.
 
 ## Update the images

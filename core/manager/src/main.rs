@@ -68,7 +68,9 @@ pub struct App {
     db: db::Db,
     sessions: Mutex<HashMap<String, Instant>>,
     /// Failed sign-ins of the last minute, by the address they came from.
-    login_attempts: Mutex<Vec<(Option<std::net::IpAddr>, Instant)>>,
+    login_attempts: auth::Limiter,
+    /// The addresses of the bundled HTTPS proxy, whose forwarded address a sign-in counts by.
+    https_proxy: auth::HttpsProxy,
     operations: Arc<tokio::sync::Mutex<()>>,
     resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     session_events: tokio::sync::Notify,
@@ -456,7 +458,8 @@ async fn main() -> anyhow::Result<()> {
         config,
         db,
         sessions: Mutex::new(HashMap::new()),
-        login_attempts: Mutex::new(Vec::new()),
+        login_attempts: Default::default(),
+        https_proxy: Default::default(),
         operations: Arc::new(tokio::sync::Mutex::new(())),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
@@ -478,6 +481,7 @@ async fn main() -> anyhow::Result<()> {
     desktop_mcp::spawn(app.clone());
     releases::spawn(app.clone());
     outbound::spawn(app.clone());
+    auth::follow_https_proxy(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
     }
