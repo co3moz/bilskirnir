@@ -442,9 +442,11 @@ async fn main() -> anyhow::Result<()> {
             job.finished_at = Some(model::now());
             job.finish_stages(model::now());
             job.progress = None;
-            job.log.push_str("\nService restarted. The Docker operation may have continued; check resources before retrying.\n");
-            job.trim_log();
-            db.put("job", &job.id, &job)?;
+            db.put_job_logged(
+                &job,
+                "\nService restarted. The Docker operation may have continued; check resources before retrying.\n",
+                false,
+            )?;
             if job.kind == "build" {
                 interrupted_builds.push(job.id);
             }

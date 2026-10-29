@@ -12,7 +12,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 type Migration = fn(&Transaction) -> rusqlite::Result<()>;
 
 /// Migration `n` brings a database of version `n - 1` to version `n`.
-const MIGRATIONS: &[Migration] = &[records_and_activity];
+const MIGRATIONS: &[Migration] = &[records_and_activity, job_log];
 
 /// Bring the database to the latest version this manager knows.
 pub(super) fn run(conn: &mut Connection) -> anyhow::Result<()> {
@@ -73,6 +73,21 @@ fn records_and_activity(transaction: &Transaction) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS activity_container ON activity(container_id, id);
         CREATE INDEX IF NOT EXISTS activity_endpoint ON activity(endpoint, id);",
+    )
+}
+
+/// Version 2: job logs apart from their records, in the chunks they were written in; see
+/// `db/job_log.rs`. `ends_at` is the length in bytes of the job's log up to the end of the
+/// chunk, which orders a job's chunks and finds those to drop. A log a record already carries
+/// stays in it.
+fn job_log(transaction: &Transaction) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE TABLE job_log(
+            job TEXT NOT NULL,
+            text TEXT NOT NULL,
+            ends_at INTEGER NOT NULL
+        );
+        CREATE INDEX job_log_job ON job_log(job, ends_at);",
     )
 }
 

@@ -1132,7 +1132,7 @@ async fn unrelated_jobs_progress_while_a_container_queue_is_blocked() {
         .to_owned();
     tokio::time::timeout(std::time::Duration::from_secs(1), async {
         loop {
-            if app.db.get::<model::Job>("job", &free).unwrap().status == "completed" {
+            if app.db.job(&free).unwrap().status == "completed" {
                 break;
             }
             tokio::task::yield_now().await;
@@ -1140,14 +1140,11 @@ async fn unrelated_jobs_progress_while_a_container_queue_is_blocked() {
     })
     .await
     .unwrap();
-    assert_eq!(
-        app.db.get::<model::Job>("job", &queued).unwrap().status,
-        "queued"
-    );
+    assert_eq!(app.db.job(&queued).unwrap().status, "queued");
     drop(guard);
     tokio::time::timeout(std::time::Duration::from_secs(1), async {
         loop {
-            if app.db.get::<model::Job>("job", &queued).unwrap().status == "completed" {
+            if app.db.job(&queued).unwrap().status == "completed" {
                 break;
             }
             tokio::task::yield_now().await;

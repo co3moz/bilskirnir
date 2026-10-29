@@ -1,6 +1,6 @@
 //! Pins down the schema versions: a new database and one from before versions both end at the
-//! latest version with what they held, a database a newer release migrated is refused and left
-//! as it was, and a migration that fails changes nothing.
+//! latest version with what they held, a job's log in its record included, a database a newer
+//! release migrated is refused and left as it was, and a migration that fails changes nothing.
 use super::*;
 use crate::db::Db;
 use std::path::{Path, PathBuf};
@@ -43,6 +43,7 @@ fn before_versions(path: &Path) {
         CREATE INDEX IF NOT EXISTS activity_container ON activity(container_id, id);
         CREATE INDEX IF NOT EXISTS activity_endpoint ON activity(endpoint, id);
         INSERT INTO records(kind, id, data) VALUES('volume-note', 'v', '{\"name\":\"kept\"}');
+        INSERT INTO records(kind, id, data) VALUES('job', 'old', '{\"id\":\"old\",\"kind\":\"exec\",\"resource\":null,\"status\":\"running\",\"created_at\":1,\"finished_at\":null,\"log\":\"Written by 0.8.4\\nhalf a li\",\"result\":null}');
         INSERT INTO activity(at, credential, source, tool, kind, arguments, summary, outcome, duration_ms)
             VALUES(1, 'mcp_token', 'tool', 'list_containers', 'read', '{}', '', 'ok', 3);",
     )
@@ -57,12 +58,12 @@ fn a_new_database_starts_at_the_latest_version() {
     assert_eq!(version(&conn), MIGRATIONS.len() as i64);
     let tables: i64 = conn
         .query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('records', 'activity')",
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('records', 'activity', 'job_log')",
             [],
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(tables, 2);
+    assert_eq!(tables, 3);
 }
 
 #[test]
@@ -70,7 +71,7 @@ fn a_database_from_before_versions_keeps_what_it_held() {
     let dir = folder();
     let path = dir.join(crate::db::FILE);
     before_versions(&path);
-    for _ in 0..2 {
+    for round in 0..2 {
         let db = Db::open(&path).unwrap();
         assert_eq!(version(&db.connection()), MIGRATIONS.len() as i64);
         let note: serde_json::Value = db.get("volume-note", "v").unwrap();
@@ -80,6 +81,16 @@ fn a_database_from_before_versions_keeps_what_it_held() {
             .query_row("SELECT count(*) FROM activity", [], |row| row.get(0))
             .unwrap();
         assert_eq!(calls, 1);
+        // A job whose log is in its record reads as it did, and what is added follows it.
+        if round == 0 {
+            assert_eq!(db.job("old").unwrap().log, "Written by 0.8.4\nhalf a li");
+            db.append_job_log("old", "ne\nand more\n").unwrap();
+        }
+        assert_eq!(
+            db.job("old").unwrap().log,
+            "Written by 0.8.4\nhalf a line\nand more\n"
+        );
+        assert!(db.jobs_summary().unwrap()[0].log.is_empty());
     }
     std::fs::remove_dir_all(&dir).unwrap();
 }

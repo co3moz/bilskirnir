@@ -190,7 +190,7 @@ async fn a_backup_streams_every_part_with_its_length_and_digest() {
         assert!(helper.contains(flag), "{helper}");
     }
     assert!(!calls.contains("src=thoric-data"), "{calls}");
-    let job: crate::model::Job = app.db.get("job", "backup-job").unwrap();
+    let job: crate::model::Job = app.db.job("backup-job").unwrap();
     assert!(!job.log.contains(SECRET));
     let stages = job
         .stages
@@ -227,7 +227,7 @@ async fn secret_values_leave_only_in_a_backup_that_asks_for_them() {
     assert_eq!(names, [MANIFEST, RECORDS, END]);
     assert!(String::from_utf8_lossy(&entries[1].1).contains(SECRET));
     assert!(!String::from_utf8_lossy(&entries[0].1).contains(SECRET));
-    let job: crate::model::Job = app.db.get("job", "backup-job").unwrap();
+    let job: crate::model::Job = app.db.job("backup-job").unwrap();
     assert!(!job.log.contains(SECRET));
     assert!(
         job.log

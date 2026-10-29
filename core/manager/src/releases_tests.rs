@@ -79,7 +79,7 @@ async fn request(app: Arc<App>, method: &str, uri: &str) -> (StatusCode, Value) 
 
 async fn finished(app: &App, id: &str) -> Job {
     for _ in 0..500 {
-        let job: Job = app.db.get("job", id).unwrap();
+        let job: Job = app.db.job(id).unwrap();
         if !active(&job) {
             return job;
         }
@@ -308,7 +308,7 @@ async fn an_update_follows_the_service_through_the_folder() {
     .unwrap();
     assert_eq!(outcome.await.unwrap(), Ok(json!({"version": VERSION})));
     assert_eq!(host.await.unwrap(), format!("{id}\n"));
-    let job: Job = app.db.get("job", &id).unwrap();
+    let job: Job = app.db.job(&id).unwrap();
     assert_eq!(job.status, "completed");
     assert!(job.log.contains("to 999.0.0"), "{}", job.log);
     assert!(
@@ -332,7 +332,7 @@ async fn an_update_follows_the_service_through_the_folder() {
     let asked = job.log.find("Asked the WSL distribution");
     assert!(copied.is_some() && copied < asked, "{}", job.log);
     let copy = crate::db::Db::open(&data(&dir).join(copy)).unwrap();
-    assert_eq!(copy.get::<Job>("job", &id).unwrap().status, "running");
+    assert_eq!(copy.job(&id).unwrap().status, "running");
     drop(copy);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -385,7 +385,7 @@ async fn an_update_does_not_start_without_a_copy_of_the_database() {
         error.contains("Could not copy the database before the update, so nothing was updated"),
         "{error}"
     );
-    let job: Job = app.db.get("job", &id).unwrap();
+    let job: Job = app.db.job(&id).unwrap();
     assert!(
         job.log.contains("ERROR: Could not copy the database"),
         "{}",
@@ -411,7 +411,7 @@ async fn a_failed_update_fails_its_job() {
     let error = outcome.await.unwrap().unwrap_err();
     assert!(error.contains("exit-code 1"), "{error}");
     host.await.unwrap();
-    let job: Job = app.db.get("job", &id).unwrap();
+    let job: Job = app.db.job(&id).unwrap();
     assert_eq!(job.status, "failed");
     assert!(job.log.contains("nothing was updated"), "{}", job.log);
     std::fs::remove_dir_all(&dir).unwrap();

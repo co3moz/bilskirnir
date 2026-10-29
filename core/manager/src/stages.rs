@@ -187,17 +187,13 @@ impl App {
             return Ok(());
         };
         job.progress = None;
-        if !job.log.is_empty() && !job.log.ends_with('\n') {
-            job.log.push('\n');
-        }
-        job.log.push_str(&format!(
+        let line = format!(
             "Stage {}/{}: {}\n",
             index + 1,
             job.stages.len(),
             label(name)
-        ));
-        job.trim_log();
-        self.db.put("job", id, &job)?;
+        );
+        self.db.put_job_logged(&job, &line, true)?;
         // Lists name a job's current stage.
         self.events.job(&job, None);
         Ok(())

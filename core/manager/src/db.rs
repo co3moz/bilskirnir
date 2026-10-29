@@ -1,10 +1,12 @@
-//! The manager's SQLite: a table of JSON records by kind and id, the agent activity and what the
-//! numbered [`migrations`] bring, which every start runs before anything reads.
+//! The manager's SQLite: a table of JSON records by kind and id, the agent activity, the jobs'
+//! logs ([`job_log`]) and what the numbered [`migrations`] bring, which every start runs before
+//! anything reads.
 use anyhow::{Context, Result};
 use rusqlite::{Connection, params};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::HashSet, path::Path, sync::Mutex};
 
+mod job_log;
 mod migrations;
 
 /// The database's file in the data folder.
@@ -22,6 +24,7 @@ impl Db {
         migrations::run(&mut conn)
             .with_context(|| format!("Could not open the database {}", path.display()))?;
         crate::activity::opened(&conn)?;
+        job_log::opened(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             unreadable: Mutex::new(HashSet::new()),
@@ -118,26 +121,41 @@ impl Db {
         transaction.commit()?;
         Ok(())
     }
+    /// Remove a record; a job's log goes with it.
     pub fn remove(&self, kind: &str, id: &str) -> Result<()> {
-        self.connection().execute(
+        let mut conn = self.connection();
+        let transaction = conn.transaction()?;
+        if kind == job_log::JOB {
+            transaction.execute("DELETE FROM job_log WHERE job=?1", [id])?;
+        }
+        transaction.execute(
             "DELETE FROM records WHERE kind=?1 AND id=?2",
             params![kind, id],
         )?;
+        transaction.commit()?;
         Ok(())
     }
-    /// Remove the finished jobs beyond the newest `keep`. A job still running or queued stays
-    /// whatever its age; its end is what marks it finished.
+    /// Remove the finished jobs beyond the newest `keep`, with their logs. A job still running
+    /// or queued stays whatever its age; its end is what marks it finished.
     pub fn prune_jobs(&self, keep: usize) -> Result<usize> {
-        let conn = self.connection();
-        let removed = conn.execute(
-            "DELETE FROM records WHERE kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)",
+        const PRUNED: &str = "kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)";
+        let mut conn = self.connection();
+        let transaction = conn.transaction()?;
+        // The logs first, while the records still say whose they are.
+        transaction.execute(
+            &format!("DELETE FROM job_log WHERE job IN (SELECT id FROM records WHERE {PRUNED})"),
+            params![keep as i64],
+        )?;
+        let removed = transaction.execute(
+            &format!("DELETE FROM records WHERE {PRUNED}"),
             params![keep as i64],
         )?;
         // A request kept to start a job again goes with its job.
-        conn.execute(
+        transaction.execute(
             "DELETE FROM records WHERE kind=?1 AND id NOT IN (SELECT id FROM records WHERE kind='job')",
             params![crate::jobs::retry::REQUESTS],
         )?;
+        transaction.commit()?;
         Ok(removed)
     }
     /// Whether a record of `kind` is saved under `id`, without reading it.

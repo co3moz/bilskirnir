@@ -67,7 +67,7 @@ async fn request(app: Arc<App>, method: &str, body: Option<Value>) -> (StatusCod
 
 async fn finished(app: &App, id: &str) -> Job {
     for _ in 0..500 {
-        let job: Job = app.db.get("job", id).unwrap();
+        let job: Job = app.db.job(id).unwrap();
         if !package_requests::active(&job) {
             return job;
         }
@@ -289,7 +289,7 @@ async fn a_change_follows_the_service_through_the_folder() {
         host.await.unwrap(),
         format!("{id}\nSECURE_COOKIE=true\nUPLOAD_MAX_MB=2048\n")
     );
-    let job: Job = app.db.get("job", &id).unwrap();
+    let job: Job = app.db.job(&id).unwrap();
     assert!(job.log.contains("Changing SECURE_COOKIE"), "{}", job.log);
     assert!(!job.log.contains("earlier output"), "{}", job.log);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -315,7 +315,7 @@ async fn a_change_the_package_rolled_back_fails_its_job() {
         "{error}"
     );
     host.await.unwrap();
-    let job: Job = app.db.get("job", &id).unwrap();
+    let job: Job = app.db.job(&id).unwrap();
     assert_eq!(job.status, "failed");
     assert!(job.log.contains("back as it was"), "{}", job.log);
     std::fs::remove_dir_all(&dir).unwrap();

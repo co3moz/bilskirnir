@@ -327,7 +327,7 @@ async fn creation_jobs_carry_the_name_of_what_they_make() {
     let ids = [&created, &built, &other].map(|started| started.0["job_id"].clone());
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         while ids.iter().any(|id| {
-            let job: Job = app.db.get("job", id.as_str().unwrap()).unwrap();
+            let job: Job = app.db.job(id.as_str().unwrap()).unwrap();
             job.finished_at.is_none()
         }) {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;

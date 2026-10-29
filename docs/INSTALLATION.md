@@ -162,7 +162,7 @@ To return to releases, wait for a release newer than the edge build you run, the
 
 ### Go back to an earlier release
 
-The database records the version of its layout. Each start brings it to the newest layout the manager knows, in one step that either completes or leaves it as it was, and a manager refuses a database a later release has moved further, rather than misread it: it does not start, and its log (`docker compose logs manager`) names both versions. Releases up to 0.8.4 know no layout version: they open any database, and may misread what a later release wrote.
+The database records the version of its layout. Each start brings it to the newest layout the manager knows, in one step that either completes or leaves it as it was, and a manager refuses a database a later release has moved further, rather than misread it: it does not start, and its log (`docker compose logs manager`) names both versions. Releases up to 0.8.4 know no layout version: they open any database, and may misread what a later release wrote, such as the jobs it ran, which they show without their logs.
 
 To go back, put a copy of the database from before the update in its place and start the earlier release. The WSL package's **Update** on the dashboard writes that copy itself, see [Go back after an update](WSL_PACKAGE.md#go-back-after-an-update). A Compose update takes none, so make one before you pull, with the manager stopped so the database and its journal files are whole. Replace `1.2.0` with the release you run and `thoric-data` with your `MANAGER_DATA_VOLUME`:
 

@@ -807,12 +807,9 @@ impl App {
         }
         Ok(format!("{}:5900", private_ip(env, &info)?))
     }
+    /// Add a line to the job's log; only the new text is written.
     pub fn append_log(&self, id: &str, line: &str) -> Result<()> {
-        let mut job: Job = self.db.get("job", id)?;
-        job.log.push_str(line);
-        job.log.push('\n');
-        job.trim_log();
-        self.db.put("job", id, &job)
+        self.db.append_job_log(id, &format!("{line}\n"))
     }
     /// Replace the job's measured progress; `None` once the measured step is over.
     pub fn set_progress(&self, id: &str, progress: Option<Value>) -> Result<()> {
