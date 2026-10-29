@@ -381,7 +381,6 @@ async fn a_refusal_before_the_upload_keeps_its_status() {
 #[cfg(unix)]
 #[tokio::test]
 async fn an_abandoned_helper_is_gone_before_its_volume_is_removed() {
-    use std::os::unix::fs::PermissionsExt;
     let dir =
         std::env::temp_dir().join(format!("thoric-abandon-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -402,8 +401,7 @@ exit 1
 "#
     .replace("@DIR@", &dir.display().to_string());
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     let cli = tokio::process::Command::new("sleep")

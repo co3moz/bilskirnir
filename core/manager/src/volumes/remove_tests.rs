@@ -131,7 +131,6 @@ async fn a_volume_called_import_is_not_taken_for_the_import_route() {
 /// is appended to `calls` in its directory.
 #[cfg(unix)]
 fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-remove-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let manager = json!([{
@@ -144,8 +143,7 @@ fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
         .replace("@MANAGER@", &manager.to_string())
         .replace("@CASES@", cases);
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(false);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();

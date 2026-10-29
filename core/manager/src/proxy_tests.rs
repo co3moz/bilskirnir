@@ -500,19 +500,16 @@ async fn the_tools_and_guides_describe_the_ports_setting() {
 /// The container `e` behind a stand-in Docker CLI, which reports what `state.json` holds.
 #[cfg(unix)]
 fn docker(app: &mut Arc<App>, state: &Value) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-proxy-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
-    std::fs::write(
+    crate::test_support::write_script(
         &docker,
-        format!(
+        &format!(
             "#!/bin/sh\ncase \"$1 $2\" in\n  'container inspect') cat '{}/state.json' ;;\n  *) exit 1 ;;\nesac\n",
             dir.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     std::fs::write(dir.join("state.json"), state.to_string()).unwrap();
     Arc::get_mut(app).unwrap().config.docker_bin = docker.display().to_string();
     dir

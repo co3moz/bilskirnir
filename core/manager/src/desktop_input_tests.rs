@@ -122,7 +122,6 @@ fn desktop() -> (
     crate::model::Container,
     std::path::PathBuf,
 ) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-input-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let docker = dir.join("docker");
@@ -137,8 +136,7 @@ case "$1 $2" in
   *) exit 1 ;;
 esac
 "#;
-    std::fs::write(&docker, script.replace("DIR", &dir.display().to_string())).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script.replace("DIR", &dir.display().to_string()));
     let mut app = crate::test_support::app(false);
     std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     let env = serde_json::from_value(json!({

@@ -80,12 +80,10 @@ async fn a_manager_without_tesseract_says_which_packages_it_needs() {
 /// A Tesseract that is a shell script, in a new directory of its own.
 #[cfg(unix)]
 fn fake_tesseract(script: &str) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("thoric-ocr-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let program = dir.join("tesseract");
-    std::fs::write(&program, format!("#!/bin/sh\n{script}\n")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&program, &format!("#!/bin/sh\n{script}\n"));
     program
 }
 

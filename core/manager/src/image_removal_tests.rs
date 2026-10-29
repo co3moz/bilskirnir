@@ -198,7 +198,6 @@ async fn a_busy_image_is_refused_instead_of_waited_for() {
 /// inspect fails is absent. Each call is appended to `calls` in its directory.
 #[cfg(unix)]
 fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!(
         "thoric-image-removal-{}",
         uuid::Uuid::new_v4().simple()
@@ -208,8 +207,7 @@ fn fake_docker(cases: &str) -> (Arc<App>, std::path::PathBuf) {
         .replace("@DIR@", &dir.display().to_string())
         .replace("@CASES@", cases);
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     (app, dir)
@@ -389,15 +387,13 @@ async fn a_catalog_image_loses_only_its_download() {
 #[cfg(unix)]
 #[tokio::test]
 async fn tags_without_a_record_are_dropped_at_startup() {
-    use std::os::unix::fs::PermissionsExt;
     let dir =
         std::env::temp_dir().join(format!("thoric-orphans-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/snapshot') printf 'thoric/snapshot:kept\nthoric/snapshot:lost\nthoric/snapshot:<none>\n' ;;\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/imported') printf 'thoric/imported:orphan\n' ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n"
         .replace("@DIR@", &dir.display().to_string());
     let docker = dir.join("docker");
-    std::fs::write(&docker, script).unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     app.db

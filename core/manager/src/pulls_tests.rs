@@ -402,7 +402,6 @@ async fn engine_pull_reports_refusals_and_interrupted_streams() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference() {
-    use std::os::unix::fs::PermissionsExt;
     let image = crate::catalog::catalog().remove(0);
     let reference = image.reference.clone();
     let release = format!("{}:1.2.3", reference.rsplit_once(':').unwrap().0);
@@ -412,15 +411,13 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     std::fs::create_dir_all(&dir).unwrap();
     let calls = dir.join("calls");
     let docker = dir.join("docker");
-    std::fs::write(
+    crate::test_support::write_script(
         &docker,
-        format!(
+        &format!(
             "#!/bin/sh\ncd '{dir}'\necho \"$*\" >> calls\ncase \"$*\" in\n  'manifest inspect'*) exit 1 ;;\n  'image inspect {release}') [ -e release-tag-here ] || exit 1 ;;\nesac\ncase \"$1 $2\" in\n  'image inspect') echo '[{{\"Id\":\"sha256:feed\"}}]' ;;\nesac\n",
             dir = dir.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let mut app = crate::test_support::app(false);
     std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     let job = crate::model::Job {
