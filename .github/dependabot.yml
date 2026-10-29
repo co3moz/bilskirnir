@@ -1,0 +1,87 @@
+# Dependabot proposes newer versions once a month, grouped so that each ecosystem has at most two
+# pull requests open: every one runs the checks and the audit of publish.yml, which cost CI minutes.
+# A new major release comes in a pull request of its own, apart from the minor and patch ones, so a
+# breaking change does not hold the others back.
+version: 2
+
+# The base images, the Compose images and the Rust toolchain come in one pull request, so the rust
+# image of core/manager/Dockerfile moves with rust-toolchain.toml, which tests/test_pinned_versions.py
+# holds equal. The checks build no image, so build the ones it changes before merging it
+# (docs/DEVELOPMENT.md).
+multi-ecosystem-groups:
+  infrastructure:
+    schedule:
+      interval: monthly
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      crates:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      crates-major:
+        patterns: ["*"]
+        update-types: [major]
+
+  - package-ecosystem: bun
+    directory: /core/web
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      # Later releases are under the Remix Icon License, which GPL-3.0-or-later cannot carry.
+      - dependency-name: "@remixicon/react"
+    groups:
+      packages:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      packages-major:
+        patterns: ["*"]
+        update-types: [major]
+
+  # An image stays on the release line it names: Ubuntu and Debian by the codename before their
+  # dated builds, the others by ignoring a new major release, such as Docker 29 or Caddy 3, which is
+  # a change of its own. A dated build counts its date as the major version, so the major releases
+  # are ignored image by image and never for "*".
+  - package-ecosystem: docker
+    directories:
+      - /core/manager
+      - /images/desktop
+      - /packaging/wsl
+    multi-ecosystem-group: infrastructure
+    patterns: ["*"]
+    ignore:
+      - dependency-name: docker
+        update-types: ["version-update:semver-major"]
+      - dependency-name: oven/bun
+        update-types: ["version-update:semver-major"]
+      - dependency-name: rust
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    multi-ecosystem-group: infrastructure
+    patterns: ["*"]
+    ignore:
+      # Thoric's own images, which this repository publishes.
+      - dependency-name: "*thoric*"
+      - dependency-name: caddy
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: rust-toolchain
+    directory: /
+    multi-ecosystem-group: infrastructure
+    patterns: ["*"]

@@ -1,4 +1,6 @@
-FROM ubuntu:24.04 AS common
+# Ubuntu 24.04 of a dated build, which Dependabot raises; tests/test_pinned_versions.py refuses a
+# moving tag. Both stages from Ubuntu name the same build.
+FROM ubuntu:noble-20261024.1 AS common
 ARG DEBIAN_FRONTEND=noninteractive
 ARG VIRTUALGL_VERSION=3.1.5
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,7 +27,7 @@ HEALTHCHECK --interval=10s --timeout=4s --start-period=30s CMD /usr/local/bin/de
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/desktop-entrypoint"]
 
 # VirtualGL's Chrome workaround for Chromium-family processes only, preloaded by gpu-run.
-FROM ubuntu:24.04 AS chromium-gpu
+FROM ubuntu:noble-20261024.1 AS chromium-gpu
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY chromium-gpu.c /src/

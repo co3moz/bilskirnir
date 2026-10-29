@@ -23,6 +23,7 @@ mod folder_archive;
 mod gamepad;
 mod gpu;
 mod groups;
+mod health;
 mod human;
 mod icons;
 mod identity;
@@ -41,6 +42,8 @@ mod pulls;
 mod reconfigure;
 mod recordings;
 mod releases;
+mod reported;
+mod request_log;
 mod script_progress;
 mod stages;
 mod terminal;
@@ -69,7 +72,9 @@ pub struct App {
     db: db::Db,
     sessions: Mutex<HashMap<String, Instant>>,
     /// Failed sign-ins of the last minute, by the address they came from.
-    login_attempts: Mutex<Vec<(Option<std::net::IpAddr>, Instant)>>,
+    login_attempts: auth::Limiter,
+    /// The addresses of the bundled HTTPS proxy, whose forwarded address a sign-in counts by.
+    https_proxy: auth::HttpsProxy,
     operations: Arc<tokio::sync::Mutex<()>>,
     resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     session_events: tokio::sync::Notify,
@@ -345,14 +350,14 @@ fn router(app: Arc<App>) -> Router {
         // The MCP token opens a desktop's proxied ports, never the dashboard's cookie.
         .route("/api/containers/{id}/ports/{port}", any(proxy::proxy))
         .route("/api/containers/{id}/ports/{port}/", any(proxy::proxy))
-        .route("/api/containers/{id}/ports/{port}/{*path}", any(proxy::proxy))
+        .route(
+            "/api/containers/{id}/ports/{port}/{*path}",
+            any(proxy::proxy),
+        )
         .route("/healthz", get(|| async { "ok" }))
+        .route("/readyz", get(health::ready))
         .fallback_service(ServeDir::new(&app.config.web).append_index_html_on_directories(true))
         .layer(axum::extract::DefaultBodyLimit::max(1_100_000))
-        .layer(TraceLayer::new_for_http().make_span_with(|req: &axum::extract::Request| {
-            // DefaultMakeSpan's span, without the credential a transfer link carries in its path.
-            tracing::debug_span!("request", method = %req.method(), uri = %transfers::traced(req.uri()), version = ?req.version())
-        }))
         .layer(middleware::from_fn_with_state(
             app.clone(),
             auth::check_host,
@@ -401,6 +406,15 @@ fn router(app: Arc<App>) -> Router {
                 }
             },
         ))
+        // The request's own span, which request_log made, also covers its body, and a server
+        // error or a body that fails gets a line of its own.
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|_: &axum::extract::Request| tracing::Span::current())
+                .on_request(())
+                .on_response(()),
+        )
+        .layer(middleware::from_fn(request_log::log))
         .with_state(app)
 }
 #[tokio::main]
@@ -463,7 +477,8 @@ async fn main() -> anyhow::Result<()> {
         config,
         db,
         sessions: Mutex::new(HashMap::new()),
-        login_attempts: Mutex::new(Vec::new()),
+        login_attempts: Default::default(),
+        https_proxy: Default::default(),
         operations: Arc::new(tokio::sync::Mutex::new(())),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
@@ -485,6 +500,7 @@ async fn main() -> anyhow::Result<()> {
     desktop_mcp::spawn(app.clone());
     releases::spawn(app.clone());
     outbound::spawn(app.clone());
+    auth::follow_https_proxy(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
     }
@@ -513,11 +529,11 @@ async fn main() -> anyhow::Result<()> {
     });
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(20));
+        let mut reported = reported::Reported::default();
         loop {
             tick.tick().await;
-            if let Err(e) = reconcile_networks(&reconcile).await {
-                tracing::debug!("Docker reconciliation: {e}");
-            }
+            let result = reconcile_networks(&reconcile, &mut reported).await;
+            reported.outcome(RECONCILIATION, &result);
         }
     });
     let listener = tokio::net::TcpListener::bind(&listen).await?;
@@ -536,7 +552,15 @@ async fn main() -> anyhow::Result<()> {
     .await?;
     Ok(())
 }
-async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
+/// What the network reconciliation as a whole reports its failures as.
+const RECONCILIATION: &str = "Docker reconciliation";
+fn container_reconciliation(id: &str) -> String {
+    format!("Container {id} network reconciliation")
+}
+fn container_pids_limit(id: &str) -> String {
+    format!("Container {id} pids limit")
+}
+async fn reconcile_networks(app: &App, reported: &mut reported::Reported) -> anyhow::Result<()> {
     let Some(manager) = &app.config.manager else {
         return Ok(());
     };
@@ -544,7 +568,16 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
     if m["Config"]["Labels"]["thoric.manager"] != "true" {
         anyhow::bail!("Missing manager label");
     }
-    for mut env in app.db.list::<model::Container>(model::CONTAINERS)? {
+    let containers = app.db.list::<model::Container>(model::CONTAINERS)?;
+    // A deleted container's failure goes with it.
+    reported.retain(|subject| {
+        subject == RECONCILIATION
+            || containers.iter().any(|env| {
+                subject == container_reconciliation(&env.id)
+                    || subject == container_pids_limit(&env.id)
+            })
+    });
+    for mut env in containers {
         let lock = app.resource_lock(&format!("container:{}", env.id));
         let Ok(_guard) = lock.try_lock() else {
             continue;
@@ -557,10 +590,9 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
         let result = async {
             let info = app.owned(&env).await?;
             // Also a desktop created before the installation's pids limit, or before it changed.
-            // Its networks are checked either way.
-            if let Err(e) = app.keep_pids_limit(&info).await {
-                tracing::debug!("Container {} pids limit: {e:#}", env.id);
-            }
+            // Its networks are checked either way, and its failure is reported on its own.
+            let pids = app.keep_pids_limit(&info).await;
+            reported.outcome(&container_pids_limit(&env.id), &pids);
             let network = app.inspect("network", &env.private_network).await?;
             App::check_network(&env, &network, true)?;
             let egress = app.inspect("network", &env.egress_network).await?;
@@ -593,9 +625,7 @@ async fn reconcile_networks(app: &App) -> anyhow::Result<()> {
             anyhow::Ok(())
         }
         .await;
-        if let Err(e) = result {
-            tracing::debug!("Container {} network reconciliation: {e:#}", env.id);
-        }
+        reported.outcome(&container_reconciliation(&env.id), &result);
     }
     Ok(())
 }

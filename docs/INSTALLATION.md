@@ -136,6 +136,8 @@ docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/ro
 
 Trust `caddy-root.crt` on the client device and open [desktop.lan:8443](https://desktop.lan:8443). Once secure cookies are enabled, sign in through HTTPS.
 
+Every browser reaches the manager from Caddy's address, so the manager counts failed sign-ins by the address Caddy forwards in `X-Forwarded-For`. It believes that header only from the running `https` service of its own Compose project, whose addresses it reads from Docker every 20 seconds and logs when they change; from anyone else, such as a desktop or a LAN client that connects to the manager's port, the connection's own address counts. A proxy of your own in front of the manager is not trusted this way, so all sign-ins through it share one count of 20 failures a minute.
+
 Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest.
 
 ## Update the images
@@ -213,7 +215,7 @@ A settings change that needs a new container saves its files to an image and ren
 
 Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Thoric does not silently replace a missing volume with an empty one.
 
-The manager checks container network connections, and gives each container `DESKTOP_PIDS_LIMIT`, every 20 seconds. A problem with one container does not prevent checks for the others. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
+The manager checks container network connections, and gives each container `DESKTOP_PIDS_LIMIT`, every 20 seconds. A problem with one container does not prevent checks for the others. A check that fails is logged as a warning once, again only when its reason changes, and once more when it works again. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
 
 ## If something does not start
 
@@ -224,6 +226,10 @@ docker compose logs --tail=100 manager
 ```
 
 Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A registry error happens before startup; check that the host can reach GHCR.
+
+The log has a line for every request with its method, path, status, latency in milliseconds and `request_id`, the ID the response carries in its `X-Request-Id` header. To find the request behind an error the dashboard or a script saw, read that header in the browser's network panel or the script's response and search the log for it, for example `docker compose logs manager | grep 6f1c0b2e`. The line never holds a query string, a transfer link's token or the path inside a desktop service reached through the manager. Reads that a page or a health check repeats on a timer while they succeed (`/healthz`, `/readyz`, the usage charts, a followed job, the Activity page, the desktop previews and the interface's own files) are logged at the debug level only, so the log keeps what people and agents do. Failed sign-ins and the first refused attempt of a locked-out address are logged as warnings with the client's address. The log filter is `RUST_LOG`, which the Compose manifests pass from `.env` to the logger: the default is `thoric=info,tower_http=info`, and `thoric=debug` adds the repeated reads.
+
+`/healthz` answers as long as the manager serves requests, which the manager image's health check uses. `/readyz` also asks the database and Docker and answers `503` naming the failed check, so `curl -fsS http://127.0.0.1:8080/readyz` tells a manager that runs but cannot reach Docker apart from one that is ready.
 
 If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, the job log names the setting behind a device Docker refused, and a desktop that stops at its renderer check names the one to check in **Logs**; [GPU on a Linux host](#gpu-on-a-linux-host) explains each route. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
 

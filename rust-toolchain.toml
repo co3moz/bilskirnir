@@ -1,0 +1,9 @@
+# The Rust release every cargo command in the repository runs on through rustup, and the one the
+# checks of .github/workflows/publish.yml install, so a new clippy lint arrives with the commit that
+# raises this version and never with a stable release alone. core/manager/Dockerfile builds the
+# manager on the rust image of the same version, which tests/test_pinned_versions.py holds equal;
+# Dependabot raises both in its monthly infrastructure pull request.
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

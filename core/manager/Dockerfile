@@ -1,3 +1,6 @@
+# Every base image names an exact version, which Dependabot raises, and tests/test_pinned_versions.py
+# refuses a moving tag. The ui stage builds with the Bun the checks install, the chef stage with the
+# Rust release of rust-toolchain.toml.
 FROM oven/bun:1.4.3-slim AS ui
 WORKDIR /build
 COPY THIRD_PARTY_NOTICES.md LICENSE ./
@@ -7,7 +10,7 @@ RUN bun install --frozen-lockfile
 COPY core/web .
 RUN bun run build
 
-FROM rust:1-bookworm AS chef
+FROM rust:1.99.1-bookworm AS chef
 RUN cargo install cargo-chef --locked --version 0.1.78
 WORKDIR /build
 
@@ -51,8 +54,10 @@ COPY .github/workflows .github/workflows
 RUN --mount=type=bind,from=ui,source=/build/core/web,target=/build/core/web \
     python3 core/manager/dependencies.py --strict --output /dependencies.json
 
-FROM docker:28-cli AS dockercli
-FROM debian:bookworm-slim
+FROM docker:28.5.2-cli AS dockercli
+# The Debian release the rust image above is built on, so the manager finds the C library it was
+# linked against.
+FROM debian:bookworm-20261027-slim
 LABEL org.opencontainers.image.title="Thoric" org.opencontainers.image.licenses="GPL-3.0-or-later"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
