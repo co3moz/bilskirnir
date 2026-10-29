@@ -36,7 +36,9 @@ pub(crate) use gateway::endpoint;
 pub(crate) use inspect::inspect;
 #[cfg(test)]
 pub(crate) use registry::SERVERS;
-pub(crate) use registry::{Declaration, check_declarations, slug, write_declarations};
+pub(crate) use registry::{
+    DECLARATION_LIMIT, Declaration, check_declarations, slug, write_declarations,
+};
 pub(crate) use servers::{
     all_servers, container_servers, refresh_server, register_server, unregister_server,
 };

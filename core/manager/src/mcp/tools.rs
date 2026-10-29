@@ -277,7 +277,8 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
                 "inherit_compose":{"type":"boolean","default":true,"description":"On a saved image with a compose, keep its steps before this build's own, as merged templates are kept. What its own build installed is already in its layers and is not asked for again."},
                 "icon":{"type":"string","description":"A PNG of at most 256 by 256 pixels as a data:image/png;base64, URL, shown beside the image's name."},
                 "template_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the template the image is built from, its entry in the templates_url list."},
-                "template_ids":{"type":"array","maxItems":8,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"description":"The templates merged into the image, in order."}
+                "template_ids":{"type":"array","maxItems":8,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"description":"The templates merged into the image, in order."},
+                "mcp":declarations_schema()
             }),
             &["name", "base_image"],
             false,
@@ -496,10 +497,37 @@ fn id_schema() -> Value {
     json!({"type":"string","minLength":1,"description":"Thoric container ID, not a Docker container ID."})
 }
 
+fn server_name_schema() -> Value {
+    json!({"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,31}$","description":"The server's name: lowercase letters, digits and dashes."})
+}
+
+/// How a desktop MCP server runs, as `register_mcp_server` and a build's `mcp` declare it.
+fn server_fields() -> serde_json::Map<String, Value> {
+    let text = |description: &str| json!({"type":"string","description":description});
+    json!({
+        "description":{"type":"string","maxLength":500},
+        "command":text("The program, on PATH (which includes ~/.local/bin) or as an absolute path."),
+        "args":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":4096}},
+        "env":{"type":"object","additionalProperties":{"type":"string","maxLength":4096}},
+        "cwd":text("Working directory; defaults to /home/desktop."),
+        "url":text("The URL of a Streamable HTTP server on the desktop's loopback, such as http://127.0.0.1:8931/mcp."),
+        "headers":{"type":"object","additionalProperties":{"type":"string","maxLength":4096},"description":"Headers for the HTTP server, such as its own Authorization."}
+    })
+    .as_object()
+    .unwrap()
+    .clone()
+}
+
+/// The servers a build declares in its image, a template's `mcp` as it is.
+fn declarations_schema() -> Value {
+    let mut fields = server_fields();
+    fields.insert("name".into(), server_name_schema());
+    json!({"type":"array","maxItems":crate::desktop_mcp::DECLARATION_LIMIT,"items":schema(Value::Object(fields), &["name"]),"description":"The MCP servers the image declares for its desktops, written to /etc/thoric/mcp.d: a template's mcp as it is. Each has a name and either command with args, env and cwd, or url with headers, as register_mcp_server takes them; the desktops built from the image run them as the desktop user, and their MCP endpoints offer the servers' tools."})
+}
+
 /// Desktop MCP servers and the MCP endpoints that publish them.
 fn desktop_mcp_tools(id: Value) -> [Tool; 8] {
-    let text = |description: &str| json!({"type":"string","description":description});
-    let server = json!({"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,31}$","description":"The server's name: lowercase letters, digits and dashes."});
+    let server = server_name_schema();
     let endpoint = json!({"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,47}$","description":"The endpoint's name, its path /mcp/NAME."});
     let grants = json!({"type":"array","minItems":1,"maxItems":16,"description":"The containers the endpoint covers, each once.","items":schema(json!({
         "container_id":{"type":"string","minLength":1},
@@ -521,16 +549,12 @@ fn desktop_mcp_tools(id: Value) -> [Tool; 8] {
         tool(
             "register_mcp_server",
             "Register an MCP server in a running desktop, replacing one of the same name the desktop user registered, and read its tools. It runs as the desktop user through docker exec, never on a published port: command with args, env and cwd for a program that speaks MCP on stdio, or url (http on 127.0.0.1, localhost or [::1] with a port) with headers for a Streamable HTTP server already listening there. Values in args, env, url and headers may name the container's compose values as ${NAME}. Its tools are then offered by the MCP endpoints that cover the container.",
-            json!({
-                "container_id": id,"name": server,
-                "description":{"type":"string","maxLength":500},
-                "command":text("The program, on PATH (which includes ~/.local/bin) or as an absolute path."),
-                "args":{"type":"array","maxItems":100,"items":{"type":"string","maxLength":4096}},
-                "env":{"type":"object","additionalProperties":{"type":"string","maxLength":4096}},
-                "cwd":text("Working directory; defaults to /home/desktop."),
-                "url":text("The URL of a Streamable HTTP server on the desktop's loopback, such as http://127.0.0.1:8931/mcp."),
-                "headers":{"type":"object","additionalProperties":{"type":"string","maxLength":4096},"description":"Headers for the HTTP server, such as its own Authorization."}
-            }),
+            {
+                let mut fields = server_fields();
+                fields.insert("container_id".into(), id.clone());
+                fields.insert("name".into(), server.clone());
+                Value::Object(fields)
+            },
             &["container_id", "name"],
             false,
             true,
