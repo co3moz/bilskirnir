@@ -444,3 +444,50 @@ async fn mcp_replies_are_chunked_on_the_wire() {
         assert!(rest[size..].ends_with("0\r\n\r\n"), "{body}");
     }
 }
+
+fn build_image_tool() -> &'static rmcp::model::Tool {
+    super::tools::TOOLS
+        .iter()
+        .find(|tool| tool.name == "build_image")
+        .expect("build_image")
+}
+
+/// `build_image` says a template's `<id>.json` is a request it takes unchanged, so every field
+/// `POST /api/images/build` reads is one of its arguments; a new field fails here until it is.
+#[test]
+fn build_image_takes_every_field_of_a_build_request() {
+    let request =
+        serde_json::to_value(rmcp::schemars::schema_for!(crate::api::BuildImage)).unwrap();
+    let offered = build_image_tool().input_schema["properties"]
+        .as_object()
+        .unwrap();
+    let missing: Vec<_> = request["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|field| !offered.contains_key(*field))
+        .collect();
+    assert!(missing.is_empty(), "build_image does not take {missing:?}");
+}
+
+/// A template that declares desktop MCP servers, as most templates of the wiki do, passes the
+/// argument check as the template list serves it.
+#[test]
+fn build_image_takes_a_template_with_mcp_servers() {
+    let template = serde_json::json!({
+        "name": "Chrome with Playwright MCP",
+        "description": "Google Chrome that an agent drives through Playwright MCP.",
+        "base_image": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04",
+        "internet": true,
+        "script": "set -eu\napt-get install -y google-chrome-stable\n",
+        "mcp": [
+            {"name": "playwright", "command": "chrome-mcp", "args": ["serve", "${CAPS}"]},
+            {"name": "notes", "url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${TOKEN}"}}
+        ],
+        "template_id": "chrome-mcp"
+    });
+    super::check_arguments(build_image_tool(), &template).unwrap();
+    let declared: Vec<crate::desktop_mcp::Declaration> =
+        serde_json::from_value(template["mcp"].clone()).unwrap();
+    crate::desktop_mcp::check_declarations(&declared).unwrap();
+}
