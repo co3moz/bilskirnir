@@ -42,7 +42,10 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             dri_gpu: true,
             adapter: String::new(),
             gpu_host: Default::default(),
+            // Docker's own default.
+            log_driver: Some("json-file".into()),
             user_namespaces: true,
+            pids_limit: desktop_limits::DEFAULT_PIDS_LIMIT,
             allowed_hosts: vec![],
             desktop_host: None,
             upload_limit: 1024 * 1024,

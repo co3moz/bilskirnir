@@ -144,10 +144,7 @@ async fn control(
     )
     .await?;
     if !output.status.success() {
-        return Err(Error(
-            StatusCode::BAD_REQUEST,
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
+        return Err(Error::helper(&output));
     }
     serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e).into())
 }

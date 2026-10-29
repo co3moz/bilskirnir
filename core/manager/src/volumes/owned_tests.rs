@@ -1,6 +1,7 @@
 //! Pins down the volumes created for one container: their labels name the container and the
 //! parameter, a listing reports that owner or that it was deleted, and deleting the container
-//! removes only those, never a volume another container mounts, and only when asked.
+//! removes only those, never a volume another container mounts, and only when asked. The volumes'
+//! locks keep a delete's look at the records and a creation's record of a volume apart.
 use super::*;
 #[cfg(unix)]
 use crate::model::CONTAINERS;
@@ -359,6 +360,100 @@ async fn deleting_a_container_removes_its_own_volumes_only_when_asked() {
     );
     // The other container and its volume are untouched.
     assert!(app.db.get::<Container>(CONTAINERS, "b").is_ok());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// Wait until the fake Docker has been asked `call`, and a moment more for what follows it
+/// without asking Docker anything.
+#[cfg(unix)]
+async fn asked(dir: &std::path::Path, call: &str) {
+    for _ in 0..250 {
+        if calls(dir).contains(call) {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("Docker was never asked {call}: {}", calls(dir));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_delete_reads_the_records_under_the_volumes_locks() {
+    let listing = "volume ls --filter label=thoric.managed=true --filter label=thoric.environment=e --format {{.Name}}";
+    let cases = format!(
+        "  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;\n  '{listing}') echo thoric-e-workspace ;;\n  'volume inspect thoric-e-workspace') echo '{workspace}' ;;\n  'volume rm thoric-e-workspace') echo thoric-e-workspace ;;",
+        workspace = volume_json("thoric-e-workspace", "e"),
+    );
+    let (app, dir) = fake_docker(&cases);
+    let env = container("e", &[]);
+    app.db.put(CONTAINERS, "e", &env).unwrap();
+    job(&app, "delete-job");
+    // A creation that chose the volume holds its lock from its check until its record is saved.
+    let creating = app
+        .resource_lock("volume:thoric-e-workspace")
+        .lock_owned()
+        .await;
+    let deleting = {
+        let (app, env) = (app.clone(), env.clone());
+        tokio::spawn(async move { app.remove_container(&env, "delete-job", true).await })
+    };
+    asked(&dir, "container inspect thoric-e-previous").await;
+    assert!(!deleting.is_finished());
+    assert!(!calls(&dir).contains("volume rm"), "{}", calls(&dir));
+    // Its record is saved, so the delete that waited sees it and keeps the volume.
+    let other = container("b", &[("thoric-e-workspace", "/workspace")]);
+    app.db.put(CONTAINERS, "b", &other).unwrap();
+    drop(creating);
+    let removed = deleting.await.unwrap().unwrap();
+    assert_eq!(
+        removed,
+        RemovedVolumes {
+            deleted: Vec::new(),
+            kept: vec!["thoric-e-workspace".into()],
+        }
+    );
+    assert!(!calls(&dir).contains("volume rm"), "{}", calls(&dir));
+    let log = app.db.job("delete-job").unwrap().log;
+    assert!(
+        log.contains("Keeping the volume thoric-e-workspace: \"Desktop b\" mounts it too."),
+        "{log}"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_creation_checks_its_volumes_again_under_their_locks() {
+    let image = json!([{"Id": "sha256:ws", "Config": {"Labels": {"thoric.desktop": "true"}}}]);
+    let cases = format!(
+        "  'image inspect sha256:ws') echo '{image}' ;;\n  'volume inspect projects') [ -f kept ] && echo '[{{\"Name\": \"projects\"}}]' || exit 1 ;;\n  'volume ls --format {{{{.Name}}}}') [ -f kept ] && echo projects ;;\n  'ps -a --format {{{{.Names}}}}'|'network ls --format {{{{.Name}}}}') ;;",
+    );
+    let (app, dir) = fake_docker(&cases);
+    std::fs::write(dir.join("kept"), "").unwrap();
+    job(&app, "create-job");
+    let spec = container("f00d", &[("projects", "/home/desktop/Projects")]).spec;
+    // A delete of the volume holds its lock from its look at the records until the removal.
+    let deleting = app.resource_lock("volume:projects").lock_owned().await;
+    let creating = {
+        let app = app.clone();
+        tokio::spawn(async move {
+            app.create_container("f00d", spec, Default::default(), "create-job")
+                .await
+        })
+    };
+    asked(&dir, "image inspect sha256:ws").await;
+    assert!(!creating.is_finished());
+    assert!(app.db.list::<Container>(CONTAINERS).unwrap().is_empty());
+    // The delete found no record that mounts it and removed it, so the creation stops.
+    std::fs::remove_file(dir.join("kept")).unwrap();
+    drop(deleting);
+    let refused = creating.await.unwrap().unwrap_err();
+    assert!(
+        format!("{refused:#}").starts_with("Volume not found"),
+        "{refused:#}"
+    );
+    assert!(app.db.list::<Container>(CONTAINERS).unwrap().is_empty());
     std::fs::remove_dir_all(dir).unwrap();
 }
 
