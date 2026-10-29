@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 /// A group of container tools an endpoint can be granted for a container. Creating, changing and
 /// deleting containers, images and volumes are never part of one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Scope {
     View,

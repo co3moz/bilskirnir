@@ -27,6 +27,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | Area | Files |
 | --- | --- |
 | HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs` |
+| OpenAPI document of the HTTP API | `core/manager/src/openapi.rs`, `core/manager/src/openapi/routes.rs` |
 | Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
 | Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
 | Settings changes from the Management page through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/thoric-settings.path`, `packaging/wsl/thoric-settings.service` |
@@ -233,6 +234,14 @@ The wiki has no review or checks before a push reaches every installation, which
 - Give the template's MCP servers names of their own, such as `playwright` rather than `mcp`: a merged image has one `mcp.d` folder, so a merge of two templates that declare a server under the same name is refused, and the build refuses a duplicate name too.
 
 A template exported from a merged image has `parts` and `template_ids`, and can be listed like any other; choosing it together with one of the templates it holds is refused.
+
+## Add an HTTP route
+
+Register the route in `router()` in `core/manager/src/main.rs`, then give it an entry in `core/manager/src/openapi/routes.rs`, which `GET /api/openapi.json` is made from: its method, its path as `main.rs` spells it, a tag, a one-line summary and what it takes and answers. `.json::<T>()` and `.optional_json::<T>()` name the type a JSON body is read into, `.query::<T>()` that of a query string, and `.upload(...)` a body read as a stream; `.returns::<T>()`, `.job()`, `.no_content()`, `.download(...)`, `.events()` and `.websocket()` say what comes back, and `.access(...)` what opens a route outside the session. A route that takes any method is an `any(...)` entry naming the methods the document shows.
+
+A type a route reads or returns derives `schemars::JsonSchema` beside its serde traits, and so does every type in its fields; its doc comments become the schema's descriptions. A type whose serde is written by hand implements `JsonSchema` by hand next to that code, as `Compose`, `Icon` and `Servers` do, and a type whose name another one already has gets `#[schemars(rename = "...")]`.
+
+`cargo test` holds the table to the router both ways. `every_served_route_is_documented_and_every_documented_route_is_served` in `core/manager/src/openapi_tests.rs` reads the paths from the router and asks each with a method nobody serves, so axum names the methods it has, and it lists every route without an entry, every entry for a route that is gone and every method on one side only. List the route in the table of `docs/API.md` as well, and describe its answer there.
 
 ## Check a change
 

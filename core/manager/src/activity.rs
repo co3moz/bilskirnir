@@ -20,6 +20,7 @@
 mod mask;
 mod store;
 
+pub(crate) use store::Filter;
 pub(crate) use store::create_table;
 
 use crate::{App, error::Result};

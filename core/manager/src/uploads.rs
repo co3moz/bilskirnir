@@ -22,7 +22,7 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Upload {
     pub destination: String,
     pub name: String,

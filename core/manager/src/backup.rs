@@ -26,6 +26,8 @@ mod restore;
 mod review;
 
 pub(crate) use export::export;
+pub(crate) use manifest::Included;
+pub(crate) use restore::Upload;
 pub(crate) use restore::{check, restore};
 
 use crate::{

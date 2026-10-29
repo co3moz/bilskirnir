@@ -31,7 +31,9 @@ const RESERVED_PREFIXES: &[&str] = &[
 ];
 
 /// What a parameter's value is.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     /// Any text. The only type that can be secret.
@@ -55,7 +57,7 @@ pub enum Kind {
 }
 
 /// How the create form shows a parameter.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Display {
     Input,
@@ -84,7 +86,7 @@ impl Kind {
 }
 
 /// One option of a choice parameter.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Choice {
     /// What the script receives.
@@ -94,7 +96,7 @@ pub struct Choice {
     pub label: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Parameter {
     /// The environment variable that carries the value.

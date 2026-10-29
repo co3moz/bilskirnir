@@ -64,6 +64,18 @@ impl<'de> Deserialize<'de> for Servers {
         }
     }
 }
+/// The two forms [`Servers`]'s serde reads and writes, for the HTTP API's document.
+impl schemars::JsonSchema for Servers {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Servers".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "description": "`all` for every desktop MCP server of the container, or the names of some.",
+            "oneOf": [{"const": "all"}, {"type": "array", "items": {"type": "string"}}],
+        })
+    }
+}
 
 /// One container of an endpoint.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -169,7 +181,7 @@ fn unique(base: &str, limit: usize, taken: impl Fn(&str) -> bool) -> String {
 }
 
 /// A grant as a request names it; the alias defaults to the container's name.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct GrantRequest {
     pub container_id: String,
@@ -180,13 +192,13 @@ pub(crate) struct GrantRequest {
     #[serde(default)]
     pub excluded_tools: Vec<String>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreateEndpoint {
     pub name: String,
     pub grants: Vec<GrantRequest>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct UpdateEndpoint {
     pub grants: Vec<GrantRequest>,

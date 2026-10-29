@@ -91,7 +91,7 @@ pub(super) fn prune(conn: &Connection, keep: usize) -> rusqlite::Result<usize> {
 
 /// Which calls a page lists: each filter given narrows it, and `before` continues from the last
 /// ID of the page before.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Filter {
     /// A container's ID.

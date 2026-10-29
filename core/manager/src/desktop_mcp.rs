@@ -27,6 +27,7 @@ mod scopes;
 mod servers;
 mod watch;
 
+pub(crate) use endpoints::{CreateEndpoint, UpdateEndpoint};
 pub(crate) use endpoints::{
     ENDPOINTS, Endpoint, automatic_endpoint, create_endpoint, delete_endpoint, endpoint_name,
     endpoint_tools, endpoints, revoke_token, scopes_list, token, update_endpoint,

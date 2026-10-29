@@ -62,7 +62,7 @@ pub struct Compose {
     pub steps: Vec<Step>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
     /// Names the step in a compose of several, such as the template it came from: lowercase
@@ -120,6 +120,27 @@ impl<'de> Deserialize<'de> for Compose {
             vec![Step::deserialize(value).map_err(D::Error::custom)?]
         };
         Ok(Self { steps })
+    }
+}
+
+/// The two forms [`Compose`]'s serde reads and writes, for the HTTP API's document.
+impl schemars::JsonSchema for Compose {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Compose".into()
+    }
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let step = generator.subschema_for::<Step>();
+        schemars::json_schema!({
+            "oneOf": [
+                step.clone(),
+                {
+                    "type": "object",
+                    "properties": {"steps": {"type": "array", "items": step}},
+                    "required": ["steps"],
+                    "additionalProperties": false,
+                },
+            ],
+        })
     }
 }
 

@@ -73,7 +73,7 @@ pub(crate) const JOB_STAGES: [&[(&str, &str)]; 5] = [
 /// A longer line is no stage marker, so it is logged without waiting for its end.
 const LINE_LIMIT: usize = 65_536;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Stage {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

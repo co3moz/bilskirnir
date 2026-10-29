@@ -20,14 +20,14 @@ use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::io::AsyncReadExt;
 
 pub const FILE_LIMIT: usize = 512 * 1024;
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Encoding {
     #[default]
     Utf8,
     Base64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReadFile {
     pub path: String,
@@ -41,7 +41,7 @@ pub struct ReadFile {
 fn default_limit() -> usize {
     65536
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WriteFile {
     pub path: String,
@@ -212,7 +212,7 @@ pub struct DeleteFile {
     #[serde(default)]
     pub recursive: bool,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MakeDirectory {
     /// Canonical absolute path of the new folder, whose parent must exist.
@@ -386,7 +386,7 @@ pub struct Download {
 fn download_limit() -> usize {
     4 * 1024 * 1024
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 pub struct DownloadQuery {
     pub path: String,
 }

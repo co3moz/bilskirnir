@@ -6,7 +6,7 @@ pub const LABEL: &str = "thoric.managed";
 /// environments were called containers, so an existing installation reads them unchanged.
 pub const CONTAINERS: &str = "environment";
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Mount {
     pub volume: String,
@@ -15,7 +15,7 @@ pub struct Mount {
     pub readonly: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ContainerSpec {
     pub name: String,
     pub image: String,
@@ -347,7 +347,7 @@ pub struct BuildConfig {
     pub inherit_compose: bool,
 }
 /// One script of a build merged from several templates, run as root in a layer of its own.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BuildPart {
     /// Lowercase letters, digits and dashes, unique in the build, such as the template's id.
@@ -440,7 +440,7 @@ pub struct Recording {
     pub fps: u8,
     pub created_at: u64,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Job {
     pub id: String,
     pub kind: String,
