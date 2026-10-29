@@ -293,6 +293,57 @@ fn the_machine_id_goes_to_systemds_and_dbuss_files_as_root() {
     );
 }
 
+/// `docker cp -` reads the archive with a tar reader of its own, not with the parser above, so a
+/// tar that shares no code with the manager has to read it the same way: two regular files owned
+/// by root, readable by everyone, holding the machine ID.
+#[cfg(unix)]
+#[test]
+fn tar_reads_the_machine_id_archive_as_docker_cp_takes_it() {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+    let id = "8aed3e38ba435c50deadb0896ace189b";
+    let tar = |args: &[&str]| {
+        let mut child = Command::new("tar")
+            .args(args)
+            .env("LC_ALL", "C")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("tar is on PATH");
+        // A few kilobytes, which the pipe takes whole before tar reads it.
+        let mut input = child.stdin.take().unwrap();
+        input.write_all(&machine_id_archive(id)).unwrap();
+        drop(input);
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let listed = tar(&["--list", "--verbose", "--numeric-owner", "--file", "-"]);
+    let entries: Vec<Vec<&str>> = listed
+        .lines()
+        .map(|line| line.split_whitespace().collect())
+        .collect();
+    assert_eq!(entries.len(), 2, "{listed}");
+    for (entry, name) in entries
+        .iter()
+        .zip(["etc/machine-id", "var/lib/dbus/machine-id"])
+    {
+        // Mode, owner and group, size, then the date and the name.
+        assert_eq!(entry[..3], ["-rw-r--r--", "0/0", "33"], "{listed}");
+        assert_eq!(entry.last(), Some(&name), "{listed}");
+    }
+    for name in ["etc/machine-id", "var/lib/dbus/machine-id"] {
+        assert_eq!(
+            tar(&["--extract", "--to-stdout", "--file", "-", name]),
+            format!("{id}\n")
+        );
+    }
+}
+
 /// Answer one request on the far end of an in-memory connection and return it, body included.
 async fn serve(mut server: tokio::io::DuplexStream, response: &str) -> String {
     let mut request = Vec::new();

@@ -14,7 +14,7 @@
 //! for that: Docker Engine 29 (API 1.54) and later use it, earlier releases accept it and choose
 //! their own, and the CLI has no option for it. Both networks get the same address because Docker
 //! does not keep the order of a container's interfaces, so `eth0` can be either of them.
-use crate::{App, model::*};
+use crate::{App, archives::tar, model::*};
 use anyhow::{Context, Result, bail};
 use http_body_util::BodyExt;
 use serde::{Deserialize, Deserializer};
@@ -147,36 +147,11 @@ pub(crate) fn machine_id_archive(id: &str) -> Vec<u8> {
     let data = format!("{id}\n");
     let mut archive = Vec::new();
     for name in ["etc/machine-id", "var/lib/dbus/machine-id"] {
-        archive.extend(tar_entry(name, data.as_bytes(), now()));
+        archive.extend(tar::entry(name, data.as_bytes(), now()));
     }
     // Two empty blocks end an archive.
     archive.resize(archive.len() + 1024, 0);
     archive
-}
-
-/// A regular file as a USTAR entry, padded to whole blocks.
-fn tar_entry(name: &str, data: &[u8], mtime: u64) -> Vec<u8> {
-    let mut header = [0u8; 512];
-    header[..name.len()].copy_from_slice(name.as_bytes());
-    for (field, value) in [
-        (100..108, 0o644),
-        (108..116, 0),
-        (116..124, 0),
-        (124..136, data.len() as u64),
-        (136..148, mtime),
-    ] {
-        let digits = format!("{value:0width$o}", width = field.len() - 1);
-        header[field.start..field.start + digits.len()].copy_from_slice(digits.as_bytes());
-    }
-    header[156] = b'0';
-    header[257..265].copy_from_slice(b"ustar\x0000");
-    header[148..156].fill(b' ');
-    let sum: u32 = header.iter().map(|byte| u32::from(*byte)).sum();
-    header[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
-    let mut entry = header.to_vec();
-    entry.extend_from_slice(data);
-    entry.resize(entry.len().div_ceil(512) * 512, 0);
-    entry
 }
 
 /// The Engine API request that connects a container to a network with a MAC address.
