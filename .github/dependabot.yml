@@ -44,6 +44,10 @@ updates:
     ignore:
       # Later releases are under the Remix Icon License, which GPL-3.0-or-later cannot carry.
       - dependency-name: "@remixicon/react"
+      # typescript-eslint refuses TypeScript 7.0, which ships no compiler API; its support waits for
+      # the API of TypeScript 7.1 (typescript-eslint/typescript-eslint#10940).
+      - dependency-name: typescript
+        versions: ["7.0.x"]
     groups:
       packages:
         patterns: ["*"]
