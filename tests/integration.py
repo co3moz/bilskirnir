@@ -481,7 +481,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 76
+    assert len(mcp("tools/list")["tools"]) == 77
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1128,6 +1128,34 @@ try:
     assert stable["satisfied"] and stable["screen_stable_for_ms"] >= 600, stable
     unmet = tool("wait_for_condition", {"container_id":env_id,"window_title":"no such window","timeout_ms":600,"interval_ms":200})["structuredContent"]
     assert not unmet["satisfied"] and unmet["window"] is None, unmet
+    # Text on the screen, read with OCR in the manager, and waits for the screen to change and for
+    # text to appear and go. Nothing else draws in the region until the clock opens there.
+    area = "600,40,520,200"
+    unchanged = api(f"containers/{env_id}/wait", {"screen_changed":True,"region":area,"timeout_ms":1200,"interval_ms":300})
+    assert not unchanged["satisfied"] and unchanged["screen_changed_percent"] < 0.5, unchanged
+    changed = {}
+    watcher = threading.Thread(target=lambda: changed.update(tool("wait_for_condition", {"container_id":env_id,"screen_changed":True,"region":area,"timeout_ms":20000,"interval_ms":200})["structuredContent"]))
+    watcher.start()
+    time.sleep(1)
+    text_app = tool("launch_application", {"container_id":env_id,"command":"xclock","args":["-digital","-strftime","Thoric reads 4217","-face","DejaVu Sans:size=20","-geometry","+640+80","-title","Thoric text test"]})["structuredContent"]["application_id"]
+    watcher.join(30)
+    assert changed.get("satisfied") and changed["screen_changed_percent"] >= 0.5, changed
+    appeared = tool("wait_for_condition", {"container_id":env_id,"text":"reads 4217","timeout_ms":20000,"interval_ms":500})["structuredContent"]
+    assert appeared["satisfied"] and appeared["text_found"] and appeared["text_match"]["text"] == "reads 4217", appeared
+    # The clock opens at 640,80 inside the area; a box read from the area alone is still placed
+    # in desktop pixels, not the area's own.
+    inside = lambda box: 640 <= box["center_x"] < 1120 and 80 <= box["center_y"] < 240
+    found = tool("find_text", {"container_id":env_id,"text":"thoric  READS 4217"})["structuredContent"]
+    assert found["found"] and found["width"] == 1280 and inside(found["matches"][0]), found
+    assert any(line["text"].endswith("Thoric reads 4217") for line in found["lines"]), found["lines"]
+    # A region is read in desktop pixels too, and words come one by one.
+    words = api(f"containers/{env_id}/find-text", {"region":area,"level":"word","text":"4217","case_sensitive":True})
+    assert words["found"] and words["width"] == 520 and inside(words["matches"][0]) and "4217" in [w["text"] for w in words["words"]], words
+    assert not tool("find_text", {"container_id":env_id,"text":"no such text on screen"})["structuredContent"]["found"]
+    tool("stop_application", {"container_id":env_id,"application_id":text_app,"grace_seconds":3})
+    gone = api(f"containers/{env_id}/wait", {"text":"reads 4217","text_state":"gone","timeout_ms":15000,"interval_ms":500})
+    assert gone["satisfied"] and not gone["text_found"] and gone["text_match"] is None, gone
+    print("PASS text on the screen with OCR, and waits for a changed screen and for text to appear and go", flush=True)
     diagnostics = tool("application_diagnostics", {"container_id":env_id,"application_id":second})["structuredContent"]
     assert diagnostics["processes"] and "READY_MARKER" in diagnostics["log_tail"] and diagnostics["open_files"], diagnostics
     sampled = tool("sample_metrics", {"container_id":env_id,"application_id":second,"duration_ms":300})["structuredContent"]

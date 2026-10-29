@@ -13,6 +13,7 @@ Thoric uses the components below to provide its browser desktop, GPU rendering a
 | TigerVNC, XFCE, GNOME, Mesa, PulseAudio and other Ubuntu packages | Each package retains its own license. The desktop images include package documentation under `/usr/share/doc`. |
 | Rust dependencies | Each dependency retains its own license. `Cargo.lock` records the exact versions used. |
 | [Docker CLI and Buildx](https://github.com/docker/cli) | Apache-2.0, Copyright Docker, Inc. The manager image copies the `docker` and `docker-buildx` binaries from the `docker:28-cli` image. |
+| [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) | Apache-2.0. The manager image installs Debian's `tesseract-ocr` with its English data, `tesseract-ocr-eng`, to read the text on desktops' screens for `find_text` and `wait_for_condition`. Each package keeps its license and copyright under `/usr/share/doc` in the image. |
 | [Moby](https://github.com/moby/moby) seccomp profile | Apache-2.0. `images/desktop/seccomp.json` is Docker's default seccomp profile with one rule added, so browser sandboxes can create user namespaces. |
 | [Rust MCP SDK (rmcp)](https://github.com/modelcontextprotocol/rust-sdk) 3.5.1 | Apache-2.0. Provides the embedded MCP protocol and HTTP transport. |
 

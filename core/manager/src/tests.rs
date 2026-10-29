@@ -382,7 +382,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 76);
+    assert_eq!(tools.len(), 77);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);
@@ -689,6 +689,7 @@ async fn automation_http_routes_keep_browser_auth_and_csrf_checks() {
         "files/delete",
         "input",
         "act-and-observe",
+        "find-text",
         "wait",
         "reset",
         "recordings",
@@ -2009,6 +2010,15 @@ fn wait_conditions_are_validated() {
             .is_ok()
     );
     assert!(check(serde_json::json!({"screen_stable_ms":1000,"region":"0,0,100,100"})).is_ok());
+    // The screen can be waited on to change, and text to appear or go, in a region or not.
+    assert!(check(serde_json::json!({"screen_changed":true})).is_ok());
+    assert!(
+        check(serde_json::json!({"screen_changed":true,"screen_change_percent":0.01,"region":"0,0,100,100"}))
+            .is_ok()
+    );
+    assert!(
+        check(serde_json::json!({"text":"Play","text_state":"gone","region":"0,0,1,1"})).is_ok()
+    );
     for bad in [
         serde_json::json!({}),
         serde_json::json!({"application_state":"running"}),
@@ -2017,6 +2027,14 @@ fn wait_conditions_are_validated() {
         serde_json::json!({"window_title":"x","timeout_ms":60001}),
         serde_json::json!({"screen_stable_ms":20000,"timeout_ms":10000}),
         serde_json::json!({"window_title":"x","region":"0,0,1,1"}),
+        serde_json::json!({"screen_changed":false}),
+        serde_json::json!({"window_title":"x","screen_change_percent":5.0}),
+        serde_json::json!({"screen_changed":true,"screen_change_percent":0.0}),
+        serde_json::json!({"screen_changed":true,"screen_change_percent":100.5}),
+        serde_json::json!({"text":"   "}),
+        serde_json::json!({"text":"x".repeat(257)}),
+        serde_json::json!({"window_title":"x","text_state":"gone"}),
+        serde_json::json!({"text":"Play","text_state":"hidden"}),
     ] {
         assert!(check(bad).is_err());
     }

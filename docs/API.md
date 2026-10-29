@@ -57,6 +57,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/containers/{id}/input` | Mouse/keyboard actions through VNC. |
 | POST | `/api/containers/{id}/act-and-observe` | Input actions followed by a screenshot, as JSON. |
 | POST | `/api/containers/{id}/screenshots` | Save a screenshot inside the desktop and return its `download_url`. |
+| POST | `/api/containers/{id}/find-text` | [Text on the screen](#text-on-the-screen), read with OCR, with boxes in desktop pixels. |
 | GET | `/api/containers/{id}/applications` | Launched applications and their state. |
 | POST | `/api/containers/{id}/applications` | Launch an application in the background. |
 | GET | `/api/containers/{id}/applications/{application_id}` | One application's state, pid and exit status. |
@@ -64,7 +65,7 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/containers/{id}/applications/{application_id}/stop` | Stop the application. |
 | GET | `/api/containers/{id}/applications/{application_id}/diagnostics` | Process tree, resources and latest log lines. |
 | GET | `/api/containers/{id}/applications/{application_id}/metrics` | CPU and memory sampled over `duration_ms`. |
-| POST | `/api/containers/{id}/wait` | Wait for a window, application state, log text or a stable screen. |
+| POST | `/api/containers/{id}/wait` | Wait for a window, application state, log text, a stable or changed screen, or text on it. |
 | POST | `/api/containers/{id}/reset` | Recreate the container from its source image; returns a job. |
 | GET | `/api/containers/{id}/recordings` | Recordings and their state. |
 | POST | `/api/containers/{id}/recordings` | Start recording desktop frames. |
@@ -763,6 +764,21 @@ Whatever a desktop serves would appear on the dashboard's address, and a desktop
 
 `POST /api/containers/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0 to 10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","jpeg_base64"}}`.
 
+## Text on the screen
+
+`POST /api/containers/{id}/find-text` with `{"text":"Save project","region":"0,0,1280,720","level":"line","min_confidence":50,"case_sensitive":false}`, every field optional, captures the screen at desktop resolution, or `region` of it, and reads it with Tesseract OCR in the manager. The capture is read in gray and enlarged up to twice, and the boxes are scaled back, so they are desktop pixels that `/input` takes as they are:
+
+```json
+{
+  "width": 1280, "height": 720, "region": "0,0,1280,720", "captured_at": 1792689876000, "truncated": false,
+  "lines": [{"text":"Save changes before closing?","x":226,"y":186,"width":278,"height":12,"confidence":91}],
+  "text": "Save project", "found": true,
+  "matches": [{"text":"Save project","x":319,"y":211,"width":75,"height":12,"center_x":356,"center_y":217,"confidence":88}]
+}
+```
+
+`level` is `line` (the default), words on one row joined into a line wherever they are close, or `word`, which lists `words` instead of `lines`. Words Tesseract is less sure of than `min_confidence` (0 to 100) are left out. `text` (at most 256 bytes) is matched within one line, ignoring case unless `case_sensitive`, with a run of spaces matching one; a match covers whole words. An answer lists at most 500 lines or words and 50 matches, and `truncated` says when there were more. Tesseract reads English, and one reading may take at most 30 seconds. A manager without Tesseract, such as a build run outside the manager image, answers 501 and names the Debian packages it needs, `tesseract-ocr` and `tesseract-ocr-eng`.
+
 ## Mouse and keyboard
 
 POST to `/api/containers/{id}/input` with an `actions` array:
@@ -806,7 +822,7 @@ POST `{"command":"glxgears","args":["-info"],"cwd":"/home/desktop","gpu":true,"e
 
 `GET .../applications/{application_id}/diagnostics` returns the application's state, exit status, its session's processes with memory use, open file count, thread count and the latest log lines. `GET .../applications/{application_id}/metrics?duration_ms=1000` samples CPU time and resident memory of those processes over the window (100 to 10000 ms) and reports container memory from cgroups; frame rate is not available.
 
-`POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100 to 60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`.
+`POST .../wait` with `{"window_title":"Game","application_id":"...","application_state":"running","log_contains":"ready","screen_stable_ms":1000,"region":"0,0,800,600","timeout_ms":10000,"interval_ms":500}` polls until every supplied condition holds and returns `satisfied`, `elapsed_ms` and the last observation; after `timeout_ms` (100 to 60000) it returns `satisfied:false` rather than an error. `application_state` defaults to `exited`, which also matches `failed`. `{"screen_changed":true,"screen_change_percent":0.5}` waits until the screen, or `region`, differs from how it looked when the wait began: `screen_change_percent` (0.01 to 100, default 0.5) of its pixels must have turned noticeably brighter or darker, and the answer reports `screen_changed_percent`. `{"text":"Loading","text_state":"gone"}` waits until the text is no longer read on the screen, or `region`, and `visible`, the default, until it is; the text is read and matched as [`find-text`](#text-on-the-screen) does, and the answer reports `text_found` and `text_match`, the first place it was read.
 
 `POST .../reset` recreates the container from its saved source image ID and returns a job. Unsaved changes in the container layer are discarded; named volumes, networks and the container ID are kept, and the data inside volumes is not touched. The reset is refused when the source image is missing.
 
@@ -923,7 +939,7 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 
 ## Limits and results
 
-JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs. An input request waits at most five seconds for a job that holds the container, such as a running script or an upload, and answers 409 after that without taking one of the four input slots. A request that needs a container, volume or image a job holds, such as a running script, an upload or an export, waits five seconds for it and then answers 409 instead of waiting for the job.
+JSON request bodies are limited to 1,100,000 bytes. Binary uploads have their own configured limit. Logs retain the last 256 KiB; application logs keep about 1 MiB. Screenshot requests share two processing slots and text reading with OCR two more, uploads allow two simultaneous transfers, archive exports, imports, extracts and volume copies two more, and desktop input allows four; operations on one container still use its resource lock, and a launched application does not hold it while it runs. An input request waits at most five seconds for a job that holds the container, such as a running script or an upload, and answers 409 after that without taking one of the four input slots. A request that needs a container, volume or image a job holds, such as a running script, an upload or an export, waits five seconds for it and then answers 409 instead of waiting for the job.
 
 MCP JSON responses are limited to 8 MiB and, like every `/mcp` response, use chunked transfer encoding, which survives the [HTTP scanning of some Windows security products](MCP.md#broken-responses-from-localhost-on-windows). This includes screenshots returned as base64 image content. A [stdio bridge](MCP.md#connect-through-stdio-on-windows) is bundled for clients that cannot use the HTTP connection directly.
 

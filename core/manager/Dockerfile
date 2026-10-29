@@ -54,7 +54,10 @@ RUN --mount=type=bind,from=ui,source=/build/core/web,target=/build/core/web \
 FROM docker:28-cli AS dockercli
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.title="Thoric" org.opencontainers.image.licenses="GPL-3.0-or-later"
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 && rm -rf /var/lib/apt/lists/*
+# Tesseract reads the text on desktops' screens for find_text and wait_for_condition. It runs in
+# the manager rather than in the desktops, so it reads every desktop image, older ones too.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tini python3 \
+    tesseract-ocr tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 COPY --from=backend /thoric /usr/local/bin/thoric

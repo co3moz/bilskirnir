@@ -32,6 +32,7 @@ mod mcp;
 mod media;
 mod model;
 mod mount_parents;
+mod ocr;
 mod outbound;
 mod package_requests;
 mod process;
@@ -168,6 +169,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/containers/{id}/input", post(desktop_input::input))
         .route("/api/containers/{id}/act-and-observe", post(capture::act))
         .route("/api/containers/{id}/screenshots", post(capture::save))
+        .route("/api/containers/{id}/find-text", post(ocr::find))
         .route(
             "/api/containers/{id}/applications",
             get(apps::list).post(apps::launch),
