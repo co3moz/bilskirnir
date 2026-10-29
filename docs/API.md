@@ -6,6 +6,8 @@ The dashboard and MCP server share Thoric's backend operations. You can also cal
 
 All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message.
 
+Every response carries an `X-Request-Id` header, and the manager's log line for the request names the same ID as `request_id`, so an error a script or the dashboard saw can be found in [the log](INSTALLATION.md#if-something-does-not-start). Send an `X-Request-Id` of your own, up to 128 letters, digits, `-`, `_`, `.` and `:`, to have it used instead; any other value is replaced with a new UUID.
+
 ## Sign in
 
 The HTTP API uses the same administrator session as the dashboard. Sign in and keep the returned cookie:
@@ -140,7 +142,8 @@ The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer lin
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
 | GET | `/api/activity` | The [agent activity](#agent-activity) log: MCP tool calls and used transfer links, newest first, with filters and a cursor. |
 | GET | `/api/dependencies` | Every [dependency](#dependencies) the manager image was built from: interface packages, crates and infrastructure. `404` for a manager built without the list. |
-| GET | `/healthz` | Basic manager health; does not require sign-in. |
+| GET | `/healthz` | Liveness: `ok` while the manager answers requests, without asking the database or Docker; does not require sign-in. The manager image's `HEALTHCHECK` and the WSL package's wait at start use it. |
+| GET | `/readyz` | Readiness: `200` with `{"ready": true, "database": true, "docker": true}` when the database answers a query and Docker answers its Engine socket's ping (or `docker version` where the manager has no socket), `503` with the failed check `false` otherwise. Each check gives up after two seconds, so a probe never hangs; the answer never says why a check failed. Does not require sign-in. |
 
 The VNC and media WebSocket routes are `/api/containers/{id}/vnc` and `/api/containers/{id}/audio/{direction}`, where direction is `output` or `input`. They use the browser session and require a matching Origin. VNC uses the binary subprotocol. Most automation clients can use screenshots and `/input` instead of implementing a VNC viewer.
 
