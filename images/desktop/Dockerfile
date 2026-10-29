@@ -1,4 +1,6 @@
-FROM ubuntu:24.04 AS common
+# Ubuntu 24.04 of a dated build, which Dependabot raises; tests/test_pinned_versions.py refuses a
+# moving tag. Both stages from Ubuntu name the same build.
+FROM ubuntu:noble-20261024.1 AS common
 ARG DEBIAN_FRONTEND=noninteractive
 ARG VIRTUALGL_VERSION=3.1.5
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,7 +27,7 @@ HEALTHCHECK --interval=10s --timeout=4s --start-period=30s CMD /usr/local/bin/de
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/desktop-entrypoint"]
 
 # VirtualGL's Chrome workaround for Chromium-family processes only, preloaded by gpu-run.
-FROM ubuntu:24.04 AS chromium-gpu
+FROM ubuntu:noble-20261024.1 AS chromium-gpu
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY chromium-gpu.c /src/
@@ -70,9 +72,11 @@ FROM common AS xfce-packages
 # librsvg2-common is GdkPixbuf's SVG loader; without it XFCE's default wallpaper and every icon
 # that exists only as SVG stay blank. The GNOME stage installs it too. PyGObject and Ayatana's
 # AppIndicator run the MCP servers tray, which XFCE's Status Tray and GNOME's AppIndicator
-# extension show alike.
+# extension show alike. GStreamer's plugins with its bindings for PyGObject turn recordings into
+# H.264 MP4 videos (appsrc, jpegdec, x264enc from the ugly set, mp4mux); GNOME installs them too.
 RUN apt-get update && apt-get install -y --no-install-recommends xfce4 xfce4-terminal librsvg2-common \
     python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
+    gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly \
     && rm -rf /var/lib/apt/lists/*
 FROM xfce-packages AS xfce
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/
@@ -105,6 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends ubuntu-wallpapers fonts-ubuntu \
     librsvg2-common gir1.2-dbusmenu-glib-0.4 ibus \
     python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
+    gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly \
     && rm -rf /var/lib/apt/lists/*
 FROM gnome-packages AS gnome
 COPY --from=scripts /usr/local/bin/ /usr/local/bin/

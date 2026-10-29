@@ -30,12 +30,12 @@ const LABEL_LIMIT: usize = 120;
 const STAGE_LIMIT: u32 = 10_000;
 
 /// What the job keeps of its scripts' parts and the steps they named.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScriptReport {
     pub parts: Vec<PartReport>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PartReport {
     /// The part's name, when a build has several parts or a compose several steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -56,7 +56,7 @@ pub struct PartReport {
 }
 
 /// A step a script named. A skipped one has no times.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScriptStep {
     pub stage: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]

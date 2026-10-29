@@ -51,7 +51,7 @@ fn desktop() -> String {
 }
 
 fn texts(lines: &[Line]) -> Vec<String> {
-    lines.iter().map(Line::text).collect()
+    lines.iter().map(|line| line.text_box().text).collect()
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn words_on_a_row_make_a_line_unless_a_column_lies_between_them() {
     );
     let line = &lines(&words)[3];
     assert_eq!(
-        line.json(),
+        serde_json::to_value(line.text_box()).unwrap(),
         serde_json::json!({"text":"Build finished in 12.4 seconds","x":460,"y":457,"width":297,"height":12,"confidence":96})
     );
 }
@@ -113,15 +113,18 @@ fn a_text_is_found_within_a_line_whatever_its_case_and_spacing() {
     let found = find(&lines, "FINISHED   in 12.4", false);
     assert_eq!(found.len(), 1);
     assert_eq!(
-        found[0].json(),
+        serde_json::to_value(found[0].text_match()).unwrap(),
         serde_json::json!({"text":"finished in 12.4","x":521,"y":457,"width":157,"height":12,"center_x":599,"center_y":463,"confidence":96})
     );
     // Part of a word finds the whole word, and every place it is in.
     let roots = find(&lines, "oo", false);
     assert_eq!(roots.len(), 2);
     assert!(roots.iter().all(|found| found.words.len() == 1));
-    assert_eq!(roots[1].json()["x"], 642);
-    assert_eq!(find(&lines, "erm", false)[0].json()["text"], "Terminal");
+    assert_eq!(roots[1].text_match().words.x, 642);
+    assert_eq!(
+        find(&lines, "erm", false)[0].text_match().words.text,
+        "Terminal"
+    );
     assert_eq!(find(&lines, "Terminal", false).len(), 1);
     assert!(find(&lines, "terminal", true).is_empty());
     // A text that spans two lines, or only spaces, is not found.

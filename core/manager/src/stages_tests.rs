@@ -196,7 +196,7 @@ fn build_output_names_each_stage_on_its_own_log_line() {
     }
     app.log_script_output("build", &lines.finish(), &mut progress)
         .unwrap();
-    let job: Job = app.db.get("job", "build").unwrap();
+    let job: Job = app.db.job("build").unwrap();
     assert_eq!(
         begun(&job),
         [
@@ -308,7 +308,7 @@ fn fake_docker(commands: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
 async fn finished(app: &App, started: axum::Json<serde_json::Value>) -> Job {
     let id = started.0["job_id"].as_str().unwrap();
     loop {
-        let job: Job = app.db.get("job", id).unwrap();
+        let job: Job = app.db.job(id).unwrap();
         if job.finished_at.is_some() {
             return job;
         }

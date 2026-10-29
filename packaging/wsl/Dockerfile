@@ -1,8 +1,8 @@
 # Root filesystem for the Thoric WSL distribution: Ubuntu 24.04 with Docker Engine, Compose,
 # Buildx, the NVIDIA Container Toolkit and the Thoric installation files. The image is
 # exported with `packaging/wsl/build.sh` into a `.wsl` package that `wsl --install --from-file`
-# accepts.
-FROM ubuntu:24.04
+# accepts. The base is a dated build of Ubuntu 24.04, which Dependabot raises.
+FROM ubuntu:noble-20261024.1
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg sudo systemd systemd-sysv dbus iproute2 iptables \
@@ -20,8 +20,11 @@ RUN install -m 0755 -d /etc/apt/keyrings \
        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin nvidia-container-toolkit \
     && rm -rf /var/lib/apt/lists/*
 # Docker starts with systemd; daemon.json, copied below, registers the NVIDIA runtime now, so the
-# first boot needs no network, and turns on live-restore, so containers keep running when Docker
-# restarts. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
+# first boot needs no network, turns on live-restore, so containers keep running when Docker
+# restarts, and has every container log through json-file in at most three files of 10 MB. An
+# update leaves the file as an older package installed it, where the manager and compose.yml give
+# Thoric's own containers the same rotation; the thoric command does not rely on it, so the package
+# level stays. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
 # whole ruleset when it starts (the default /etc/nftables.conf) and when it stops, which clears
 # the firewall rules of every Docker Engine on the machine, so it is masked.
 RUN systemctl enable docker containerd \

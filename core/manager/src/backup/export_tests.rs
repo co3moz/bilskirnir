@@ -190,7 +190,7 @@ async fn a_backup_streams_every_part_with_its_length_and_digest() {
         assert!(helper.contains(flag), "{helper}");
     }
     assert!(!calls.contains("src=thoric-data"), "{calls}");
-    let job: crate::model::Job = app.db.get("job", "backup-job").unwrap();
+    let job: crate::model::Job = app.db.job("backup-job").unwrap();
     assert!(!job.log.contains(SECRET));
     let stages = job
         .stages
@@ -227,7 +227,7 @@ async fn secret_values_leave_only_in_a_backup_that_asks_for_them() {
     assert_eq!(names, [MANIFEST, RECORDS, END]);
     assert!(String::from_utf8_lossy(&entries[1].1).contains(SECRET));
     assert!(!String::from_utf8_lossy(&entries[0].1).contains(SECRET));
-    let job: crate::model::Job = app.db.get("job", "backup-job").unwrap();
+    let job: crate::model::Job = app.db.job("backup-job").unwrap();
     assert!(!job.log.contains(SECRET));
     assert!(
         job.log
@@ -258,5 +258,30 @@ async fn a_failing_part_fails_the_download_instead_of_ending_it_short() {
     };
     let error = download(&app, included).await.unwrap_err();
     assert!(error.to_string().contains("no such image"), "{error:#}");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A record this release cannot read is not left out of a backup that would then look whole: the
+/// backup fails before its first entry and names the record, without its data.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_record_that_does_not_read_fails_the_backup_instead_of_going_missing() {
+    let (app, dir) = installation();
+    app.db
+        .put(
+            CONTAINERS,
+            "c2",
+            &serde_json::json!({"id": "c2", "spec": SECRET}),
+        )
+        .unwrap();
+    let error = format!(
+        "{:#}",
+        download(&app, Included::default()).await.unwrap_err()
+    );
+    assert!(
+        error.contains(&format!("{CONTAINERS} record c2")),
+        "{error}"
+    );
+    assert!(!error.contains(SECRET), "{error}");
     std::fs::remove_dir_all(dir).unwrap();
 }

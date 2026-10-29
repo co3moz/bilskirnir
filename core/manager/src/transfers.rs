@@ -26,7 +26,7 @@ use crate::{
 use axum::{
     body::Body,
     extract::{Path, Query, State, rejection::QueryRejection},
-    http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
@@ -267,7 +267,7 @@ pub(crate) fn create(app: &App, operation: Operation) -> Result<Value> {
 }
 
 /// What a request may add to its link: an upload's size, when it sends no Content-Length.
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Size {
     size: Option<u64>,
@@ -464,14 +464,6 @@ async fn run(
             .await
             .into_response(),
     })
-}
-
-/// A request's URI as tracing records it: a transfer link's token is a credential.
-pub(crate) fn traced(uri: &Uri) -> String {
-    match uri.path().strip_prefix(ROUTE) {
-        Some(_) => format!("{ROUTE}<token>"),
-        None => uri.to_string(),
-    }
 }
 
 #[cfg(test)]

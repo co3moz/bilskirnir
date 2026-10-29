@@ -108,7 +108,10 @@ where
             .ok()
             .and_then(|value| value["message"].as_str().map(str::to_owned))
             .unwrap_or_else(|| String::from_utf8_lossy(&body).trim().to_owned());
-        bail!("Docker: {message} ({status})");
+        return Err(crate::error::engine_failure(
+            status,
+            format!("Docker: {message} ({status})"),
+        ));
     }
     Ok((response, connection))
 }

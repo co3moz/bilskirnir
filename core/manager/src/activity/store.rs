@@ -17,33 +17,10 @@ const PRUNE_EVERY: i64 = 64;
 const PAGE: usize = 50;
 const PAGE_LIMIT: usize = 200;
 
-/// Make the table when the database opens, and drop what is beyond [`KEPT`].
-pub(crate) fn create_table(conn: &Connection) -> rusqlite::Result<()> {
-    // AUTOINCREMENT: an ID is never given again after older rows are pruned, so a page's cursor
-    // keeps its place.
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS activity(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            at INTEGER NOT NULL,
-            endpoint TEXT,
-            credential TEXT NOT NULL,
-            client TEXT,
-            source TEXT NOT NULL,
-            tool TEXT NOT NULL,
-            server TEXT,
-            container_id TEXT,
-            container_name TEXT,
-            kind TEXT NOT NULL,
-            arguments TEXT NOT NULL,
-            summary TEXT NOT NULL,
-            outcome TEXT NOT NULL,
-            error TEXT,
-            duration_ms INTEGER NOT NULL,
-            job_id TEXT
-        );
-        CREATE INDEX IF NOT EXISTS activity_container ON activity(container_id, id);
-        CREATE INDEX IF NOT EXISTS activity_endpoint ON activity(endpoint, id);",
-    )?;
+/// Drop what is beyond [`KEPT`] when the database opens. Its migrations make the table, whose
+/// AUTOINCREMENT never gives an ID again after older rows are pruned, so a page's cursor keeps
+/// its place.
+pub(crate) fn opened(conn: &Connection) -> rusqlite::Result<()> {
     prune(conn, KEPT)?;
     Ok(())
 }
@@ -91,7 +68,7 @@ pub(super) fn prune(conn: &Connection, keep: usize) -> rusqlite::Result<usize> {
 
 /// Which calls a page lists: each filter given narrows it, and `before` continues from the last
 /// ID of the page before.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Filter {
     /// A container's ID.

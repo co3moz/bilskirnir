@@ -44,7 +44,9 @@ fn a_header_larger_than_any_desktop_or_bytes_that_are_no_jpeg_are_refused() {
     huge[frame + 5..frame + 9].copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
     let error = Gray::from_jpeg(&huge).unwrap_err().to_string();
     assert!(error.contains("65535x65535"), "{error}");
-    assert!(Gray::from_jpeg(b"not a jpeg").is_err());
+    let error = crate::error::Error::from(Gray::from_jpeg(b"not a jpeg").unwrap_err());
+    // What the desktop's screenshot helper answered is its failure, not the request's.
+    assert_eq!(error.0, StatusCode::BAD_GATEWAY, "{}", error.1);
     assert!(Gray::from_jpeg(&[]).is_err());
 }
 

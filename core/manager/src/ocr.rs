@@ -27,11 +27,11 @@ use axum::{
     http::StatusCode,
 };
 use rmcp::schemars::{self, JsonSchema};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::{io::AsyncWriteExt, process::Command, sync::Semaphore};
-pub(crate) use words::Match;
+pub(crate) use words::{Match, TextBox, TextMatch};
 
 /// The program, found on the manager's `PATH`.
 const PROGRAM: &str = "tesseract";
@@ -206,46 +206,77 @@ pub(crate) async fn locate(
     Ok(words::find(&reading.lines, text, false))
 }
 
+/// What `find_text` read.
+#[derive(Serialize, JsonSchema)]
+pub struct FoundText {
+    /// The size of what was read: the region's, or the desktop's.
+    pub width: u16,
+    pub height: u16,
+    /// The region read, as the request named it.
+    pub region: Option<String>,
+    /// When the screen was captured, in Unix milliseconds.
+    pub captured_at: u64,
+    /// Lines of words, top to bottom and left to right; with level=word, `words` instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lines: Option<Vec<TextBox>>,
+    /// Every word, line by line, with level=word.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<TextBox>>,
+    /// Whether there was more than the 500 lines or words listed.
+    pub truncated: bool,
+    /// The text looked for, with `found` and `matches`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Whether the text was read anywhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub found: Option<bool>,
+    /// Every place the text was read, at most 50.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matches: Option<Vec<TextMatch>>,
+}
+
 pub async fn find_text(app: &App, id: &str, body: &FindText) -> Result<Value> {
     body.validate()?;
     let reading = read(app, id, body.region.as_deref(), body.min_confidence).await?;
-    let (key, entries): (&str, Vec<Value>) = match body.level {
-        Level::Line => (
-            "lines",
-            reading.lines.iter().map(words::Line::json).collect(),
-        ),
+    let entries: Vec<TextBox> = match body.level {
+        Level::Line => reading.lines.iter().map(words::Line::text_box).collect(),
         // In the order of the lines, so a row's words come left to right.
-        Level::Word => (
-            "words",
-            reading
-                .lines
-                .iter()
-                .flat_map(|line| &line.words)
-                .map(words::Word::json)
-                .collect(),
-        ),
+        Level::Word => reading
+            .lines
+            .iter()
+            .flat_map(|line| &line.words)
+            .map(words::Word::text_box)
+            .collect(),
     };
-    let mut result = json!({
-        "width": reading.width,
-        "height": reading.height,
-        "region": body.region,
-        "captured_at": reading.captured_at,
-        "truncated": reading.truncated || entries.len() > ENTRIES,
-    });
-    result[key] = json!(entries.into_iter().take(ENTRIES).collect::<Vec<_>>());
-    if let Some(text) = &body.text {
-        let matches = words::find(&reading.lines, text, body.case_sensitive);
-        result["text"] = json!(text);
-        result["found"] = json!(!matches.is_empty());
-        result["matches"] = json!(
+    let truncated = reading.truncated || entries.len() > ENTRIES;
+    let entries = entries.into_iter().take(ENTRIES).collect();
+    let (lines, words) = match body.level {
+        Level::Line => (Some(entries), None),
+        Level::Word => (None, Some(entries)),
+    };
+    let matches = body
+        .text
+        .as_ref()
+        .map(|text| words::find(&reading.lines, text, body.case_sensitive));
+    let found = FoundText {
+        width: reading.width,
+        height: reading.height,
+        region: body.region.clone(),
+        captured_at: reading.captured_at,
+        lines,
+        words,
+        truncated,
+        text: body.text.clone(),
+        found: matches.as_ref().map(|matches| !matches.is_empty()),
+        matches: matches.map(|matches| {
             matches
                 .iter()
                 .take(MATCHES)
-                .map(Match::json)
-                .collect::<Vec<_>>()
-        );
-    }
-    Ok(result)
+                .map(Match::text_match)
+                .collect()
+        }),
+    };
+    serde_json::to_value(found).map_err(|e| Error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 pub async fn find(
@@ -318,7 +349,7 @@ async fn tesseract(program: &str, image: Vec<u8>, mode: &str, timeout: Duration)
         Err(_) => {
             let _ = child.kill().await;
             return Err(Error(
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::GATEWAY_TIMEOUT,
                 format!(
                     "Reading the text took longer than {} seconds; read a smaller region",
                     timeout.as_secs_f32()

@@ -69,7 +69,7 @@ pub async fn configuration(State(app): State<Arc<App>>) -> Result<Json<Value>> {
 }
 
 /// A settings change: the new text of each setting, as `.env` will hold it.
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Change {
     changes: BTreeMap<String, String>,

@@ -42,7 +42,10 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
             dri_gpu: true,
             adapter: String::new(),
             gpu_host: Default::default(),
+            // Docker's own default.
+            log_driver: Some("json-file".into()),
             user_namespaces: true,
+            pids_limit: desktop_limits::DEFAULT_PIDS_LIMIT,
             allowed_hosts: vec![],
             desktop_host: None,
             upload_limit: 1024 * 1024,
@@ -59,7 +62,8 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         },
         db: db::Db::open(std::path::Path::new(":memory:")).unwrap(),
         sessions: Mutex::new(HashMap::new()),
-        login_attempts: Mutex::new(Vec::new()),
+        login_attempts: Default::default(),
+        https_proxy: Default::default(),
         operations: Arc::new(tokio::sync::Mutex::new(())),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
@@ -1151,7 +1155,7 @@ async fn unrelated_jobs_progress_while_a_container_queue_is_blocked() {
         .to_owned();
     tokio::time::timeout(std::time::Duration::from_secs(1), async {
         loop {
-            if app.db.get::<model::Job>("job", &free).unwrap().status == "completed" {
+            if app.db.job(&free).unwrap().status == "completed" {
                 break;
             }
             tokio::task::yield_now().await;
@@ -1159,14 +1163,11 @@ async fn unrelated_jobs_progress_while_a_container_queue_is_blocked() {
     })
     .await
     .unwrap();
-    assert_eq!(
-        app.db.get::<model::Job>("job", &queued).unwrap().status,
-        "queued"
-    );
+    assert_eq!(app.db.job(&queued).unwrap().status, "queued");
     drop(guard);
     tokio::time::timeout(std::time::Duration::from_secs(1), async {
         loop {
-            if app.db.get::<model::Job>("job", &queued).unwrap().status == "completed" {
+            if app.db.job(&queued).unwrap().status == "completed" {
                 break;
             }
             tokio::task::yield_now().await;

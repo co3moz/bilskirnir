@@ -20,14 +20,14 @@ use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::io::AsyncReadExt;
 
 pub const FILE_LIMIT: usize = 512 * 1024;
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Encoding {
     #[default]
     Utf8,
     Base64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReadFile {
     pub path: String,
@@ -41,7 +41,7 @@ pub struct ReadFile {
 fn default_limit() -> usize {
     65536
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WriteFile {
     pub path: String,
@@ -166,15 +166,7 @@ pub async fn write(
     )
     .await?;
     if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error(
-            if message.starts_with("CONFLICT:") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            message,
-        ));
+        return Err(Error::helper(&output));
     }
     Ok(Json(json!({"path":body.path,"bytes":size})))
 }
@@ -212,7 +204,7 @@ pub struct DeleteFile {
     #[serde(default)]
     pub recursive: bool,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MakeDirectory {
     /// Canonical absolute path of the new folder, whose parent must exist.
@@ -284,15 +276,7 @@ async fn file_ops(app: &App, cid: &str, arguments: &[&str]) -> Result<Value> {
     )
     .await?;
     if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error(
-            if message.starts_with("CONFLICT:") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            message,
-        ));
+        return Err(Error::helper(&output));
     }
     serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e).into())
 }
@@ -386,7 +370,7 @@ pub struct Download {
 fn download_limit() -> usize {
     4 * 1024 * 1024
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 pub struct DownloadQuery {
     pub path: String,
 }
@@ -466,10 +450,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
     )
     .await?;
     if !output.status.success() {
-        return Err(Error(
-            StatusCode::BAD_REQUEST,
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
+        return Err(Error::helper(&output));
     }
     Ok(json!({
         "path": body.path,

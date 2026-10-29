@@ -1035,6 +1035,8 @@ export const tr: Messages = {
   "settings.about.DESKTOP_IMAGE": "Oluşturma formunun ilk seçtiği imaj.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Masaüstlerindeki tarayıcıların ve Electron uygulamalarının sandbox'ını açmasına izin verir.",
+  "settings.about.DESKTOP_PIDS_LIMIT":
+    "Bir masaüstünün çalıştırabileceği en fazla süreç ve iş parçacığı, en az 1024; sınırsız için 0.",
   "settings.about.AUDIO_ENABLED": "Masaüstü sesi tarayıcıda.",
   "settings.about.MICROPHONE_ENABLED": "Tarayıcının mikrofonu masaüstlerinde; ses gerekir.",
   "settings.about.INTERNET_ENABLED": "Konteynerlerin internet erişimi olup olamayacağı.",

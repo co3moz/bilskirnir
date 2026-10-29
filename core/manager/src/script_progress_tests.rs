@@ -332,7 +332,7 @@ fn only_a_change_is_saved_and_the_report_outlives_the_progress() {
         &mut progress,
     )
     .unwrap();
-    let saved: crate::model::Job = app.db.get("job", "setup").unwrap();
+    let saved: crate::model::Job = app.db.job("setup").unwrap();
     assert_eq!(saved.log, "THORIC_STAGE=1/2 Waiting\nworking\n");
     assert_eq!(saved.progress.unwrap()["script"]["label"], "Waiting");
     assert_eq!(saved.script.unwrap().parts[0].steps.len(), 1);
@@ -341,17 +341,11 @@ fn only_a_change_is_saved_and_the_report_outlives_the_progress() {
     moved.progress = None;
     app.db.put("job", "setup", &moved).unwrap();
     app.save_script("setup", &mut progress).unwrap();
-    assert_eq!(
-        app.db
-            .get::<crate::model::Job>("job", "setup")
-            .unwrap()
-            .progress,
-        None
-    );
+    assert_eq!(app.db.job("setup").unwrap().progress, None);
     progress.finish_part(0, 2);
     progress.end();
     app.save_script("setup", &mut progress).unwrap();
-    let saved: crate::model::Job = app.db.get("job", "setup").unwrap();
+    let saved: crate::model::Job = app.db.job("setup").unwrap();
     assert_eq!(saved.progress, None);
     assert_eq!(saved.script.unwrap().parts[0].finished_at, Some(2));
     // Job lists leave the report out, as they leave the log out.

@@ -1,56 +1,116 @@
-use anyhow::Result;
+//! The manager's SQLite: a table of JSON records by kind and id, the agent activity, the jobs'
+//! logs ([`job_log`]) and what the numbered [`migrations`] bring, which every start runs before
+//! anything reads.
+use anyhow::{Context, Result};
 use rusqlite::{Connection, params};
 use serde::{Serialize, de::DeserializeOwned};
-use std::sync::Mutex;
+use std::{collections::HashSet, path::Path, sync::Mutex};
 
-pub struct Db(Mutex<Connection>);
+mod job_log;
+mod migrations;
+
+/// The database's file in the data folder.
+pub(crate) const FILE: &str = "state.sqlite";
+
+pub struct Db {
+    conn: Mutex<Connection>,
+    /// The records a list skipped because they did not read, by kind and id, each said once.
+    unreadable: Mutex<HashSet<(String, String)>>,
+}
 impl Db {
-    pub fn open(path: &std::path::Path) -> Result<Self> {
-        let conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id));")?;
-        crate::activity::create_table(&conn)?;
-        Ok(Self(Mutex::new(conn)))
+    pub fn open(path: &Path) -> Result<Self> {
+        let mut conn = Connection::open(path)?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+        migrations::run(&mut conn)
+            .with_context(|| format!("Could not open the database {}", path.display()))?;
+        crate::activity::opened(&conn)?;
+        job_log::opened(&conn)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+            unreadable: Mutex::new(HashSet::new()),
+        })
     }
     /// The connection itself, for a module with a table of its own, such as the agent activity.
     pub(crate) fn connection(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.0.lock().unwrap()
+        self.conn.lock().unwrap()
     }
     pub fn put<T: Serialize>(&self, kind: &str, id: &str, value: &T) -> Result<()> {
-        self.0.lock().unwrap().execute("INSERT INTO records(kind,id,data) VALUES(?1,?2,?3) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data", params![kind,id,serde_json::to_string(value)?])?;
+        self.connection().execute("INSERT INTO records(kind,id,data) VALUES(?1,?2,?3) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data", params![kind,id,serde_json::to_string(value)?])?;
         Ok(())
     }
     pub fn get<T: DeserializeOwned>(&self, kind: &str, id: &str) -> Result<T> {
-        let text: String = self.0.lock().unwrap().query_row(
+        let text: String = self.connection().query_row(
             "SELECT data FROM records WHERE kind=?1 AND id=?2",
             params![kind, id],
             |r| r.get(0),
         )?;
         Ok(serde_json::from_str(&text)?)
     }
+    /// Every record of `kind` that reads, newest first. One that does not, such as a record a
+    /// later release wrote in another shape, is left out and logged, so the others stay usable;
+    /// a decision that needs them all takes [`Db::list_complete`].
     pub fn list<T: DeserializeOwned>(&self, kind: &str) -> Result<Vec<T>> {
-        let conn = self.0.lock().unwrap();
-        let mut stmt =
-            conn.prepare("SELECT data FROM records WHERE kind=?1 ORDER BY rowid DESC")?;
-        let rows = stmt.query_map([kind], |r| r.get::<_, String>(0))?;
-        rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
+        Ok(self
+            .rows(kind, "rowid DESC")?
+            .into_iter()
+            .filter_map(|(id, data)| self.readable(kind, &id, &data))
+            .collect())
     }
-    /// Every record of `kind` with its id, oldest first, for records that do not carry their id.
-    pub fn entries<T: DeserializeOwned>(&self, kind: &str) -> Result<Vec<(String, T)>> {
-        let conn = self.0.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT id, data FROM records WHERE kind=?1 ORDER BY rowid")?;
-        let rows = stmt.query_map([kind], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-        })?;
-        rows.map(|r| {
-            let (id, data) = r?;
-            Ok((id, serde_json::from_str(&data)?))
-        })
-        .collect()
+    /// Every record of `kind`, newest first, or an error that names the first that does not
+    /// read: for a decision that must see them all, such as whether anything still uses an
+    /// image or a volume, or a backup.
+    pub fn list_complete<T: DeserializeOwned>(&self, kind: &str) -> Result<Vec<T>> {
+        self.rows(kind, "rowid DESC")?
+            .into_iter()
+            .map(|(id, data)| complete(kind, &id, &data))
+            .collect()
+    }
+    /// Every record of `kind` with its id, oldest first, for records that do not carry their
+    /// id, or an error that names the first that does not read, as [`Db::list_complete`] gives.
+    /// Only a backup reads such records all at once.
+    pub fn entries_complete<T: DeserializeOwned>(&self, kind: &str) -> Result<Vec<(String, T)>> {
+        self.rows(kind, "rowid")?
+            .into_iter()
+            .map(|(id, data)| Ok((id.clone(), complete(kind, &id, &data)?)))
+            .collect()
+    }
+    /// The ids of every record of `kind`, without reading one, so a record that does not read
+    /// still counts as taken.
+    pub fn ids(&self, kind: &str) -> Result<Vec<String>> {
+        let conn = self.connection();
+        let mut stmt = conn.prepare("SELECT id FROM records WHERE kind=?1 ORDER BY rowid")?;
+        let rows = stmt.query_map([kind], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+    fn rows(&self, kind: &str, order: &str) -> Result<Vec<(String, String)>> {
+        let conn = self.connection();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT id, data FROM records WHERE kind=?1 ORDER BY {order}"
+        ))?;
+        let rows = stmt.query_map([kind], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+    /// The record when it reads; otherwise its kind and id are logged, once, and never its data.
+    fn readable<T: DeserializeOwned>(&self, kind: &str, id: &str, data: &str) -> Option<T> {
+        match serde_json::from_str(data) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                if self
+                    .unreadable
+                    .lock()
+                    .unwrap()
+                    .insert((kind.into(), id.into()))
+                {
+                    tracing::warn!("Skipping the {kind} record {id}: {}", unread(&error));
+                }
+                None
+            }
+        }
     }
     /// Insert records that must arrive together, as `(kind, id, value)`, in one transaction: all
     /// of them or none. An existing record is never replaced; one of the same kind and id fails it.
     pub fn insert_all(&self, records: &[(&str, &str, serde_json::Value)]) -> Result<()> {
-        let mut conn = self.0.lock().unwrap();
+        let mut conn = self.connection();
         let transaction = conn.transaction()?;
         for (kind, id, value) in records {
             transaction.execute(
@@ -61,31 +121,46 @@ impl Db {
         transaction.commit()?;
         Ok(())
     }
+    /// Remove a record; a job's log goes with it.
     pub fn remove(&self, kind: &str, id: &str) -> Result<()> {
-        self.0.lock().unwrap().execute(
+        let mut conn = self.connection();
+        let transaction = conn.transaction()?;
+        if kind == job_log::JOB {
+            transaction.execute("DELETE FROM job_log WHERE job=?1", [id])?;
+        }
+        transaction.execute(
             "DELETE FROM records WHERE kind=?1 AND id=?2",
             params![kind, id],
         )?;
+        transaction.commit()?;
         Ok(())
     }
-    /// Remove the finished jobs beyond the newest `keep`. A job still running or queued stays
-    /// whatever its age; its end is what marks it finished.
+    /// Remove the finished jobs beyond the newest `keep`, with their logs. A job still running
+    /// or queued stays whatever its age; its end is what marks it finished.
     pub fn prune_jobs(&self, keep: usize) -> Result<usize> {
-        let conn = self.0.lock().unwrap();
-        let removed = conn.execute(
-            "DELETE FROM records WHERE kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)",
+        const PRUNED: &str = "kind='job' AND json_extract(data, '$.finished_at') IS NOT NULL AND rowid NOT IN (SELECT rowid FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT ?1)";
+        let mut conn = self.connection();
+        let transaction = conn.transaction()?;
+        // The logs first, while the records still say whose they are.
+        transaction.execute(
+            &format!("DELETE FROM job_log WHERE job IN (SELECT id FROM records WHERE {PRUNED})"),
+            params![keep as i64],
+        )?;
+        let removed = transaction.execute(
+            &format!("DELETE FROM records WHERE {PRUNED}"),
             params![keep as i64],
         )?;
         // A request kept to start a job again goes with its job.
-        conn.execute(
+        transaction.execute(
             "DELETE FROM records WHERE kind=?1 AND id NOT IN (SELECT id FROM records WHERE kind='job')",
             params![crate::jobs::retry::REQUESTS],
         )?;
+        transaction.commit()?;
         Ok(removed)
     }
     /// Whether a record of `kind` is saved under `id`, without reading it.
     pub fn contains(&self, kind: &str, id: &str) -> Result<bool> {
-        let found = self.0.lock().unwrap().query_row(
+        let found = self.connection().query_row(
             "SELECT EXISTS(SELECT 1 FROM records WHERE kind=?1 AND id=?2)",
             params![kind, id],
             |row| row.get(0),
@@ -93,19 +168,55 @@ impl Db {
         Ok(found)
     }
     pub fn jobs_summary(&self) -> Result<Vec<crate::model::Job>> {
-        let conn = self.0.lock().unwrap();
         // Strip potentially large logs and script reports in SQLite, before allocating/deserializing rows.
-        let mut stmt = conn.prepare("SELECT json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT 100")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
+        self.jobs("SELECT id, json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' ORDER BY rowid DESC LIMIT 100")
     }
     /// The jobs that are queued or running, newest first, without their logs or script reports.
     pub fn active_jobs(&self) -> Result<Vec<crate::model::Job>> {
-        let conn = self.0.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' AND json_extract(data, '$.status') IN ('queued', 'running') ORDER BY rowid DESC")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        rows.map(|r| Ok(serde_json::from_str(&r?)?)).collect()
+        self.jobs("SELECT id, json_remove(json_set(data, '$.log', ''), '$.script') FROM records WHERE kind='job' AND json_extract(data, '$.status') IN ('queued', 'running') ORDER BY rowid DESC")
     }
+    /// The jobs `query` selects as id and data, without those that do not read.
+    fn jobs(&self, query: &str) -> Result<Vec<crate::model::Job>> {
+        let rows: Vec<(String, String)> = {
+            let conn = self.connection();
+            let mut stmt = conn.prepare(query)?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, data)| self.readable("job", &id, &data))
+            .collect())
+    }
+    /// Write a consistent copy of the whole database to `path`, a file that does not exist yet,
+    /// while the manager goes on using it.
+    pub fn copy_to(&self, path: &Path) -> Result<()> {
+        let target = path
+            .to_str()
+            .with_context(|| format!("{} is not a UTF-8 path", path.display()))?;
+        self.connection().execute("VACUUM INTO ?1", [target])?;
+        Ok(())
+    }
+}
+
+/// A record a decision needs whole, or an error that names it without its data.
+fn complete<T: DeserializeOwned>(kind: &str, id: &str, data: &str) -> Result<T> {
+    serde_json::from_str(data).map_err(|error| {
+        anyhow::anyhow!(
+            "The {kind} record {id} cannot be read by this release of Thoric ({})",
+            unread(&error)
+        )
+    })
+}
+
+/// Why a record did not read, by where it went wrong: serde's own message can quote a value.
+fn unread(error: &serde_json::Error) -> String {
+    let what = match error.classify() {
+        serde_json::error::Category::Data => "fields in a shape this release does not read",
+        serde_json::error::Category::Syntax | serde_json::error::Category::Eof => "invalid JSON",
+        serde_json::error::Category::Io => "a read error",
+    };
+    format!("{what} at line {}, column {}", error.line(), error.column())
 }
 
 #[cfg(test)]

@@ -20,7 +20,8 @@
 mod mask;
 mod store;
 
-pub(crate) use store::create_table;
+pub(crate) use store::Filter;
+pub(crate) use store::opened;
 
 use crate::{App, error::Result};
 use axum::{

@@ -1041,6 +1041,8 @@ export const es: Messages = {
   "settings.about.DESKTOP_IMAGE": "La imagen que el formulario de creación elige primero.",
   "settings.about.DESKTOP_USER_NAMESPACES":
     "Permite que los navegadores y las apps Electron de los escritorios inicien su sandbox.",
+  "settings.about.DESKTOP_PIDS_LIMIT":
+    "El máximo de procesos e hilos que ejecuta un escritorio, al menos 1024; 0 para ningún límite.",
   "settings.about.AUDIO_ENABLED": "El sonido del escritorio en el navegador.",
   "settings.about.MICROPHONE_ENABLED":
     "El micrófono del navegador en los escritorios; necesita sonido.",

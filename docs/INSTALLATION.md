@@ -30,7 +30,7 @@ The minimal README example keeps settings directly in Compose. The full manifest
 
 The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
 
-In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER`, `PROXY_URL`, `PROXY_USERNAME`, `PROXY_BYPASS` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `PROXY_PASSWORD`, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `thoric settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
+In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `DESKTOP_PIDS_LIMIT`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER`, `PROXY_URL`, `PROXY_USERNAME`, `PROXY_BYPASS` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `PROXY_PASSWORD`, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `thoric settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
@@ -58,6 +58,7 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 | `GAMEPAD_DEFAULT` | `false` | Whether a new container gets the virtual gamepad unless it asks otherwise. |
 | `VPN_DEFAULT` | `false` | Whether a new container gets VPN access unless it asks otherwise. |
 | `DESKTOP_USER_NAMESPACES` | `true` | Lets processes in a container create user namespaces, which Chrome, Edge, other Chromium-based browsers and Electron applications use for their sandbox. Containers get Docker's default seccomp profile with this one addition (`images/desktop/seccomp.json`); calls that need `CAP_SYS_ADMIN`, such as `mount`, stay blocked. Set `false` to keep Docker's default: those applications then start only with `--no-sandbox`, and opening a link in such a default browser fails. It applies when a container is created, so an existing container changes after a reset or a settings change that recreates it. |
+| `DESKTOP_PIDS_LIMIT` | `16384` | How many processes and threads one container may run, so a runaway program or a fork bomb inside it stops there instead of using up the host's for the other containers and the manager. Threads count: a browser with many tabs, an IDE with its language servers or the Unity editor each run hundreds to thousands, so raise it when programs in a container fail with `Resource temporarily unavailable` as they start a process or a thread. At least 1024, or `0` for no limit. Docker changes it on a running container, so within 20 seconds of starting the manager gives every container the current value, also one created before the limit, without restarting it. |
 | `UPLOAD_MAX_MB` | `1024` | Maximum file size in MiB, from 1 to 65536. |
 | `IMAGE_ARCHIVE_MAX_MB` | `65536` | Largest image or volume archive an import accepts, in MiB after decompression, from 1 to 1048576. An image archive holds every layer of the image, so it is several gigabytes. |
 | `DESKTOP_IMAGE` | XFCE GHCR image | The default image when creating a container. |
@@ -90,6 +91,8 @@ The container features of the create form have a switch and a default each. GPU 
 Containers created with the gamepad option receive the host's `/dev/uinput` device, which current WSL2 kernels provide; a root helper inside the desktop creates the virtual controller there.
 
 Containers created with the VPN option receive the host's `/dev/net/tun` device, which current WSL2 kernels and most Linux hosts provide, and the `NET_ADMIN` capability. Both reach only the container's own network namespace: a VPN client there changes the desktop's routes, never the host's or another container's. A host without `/dev/net/tun` refuses such a container with the setting named.
+
+Container logs rotate. Docker's default logging driver, `json-file`, keeps everything a container writes in one file that otherwise grows for as long as the container exists. While the Docker daemon logs through it, the manager creates every container with `max-size=10m` and `max-file=3`, so a desktop's log takes at most 30 MB, and **Logs** and the MCP `container_logs` still show its newest lines. The manager asks Docker for its driver once when it starts. Under `local`, which rotates by itself, and under a driver chosen for the daemon, such as `journald` or `syslog`, containers keep the daemon's own settings. Both Compose manifests give the manager and the HTTPS service the same rotation whatever the daemon's default; a Compose override file changes that. Docker fixes a container's log settings when it creates the container, so a container created by an older manager keeps a log without a size until a reset or a settings change recreates it, and the manager's own log rotates once Compose recreates it from the new manifest, as `thoric update` does.
 
 Agent access uses a separate token rather than the dashboard session, unless `MCP_AUTH_MODE=none` turns it off. See the [MCP guide](MCP.md) to connect an agent, or the [HTTP API](API.md) to build another client.
 
@@ -133,6 +136,8 @@ docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/ro
 
 Trust `caddy-root.crt` on the client device and open [desktop.lan:8443](https://desktop.lan:8443). Once secure cookies are enabled, sign in through HTTPS.
 
+Every browser reaches the manager from Caddy's address, so the manager counts failed sign-ins by the address Caddy forwards in `X-Forwarded-For`. It believes that header only from the running `https` service of its own Compose project, whose addresses it reads from Docker every 20 seconds and logs when they change; from anyone else, such as a desktop or a LAN client that connects to the manager's port, the connection's own address counts. A proxy of your own in front of the manager is not trusted this way, so all sign-ins through it share one count of 20 failures a minute.
+
 Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest.
 
 ## Update the images
@@ -158,13 +163,39 @@ New containers use the updated catalog images. Existing containers and snapshots
 
 `edge` is the newest build of `master`, published with every change before a release includes it. To follow it, set `MANAGER_IMAGE=ghcr.io/co3moz/thoric:edge` in `.env`, export the installation files from `ghcr.io/co3moz/thoric:edge` as [above](#use-the-full-installation-files), since a change on `master` may add a setting to them, and run the update commands. An edge manager downloads the desktop images published with it, those of its own commit, and the sidebar names that commit instead of a version, since an edge build still carries the version of the release before it. `ghcr.io/co3moz/thoric:sha-<full-commit>` stays on one build of `master` the same way. For the WSL package, see [Edge builds](WSL_PACKAGE.md#edge-builds) there.
 
-To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it may not read what the newer manager wrote, and it refuses the desktop images, and the images built on them, made for a newer Thoric.
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, or to `latest`, and update. An older release is a step back that its version does not show: it refuses a database the newer manager moved to a later layout, as [below](#go-back-to-an-earlier-release), and it refuses the desktop images, and the images built on them, made for a newer Thoric.
+
+### Go back to an earlier release
+
+The database records the version of its layout. Each start brings it to the newest layout the manager knows, in one step that either completes or leaves it as it was, and a manager refuses a database a later release has moved further, rather than misread it: it does not start, and its log (`docker compose logs manager`) names both versions. Releases up to 0.8.4 know no layout version: they open any database, and may misread what a later release wrote, such as the jobs it ran, which they show without their logs.
+
+To go back, put a copy of the database from before the update in its place and start the earlier release. The WSL package's **Update** on the dashboard writes that copy itself, see [Go back after an update](WSL_PACKAGE.md#go-back-after-an-update). A Compose update takes none, so make one before you pull, with the manager stopped so the database and its journal files are whole. Replace `1.2.0` with the release you run and `thoric-data` with your `MANAGER_DATA_VOLUME`:
+
+```bash
+docker compose stop manager
+docker run --rm -v thoric-data:/data --entrypoint sh ghcr.io/co3moz/thoric:1.2.0 -c \
+  'mkdir -p /data/before-update && cp -p /data/state.sqlite* /data/before-update/'
+docker compose pull
+docker compose up -d
+```
+
+To put it back, stop the manager, set the newer database aside in `replaced`, copy the files back, set `MANAGER_IMAGE` in `.env` to the earlier release and start it:
+
+```bash
+docker compose stop manager
+docker run --rm -v thoric-data:/data --entrypoint sh ghcr.io/co3moz/thoric:1.2.0 -c \
+  'cd /data && mkdir -p replaced && mv state.sqlite* replaced/ && cp -p before-update/state.sqlite* .'
+docker compose up -d
+```
+
+The records then describe the installation as it was before the update: a container created or deleted since is missing from them or listed again, while its Docker container, images and volumes stay as they are.
 
 ## Know where your data lives
 
 | Data | Location | Effect of deleting a container |
 | --- | --- | --- |
 | Container settings, image records and jobs | `/data/state.sqlite` in the manager data volume | The manager's database remains. |
+| Copies of the database from the WSL package's last three updates | `/data/state-<release>-to-<release>.sqlite` beside it | Unaffected. |
 | Installed software and unmounted home files | The desktop container's writable layer | Lost unless saved in an image or snapshot. |
 | Files carried over by a settings change | An image tagged `thoric/container:JOB_ID` that the container runs | Removed, unless a snapshot builds on it. |
 | Files in named-volume mounts | Separate Docker volumes | Preserved. |
@@ -184,7 +215,7 @@ A settings change that needs a new container saves its files to an image and ren
 
 Recreating a missing container cannot restore changes that were never saved as a snapshot. Missing images or volumes stop recovery so you can resolve them; Thoric does not silently replace a missing volume with an empty one.
 
-The manager checks container network connections every 20 seconds. A problem with one container does not prevent checks for the others. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
+The manager checks container network connections, and gives each container `DESKTOP_PIDS_LIMIT`, every 20 seconds. A problem with one container does not prevent checks for the others. A check that fails is logged as a warning once, again only when its reason changes, and once more when it works again. Changes made directly through Docker can still conflict with manager operations, so inspect affected resources before trying recovery.
 
 ## If something does not start
 
@@ -195,6 +226,10 @@ docker compose logs --tail=100 manager
 ```
 
 Use `-f compose.ghcr.yml` with the full registry manifest. A missing or too-short password prevents startup when `AUTH_MODE=password`. A registry error happens before startup; check that the host can reach GHCR.
+
+The log has a line for every request with its method, path, status, latency in milliseconds and `request_id`, the ID the response carries in its `X-Request-Id` header. To find the request behind an error the dashboard or a script saw, read that header in the browser's network panel or the script's response and search the log for it, for example `docker compose logs manager | grep 6f1c0b2e`. The line never holds a query string, a transfer link's token or the path inside a desktop service reached through the manager. Reads that a page or a health check repeats on a timer while they succeed (`/healthz`, `/readyz`, the usage charts, a followed job, the Activity page, the desktop previews and the interface's own files) are logged at the debug level only, so the log keeps what people and agents do. Failed sign-ins and the first refused attempt of a locked-out address are logged as warnings with the client's address. The log filter is `RUST_LOG`, which the Compose manifests pass from `.env` to the logger: the default is `thoric=info,tower_http=info`, and `thoric=debug` adds the repeated reads.
+
+`/healthz` answers as long as the manager serves requests, which the manager image's health check uses. `/readyz` also asks the database and Docker and answers `503` naming the failed check, so `curl -fsS http://127.0.0.1:8080/readyz` tells a manager that runs but cannot reach Docker apart from one that is ready.
 
 If the dashboard opens but a container fails, read its job log and **Logs**; **Diagnostics** needs a running desktop. For a GPU error, the job log names the setting behind a device Docker refused, and a desktop that stops at its renderer check names the one to check in **Logs**; [GPU on a Linux host](#gpu-on-a-linux-host) explains each route. You can create a separate container with GPU disabled to check the basic desktop path without deleting the failed container's files.
 

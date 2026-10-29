@@ -167,7 +167,7 @@ pub async fn container(State(app): State<Arc<App>>, Path(id): Path<String>) -> R
 }
 
 /// A new container's settings, and values for the compose parameters of its image.
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct CreateContainer {
     #[serde(flatten)]
     pub spec: ContainerSpec,
@@ -275,7 +275,8 @@ pub async fn create(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Res
         },
     )
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
+#[schemars(rename = "ContainerAction")]
 pub struct Action {
     pub action: String,
 }
@@ -305,7 +306,7 @@ pub async fn action(
         },
     )
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Internet {
     pub enabled: bool,
 }
@@ -372,7 +373,7 @@ pub async fn update_settings(
 }
 /// How a container is deleted: its named volumes stay unless `delete_volumes` asks for those
 /// created for it.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Remove {
     #[serde(default)]
@@ -633,7 +634,7 @@ pub async fn image_config(
         template_ids,
     }))
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct RegisterImage {
     pub reference: String,
     pub name: String,
@@ -674,7 +675,7 @@ pub async fn register_image(
 /// A build request. `GET /api/images/{id}/config` returns the same shape, so an exported
 /// configuration is a request that builds the image again, and a template on the templates page
 /// is one too.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct BuildImage {
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -893,7 +894,7 @@ pub async fn build(
         },
     )
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Snapshot {
     pub name: String,
     #[serde(default)]
@@ -987,7 +988,7 @@ pub async fn volumes(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     crate::volumes::mark_owners(&mut values, &app.db.list::<Container>(CONTAINERS)?);
     Ok(Json(json!(values)))
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Volume {
     pub name: String,
 }
@@ -1005,7 +1006,7 @@ pub async fn jobs(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     Ok(Json(json!(jobs)))
 }
 pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    let job: Job = app.db.get("job", &id)?;
+    let job: Job = app.db.job(&id)?;
     let mut value = json!(job);
     if retry::retryable(&app, &job) {
         value["retryable"] = json!(true);

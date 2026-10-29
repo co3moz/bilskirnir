@@ -6,7 +6,7 @@ pub const LABEL: &str = "thoric.managed";
 /// environments were called containers, so an existing installation reads them unchanged.
 pub const CONTAINERS: &str = "environment";
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Mount {
     pub volume: String,
@@ -15,7 +15,7 @@ pub struct Mount {
     pub readonly: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ContainerSpec {
     pub name: String,
     pub image: String,
@@ -347,7 +347,7 @@ pub struct BuildConfig {
     pub inherit_compose: bool,
 }
 /// One script of a build merged from several templates, run as root in a layer of its own.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BuildPart {
     /// Lowercase letters, digits and dashes, unique in the build, such as the template's id.
@@ -440,7 +440,7 @@ pub struct Recording {
     pub fps: u8,
     pub created_at: u64,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Job {
     pub id: String,
     pub kind: String,
@@ -453,6 +453,9 @@ pub struct Job {
     pub status: String,
     pub created_at: u64,
     pub finished_at: Option<u64>,
+    /// The log as the API shows it, from `Db::job`. A saved record keeps only what managers
+    /// before the `job_log` table wrote into it, and an empty log otherwise, which those
+    /// managers still read; the rest is in that table.
     pub log: String,
     pub result: Option<serde_json::Value>,
     /// Measured progress of the running step, such as an image download.
@@ -466,11 +469,14 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<crate::script_progress::ScriptReport>,
 }
+/// How many bytes of a job's log are kept: the last ones.
+pub(crate) const LOG_LIMIT: usize = 262_144;
 impl Job {
+    /// Keep the last [`LOG_LIMIT`] bytes of the log, from the first character that starts in
+    /// them.
     pub fn trim_log(&mut self) {
-        const LIMIT: usize = 262_144;
-        if self.log.len() > LIMIT {
-            let mut at = self.log.len() - LIMIT;
+        if self.log.len() > LOG_LIMIT {
+            let mut at = self.log.len() - LOG_LIMIT;
             while !self.log.is_char_boundary(at) {
                 at += 1;
             }

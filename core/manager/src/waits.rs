@@ -229,7 +229,7 @@ pub async fn wait_for_condition(app: &Arc<App>, id: &str, body: &WaitFor) -> Res
             let gone = body.text_state.as_deref() == Some("gone");
             satisfied &= matches.is_empty() == gone;
             result["text_found"] = json!(!matches.is_empty());
-            result["text_match"] = matches.first().map_or(Value::Null, ocr::Match::json);
+            result["text_match"] = json!(matches.first().map(ocr::Match::text_match));
         }
         result["elapsed_ms"] = json!(started.elapsed().as_millis() as u64);
         if satisfied {

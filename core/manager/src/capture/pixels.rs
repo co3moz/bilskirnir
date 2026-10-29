@@ -1,6 +1,8 @@
 //! The pixels of a screenshot, for what the manager reads from the screen itself: its text, which
 //! Tesseract reads from a grayscale image, and how much of it changed while a wait ran.
+use crate::error::Fault;
 use anyhow::{Context, bail};
+use axum::http::StatusCode;
 
 /// The most pixels a screenshot may decode to, an 8K desktop's.
 const MAX_PIXELS: usize = 7680 * 4320;
@@ -15,8 +17,13 @@ pub(crate) struct Gray {
 
 impl Gray {
     /// Decode a screenshot's JPEG. Its size is read from the header first, so an image larger
-    /// than any desktop is refused before a pixel is decoded.
+    /// than any desktop is refused before a pixel is decoded. Bytes that are no desktop's JPEG
+    /// are a failure of the desktop's screenshot helper, which answers 502.
     pub fn from_jpeg(jpeg: &[u8]) -> anyhow::Result<Self> {
+        Self::decode(jpeg)
+            .map_err(|error| Fault::error(StatusCode::BAD_GATEWAY, format!("{error:#}")))
+    }
+    fn decode(jpeg: &[u8]) -> anyhow::Result<Self> {
         let mut decoder = jpeg_decoder::Decoder::new(jpeg);
         decoder.set_max_decoding_buffer_size(MAX_PIXELS * 3);
         decoder

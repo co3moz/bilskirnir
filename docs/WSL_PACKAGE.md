@@ -194,6 +194,24 @@ The manager cannot reach the distribution from its container, so the two meet in
 
 A package from before the units gets them with its first `thoric update` to a release that bundles them. Like the command, they come only from a release of `ghcr.io/co3moz/thoric`, since they run as root and would stay after a manager chosen by hand is gone, and an update enables them only when it installs or changes them, so a path unit you turned off stays off. To turn off both the lookup and the button, set `UPDATE_CHECK=false` with `thoric settings` and run `thoric restart`; the manager then makes no request to GitHub.
 
+### Go back after an update
+
+The new manager may move its database to a layout the release before it no longer opens; see [Go back to an earlier release](INSTALLATION.md#go-back-to-an-earlier-release). So before it leaves the request, the manager writes a copy of its database beside it in the `thoric-data` volume, named after the release it leaves and the one it moves to, such as `state-1.2.0-to-1.3.0.sqlite` (an edge manager names its commit, `state-sha-<commit>-to-1.3.0.sqlite`), and keeps the newest three. The job's log names the copy. When it cannot be written, for example on a full disk, the job fails with that reason before anything is asked of the distribution; `thoric update` in a terminal updates without a copy. Releases up to 0.8.4 take none.
+
+To go back to the release you updated from, with the records it had then, stop Thoric, set the database the newer manager used aside in `replaced`, put the copy in its place, and start that release again. Replace `1.2.0` and `1.3.0` with the versions in the copy's name:
+
+```bash
+# The copies in the volume
+docker run --rm -v thoric-data:/data --entrypoint ls ghcr.io/co3moz/thoric:1.2.0 /data
+thoric stop
+docker run --rm -v thoric-data:/data --entrypoint sh ghcr.io/co3moz/thoric:1.2.0 -c \
+  'cd /data && mkdir -p replaced && mv state.sqlite* replaced/ && cp -p state-1.2.0-to-1.3.0.sqlite state.sqlite'
+thoric settings   # set MANAGER_IMAGE=ghcr.io/co3moz/thoric:1.2.0
+thoric start
+```
+
+The records then describe the installation as it was when the update began: a container created or deleted since is missing from them or listed again, while its Docker container, images and volumes stay as they are. The installation files and the `thoric` command stay those of the newer release, and the next `thoric update` moves forward again.
+
 ### Edge builds
 
 `edge` is the newest build of `master`, published with every change before a release includes it. To follow it, set `MANAGER_IMAGE=ghcr.io/co3moz/thoric:edge` with `thoric settings` and run `thoric update`. From then on, each `thoric update`, and **Update** on the dashboard once a newer release is out, downloads the newest `edge` again:
@@ -203,7 +221,7 @@ A package from before the units gets them with its first `thoric update` to a re
 - The `thoric` command and the units of the dashboard's update and settings stay as the package or the last release brought them, since they run as root (see [The thoric command](#the-thoric-command)).
 - The sidebar names the commit the manager was built from instead of a version, since an edge build still carries the version of the release before it.
 
-To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, such as `ghcr.io/co3moz/thoric:1.2.0`, and run `thoric update`; updates then follow releases again. An older release is a step back that its version does not show: it may not read what the newer manager wrote, and it refuses the desktop images, and the images built on them, made for a newer Thoric.
+To return to releases, wait for a release newer than the edge build you run, then set `MANAGER_IMAGE` to it, such as `ghcr.io/co3moz/thoric:1.2.0`, and run `thoric update`; updates then follow releases again. An older release is a step back that its version does not show: it refuses a database the newer manager moved to a later layout, which needs [the copy from before](#go-back-after-an-update), and it refuses the desktop images, and the images built on them, made for a newer Thoric.
 
 ## Settings from the dashboard
 
@@ -265,6 +283,7 @@ The disk file does not shrink when images or containers are deleted. Two ways re
 - The Linux user created at first start has passwordless `sudo` and belongs to the `docker` group, and its name is the dashboard's `ADMIN_USERNAME`. The distribution is a single-purpose appliance for the Windows user who installed it.
 - `.env` holds the dashboard password and the agent token, so it belongs to root and only the `docker` group may read it (`root:docker`, mode `0640`). `thoric settings` saves it through `sudoedit`, which keeps that owner and mode, as do a settings change from the dashboard and its `.env.previous`; change it any other way with `sudo`.
 - Without a password, the dashboard has no sign-in. That is safe only while it listens on localhost; set `AUTH_MODE=password` and an `ADMIN_PASSWORD` in `.env` before allowing other devices.
+- Docker keeps every container's log in at most three files of 10 MB (`json-file` with `max-size` and `max-file` in `/etc/docker/daemon.json`). A distribution installed from an older package keeps the `daemon.json` it came with, since `thoric update` leaves Docker's configuration alone: the manager and its `compose.yml` still give Thoric's own containers that rotation, while other containers you run in the distribution keep logs that grow until you add `log-opts` there and restart Docker.
 - Docker runs with the NVIDIA runtime registered. `WSL_GPU` is set when `/dev/dxg` and the WSL libraries exist, and `NVIDIA_COMPUTE` when `libcuda` is present; otherwise containers run without GPU acceleration. Change these in `.env` if the detection is wrong.
 - Root agent access is enabled unless the first start turned it off: `ROOT_MCP_ENABLED=true` with a random 64-character `MCP_TOKEN` by default, a custom token or `MCP_AUTH_MODE=none`. `thoric mcp` prints the endpoint, the token and the [client settings](MCP.md); root agent access grants administrator access to every container, so set `ROOT_MCP_ENABLED=false` in `.env` and restart if no agent needs that, and give agents [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) for chosen containers instead, which answer either way. Without a token it is safe only while the manager listens on localhost. Installations from before 0.6.3 have the setting as `MCP_ENABLED`, which keeps working until `thoric update` renames it.
 - The manager listens on `127.0.0.1`, or on `0.0.0.0` when the first start allowed other devices, at the port the first start asked for, `8080` by default. Windows has to let them in as well, see [Access from other devices](#access-from-other-devices).

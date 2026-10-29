@@ -4,8 +4,8 @@
 //! The records are an allowlist of database kinds, the fields of [`Records`]. Containers, saved
 //! images with their icons and composes, each container's pinned compose with its values, the
 //! passwords of the containers' own proxies and MCP endpoints with their token hashes are the
-//! installation's state. Jobs, the processes of running
-//! desktops (applications, terminals, recordings), the tool lists of desktop MCP servers, which
+//! installation's state. Jobs with their logs, which are in a table of their own, the processes
+//! of running desktops (applications, terminals, recordings), the tool lists of desktop MCP servers, which
 //! the manager reads again from a running desktop, and any kind added later are history or what a
 //! running manager rebuilds, and stay out until someone decides otherwise here. The tests list
 //! both sides and fail on a kind the code writes that is on neither.
@@ -24,7 +24,7 @@ pub(crate) const KIND: &str = "thoric-backup";
 pub(crate) const FORMAT: u32 = 1;
 
 /// The optional parts of a backup. The records are always in it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Included {
     /// The saved images: their records with their Docker images. Catalog images are left out;

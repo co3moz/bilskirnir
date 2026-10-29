@@ -11,6 +11,8 @@ use crate::{
         manifest::{Included, PartEnd},
         tests::{SECRET, calls, container, endpoint, fake_docker, image, job, pinned, saved_image},
     },
+    desktop_mcp::Endpoint,
+    model::ImageRecord,
     model::WorkingImage,
 };
 use axum::body::Bytes;
@@ -240,7 +242,7 @@ async fn a_backup_comes_back_with_its_files_identity_and_tokens() {
         !calls.lines().any(|call| call.starts_with("start")),
         "{calls}"
     );
-    let job: crate::model::Job = app.db.get("job", "restore-job").unwrap();
+    let job: crate::model::Job = app.db.job("restore-job").unwrap();
     assert!(!job.log.contains(SECRET));
     let stages = job
         .stages

@@ -103,11 +103,19 @@ pub async fn capture_input(
             let _ = child.wait().await;
             match failure {
                 Ok(Err(e)) => Err(e),
-                Err(_) => bail!("Docker operation timed out"),
+                Err(_) => Err(timed_out()),
                 _ => unreachable!(),
             }
         }
     }
+}
+
+/// A Docker command that did not finish within its limit: Docker did not answer in time.
+pub(crate) fn timed_out() -> anyhow::Error {
+    crate::error::Fault::error(
+        axum::http::StatusCode::GATEWAY_TIMEOUT,
+        "Docker operation timed out",
+    )
 }
 
 async fn deliver(stdin: &mut tokio::process::ChildStdin, input: &[u8]) -> std::io::Result<()> {

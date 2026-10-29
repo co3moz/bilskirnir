@@ -73,7 +73,7 @@ pub(crate) const JOB_STAGES: [&[(&str, &str)]; 5] = [
 /// A longer line is no stage marker, so it is logged without waiting for its end.
 const LINE_LIMIT: usize = 65_536;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Stage {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -187,17 +187,13 @@ impl App {
             return Ok(());
         };
         job.progress = None;
-        if !job.log.is_empty() && !job.log.ends_with('\n') {
-            job.log.push('\n');
-        }
-        job.log.push_str(&format!(
+        let line = format!(
             "Stage {}/{}: {}\n",
             index + 1,
             job.stages.len(),
             label(name)
-        ));
-        job.trim_log();
-        self.db.put("job", id, &job)?;
+        );
+        self.db.put_job_logged(&job, &line, true)?;
         // Lists name a job's current stage.
         self.events.job(&job, None);
         Ok(())

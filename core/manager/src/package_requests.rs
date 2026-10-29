@@ -130,12 +130,13 @@ pub(crate) fn resume(
         let id = job.id.clone();
         let result = async {
             // The log is read again from its start.
-            let mut record: Job = app.db.get("job", &id)?;
-            record.log = format!(
-                "The manager restarted while {} ran in the WSL distribution; its output follows.\n",
-                channel.command
-            );
-            app.db.put("job", &id, &record)?;
+            app.db.restart_job_log(
+                &id,
+                &format!(
+                    "The manager restarted while {} ran in the WSL distribution; its output follows.\n",
+                    channel.command
+                ),
+            )?;
             let ended = follow(&app, channel, &id, timing).await?;
             outcome(&ended)
         }

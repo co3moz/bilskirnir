@@ -7,7 +7,8 @@
 //! continues a line when it sits on the same row and starts within one and a half line heights
 //! of its end. That joins the words of a phrase or a terminal line and keeps labels a column
 //! apart, such as the buttons of a panel, separate.
-use serde_json::{Value, json};
+use rmcp::schemars::{self, JsonSchema};
+use serde::Serialize;
 
 /// How far, in line heights, the next word of a line may start after the line's end.
 const GAP: f64 = 1.5;
@@ -23,6 +24,33 @@ pub(crate) struct Word {
     pub confidence: f32,
 }
 
+/// A word or a line as an answer lists it.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+pub struct TextBox {
+    /// What was read; a line's words are joined by spaces.
+    pub text: String,
+    /// The box's left edge in desktop pixels, which desktop_input takes as it is.
+    pub x: u32,
+    /// The box's top edge in desktop pixels.
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    /// How sure Tesseract is, 0 to 100: a line's is the mean of its words', a match's that of the
+    /// least sure word it covers.
+    pub confidence: u32,
+}
+
+/// Where a text was read, as an answer lists it.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+pub struct TextMatch {
+    /// The whole words the text covers and their box.
+    #[serde(flatten)]
+    pub words: TextBox,
+    /// The middle of the box in desktop pixels, to click.
+    pub center_x: u32,
+    pub center_y: u32,
+}
+
 impl Word {
     fn right(&self) -> u32 {
         self.x + self.width
@@ -30,15 +58,8 @@ impl Word {
     fn bottom(&self) -> u32 {
         self.y + self.height
     }
-    pub fn json(&self) -> Value {
-        json!({
-            "text": self.text,
-            "x": self.x,
-            "y": self.y,
-            "width": self.width,
-            "height": self.height,
-            "confidence": self.confidence.round() as u32,
-        })
+    pub fn text_box(&self) -> TextBox {
+        bounds(std::slice::from_ref(self), self.confidence)
     }
 }
 
@@ -49,9 +70,6 @@ pub(crate) struct Line {
 }
 
 impl Line {
-    pub fn text(&self) -> String {
-        join(&self.words)
-    }
     fn top(&self) -> u32 {
         self.words.iter().map(|w| w.y).min().unwrap_or_default()
     }
@@ -65,11 +83,9 @@ impl Line {
     fn right(&self) -> u32 {
         self.words.last().map(Word::right).unwrap_or_default()
     }
-    pub fn json(&self) -> Value {
-        let mut value = bounds(&self.words, &self.text());
+    pub fn text_box(&self) -> TextBox {
         let total: f32 = self.words.iter().map(|w| w.confidence).sum();
-        value["confidence"] = json!((total / self.words.len().max(1) as f32).round() as u32);
-        value
+        bounds(&self.words, total / self.words.len().max(1) as f32)
     }
 }
 
@@ -80,19 +96,18 @@ pub(crate) struct Match {
 }
 
 impl Match {
-    pub fn json(&self) -> Value {
-        let mut value = bounds(&self.words, &join(&self.words));
-        let width = value["width"].as_u64().unwrap_or_default();
-        let height = value["height"].as_u64().unwrap_or_default();
-        value["center_x"] = json!(value["x"].as_u64().unwrap_or_default() + width / 2);
-        value["center_y"] = json!(value["y"].as_u64().unwrap_or_default() + height / 2);
+    pub fn text_match(&self) -> TextMatch {
         let least = self
             .words
             .iter()
             .map(|w| w.confidence)
             .fold(100.0, f32::min);
-        value["confidence"] = json!(least.round() as u32);
-        value
+        let words = bounds(&self.words, least);
+        TextMatch {
+            center_x: words.x + words.width / 2,
+            center_y: words.y + words.height / 2,
+            words,
+        }
     }
 }
 
@@ -104,13 +119,20 @@ fn join(words: &[Word]) -> String {
         .join(" ")
 }
 
-/// The text and the box around some words.
-fn bounds(words: &[Word], text: &str) -> Value {
+/// The text of some words, the box around them and a confidence.
+fn bounds(words: &[Word], confidence: f32) -> TextBox {
     let x = words.iter().map(|w| w.x).min().unwrap_or_default();
     let y = words.iter().map(|w| w.y).min().unwrap_or_default();
     let right = words.iter().map(Word::right).max().unwrap_or_default();
     let bottom = words.iter().map(Word::bottom).max().unwrap_or_default();
-    json!({"text": text, "x": x, "y": y, "width": right - x, "height": bottom - y})
+    TextBox {
+        text: join(words),
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+        confidence: confidence.round() as u32,
+    }
 }
 
 /// The words of Tesseract's TSV output that it is at least `min_confidence` sure of, their boxes

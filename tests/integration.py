@@ -10,6 +10,7 @@ import io
 import json
 import math
 import os
+import re
 import socket
 import shutil
 import struct
@@ -825,6 +826,18 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 403
     print("PASS duplicate volume, mount aliases and Host validation", flush=True)
+    # Readiness asks the database and Docker, and every answer names its request in the log.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/readyz", timeout=10) as response:
+        assert json.loads(response.read()) == {"ready": True, "database": True, "docker": True}
+        assert uuid.UUID(response.headers["X-Request-Id"])
+    request_id = f"acceptance-{tag}"
+    with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/api/session", headers={"X-Request-Id": request_id}), timeout=10) as response:
+        assert response.headers["X-Request-Id"] == request_id
+    # The log colors field names unless NO_COLOR is set, so the colors go before matching.
+    plain = lambda: re.sub(r"\x1b\[[0-9;]*m", "", docker("logs", manager).decode(errors="replace"))
+    logged = wait_for(lambda: next((line for line in plain().splitlines() if f"request_id={request_id}" in line and "answered" in line), None), 10)
+    assert "method=GET" in logged and "path=/api/session" in logged and "status=200" in logged, logged
+    print("PASS readiness and request IDs in the log", flush=True)
     # The templates page reads the wiki's list in the browser, so the policy allows that host.
     assert api("settings")["templates_url"] == "https://raw.githubusercontent.com/wiki/co3moz/thoric/templates/index.json"
     # The suite runs with GPU_DEFAULT=false, so a request that leaves gpu out gets none, as before
@@ -1221,12 +1234,22 @@ try:
     time.sleep(1.5)
     finished = tool("stop_recording", {"container_id":env_id,"recording_id":recording["recording_id"]})["structuredContent"]
     assert finished["state"] == "finished" and finished["frames"] >= 2 and finished["reason"] == "stopped", finished
-    assert any(r["recording_id"] == recording["recording_id"] and r["frames"] == finished["frames"] for r in tool("list_recordings", {"container_id":env_id})["structuredContent"]["items"])
+    video = finished["video"]
+    assert (video["codec"], video["container"], video["mime_type"]) == ("H.264", "MP4", "video/mp4") and "fallback" not in video, finished
+    assert video["path"] == f"{finished['directory']}/recording.mp4" and video["frames"] == finished["frames"] and video["bytes"] > 0, video
+    assert video["download_url"] == f"/api/containers/{env_id}/files/download?path={video['path']}" and 500 <= video["duration_ms"] <= 10000, video
+    assert video["width"] % 2 == 0 and video["height"] % 2 == 0 and video["width"] <= 320, video
+    mp4 = base64.b64decode(tool("download_file", {"container_id":env_id,"path":video["path"]})["structuredContent"]["data_base64"])
+    assert mp4[4:8] == b"ftyp" and b"avc1" in mp4 and b"avcC" in mp4 and 0 < mp4.find(b"moov") < mp4.find(b"mdat"), mp4[:64]
+    assert any(r["recording_id"] == recording["recording_id"] and r["frames"] == finished["frames"] and r["video"]["path"] == video["path"] for r in tool("list_recordings", {"container_id":env_id})["structuredContent"]["items"])
     frames = tool("list_files", {"container_id":env_id,"path":finished["directory"]})["structuredContent"]
     assert sum(1 for f in frames["items"] if f["name"].endswith(".jpg")) == finished["frames"], frames
+    assert not any(f["name"] == "recording.avi" for f in frames["items"]), frames
     exported = tool("export_artifacts", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"evidence.tar.gz","recording_ids":[recording["recording_id"]],"application_ids":[second]})["structuredContent"]
     listing = docker("exec", container, "tar", "-tzf", exported["path"]).decode()
     assert "manifest.json" in listing and f"recordings/{recording['recording_id']}/frame-00000" in listing and f"applications/{second}/log" in listing, listing
+    assert exported["videos"] == {recording["recording_id"]: f"recordings/{recording['recording_id']}/recording.mp4"}, exported
+    assert f"recordings/{recording['recording_id']}/recording.mp4" in listing, listing
     assert tool("export_artifacts", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"evidence.tar.gz","recording_ids":[recording["recording_id"]]}, allow_error=True)["isError"]
     tool("move_file", {"container_id":env_id,"source":"/home/desktop/agent-files/hello.txt","destination":"/home/desktop/agent-files/renamed.txt"})
     entries = tool("list_files", {"container_id":env_id,"path":"/home/desktop/agent-files"})["structuredContent"]["items"]
@@ -1236,9 +1259,7 @@ try:
     tool("delete_file", {"container_id":env_id,"path":"/home/desktop/agent-files","recursive":True})
     assert docker("exec",container,"test","!","-e","/home/desktop/agent-files") == b""
     tool("stop_application", {"container_id":env_id,"application_id":second})
-    print("PASS waits, diagnostics, metrics, frame recordings, artifact export and file tools", flush=True)
-    assert finished["video"]["codec"] == "MJPEG" and finished["video"]["bytes"] > 0, finished
-    assert f"recordings/{recording['recording_id']}/recording.avi" in listing, listing
+    print("PASS waits, diagnostics, metrics, frame recordings with their H.264 video, artifact export and file tools", flush=True)
     downloaded = tool("download_file", {"container_id":env_id,"path":exported["path"]})["structuredContent"]
     assert downloaded["download_url"] == exported["download_url"] == f"/api/containers/{env_id}/files/download?path={exported['path']}"
     assert downloaded["bytes"] == exported["bytes"] and downloaded["mime_type"] == "application/gzip", downloaded["bytes"]
@@ -2267,6 +2288,18 @@ try:
     assert docker("exec", edit_container, "cat", "/home/desktop/settings-marker") == b"kept"
     assert b"Server Name" in docker("exec", "--user", "desktop", edit_container, "pactl", "info")
     assert not docker("ps", "-a", "--filter", f"name={edit_container}-previous", "--format", "{{.Names}}").strip()
+    # A recreated desktop gets the pids limit and, under Docker's default driver, a log that rotates.
+    # One that lost its limit gets it back from the manager's next check, without a restart.
+    assert second["HostConfig"]["PidsLimit"] == 16384, second["HostConfig"]
+    if docker("info", "--format", "{{.LoggingDriver}}").decode().strip() == "json-file":
+        log_config = second["HostConfig"]["LogConfig"]
+        assert log_config["Type"] == "json-file" and {key: log_config["Config"].get(key) for key in ("max-size", "max-file")} == {"max-size": "10m", "max-file": "3"}, log_config
+    docker("update", "--pids-limit", "-1", edit_container)
+    limit = lambda: json.loads(docker("inspect", edit_container))[0]["HostConfig"]["PidsLimit"]
+    assert limit() in (None, 0, -1)
+    assert wait_for(lambda: limit() == 16384, 60), limit()
+    assert json.loads(docker("inspect", edit_container))[0]["State"]["StartedAt"] == second["State"]["StartedAt"]
+    print("PASS a desktop gets the pids limit, back in place when it loses it, and a log that rotates", flush=True)
     # The new container has the old one's identity; another identity is a change that recreates it.
     assert machine(edit_container) == recorded(edit_identity)
     takeover = {"hostname": "unity-build", "mac_address": "02-00-00-00-00-0A", "machine_id": "8AED3E38-BA43-5C50-DEAD-B0896ACE189B"}

@@ -183,7 +183,7 @@ impl Snapshot {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 pub struct Since {
     /// The `cursor` of an earlier response; only samples stamped after it are returned.
     #[serde(default)]

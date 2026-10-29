@@ -218,8 +218,7 @@ impl EndpointMcp {
             }
             Target::Job { containers } => {
                 let id = args["job_id"].as_str().unwrap_or_default();
-                let job: crate::model::Job =
-                    self.app.db.get("job", id).map_err(|_| error::missing())?;
+                let job = self.app.db.job(id).map_err(|_| error::missing())?;
                 // Only jobs of the endpoint's own containers, whatever the id guesses.
                 if !job.resource.as_deref().is_some_and(|resource| {
                     containers

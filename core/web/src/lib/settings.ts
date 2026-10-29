@@ -30,6 +30,7 @@ export const SECTION_OF: Record<string, Section> = {
   MCP_TOKEN: "mcp",
   DESKTOP_IMAGE: "desktops",
   DESKTOP_USER_NAMESPACES: "desktops",
+  DESKTOP_PIDS_LIMIT: "desktops",
   AUDIO_ENABLED: "features",
   MICROPHONE_ENABLED: "features",
   INTERNET_ENABLED: "features",
@@ -146,6 +147,8 @@ export const FIELDS: Record<string, Field> = {
   ALLOWED_HOSTS: { kind: "text", placeholder: "desktop.lan,nas.lan" },
   DESKTOP_IMAGE: { kind: "text", placeholder: "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04" },
   DESKTOP_USER_NAMESPACES: { kind: "switch" },
+  // 0 is no limit; the manager refuses one below 1024, which leaves desktops that cannot start.
+  DESKTOP_PIDS_LIMIT: { kind: "number", min: 0, max: 4194304 },
   WSL_GPU: { kind: "switch" },
   NVIDIA_COMPUTE: { kind: "switch" },
   GPU_ADAPTER: {

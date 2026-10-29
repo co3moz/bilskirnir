@@ -3,6 +3,7 @@
 //! answer that names the packages when it is missing, its own message when it fails, and a bound
 //! on how long it may take.
 use super::*;
+use serde_json::json;
 
 fn request(value: Value) -> FindText {
     serde_json::from_value(value).unwrap()
@@ -132,6 +133,7 @@ async fn a_failing_or_slow_tesseract_is_an_error_with_its_own_words() {
     .await
     .unwrap_err();
     assert!(started.elapsed() < Duration::from_secs(4));
+    assert_eq!(error.0, StatusCode::GATEWAY_TIMEOUT);
     assert!(error.1.contains("longer than 0.3 seconds"), "{}", error.1);
     for program in [failing, slow] {
         std::fs::remove_dir_all(program.parent().unwrap()).unwrap();
