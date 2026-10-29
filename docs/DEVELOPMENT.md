@@ -27,6 +27,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | Area | Files |
 | --- | --- |
 | HTTP API, settings and authentication | `core/manager/src/main.rs`, `core/manager/src/api.rs`, `core/manager/src/config.rs`, `core/manager/src/auth.rs` |
+| Error statuses: a `bail!` is the request's (400), a failure of Docker, a helper or the manager is marked where it happens with `error::Fault`, or is an I/O or database error | `core/manager/src/error.rs` |
 | Docker lifecycle and jobs | `core/manager/src/docker.rs`, `core/manager/src/jobs.rs`, `core/manager/src/process.rs` |
 | Catalog image downloads and their progress | `core/manager/src/pulls.rs` |
 | Settings changes from the Management page through the WSL package | `core/manager/src/config/changes.rs`, `core/manager/src/package_requests.rs`, `core/web/src/components/configuration-editor.tsx`, `core/web/src/lib/settings.ts`, `packaging/wsl/thoric-settings.path`, `packaging/wsl/thoric-settings.service` |
@@ -36,7 +37,7 @@ The projects sit in three folders: `core/` holds the manager (`core/manager`, Ru
 | VNC, audio and microphone proxies | `core/manager/src/media.rs`, `core/manager/helpers/audio_output.py` |
 | MCP server, command execution and desktop input | `core/manager/src/mcp.rs`, `core/manager/src/exec.rs`, `core/manager/src/desktop_input.rs` |
 | Background applications, windows, screenshots and waits | `core/manager/src/apps.rs`, `core/manager/helpers/app_runner.py`, `core/manager/helpers/app_control.py`, `core/manager/src/windows.rs`, `core/manager/src/capture.rs`, `core/manager/src/waits.rs` |
-| Recordings and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/export_artifacts.py` |
+| Recordings, their video and artifact export | `core/manager/src/recordings.rs`, `core/manager/helpers/recorder.py`, `core/manager/helpers/recording_video.py`, `core/manager/helpers/export_artifacts.py` |
 | Audio capture and injection | `core/manager/src/audio.rs`, `core/manager/helpers/audio_tools.py` |
 | Interactive terminals | `core/manager/src/terminal.rs`, `core/manager/helpers/terminal_runner.py`, `core/manager/helpers/terminal_control.py` |
 | Virtual gamepad | `core/manager/src/gamepad.rs`, `core/manager/helpers/gamepad_daemon.py`, `core/manager/helpers/gamepad_control.py` |
@@ -98,6 +99,8 @@ The language is the browser's first one that has a catalog, English otherwise, u
 The manager and desktop containers run on the same WSL Docker Engine. Only the manager receives `/var/run/docker.sock`.
 
 Containers are created with `--security-opt seccomp=images/desktop/seccomp.json` unless `DESKTOP_USER_NAMESPACES=false`. The file is Docker's default profile from `github.com/moby/profiles/seccomp` v0.2.4, the version Docker Engine 29.9 vendors, with one rule appended that allows `clone` and `unshare`, so browser and Electron sandboxes can create user namespaces. To follow a newer Docker release, copy its `vendor/github.com/moby/profiles/seccomp/default.json` and append that rule again; the Rust tests check that the rule is present and that calls Docker reserves for `CAP_SYS_ADMIN` stay refused. Docker fixes the profile when it creates a container, so existing containers pick up a change only when they are recreated.
+
+Containers also get `--pids-limit` from `DESKTOP_PIDS_LIMIT` and, while the daemon's logging driver is `json-file`, `--log-opt max-size=10m --log-opt max-file=3` (`core/manager/src/desktop_limits.rs`). The manager reads `docker info` once when it starts, for the driver and for the GPU routes, and leaves another driver as the daemon has it: `local` rotates by itself, and `journald` or `syslog` refuse `max-size`. Docker fixes log options at creation, but `docker update` changes the pids limit of a running container, so the 20-second reconciliation gives every desktop the current value. The volume and GPU helpers run with `--log-driver none`, since archives and samples stream through their output, and image builds run their steps in BuildKit, which keeps no container log. Desktops get neither `no-new-privileges` nor dropped capabilities: `sudo` inside them is a deliberate default.
 
 The MCP server is mounted on the same Axum router at `/mcp`. Its bearer authentication is independent of browser sessions, but the outer Host policy and matching-Origin checks still apply. Tool calls reuse HTTP handlers and resource locks; do not implement separate Docker mutations for MCP. Mouse and keyboard control use shared RFB 3.8 connections and Fence acknowledgement; keys and buttons held within a request are released when it ends, and relative movement is emulated from the position reported by `xdotool`. Scripts run from an unlinked temporary file with stdin closed. Background applications are supervised by `app_runner.py` inside the desktop, which keeps a bounded log under `/tmp`; `app_control.py` reports, reads and stops them. Window tools use `xdotool` and `wmctrl`, and `desktop-screenshot` accepts a maximum width, a region and a window ID. Accessibility inspection uses `python3-pyatspi` and the session's AT-SPI bus. Terminals run bash on a pseudo-terminal supervised by `terminal_runner.py`. Containers created with `gamepad=true` get `/dev/uinput` and a device cgroup rule for input devices; `gamepad_daemon.py` runs as root inside the desktop only, creates the virtual controller and its `/dev/input` nodes, and never touches the host.
 
@@ -283,7 +286,7 @@ For Docker or GPU lifecycle changes, build both catalog images and the manager, 
 python3 tests/integration.py
 ```
 
-The suite creates uniquely named resources and cleans only resources it owns. It covers both catalog images, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and MJPEG video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
+The suite creates uniquely named resources and cleans only resources it owns. It covers both catalog images, hardware OpenGL, authentication, VNC and screenshot output, audio channels, uploads, image builds, snapshots, volumes, network changes, concurrent operations and recovery, plus the agent tools: background applications, windows, held input, relative pointer movement, waits, diagnostics, recordings and their H.264 video, artifact export, file tools, downloads, audio capture and injection, terminals, accessibility inspection, the virtual gamepad and container reset. It does not launch Unity or test a physical microphone.
 
 ### GPU on a Linux host
 
@@ -298,6 +301,8 @@ The suite asserts the renderer of the GPU routes the manager found, so it also r
 Then `python3 tests/integration.py` on that host, and record what ran, with the GPU and the Docker and toolkit versions, in the pull request and in [Running graphics applications](USAGE.md#running-graphics-applications).
 
 Inspect interface changes in a live browser at desktop and narrow widths. Open saved screenshots to confirm their actual layout before adding them to the documentation. Do not run acceptance tests or rebuild images for a wording-only change.
+
+`docs/screenshots/agent-demo.gif`, at the top of the README, is a recording of an agent at work, not a screenshot of the interface. It was made in a real installation with a container from the XFCE catalog image at 1280x720, driven only through `/mcp` (`desktop_input`, `wait_for_condition`, `set_window_geometry`, `screenshot`, `save_screenshot`) while `start_recording` kept frames at 5 per second, which `read_file` then read back. The frames are scaled to 960 pixels wide and share one palette, a bar under them names the tool call in progress, and a ring marks the click, since screenshots carry no pointer. Keep it under 5 MB, open it after saving, and record it again when the desktop or the tools it shows change.
 
 ## Keep dependencies current
 

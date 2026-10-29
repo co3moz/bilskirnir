@@ -8,10 +8,7 @@
 use crate::config::Config;
 use serde::Serialize;
 use serde_json::Value;
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
 
 /// PCI vendor IDs as `/sys` writes them.
 const NVIDIA: &str = "0x10de";
@@ -30,8 +27,8 @@ pub(crate) struct Seen {
     pub wsl: bool,
     /// A display device that NVIDIA's own driver runs; the toolkit needs that driver.
     pub nvidia: bool,
-    /// Whether Docker has the NVIDIA Container Toolkit, `None` when Docker was not asked or did
-    /// not answer.
+    /// Whether Docker has the NVIDIA Container Toolkit, `None` when it was not looked for or
+    /// Docker did not answer.
     pub toolkit: Option<bool>,
     /// The vendors of the render devices under `/dev/dri` that Mesa's own drivers run, such as
     /// `AMD` or `Intel`, each once.
@@ -39,8 +36,9 @@ pub(crate) struct Seen {
 }
 
 impl Host {
-    /// Look at the host the manager's Docker daemon runs on.
-    pub(crate) async fn detect(config: &Config) -> Host {
+    /// Look at the host the manager's Docker daemon runs on, with `docker_info` as the daemon
+    /// answered it when the manager started ([`crate::desktop_limits::docker_info`]).
+    pub(crate) fn detect(config: &Config, docker_info: Option<&Value>) -> Host {
         // Only a local daemon's socket can be the host whose /sys the manager sees.
         if config.docker_socket.is_none() {
             return Host::default();
@@ -49,9 +47,7 @@ impl Host {
             return Host::default();
         };
         if seen.nvidia && !seen.wsl {
-            seen.toolkit = docker_info(&config.docker_bin)
-                .await
-                .map(|info| toolkit(&info));
+            seen.toolkit = docker_info.map(toolkit);
         }
         Host { seen: Some(seen) }
     }
@@ -138,23 +134,6 @@ pub(crate) fn toolkit(info: &Value) -> bool {
                     .is_some_and(|id| id.starts_with("nvidia.com/gpu"))
             })
         })
-}
-
-async fn docker_info(docker_bin: &str) -> Option<Value> {
-    let mut command = tokio::process::Command::new(docker_bin);
-    command.args(["info", "--format", "{{json .}}"]);
-    let out = crate::process::capture(
-        command,
-        Duration::from_secs(20),
-        4 * 1024 * 1024,
-        crate::process::Overflow::Reject,
-    )
-    .await
-    .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    serde_json::from_slice(&out.stdout).ok()
 }
 
 #[cfg(test)]

@@ -1,10 +1,20 @@
 name: thoric
 
+# The manager and the HTTPS service keep their logs in at most three files of 10 MB, whatever the
+# Docker daemon's default driver; the manager gives desktops the same while the daemon logs
+# through json-file.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   manager:
     image: ${MANAGER_IMAGE:-ghcr.io/co3moz/thoric:latest}
     container_name: ${MANAGER_CONTAINER:-thoric-manager}
     restart: unless-stopped
+    logging: *logging
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
     labels:
@@ -40,6 +50,7 @@ services:
       GAMEPAD_DEFAULT: ${GAMEPAD_DEFAULT:-false}
       VPN_DEFAULT: ${VPN_DEFAULT:-false}
       DESKTOP_USER_NAMESPACES: ${DESKTOP_USER_NAMESPACES:-true}
+      DESKTOP_PIDS_LIMIT: ${DESKTOP_PIDS_LIMIT:-16384}
       UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-1024}
       IMAGE_ARCHIVE_MAX_MB: ${IMAGE_ARCHIVE_MAX_MB:-65536}
       TEMPLATES_URL: ${TEMPLATES_URL:-}
@@ -69,6 +80,7 @@ services:
     profiles: [https]
     image: caddy:2.11.7-alpine
     restart: unless-stopped
+    logging: *logging
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     environment:

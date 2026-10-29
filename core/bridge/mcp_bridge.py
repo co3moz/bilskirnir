@@ -16,6 +16,8 @@ STREAM_IDLE = 60
 # Until the server notices a lost stream, at its next keep-alive, a new one would only be kept
 # alive beside it and hear nothing, so the stream is opened again after this wait.
 REOPEN_AFTER = 20
+INITIALIZED = b'{"jsonrpc":"2.0","method":"notifications/initialized"}'
+LIST_CHANGED = {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}
 
 
 def events(response, whole):
@@ -43,14 +45,25 @@ def events(response, whole):
         yield b"\n".join(pending)
 
 
+def lists_tool_changes(answer):
+    """Whether an answer to initialize says the server tells of changes to its tool list."""
+    result = answer.get("result") if isinstance(answer, dict) else None
+    capabilities = result.get("capabilities") if isinstance(result, dict) else None
+    tools = capabilities.get("tools") if isinstance(capabilities, dict) else None
+    return isinstance(tools, dict) and tools.get("listChanged") is True
+
+
 def run(url, token, source, output, errors):
     output_lock = threading.Lock()
     slots = threading.Semaphore(8)
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     # A scoped endpoint (/mcp/<name>) assigns a session on initialize and expects it back on
-    # every later request; /mcp assigns none.
-    session = {"id": None}
-    stream = {"opened": False}
+    # every later request; /mcp assigns none. The client's initialize is kept to open the
+    # session again once the endpoint has forgotten it.
+    session = {"id": None, "initialize": None}
+    # Held while a session is opened, by the client's initialize or by a renewal.
+    session_lock = threading.Lock()
+    stream = {"session": None}
     stream_lock = threading.Lock()
     stopped = threading.Event()
 
@@ -68,21 +81,24 @@ def run(url, token, source, output, errors):
                 errors.write(text + "\n")
                 errors.flush()
 
-    def listen():
+    def headers(accept, session_id):
+        named = {"Accept": accept, "MCP-Protocol-Version": PROTOCOL}
+        if token:
+            named["Authorization"] = "Bearer " + token
+        if session_id:
+            named["Mcp-Session-Id"] = session_id
+        return named
+
+    def listen(listening):
         # What the endpoint sends outside any request, such as notifications/tools/list_changed
         # when a desktop server is added, arrives on the session's own stream. Opened again
         # without Last-Event-ID, the server repeats what it kept of the stream, so a notification
-        # sent meanwhile still arrives, possibly twice.
-        while not stopped.is_set():
-            headers = {
-                "Accept": "text/event-stream",
-                "MCP-Protocol-Version": PROTOCOL,
-                "Mcp-Session-Id": session["id"],
-            }
-            if token:
-                headers["Authorization"] = "Bearer " + token
+        # sent meanwhile still arrives, possibly twice. A renewed session gets a listener of its
+        # own, and this one stops.
+        while not stopped.is_set() and session["id"] == listening:
+            request = urllib.request.Request(url, headers=headers("text/event-stream", listening))
             try:
-                with client.open(urllib.request.Request(url, headers=headers), timeout=STREAM_IDLE) as response:
+                with client.open(request, timeout=STREAM_IDLE) as response:
                     if response.headers.get_content_type() != "text/event-stream":
                         return
                     for data in events(response, whole=False):
@@ -93,7 +109,8 @@ def run(url, token, source, output, errors):
                         if isinstance(message, dict) and message.get("jsonrpc") == "2.0":
                             emit(message)
             except urllib.error.HTTPError as error:
-                # 404 once the session ended, 405 where no stream is offered: nothing comes later.
+                # 404 once the session ended, 405 where no stream is offered: nothing comes later
+                # on this session.
                 if 400 <= error.code < 500:
                     return
             except Exception:
@@ -102,10 +119,71 @@ def run(url, token, source, output, errors):
 
     def open_stream():
         with stream_lock:
-            if not session["id"] or stream["opened"]:
+            listening = session["id"]
+            if not listening or stream["session"] == listening:
                 return
-            stream["opened"] = True
-        threading.Thread(target=listen, daemon=True).start()
+            stream["session"] = listening
+        threading.Thread(target=listen, args=(listening,), daemon=True).start()
+
+    def post(body, session_id):
+        named = headers("application/json, text/event-stream", session_id)
+        named["Content-Type"] = "application/json"
+        return client.open(urllib.request.Request(url, data=body, headers=named), timeout=125)
+
+    def answers(response):
+        """The messages that answer a POST, within RESPONSE_LIMIT."""
+        if response.status in (202, 204):
+            return
+        mime = response.headers.get_content_type()
+        if mime == "application/json":
+            data = response.read(RESPONSE_LIMIT + 1)
+            if len(data) > RESPONSE_LIMIT:
+                raise ValueError("MCP response exceeds the 8 MiB limit")
+            yield json.loads(data)
+        elif mime == "text/event-stream":
+            for data in events(response, whole=True):
+                yield json.loads(data)
+        else:
+            raise ValueError("MCP endpoint returned an unexpected content type")
+
+    def deliver(message, body, session_id):
+        with post(body, session_id) as response:
+            if message.get("method") == "initialize":
+                session["id"] = response.headers.get("Mcp-Session-Id")
+            for answer in answers(response):
+                emit(answer)
+        # The session takes its own stream once it is initialized.
+        if message.get("method") == "notifications/initialized":
+            open_stream()
+
+    def renew(expired):
+        """Open a new session in place of one the endpoint no longer knows, with the client's
+        initialize, whose answer the client already has, and tell whether a request refused in
+        the old one may be sent again."""
+        with session_lock:
+            if session["id"] != expired:
+                # Another request renewed it meanwhile, or the client initialized again.
+                return True
+            if session["initialize"] is None:
+                return False
+            try:
+                with post(session["initialize"], None) as response:
+                    renewed = response.headers.get("Mcp-Session-Id")
+                    answered = [answer for answer in answers(response)
+                                if isinstance(answer, dict) and "id" in answer]
+                if len(answered) != 1 or not isinstance(answered[0].get("result"), dict):
+                    return False
+                with post(INITIALIZED, renewed):
+                    pass
+            except Exception:
+                return False
+            session["id"] = renewed
+        open_stream()
+        # Nothing could tell of a change to the tools while there was no session, so the client
+        # is asked to list them again.
+        if lists_tool_changes(answered[0]):
+            emit(LIST_CHANGED)
+        return True
 
     def forward(message):
         try:
@@ -120,36 +198,24 @@ def run(url, token, source, output, errors):
             if len(body) > REQUEST_LIMIT:
                 failure(message, -32600, "MCP request exceeds the 1100000-byte limit")
                 return
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-                "MCP-Protocol-Version": PROTOCOL,
-            }
-            if token:
-                headers["Authorization"] = "Bearer " + token
-            if session["id"]:
-                headers["Mcp-Session-Id"] = session["id"]
-            request = urllib.request.Request(url, data=body, headers=headers)
-            with client.open(request, timeout=125) as response:
-                assigned = response.headers.get("Mcp-Session-Id")
-                if assigned:
-                    session["id"] = assigned
-                if response.status in (202, 204):
-                    # The session takes its own stream once it is initialized.
-                    if message.get("method") == "notifications/initialized":
-                        open_stream()
-                    return
-                mime = response.headers.get_content_type()
-                if mime == "application/json":
-                    data = response.read(RESPONSE_LIMIT + 1)
-                    if len(data) > RESPONSE_LIMIT:
-                        raise ValueError("MCP response exceeds the 8 MiB limit")
-                    emit(json.loads(data))
-                elif mime == "text/event-stream":
-                    for data in events(response, whole=True):
-                        emit(json.loads(data))
-                else:
-                    raise ValueError("MCP endpoint returned an unexpected content type")
+            if message.get("method") == "initialize":
+                # initialize opens a session, so it names none.
+                with session_lock:
+                    session["initialize"] = body
+                    deliver(message, body, None)
+                return
+            sent = session["id"]
+            try:
+                deliver(message, body, sent)
+            except urllib.error.HTTPError as error:
+                # An endpoint forgets a session that carried nothing for five minutes, and every
+                # one when the manager restarts, and answers 404 to its ID. The request is sent
+                # once more in a new session, and a second refusal goes to the client.
+                if error.code != 404 or not sent or not renew(sent):
+                    raise
+                # A renewal sends notifications/initialized itself.
+                if message.get("method") != "notifications/initialized":
+                    deliver(message, body, session["id"])
         except urllib.error.HTTPError as error:
             failure(message, -32000, f"MCP HTTP request failed with status {error.code}")
         except Exception:

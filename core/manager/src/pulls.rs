@@ -246,7 +246,7 @@ where
             if status.is_client_error() {
                 return Err(Refused(error).into());
             }
-            bail!(error);
+            return Err(crate::error::engine_failure(status, error));
         }
         let mut pending = Vec::new();
         while let Some(frame) = tokio::time::timeout(IDLE_LIMIT, response.body_mut().frame())

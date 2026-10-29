@@ -20,8 +20,11 @@ RUN install -m 0755 -d /etc/apt/keyrings \
        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin nvidia-container-toolkit \
     && rm -rf /var/lib/apt/lists/*
 # Docker starts with systemd; daemon.json, copied below, registers the NVIDIA runtime now, so the
-# first boot needs no network, and turns on live-restore, so containers keep running when Docker
-# restarts. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
+# first boot needs no network, turns on live-restore, so containers keep running when Docker
+# restarts, and has every container log through json-file in at most three files of 10 MB. An
+# update leaves the file as an older package installed it, where the manager and compose.yml give
+# Thoric's own containers the same rotation; the thoric command does not rely on it, so the package
+# level stays. WSL 2 runs every distribution in one network namespace. nftables.service flushes the
 # whole ruleset when it starts (the default /etc/nftables.conf) and when it stops, which clears
 # the firewall rules of every Docker Engine on the machine, so it is masked.
 RUN systemctl enable docker containerd \
