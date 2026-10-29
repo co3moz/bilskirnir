@@ -19,7 +19,11 @@ use std::{sync::Arc, time::Duration};
 const RECORDER: &str = include_str!("../helpers/recorder.py");
 const CONTROL: &str = include_str!("../helpers/app_control.py");
 const EXPORTER: &str = include_str!("../helpers/export_artifacts.py");
+const VIDEO: &str = include_str!("../helpers/recording_video.py");
 pub const ROOT: &str = "/tmp/thoric-recordings";
+/// How long the videos of one stop or export may take to encode. Past it, the recordings left go
+/// into an MJPEG AVI, which only copies their frames, so the helper ends soon after.
+const ENCODE_SECONDS: u64 = 90;
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -130,6 +134,37 @@ async fn control(app: &App, container: &str, arguments: &[&str]) -> anyhow::Resu
     let output = app.docker(&args).await?;
     serde_json::from_slice(&output).context("Recording control returned invalid data")
 }
+/// Makes the video of every recording in `directories` that finished without one, as the desktop
+/// user, and returns their states in the same order.
+async fn videos(app: &App, container: &str, directories: &[String]) -> anyhow::Result<Vec<Value>> {
+    let mut args = [
+        "exec",
+        "--user",
+        "1001:1001",
+        container,
+        "python3",
+        "-c",
+        VIDEO,
+        &ENCODE_SECONDS.to_string(),
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    args.extend(directories.iter().cloned());
+    let output = process::capture(
+        app.command(&args),
+        Duration::from_secs(ENCODE_SECONDS + 60),
+        4 * 1024 * 1024,
+        process::Overflow::Reject,
+    )
+    .await?;
+    if !output.status.success() {
+        bail!(
+            "Recording video: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    serde_json::from_slice(&output.stdout).context("Recording video returned invalid data")
+}
 fn describe(record: &Recording, status: Value) -> Value {
     let mut value = json!({
         "recording_id": record.id,
@@ -143,6 +178,10 @@ fn describe(record: &Recording, status: Value) -> Value {
         for (key, field) in fields {
             value[key] = field.clone();
         }
+    }
+    if let Some(path) = value["video"]["path"].as_str().map(str::to_owned) {
+        value["video"]["download_url"] =
+            json!(crate::files::download_url(&record.container_id, &path));
     }
     value
 }
@@ -195,12 +234,16 @@ pub async fn stop_recording(app: &Arc<App>, id: &str, recording: &str) -> Result
     let record = record(app, id, recording)?;
     let (_, info) = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;
-    let status = control(
-        app,
-        container,
-        &["recording-stop", &format!("{ROOT}/{}", record.id), "15"],
-    )
-    .await?;
+    let directory = format!("{ROOT}/{}", record.id);
+    let mut status = control(app, container, &["recording-stop", &directory, "15"]).await?;
+    // Also a recording that ended at its limit gets its video here, once.
+    if status["state"] == "finished" && status["video"].is_null() {
+        match videos(app, container, std::slice::from_ref(&directory)).await {
+            Ok(mut items) if !items.is_empty() => status = items.swap_remove(0),
+            Ok(_) => {}
+            Err(error) => status["video"] = json!({"error": format!("{error:#}")}),
+        }
+    }
     Ok(describe(&record, status))
 }
 pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
@@ -264,12 +307,25 @@ pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result
             json!(format!("{}/{}", apps_root(), record.id)),
         );
     }
+    let container = info["Id"].as_str().context("Missing container ID")?;
+    // A recording that ended at its limit and was never stopped gets its video before it is
+    // packaged; one that cannot is exported with its frames as before.
+    let directories = recordings
+        .values()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if !directories.is_empty()
+        && let Err(error) = videos(app, container, &directories).await
+    {
+        tracing::warn!("Recordings of {id} are exported without a new video: {error:#}");
+    }
     let manifest = json!({"recordings": recordings, "applications": applications}).to_string();
     let args = [
         "exec",
         "--user",
         "1001:1001",
-        info["Id"].as_str().context("Missing container ID")?,
+        container,
         "python3",
         "-c",
         EXPORTER,
@@ -329,3 +385,7 @@ pub async fn export(
 ) -> Result<Json<Value>> {
     Ok(Json(export_artifacts(&app, &id, &body).await?))
 }
+
+#[cfg(test)]
+#[path = "recordings_tests.rs"]
+mod tests;
