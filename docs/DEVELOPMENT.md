@@ -291,6 +291,8 @@ Then `python3 tests/integration.py` on that host, and record what ran, with the 
 
 Inspect interface changes in a live browser at desktop and narrow widths. Open saved screenshots to confirm their actual layout before adding them to the documentation. Do not run acceptance tests or rebuild images for a wording-only change.
 
+`docs/screenshots/agent-demo.gif`, at the top of the README, is a recording of an agent at work, not a screenshot of the interface. It was made in a real installation with a container from the XFCE catalog image at 1280x720, driven only through `/mcp` (`desktop_input`, `wait_for_condition`, `set_window_geometry`, `screenshot`, `save_screenshot`) while `start_recording` kept frames at 5 per second, which `read_file` then read back. The frames are scaled to 960 pixels wide and share one palette, a bar under them names the tool call in progress, and a ring marks the click, since screenshots carry no pointer. Keep it under 5 MB, open it after saving, and record it again when the desktop or the tools it shows change.
+
 ## Publish container images
 
 The **Publish containers** workflow checks frontend and backend code, makes the dependency list and validates Compose before publishing three `linux/amd64` images to GHCR and Docker Hub:
