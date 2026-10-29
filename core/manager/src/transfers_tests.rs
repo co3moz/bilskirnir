@@ -2,7 +2,7 @@
 //! first request that presents it, expires, is accepted by the transfer route only, and runs the
 //! route's own handler without a session that could end it.
 use super::*;
-use crate::tests::{app, mcp_app, mcp_request};
+use crate::test_support::{app, mcp_app, mcp_request};
 use axum::http::Request;
 use tower::ServiceExt;
 

@@ -1,7 +1,11 @@
 //! What the settings page is shown of the configuration: every setting Compose passes to the
-//! manager, as `.env.example` names it, and never a secret's value.
+//! manager, as `.env.example` names it, and never a secret's value. Also how `TEMPLATES_URL`,
+//! `VOLUME_FILTER` and the MCP token are read, with the limits of a script request, that the
+//! desktop seccomp profile adds only user namespaces to Docker's default, and that the
+//! administrator's password is hashed with Argon2id only at startup.
 use super::*;
-use crate::tests::DESKTOP_CONTEXT;
+use crate::exec;
+use crate::test_support::DESKTOP_CONTEXT;
 use axum::{body::Body, http::Request};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tower::ServiceExt;
@@ -45,7 +49,7 @@ fn names(config: &Config) -> Vec<String> {
 
 #[test]
 fn the_page_shows_every_setting_compose_passes_to_the_manager() {
-    let app = crate::tests::app(true);
+    let app = crate::test_support::app(true);
     let shown = names(&app.config);
     let example = read(".env.example");
     let (sections, catalog) = (
@@ -87,7 +91,7 @@ fn the_page_shows_every_setting_compose_passes_to_the_manager() {
 
 #[test]
 fn a_secret_says_only_whether_it_is_set() {
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.password_hash = Some("$argon2id$v=19$stored-password-hash".into());
     config.mcp_token = Some("token-of-the-agent-endpoint".into());
@@ -136,9 +140,48 @@ fn a_secret_says_only_whether_it_is_set() {
     assert_eq!(setting(config, "UPLOAD_MAX_MB")["value"], 1024);
 }
 
+#[test]
+fn the_administrator_password_is_hashed_at_startup_only() {
+    use argon2::{PasswordHash, PasswordVerifier};
+    let get = |key: &str| match key {
+        "ADMIN_PASSWORD" => Some("correct horse".to_owned()),
+        // The seccomp profile is a file of the repository root, not of the test's folder.
+        "DESKTOP_USER_NAMESPACES" => Some("false".to_owned()),
+        _ => None,
+    };
+    let hash = Config::parse(&get, Reading::Startup)
+        .unwrap()
+        .password_hash
+        .unwrap();
+    // Argon2id with its default parameters and a salt of 16 bytes, which is 22 base64 letters.
+    let parts: Vec<&str> = hash.split('$').collect();
+    assert_eq!(
+        parts[..4],
+        ["", "argon2id", "v=19", "m=19456,t=2,p=1"],
+        "{hash}"
+    );
+    assert_eq!(parts[4].len(), 22, "{hash}");
+    let parsed = PasswordHash::new(&hash).unwrap();
+    assert!(
+        Argon2::default()
+            .verify_password(b"correct horse", &parsed)
+            .is_ok()
+    );
+    assert!(
+        Argon2::default()
+            .verify_password(b"wrong horse", &parsed)
+            .is_err()
+    );
+    // Every start salts anew, and a change from the dashboard never hashes.
+    let again = Config::parse(&get, Reading::Startup).unwrap().password_hash;
+    assert_ne!(again.as_deref(), Some(hash.as_str()));
+    let change = Config::parse(&get, Reading::Change).unwrap().password_hash;
+    assert_eq!(change, None);
+}
+
 #[tokio::test]
 async fn the_configuration_route_needs_a_session_and_is_documented() {
-    let response = crate::router(crate::tests::app(true))
+    let response = crate::router(crate::test_support::app(true))
         .oneshot(
             Request::builder()
                 .uri("/api/configuration")
@@ -149,7 +192,7 @@ async fn the_configuration_route_needs_a_session_and_is_documented() {
         .await
         .unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::UNAUTHORIZED);
-    let response = crate::router(crate::tests::app(false))
+    let response = crate::router(crate::test_support::app(false))
         .oneshot(
             Request::builder()
                 .uri("/api/configuration")
@@ -242,7 +285,7 @@ fn the_manifests_carry_a_renamed_variable_over_to_its_new_name() {
 
 #[test]
 fn the_page_edits_only_the_settings_it_may_change() {
-    let app = crate::tests::app(true);
+    let app = crate::test_support::app(true);
     let shown = app.config.shown();
     let names = names(&app.config);
     for name in EDITABLE {
@@ -299,7 +342,7 @@ fn a_value_from_the_dashboard_is_one_line_that_env_keeps_as_it_is() {
 
 #[test]
 fn a_change_is_read_as_the_manager_would_start_with_it() {
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     // Sign-in stays on, but the password, which only its hash is kept of, is not read again.
     config.environment = BTreeMap::from([
@@ -363,7 +406,7 @@ fn a_change_is_read_as_the_manager_would_start_with_it() {
 /// in `core/web/src/lib/settings.ts`), which holds only while a default never gives more.
 #[test]
 fn a_default_gives_nothing_while_its_feature_is_switched_off() {
-    let mut app = crate::tests::app(true);
+    let mut app = crate::test_support::app(true);
     let config = &mut Arc::get_mut(&mut app).unwrap().config;
     config.environment = BTreeMap::from([
         ("AUTH_MODE".into(), "password".into()),
@@ -395,4 +438,148 @@ fn a_default_gives_nothing_while_its_feature_is_switched_off() {
     }
     // The microphone travels over the audio connection.
     assert_eq!(defaults(&["AUDIO_ENABLED"])["microphone"], false);
+}
+
+#[test]
+fn templates_url_defaults_to_the_wiki_and_none_turns_the_page_off() {
+    for unset in [None, Some(""), Some("  ")] {
+        assert_eq!(
+            templates_url(unset).unwrap().as_deref(),
+            Some(TEMPLATES_URL)
+        );
+    }
+    assert_eq!(templates_url(Some("none")).unwrap(), None);
+    let mirror = "http://10.0.0.5:8000/thoric/index.json";
+    assert_eq!(
+        templates_url(Some(mirror)).unwrap().as_deref(),
+        Some(mirror)
+    );
+    // The policy header names the host, so nothing may close the directive or start another.
+    for refused in [
+        "None",
+        "ftp://example.com/index.json",
+        "https://",
+        "https:///index.json",
+        "https://example.com/a b.json",
+        "https://example.com;script-src *",
+        "https://example.com/index.json'",
+        "https://user@example.com/index.json",
+        "https://example.com?x/index.json",
+    ] {
+        assert!(templates_url(Some(refused)).is_err(), "{refused}");
+    }
+}
+
+#[test]
+fn volume_filter_defaults_to_the_managers_label_and_none_lists_every_volume() {
+    // Compose hands an unset variable over as an empty one, so empty cannot switch it off.
+    for unset in [None, Some(""), Some("  ")] {
+        assert_eq!(
+            volume_filter(unset).unwrap().as_deref(),
+            Some("thoric.managed=true")
+        );
+    }
+    assert_eq!(volume_filter(Some("none")).unwrap(), None);
+    for label in [
+        "team",
+        "team=",
+        "com.example.team=unity",
+        "thoric.managed",
+        "thoric.managed=true",
+    ] {
+        assert_eq!(volume_filter(Some(label)).unwrap().as_deref(), Some(label));
+    }
+    // A label the manager could not put on what it creates, or one Docker's filter reads apart.
+    for refused in [
+        "=true",
+        "team name=a",
+        "team=a b",
+        "team=a,b",
+        "team\n=a",
+        "thoric.managed=false",
+        "thoric.managed=",
+    ] {
+        assert!(volume_filter(Some(refused)).is_err(), "{refused}");
+    }
+}
+
+#[test]
+fn mcp_token_and_script_validation() {
+    // Any length up to 256 is accepted; whitespace and non-ASCII cannot travel in a bearer header.
+    for token in [
+        "",
+        "short token",
+        "token\n",
+        "şifre",
+        "x".repeat(257).as_str(),
+    ] {
+        assert!(validate_mcp_token(true, token).is_err());
+    }
+    assert!(validate_mcp_token(false, "").is_ok());
+    for token in ["x", "$hort#'\"`%!", "x".repeat(256).as_str()] {
+        assert!(validate_mcp_token(true, token).is_ok());
+    }
+    // Only an explicit MCP_AUTH_MODE=none drops the token; an unset or mistyped mode does not.
+    for mode in [None, Some("token")] {
+        assert!(mcp_token(true, mode, String::new()).is_err());
+    }
+    for mode in [Some(""), Some("off"), Some("None")] {
+        assert!(mcp_token(true, mode, "0".repeat(32)).is_err());
+    }
+    assert_eq!(
+        mcp_token(true, None, "0".repeat(32)).unwrap(),
+        Some("0".repeat(32))
+    );
+    assert_eq!(mcp_token(true, Some("none"), String::new()).unwrap(), None);
+    for body in [
+        serde_json::json!({"script":""}),
+        serde_json::json!({"script":"echo ok","timeout_seconds":0}),
+        serde_json::json!({"script":"echo ok","timeout_seconds":3501}),
+        serde_json::json!({"script":"echo\0ok"}),
+    ] {
+        assert!(
+            serde_json::from_value::<exec::Execute>(body)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+    let body: exec::Execute = serde_json::from_value(serde_json::json!({"script":"id"})).unwrap();
+    assert!(!body.root);
+    assert_eq!(body.timeout_seconds, 300);
+    assert!(body.validate().is_ok());
+}
+
+#[test]
+fn the_desktop_seccomp_profile_adds_only_user_namespaces_to_dockers_default() {
+    let profile: serde_json::Value =
+        serde_json::from_str(include_str!("../../../images/desktop/seccomp.json")).unwrap();
+    assert_eq!(profile["defaultAction"], "SCMP_ACT_ERRNO");
+    let rules = profile["syscalls"].as_array().unwrap();
+    let unconditional = |name: &str| {
+        rules.iter().any(|rule| {
+            rule["action"] == "SCMP_ACT_ALLOW"
+                && rule["names"].as_array().unwrap().iter().any(|n| n == name)
+                && rule.get("args").is_none()
+                && rule.get("includes").is_none()
+        })
+    };
+    // A sandbox starts by cloning or unsharing into a new user namespace.
+    assert!(unconditional("clone") && unconditional("unshare"));
+    // Calls Docker reserves for CAP_SYS_ADMIN stay refused, so a process in its own namespace
+    // still cannot mount file systems or join another process's namespaces.
+    for name in ["mount", "umount2", "fsopen", "open_tree", "setns", "bpf"] {
+        assert!(
+            !unconditional(name),
+            "{name} is allowed without CAP_SYS_ADMIN"
+        );
+    }
+    // glibc falls back from clone3 to clone only when clone3 reports ENOSYS.
+    assert!(
+        rules
+            .iter()
+            .any(|rule| rule["names"] == serde_json::json!(["clone3"])
+                && rule["errnoRet"] == 38
+                && rule["excludes"]["caps"] == serde_json::json!(["CAP_SYS_ADMIN"]))
+    );
 }

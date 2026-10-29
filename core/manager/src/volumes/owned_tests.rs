@@ -48,7 +48,7 @@ fn a_volume_created_for_a_container_carries_its_owner() {
         "volume create --label thoric.managed=true --label team=unity --label thoric.environment=e --label thoric.parameter=UNITY_WORKSPACE thoric-e-unity-workspace"
     );
     // The owner label is the one the container carries.
-    let desktop = crate::tests::app(false).container_args(&container("e", &[]), None);
+    let desktop = crate::test_support::app(false).container_args(&container("e", &[]), None);
     assert!(desktop.contains(&format!("{OWNER}=e")), "{desktop:?}");
     let labelled = |labels: Value| json!({"Name": "thoric-e-unity-workspace", "Labels": labels});
     assert!(owned_by(
@@ -149,7 +149,7 @@ fn fake_docker(cases: &str) -> (std::sync::Arc<App>, std::path::PathBuf) {
     let docker = dir.join("docker");
     std::fs::write(&docker, script).unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
     config.docker_bin = docker.display().to_string();
     config.manager = Some("thoric-manager".into());

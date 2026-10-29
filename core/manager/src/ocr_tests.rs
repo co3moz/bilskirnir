@@ -48,7 +48,7 @@ fn small_captures_are_enlarged_twice_and_large_ones_less_or_not_at_all() {
 
 #[tokio::test]
 async fn a_missing_container_is_refused_before_anything_runs() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let error = find_text(&app, "missing", &request(json!({"text":"Play"})))
         .await
         .unwrap_err();

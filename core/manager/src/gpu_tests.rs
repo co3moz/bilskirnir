@@ -1,11 +1,15 @@
 //! Pins down which routes a GPU desktop gets from the settings and what the host showed, the
-//! `docker create` arguments of each, and the errors that name the setting when a route is
-//! missing or Docker refuses its devices.
+//! `docker create` arguments of each, and the errors that name the setting when a route is missing
+//! or Docker refuses its devices. Also that a GPU container is refused before Docker when no route
+//! is used, at creation, retry and a settings change that creates it again.
 use super::*;
+use crate::model;
+use crate::test_support::{app, spec};
 use host::Seen;
+use std::sync::Arc;
 
 fn config(seen: Option<Seen>) -> std::sync::Arc<crate::App> {
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     std::sync::Arc::get_mut(&mut app).unwrap().config.gpu_host = Host { seen };
     app
 }
@@ -253,4 +257,85 @@ fn the_settings_route_reports_routes_and_what_the_host_showed() {
         })
     );
     assert_eq!(report(&config(None).config)["found"], Value::Null);
+}
+
+#[tokio::test]
+async fn gpu_containers_are_rejected_when_the_installation_has_no_gpu() {
+    let mut app = app(false);
+    {
+        let config = &mut Arc::get_mut(&mut app).unwrap().config;
+        config.wsl_gpu = false;
+        config.cuda = false;
+    }
+    let mut spec = spec();
+    spec.gpu = true;
+    let error = app
+        .create_container("gpu-test", spec, Default::default(), "gpu-job")
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("GPU"), "{error}");
+    assert!(
+        app.db
+            .list::<model::Container>(model::CONTAINERS)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_host_without_a_wsl_gpu_refuses_a_gpu_container_naming_wsl_gpu() {
+    // A Linux host without GPUs, with WSL_GPU left at its default.
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.gpu_host = Host {
+        seen: Some(Default::default()),
+    };
+    let mut spec = spec();
+    spec.gpu = true;
+    let error = app
+        .create_container("gpu-test", spec.clone(), Default::default(), "gpu-job")
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("WSL_GPU is true, but this host has no WSL GPU (/dev/dxg)"),
+        "{error}"
+    );
+    assert!(
+        app.db
+            .list::<model::Container>(model::CONTAINERS)
+            .unwrap()
+            .is_empty()
+    );
+    // A retry or reset of a GPU container that exists already stops before Docker too.
+    let env = model::Container {
+        id: "gpu-test".into(),
+        container: "thoric-gpu-test".into(),
+        private_network: "thoric-gpu-test-private".into(),
+        egress_network: "thoric-gpu-test-egress".into(),
+        source_image_id: "sha256:base".into(),
+        created_at: 1,
+        spec,
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    let error = app.create_stopped(&env, "manager").await.unwrap_err();
+    assert!(error.to_string().contains("WSL_GPU"), "{error}");
+    // A settings change that creates it again is refused the same way; one applied in place is not.
+    let request = |body: serde_json::Value| body.as_object().unwrap().clone();
+    let error = app
+        .settings_preview(
+            &env,
+            &request(serde_json::json!({"resolution": "1280x720"})),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("WSL_GPU"), "{error}");
+    let (_, changes) = app
+        .settings_preview(&env, &request(serde_json::json!({"name": "Renamed"})))
+        .unwrap();
+    assert!(changes.restart.is_empty());
+    // And the create form starts without GPU access.
+    assert!(!app.config.feature_defaults().gpu);
 }

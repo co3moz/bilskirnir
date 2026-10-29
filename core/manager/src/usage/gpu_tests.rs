@@ -45,7 +45,7 @@ fn a_driver_message_is_not_a_reading() {
 
 #[test]
 fn routes_follow_what_the_installation_gives_desktops() {
-    let mut config = crate::tests::app(false);
+    let mut config = crate::test_support::app(false);
     let config = &mut std::sync::Arc::get_mut(&mut config).unwrap().config;
     assert_eq!(routes(config), [Route::Wsl, Route::Toolkit]);
     config.wsl_gpu = false;
@@ -80,7 +80,7 @@ fn the_helper_gets_the_gpu_and_nothing_else() {
 
 #[tokio::test]
 async fn a_failing_sampler_reports_what_it_printed() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     // nvidia-smi explains a missing library on stdout and exits.
     let mut command = tokio::process::Command::new(if cfg!(windows) { "cmd" } else { "sh" });
     if cfg!(windows) {
@@ -104,7 +104,7 @@ async fn a_failing_sampler_reports_what_it_printed() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_sampler_records_each_line_until_it_ends() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let mut command = tokio::process::Command::new("sh");
     command.args([
         "-c",

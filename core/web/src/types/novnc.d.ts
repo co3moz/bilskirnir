@@ -8,6 +8,8 @@ declare module "@novnc/novnc" {
     )
     scaleViewport: boolean
     resizeSession: boolean
+    // noVNC 1.7 dropped it from API.md with the constructor option it deprecated, but the property
+    // is still there; check core/rfb.js before raising noVNC.
     showDotCursor: boolean
     focusOnClick: boolean
     viewOnly: boolean

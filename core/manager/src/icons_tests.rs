@@ -72,6 +72,25 @@ fn json_carries_an_icon_as_a_png_data_url() {
 }
 
 #[test]
+fn an_icon_an_earlier_release_saved_reads_and_writes_the_same_text() {
+    // Standard base64 with its padding, as Python's base64.b64encode writes it.
+    let saved = json!("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA=");
+    let icon = serde_json::from_value::<Icon>(saved.clone()).unwrap();
+    assert_eq!(icon, sample(1, 1));
+    assert_eq!(serde_json::to_value(&icon).unwrap(), saved);
+    // Missing padding and a last character with stray bits are refused, as they were.
+    for refused in [
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA",
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAB=",
+    ] {
+        assert!(
+            serde_json::from_value::<Icon>(json!(refused)).is_err(),
+            "{refused}"
+        );
+    }
+}
+
+#[test]
 fn a_saved_icon_this_release_cannot_use_reads_as_none() {
     let mut saved = json!(record("a", None));
     for icon in [
@@ -123,7 +142,7 @@ async fn fetch(app: Arc<App>, uri: &str, tag: Option<&str>) -> Response {
 
 #[tokio::test]
 async fn the_icon_route_serves_the_picture_a_list_names() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("image", "a", &record("a", None)).unwrap();
     let missing = fetch(app.clone(), "/api/images/a/icon", None).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
@@ -179,7 +198,7 @@ async fn the_icon_route_serves_the_picture_a_list_names() {
 
 #[tokio::test]
 async fn only_a_saved_image_takes_a_usable_icon() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     app.db.put("image", "a", &record("a", None)).unwrap();
     let catalog = set(
         State(app.clone()),

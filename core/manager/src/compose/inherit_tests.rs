@@ -288,7 +288,7 @@ fn the_list_marks_a_build_that_lacks_steps_of_its_base_s_compose() {
 
 #[tokio::test]
 async fn an_image_that_lacks_its_base_s_compose_gets_it_once() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let re = image("re", Some(analysis()), &["reverse-engineering"]);
     let dropped = built_on(&re, "dropped", Some(chrome()), &["chrome"]);
     for record in [&re, &dropped] {

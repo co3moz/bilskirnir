@@ -10,7 +10,7 @@ use crate::{
         tests::{container, endpoint, grant, names, server},
     },
     model::CONTAINERS,
-    tests::{app, mcp_app},
+    test_support::{app, mcp_app},
 };
 use std::{
     convert::Infallible,

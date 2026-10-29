@@ -1,0 +1,446 @@
+//! Pins down the administrator's MCP channel at `/mcp`: its bearer token and Host and Origin
+//! checks, the tool list agents see and what `docs/MCP.md` and the README say of it, refusals of an
+//! unknown tool or argument before anything changes, the bounds of its transport, replies chunked
+//! on the wire, and a screenshot call that fits in half a worker's stack.
+use crate::test_support::{mcp_app, mcp_request, spec};
+use crate::{model, router};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use std::sync::Arc;
+use tower::ServiceExt;
+
+#[tokio::test]
+async fn mcp_requires_its_own_token_and_rejects_cross_origin_access() {
+    for (enabled, token, host, origin, expected) in [
+        (false, None, "localhost:8080", None, StatusCode::NOT_FOUND),
+        (true, None, "localhost:8080", None, StatusCode::UNAUTHORIZED),
+        (
+            true,
+            Some("Bearer wrong"),
+            "localhost:8080",
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            true,
+            Some("Bearer test-token-with-at-least-32-characters"),
+            "evil.example",
+            None,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            true,
+            Some("Bearer test-token-with-at-least-32-characters"),
+            "localhost:8080",
+            Some("https://evil.example"),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let mut app = mcp_app();
+        Arc::get_mut(&mut app).unwrap().config.root_mcp_enabled = enabled;
+        let mut req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("host", host);
+        if let Some(token) = token {
+            req = req.header("authorization", token);
+        }
+        if let Some(origin) = origin {
+            req = req.header("origin", origin);
+        }
+        let response = router(app)
+            .oneshot(req.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+    }
+}
+
+#[tokio::test]
+async fn mcp_without_a_token_still_rejects_other_hosts_and_origins() {
+    let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
+    for (token, host, origin, expected) in [
+        (None, "localhost:8080", None, StatusCode::OK),
+        (Some("Bearer wrong"), "localhost:8080", None, StatusCode::OK),
+        (None, "evil.example", None, StatusCode::FORBIDDEN),
+        (
+            None,
+            "localhost:8080",
+            Some("https://evil.example"),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let mut app = mcp_app();
+        Arc::get_mut(&mut app).unwrap().config.mcp_token = None;
+        let mut req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("host", host)
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            .header("mcp-protocol-version", "2025-11-25");
+        if let Some(token) = token {
+            req = req.header("authorization", token);
+        }
+        if let Some(origin) = origin {
+            req = req.header("origin", origin);
+        }
+        let response = router(app)
+            .oneshot(req.body(Body::from(initialize.to_string())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+}
+
+#[tokio::test]
+async fn mcp_negotiates_and_lists_tools_with_useful_results() {
+    let app = mcp_app();
+    let (status, body) = mcp_request(app.clone(), "initialize", serde_json::json!({"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["serverInfo"]["name"], "thoric");
+    let instructions = body["result"]["instructions"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let tools = body["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 77);
+    // Usage is read for every container unless one is named.
+    let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
+    assert_eq!(usage["annotations"]["readOnlyHint"], true);
+    assert_eq!(usage["inputSchema"]["required"], serde_json::json!([]));
+    assert!(usage["inputSchema"]["properties"]["container_id"].is_object());
+    // Compose values reach a new container through create_container; the schema forbids
+    // properties it does not list, so a missing one is a value no agent can send.
+    let create = tools
+        .iter()
+        .find(|t| t["name"] == "create_container")
+        .unwrap();
+    assert!(create["inputSchema"]["properties"]["parameters"].is_object());
+    let compose = tools
+        .iter()
+        .find(|t| t["name"] == "set_image_compose")
+        .unwrap();
+    assert_eq!(compose["annotations"]["destructiveHint"], true);
+    assert_eq!(
+        compose["inputSchema"]["properties"]["compose"]["anyOf"][0]["required"],
+        serde_json::json!(["script"])
+    );
+    for name in ["delete_container", "delete_image", "delete_volume"] {
+        let delete = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert_eq!(delete["annotations"]["destructiveHint"], true, "{name}");
+    }
+    let screenshot = tools.iter().find(|t| t["name"] == "screenshot").unwrap();
+    assert_eq!(screenshot["annotations"]["readOnlyHint"], true);
+    assert!(screenshot["inputSchema"]["properties"]["max_width"].is_object());
+    assert!(
+        screenshot["description"]
+            .as_str()
+            .unwrap()
+            .contains("save_screenshot")
+    );
+    let save = tools
+        .iter()
+        .find(|t| t["name"] == "save_screenshot")
+        .unwrap();
+    assert_eq!(save["annotations"]["readOnlyHint"], false);
+    assert!(save["inputSchema"]["properties"]["capture"].is_object());
+    assert_eq!(
+        save["inputSchema"]["required"],
+        serde_json::json!(["path", "container_id"])
+    );
+    for name in ["save_screenshot", "download_file", "export_artifacts"] {
+        let tool = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert!(
+            tool["description"]
+                .as_str()
+                .unwrap()
+                .contains("download_url"),
+            "{name} must tell agents how to hand files to the user"
+        );
+    }
+    // Agents reached for docker and wsl on the host when a client hid a returned image. The
+    // instructions must steer them to the download link instead, and the guide must document it.
+    assert!(instructions.contains("download_url") && instructions.contains("wsl"));
+    // Agents wrote their own install scripts for toolchains a template already builds, since no
+    // tool lists templates. The instructions and build_image must point them at the list.
+    let build = tools.iter().find(|t| t["name"] == "build_image").unwrap();
+    for text in [
+        instructions.as_str(),
+        build["description"].as_str().unwrap(),
+    ] {
+        assert!(text.contains("templates_url") && text.contains("template_id"));
+    }
+    let guide = include_str!("../../../docs/MCP.md");
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        assert!(
+            guide.contains(&format!("`{name}`")),
+            "docs/MCP.md must mention {name}"
+        );
+    }
+    assert!(guide.contains("`download_url`"));
+    assert!(guide.contains("## Build from a template") && guide.contains("`templates_url`"));
+    // The count went stale once already; it is stated in the guide, so it is checked from here.
+    assert!(
+        guide.contains(&format!("exposes {} tools", tools.len())),
+        "docs/MCP.md must state the tool count"
+    );
+    // The README leads with the same count, so it goes stale the same way.
+    assert!(
+        include_str!("../../../README.md").contains(&format!("with {} tools", tools.len())),
+        "README.md must state the tool count"
+    );
+    assert_eq!(
+        screenshot["inputSchema"]["required"],
+        serde_json::json!(["container_id"])
+    );
+    let observe = tools
+        .iter()
+        .find(|t| t["name"] == "act_and_observe")
+        .unwrap();
+    assert!(observe["inputSchema"]["properties"]["actions"].is_object());
+    assert!(
+        observe["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "container_id")
+    );
+    let stop = tools
+        .iter()
+        .find(|t| t["name"] == "stop_application")
+        .unwrap();
+    assert!(
+        stop["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "application_id")
+    );
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"get_settings","arguments":{}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], false, "{body}");
+    assert!(body["result"]["structuredContent"]["base_image"].is_string());
+    assert!(!body.to_string().contains("test-token"));
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"get_usage","arguments":{"seconds":30}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], false, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["seconds"], 30);
+    assert_eq!(body["result"]["structuredContent"]["gpu"]["scope"], "host");
+    let (_, body) = mcp_request(
+        app,
+        "tools/call",
+        serde_json::json!({"name":"delete_container","arguments":{"container_id":"missing"}}),
+    )
+    .await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(
+        body["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("not found")
+    );
+}
+
+#[tokio::test]
+async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
+    let app = mcp_app();
+    for args in [
+        serde_json::json!({"name":"not_a_tool","arguments":{}}),
+        serde_json::json!({"name":"delete_container","arguments":{}}),
+        serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+    ] {
+        let (_, body) = mcp_request(app.clone(), "tools/call", args).await;
+        assert_eq!(body["error"]["code"], -32602, "{body}");
+    }
+    let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_container","arguments":{"container_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    let (_,body)=mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","mounts":[{"volume":"project","target":"/workspace","read_only":true}]}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+    // copy_volume reaches the copy route, which refuses it before any job without a manager.
+    for (arguments, refusal) in [
+        (
+            serde_json::json!({"volume":"project","name":"project-copy"}),
+            "MANAGER_CONTAINER",
+        ),
+        (
+            serde_json::json!({"volume":"project","name":"-bad"}),
+            "Invalid volume name",
+        ),
+    ] {
+        let (_, body) = mcp_request(
+            app.clone(),
+            "tools/call",
+            serde_json::json!({"name":"copy_volume","arguments":arguments}),
+        )
+        .await;
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        assert!(body.to_string().contains(refusal), "{body}");
+    }
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
+        serde_json::json!({"name":"copy_volume","arguments":{"name":"project-copy"}}),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32602, "{body}");
+    assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+}
+
+/// A debug build reserves stack in a function's frame for every future it awaits, and the MCP
+/// dispatch awaits dozens in one match. Once that took most of a tokio worker's 2 MiB, so a debug
+/// manager aborted on screenshot. The whole /mcp call, down to running Docker, must fit in half.
+#[test]
+fn mcp_screenshot_fits_in_half_a_worker_stack() {
+    let app = mcp_app();
+    let env = model::Container {
+        id: "test-id".into(),
+        container: "test-container".into(),
+        private_network: "test-private".into(),
+        egress_network: "test-egress".into(),
+        source_image_id: "sha256:test".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    // A stack overflow aborts the test binary and names this thread. The call needs under 512 KiB
+    // on Linux and 768 KiB on Windows; with Docker's read chunks in arrays it overflowed 2 MiB.
+    std::thread::Builder::new()
+        .name("mcp-screenshot-in-1-mib".into())
+        .stack_size(1024 * 1024)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let (_, body) = mcp_request(
+                        app,
+                        "tools/call",
+                        serde_json::json!({"name":"screenshot","arguments":{"container_id":"test-id","max_width":320}}),
+                    )
+                    .await;
+                    // The test has no Docker, so the call ends where it would run the first command.
+                    assert_eq!(body["result"]["isError"], true, "{body}");
+                    assert!(
+                        body.to_string().contains("Could not start Docker CLI"),
+                        "{body}"
+                    );
+                })
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn mcp_transport_bounds_messages_and_accepts_notifications() {
+    let app = mcp_app();
+    for (method, version, payload, expected) in [
+        (
+            "POST",
+            "2025-11-25",
+            serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}).to_string(),
+            StatusCode::ACCEPTED,
+        ),
+        (
+            "GET",
+            "2025-11-25",
+            String::new(),
+            StatusCode::METHOD_NOT_ALLOWED,
+        ),
+        (
+            "POST",
+            "1900-01-01",
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"ping"}).to_string(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "POST",
+            "2025-11-25",
+            "x".repeat(1_100_001),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+    ] {
+        let response = router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri("/mcp")
+                    .header("host", "localhost")
+                    .header(
+                        "authorization",
+                        "Bearer test-token-with-at-least-32-characters",
+                    )
+                    .header("content-type", "application/json")
+                    .header("accept", "application/json, text/event-stream")
+                    .header("mcp-protocol-version", version)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{method} {version}");
+    }
+}
+
+/// Norton's web protection rewrites a Content-Length reply on a loopback `/mcp` path into a
+/// chunked header over an unchunked body. Chunked replies pass through it intact, so the framing
+/// that reaches the socket is what has to stay chunked, rejections included.
+#[tokio::test]
+async fn mcp_replies_are_chunked_on_the_wire() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, router(mcp_app())).await });
+    let initialize = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+        "protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}})
+    .to_string();
+    for (authorization, expected) in [
+        ("", "HTTP/1.1 401 "),
+        (
+            "Authorization: Bearer test-token-with-at-least-32-characters\r\n",
+            "HTTP/1.1 200 ",
+        ),
+    ] {
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        let request = format!(
+            "POST /mcp HTTP/1.1\r\nHost: localhost:8080\r\n{authorization}Content-Type: application/json\r\nAccept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-11-25\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{initialize}",
+            initialize.len()
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut reply = Vec::new();
+        stream.read_to_end(&mut reply).await.unwrap();
+        let reply = String::from_utf8(reply).unwrap();
+        let (head, body) = reply.split_once("\r\n\r\n").unwrap();
+        let head = head.to_ascii_lowercase();
+        assert!(reply.starts_with(expected), "{head}");
+        assert!(head.contains("\r\ntransfer-encoding: chunked"), "{head}");
+        assert!(!head.contains("\r\ncontent-length:"), "{head}");
+        let (size, rest) = body.split_once("\r\n").unwrap();
+        let size = usize::from_str_radix(size, 16).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&rest[..size]).unwrap();
+        assert!(json.is_object(), "{json}");
+        assert!(rest[size..].ends_with("0\r\n\r\n"), "{body}");
+    }
+}

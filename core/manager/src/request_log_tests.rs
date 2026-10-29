@@ -1,6 +1,7 @@
 //! Pins down the request log: a line for every request with its method, path, status, latency
-//! and ID, at debug only for a timer's successful reads, an ID the answer returns, and never a
-//! query, a transfer link's token or a desktop service's own path.
+//! and ID, at debug only for a timer's successful reads, an ID the answer returns, a line of its
+//! own in the request's span for a server error, and never a query, a transfer link's token or a
+//! desktop service's own path.
 use super::*;
 use axum::body::Body;
 use std::sync::{Arc, Mutex};
@@ -23,6 +24,18 @@ impl std::io::Write for Written {
 /// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and the
 /// request's line.
 async fn logged(uri: &str, id: Option<&str>) -> (String, String) {
+    let (answered, log) = log_of(uri, id).await;
+    let line = log
+        .lines()
+        .find(|line| line.contains(": answered "))
+        .unwrap_or_else(|| panic!("no line for {uri} in {log:?}"))
+        .to_owned();
+    (answered, line)
+}
+
+/// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and all
+/// the log wrote meanwhile.
+async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
     let written = Written::default();
     let writer = written.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -36,18 +49,13 @@ async fn logged(uri: &str, id: Option<&str>) -> (String, String) {
     if let Some(id) = id {
         request = request.header("x-request-id", id);
     }
-    let response = crate::router(crate::tests::app(false))
+    let response = crate::router(crate::test_support::app(false))
         .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap();
     let answered = response.headers()[&REQUEST_ID].to_str().unwrap().to_owned();
     let log = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
-    let line = log
-        .lines()
-        .find(|line| line.contains(": answered "))
-        .unwrap_or_else(|| panic!("no line for {uri} in {log:?}"))
-        .to_owned();
-    (answered, line)
+    (answered, log)
 }
 
 #[tokio::test]
@@ -79,6 +87,27 @@ async fn a_timer_s_reads_are_logged_at_debug_while_they_succeed() {
     let (_, line) = logged("/readyz", None).await;
     assert!(line.contains(" INFO "), "{line}");
     assert!(line.contains("status=503"), "{line}");
+}
+
+#[tokio::test]
+async fn a_server_error_has_a_line_of_its_own_in_the_requests_span() {
+    // Without Docker the manager is not ready: the trace layer adds an error line to the request's
+    // own, and both carry its ID.
+    let (id, log) = log_of("/readyz", None).await;
+    let failed = log
+        .lines()
+        .find(|line| line.contains("response failed"))
+        .unwrap_or_else(|| panic!("no failure line in {log:?}"));
+    assert!(failed.contains(" ERROR "), "{failed}");
+    assert!(failed.contains(&format!("request_id={id}")), "{failed}");
+    assert!(failed.contains("503"), "{failed}");
+    // A success has the request's line alone.
+    let (_, log) = log_of("/api/session", None).await;
+    let lines: Vec<&str> = log
+        .lines()
+        .filter(|line| line.contains("request{"))
+        .collect();
+    assert_eq!(lines.len(), 1, "{log}");
 }
 
 #[tokio::test]

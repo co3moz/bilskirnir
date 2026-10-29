@@ -1,6 +1,7 @@
 //! Desktop MCP servers and MCP endpoints: which declarations are accepted, what an endpoint offers
 //! for its scopes and nothing more, the names its tools get, which single tools a grant leaves
-//! out, and that an endpoint's token opens that endpoint and no other route.
+//! out, and that an endpoint's token opens that endpoint and no other route, also one an earlier
+//! release stored the hash of.
 use super::{
     client::{Exec, MAX_TOOLS, check_tool_list, exec_args, relayed},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of, summary},
@@ -13,7 +14,7 @@ use super::{
 };
 use crate::{
     model::{CONTAINERS, Container},
-    tests::{app, mcp_app},
+    test_support::{app, mcp_app},
 };
 use axum::{
     Json,
@@ -344,6 +345,24 @@ fn exposed_names_are_valid_client_tool_names_of_at_most_64() {
     assert!(
         long.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    );
+}
+
+#[test]
+fn a_hash_an_earlier_release_stored_or_offered_stays_the_same() {
+    // An endpoint record keeps only its token's BLAKE2s-256, so a token issued before must still
+    // open it. The digest is the one Python's hashlib.blake2s gives.
+    let token = "bsk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let mut stored = endpoint("agents", Vec::new());
+    stored.token_hash =
+        Some("892a26ef2a6e1206944a4bbd388e09bbbc720cd372a5973664e583a99fd12133".into());
+    assert!(stored.opens(token));
+    assert!(!stored.opens(&token.replace('f', "e")));
+    // The hash tail of a tool's name is what agents call and what a grant leaves out by name.
+    assert_eq!(exposed_name_hashed(&["s", "a_b"]), "s__a_b_885b26");
+    assert_eq!(
+        exposed_name(&["ext-dev", "chrome", &"t".repeat(80)]),
+        format!("ext-dev__chrome__{}_5de7f8", "t".repeat(40))
     );
 }
 

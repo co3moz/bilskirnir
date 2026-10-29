@@ -308,7 +308,7 @@ fn a_part_keeps_a_bounded_list_of_steps_while_its_progress_goes_on() {
 
 #[test]
 fn only_a_change_is_saved_and_the_report_outlives_the_progress() {
-    let app = crate::tests::app(false);
+    let app = crate::test_support::app(false);
     let job = crate::model::Job {
         id: "setup".into(),
         kind: "create".into(),

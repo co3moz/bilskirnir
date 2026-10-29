@@ -421,7 +421,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut app = crate::tests::app(false);
+    let mut app = crate::test_support::app(false);
     std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
     let job = crate::model::Job {
         id: "pull".into(),
