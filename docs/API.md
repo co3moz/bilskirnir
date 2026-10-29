@@ -4,7 +4,7 @@
 
 The dashboard and MCP server share Thoric's backend operations. You can also call the HTTP API directly from a script or another application to manage containers and build your own interface.
 
-All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message.
+All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message; [errors](#errors) says what each status means.
 
 ## Sign in
 
@@ -21,6 +21,24 @@ curl --cookie-jar thoric.cookies \
 Send that cookie with subsequent requests. POST and DELETE requests also need `X-Thoric-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
 
 The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
+
+## Errors
+
+An error answers `{"error": "..."}` with a status that says whose failure it is. The message is the same whatever the status, and the dashboard shows it as it is.
+
+| Status | Meaning |
+| --- | --- |
+| `400` | The request was refused: a value that a check does not accept, or something it names that Docker does not have, such as an image or a volume. Change the request before sending it again. |
+| `401` | There is no session, or it ended. Sign in again. |
+| `403` | Not allowed: a foreign `Origin`, the manager's own volumes, or a file the desktop user cannot open. |
+| `404` | The record, or what the route names, does not exist. |
+| `409` | It conflicts with the state of something: another operation on the same container, image or volume is still running after the 5 seconds a request waits for it, a name is in use, a container is not running, or a container record mounts the volume. Send it again once that has changed. |
+| `500` | The manager itself failed: its database, its disk, or a task that ended unexpectedly. |
+| `502` | Docker failed at what it was asked, or a helper that the manager runs in a desktop or a helper container crashed. The message carries their answer. |
+| `503` | Docker cannot be reached: its daemon is stopped or its socket is missing. The same request works once Docker is back. |
+| `504` | A Docker command did not finish within its time limit. |
+
+Routes name the other statuses they use, such as `413` and `429` for transfers. A route that starts a job answers once the job is queued, and the job's failure is in its log rather than in a status. MCP tools return the same message as a tool error, without a status.
 
 ## Endpoints
 

@@ -416,6 +416,10 @@ fn helper_error(stderr: &[u8]) -> Error {
             "The volume helper ended without saying why".into(),
         );
     }
+    // Docker that cannot be reached, its daemon's failure or a helper that crashed.
+    if let Some(status) = crate::error::answer_status(&text) {
+        return Error(status, message);
+    }
     if message.contains("[Errno 13]") {
         return Error(
             StatusCode::FORBIDDEN,

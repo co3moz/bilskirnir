@@ -354,7 +354,17 @@ fn helper_failures_keep_their_meaning() {
         docker.1,
         "docker: Error response from daemon: no such image."
     );
+    assert_eq!(docker.0, StatusCode::BAD_REQUEST);
     assert_eq!(helper_error(b"").0, StatusCode::BAD_GATEWAY);
+    // Docker that cannot be reached, or a helper that crashed, is not the request's to fix.
+    let unreachable = helper_error(
+        b"docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\nSee 'docker run --help'.\n",
+    );
+    assert_eq!(unreachable.0, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(unreachable.1.starts_with("docker: Cannot connect"));
+    let crashed =
+        helper_error(b"Traceback (most recent call last):\n  File \"<string>\"\nKeyError: 'x'\n");
+    assert_eq!(crashed.0, StatusCode::BAD_GATEWAY);
 }
 
 async fn post(app: Arc<App>, uri: &str, body: serde_json::Value) -> (StatusCode, String) {

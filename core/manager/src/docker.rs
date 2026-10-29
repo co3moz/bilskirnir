@@ -32,7 +32,7 @@ impl App {
         )
         .await?;
         if !out.status.success() {
-            bail!("Docker: {}", String::from_utf8_lossy(&out.stderr).trim());
+            return Err(crate::error::docker_failure(&out.stderr, out.status.code()));
         }
         Ok(out.stdout)
     }
