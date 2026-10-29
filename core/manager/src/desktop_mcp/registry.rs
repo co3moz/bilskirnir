@@ -44,7 +44,7 @@ const RESERVED_HEADERS: [&str; 9] = [
 /// How the manager starts a server: a program on stdio, or a Streamable HTTP server already
 /// listening on the desktop's loopback. Values in `args`, `env`, `url` and `headers` may name the
 /// container's compose values as `${NAME}`, or `${STEP.NAME}` for one step of several.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ServerSpec {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -64,7 +64,7 @@ pub(crate) struct ServerSpec {
 }
 
 /// A server with its name, as a build, a template or a registration request names it.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, schemars::JsonSchema)]
 pub(crate) struct Declaration {
     pub name: String,
     #[serde(flatten)]

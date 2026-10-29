@@ -102,6 +102,23 @@ impl<'de> Deserialize<'de> for Icon {
     }
 }
 
+/// The text [`Icon`]'s serde reads and writes, for the HTTP API's document.
+impl schemars::JsonSchema for Icon {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Icon".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "type": "string",
+            "pattern": format!("^{DATA_URL}"),
+            "description": format!(
+                "A PNG of at most {ICON_SIZE} by {ICON_SIZE} pixels and {} KiB, as a `{DATA_URL}` URL.",
+                ICON_LIMIT / 1024
+            ),
+        })
+    }
+}
+
 /// Reads an icon that was saved earlier, by this release or another one. A picture this release
 /// cannot use reads as no icon, so a record or an archive keeps everything else it holds.
 pub(crate) fn lenient<'de, D: Deserializer<'de>>(
@@ -122,7 +139,7 @@ pub(crate) fn inherited(records: &[ImageRecord], image_id: &str) -> Option<Icon>
         .find_map(|record| record.icon.clone())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct IconQuery {
     /// The version a list named; the picture behind it never changes.
     #[serde(default)]
@@ -162,7 +179,7 @@ pub async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct SetIcon {
     pub icon: Icon,
 }

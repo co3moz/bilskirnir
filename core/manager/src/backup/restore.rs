@@ -53,7 +53,7 @@ pub async fn check(
     Ok(Json(json!(review(&manifest, &present))))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Upload {
     /// The backup's exact size, or none for one streamed as it is made.
     #[serde(default)]

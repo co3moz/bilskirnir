@@ -4,7 +4,7 @@
 
 The dashboard and MCP server share Thoric's backend operations. You can also call the HTTP API directly from a script or another application to manage containers and build your own interface.
 
-All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message; [errors](#errors) says what each status means.
+All paths below are relative to your installation, for example `http://localhost:8080`. Request bodies and results are JSON unless noted otherwise. Errors return an HTTP error status and an `error` message; [errors](#errors) says what each status means. The manager also describes every route, with its parameters and request bodies, as an [OpenAPI document](#openapi-document) for client generators and API tools.
 
 Every response carries an `X-Request-Id` header, and the manager's log line for the request names the same ID as `request_id`, so an error a script or the dashboard saw can be found in [the log](INSTALLATION.md#if-something-does-not-start). Send an `X-Request-Id` of your own, up to 128 letters, digits, `-`, `_`, `.` and `:`, to have it used instead; any other value is replaced with a new UUID.
 
@@ -160,6 +160,7 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | POST | `/api/human-requests/{id}/answer` | Answer a request for a person with `answer`, `done` or `decline`, and an optional `reply`; returns the request. `404` once it is gone, `409` when it was answered already. |
 | GET | `/api/activity` | The [agent activity](#agent-activity) log: MCP tool calls and used transfer links, newest first, with filters and a cursor. |
 | GET | `/api/dependencies` | Every [dependency](#dependencies) the manager image was built from: interface packages, crates and infrastructure. `404` for a manager built without the list. |
+| GET | `/api/openapi.json` | This API as an [OpenAPI 3.1 document](#openapi-document): every route with its parameters, request bodies and what it needs. |
 | GET | `/healthz` | Liveness: `ok` while the manager answers requests, without asking the database or Docker; does not require sign-in. The manager image's `HEALTHCHECK` and the WSL package's wait at start use it. |
 | GET | `/readyz` | Readiness: `200` with `{"ready": true, "database": true, "docker": true}` when the database answers a query and Docker answers its Engine socket's ping (or `docker version` where the manager has no socket), `503` with the failed check `false` otherwise. Each check gives up after two seconds, so a probe never hangs; the answer never says why a check failed. Does not require sign-in. |
 
@@ -941,6 +942,22 @@ Unless `UPDATE_CHECK=false`, the manager asks GitHub for the newest release when
 | `ui` | The interface's packages from `core/web/bun.lock` for linux/amd64, with the license their installed `package.json` names. `scope` is `runtime` for what the interface's own dependencies reach, `development` for what only the build tools do, and `direct` whether `core/web/package.json` names it. |
 | `backend` | The manager's crates from `cargo metadata` for `x86_64-unknown-linux-gnu`. `scope` is `runtime` for what is compiled into the binary, `build` for what only build scripts and procedural macros use, `development` for what only tests do, and `direct` whether `core/manager/Cargo.toml` names it. |
 | `infrastructure` | What the Dockerfiles, Compose manifests and workflows use. `kind` is `image`, `package` (an APT package, with `source`, the image of the stage that installs it), `tool`, `download` (a GitHub release), `action` (with `pin`, the commit it is pinned to) or `runner`, and `used_in` lists where: `manager`, `desktop`, `wsl`, `compose` or `ci`. |
+
+## OpenAPI document
+
+`GET /api/openapi.json` returns this API as an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) document, which client generators and API tools read. It needs the session like the other routes here, so send the cookie, or nothing with `AUTH_MODE=none`:
+
+```bash
+curl --cookie thoric.cookies http://localhost:8080/api/openapi.json > thoric-openapi.json
+```
+
+The manager makes the document from its own code, so it describes the release that serves it. It lists every route of the [table above](#endpoints), with `/mcp`, the transfer links, the desktop ports, `/healthz` and `/readyz`, and for each:
+
+- its path and query parameters and its request body. The JSON Schemas of the bodies and query strings are those of the types the manager reads them into, with their defaults and limits, and the shared ones are under `components.schemas`. A create request's features have no default there, since a request that leaves one out gets the installation's, which `GET /api/settings` reports.
+- what it needs: `session`, the cookie, with the `X-Thoric-Request` header on a change; `mcp` or `endpoint`, a bearer token; or nothing, for the session state, sign-in, `/healthz`, `/readyz` and transfer links, which the token in their path authorizes.
+- what it answers: a JSON type where the manager answers with one, such as `JobStarted` (`{"job_id"}`) for a route that queues a job, a job, a compose or a build configuration; otherwise JSON that this guide describes. Every operation names the statuses of the [errors](#errors) table, from `400` to `504`, each with its meaning under `components.responses` and the body `Error`, `{"error": "..."}`, which the other statuses a route uses carry too; `/readyz` describes its own `503`, its checks with the failed one `false`. Every operation takes the optional `X-Request-Id` header and every answer names it, as [the start of this guide](#http-api) says.
+
+A route that answers with something other than one JSON value says how in `x-thoric-stream`: `download` for a file, an archive or a picture streamed as it is read, `upload` for a body the manager streams as it arrives, `event-stream` for `/api/events`, `websocket` for VNC, the audio channels and the MCP inspector, which OpenAPI describes only as their `101` answer, and `relay` for `/mcp`, the MCP endpoints, transfer links and desktop ports, which answer with what is behind them. Operation IDs come from the method and the path, such as `postContainersByIdFilesRead`.
 
 ## Limits and results
 

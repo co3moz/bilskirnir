@@ -27,7 +27,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 /// nothing beyond that user, who owns every file.
 const COPIED: &[&str] = &["--preserve-permissions"];
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CopyVolume {
     /// The new volume's name.

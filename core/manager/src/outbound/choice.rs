@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv6Addr};
 
 /// A container's proxy, beside `None` for none.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum ProxyChoice {
     /// The installation's proxy, `PROXY_URL`, as it is set now.

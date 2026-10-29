@@ -29,7 +29,9 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::time::Duration;
 
+pub(crate) use archive::CopyVolume;
 pub(crate) use archive::{Extract, Import, VolumeWriter, copy, export, extract, import};
+pub(crate) use files::MakeDirectory;
 pub(crate) use files::{
     DownloadQuery, delete, download, list, make_directory, move_, read, upload, write,
 };

@@ -26,6 +26,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+pub(crate) use copy::CopyVolume;
 pub(crate) use copy::copy;
 use ending::Ending;
 use flate2::write::MultiGzDecoder;
@@ -105,7 +106,7 @@ pub async fn export(
         .into_response())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Import {
     /// The new volume's name.
     pub name: String,
@@ -153,7 +154,7 @@ pub async fn import(
     answer(&app, job_id, was_accepted, outcome, session).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Extract {
     /// The new folder, or `/` for a volume that is still empty.
     pub path: String,

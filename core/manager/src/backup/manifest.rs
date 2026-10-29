@@ -24,7 +24,7 @@ pub(crate) const KIND: &str = "thoric-backup";
 pub(crate) const FORMAT: u32 = 1;
 
 /// The optional parts of a backup. The records are always in it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Included {
     /// The saved images: their records with their Docker images. Catalog images are left out;

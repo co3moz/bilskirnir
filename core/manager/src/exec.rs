@@ -39,7 +39,7 @@ pub(crate) fn desktop_exec(user: &str, root: bool) -> Vec<String> {
     .to_vec()
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Execute {
     pub script: String,

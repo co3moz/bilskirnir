@@ -45,7 +45,7 @@ pub(crate) const MAX_WAIT: u64 = 300;
 /// How often a waiting call reports progress to a client that asked for it.
 const PROGRESS_EVERY: Duration = Duration::from_secs(10);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Status {
     /// Nobody answered yet.
@@ -56,7 +56,7 @@ pub(crate) enum Status {
     Declined,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, schemars::JsonSchema)]
 pub(crate) struct HumanRequest {
     pub id: String,
     pub container_id: String,
@@ -265,7 +265,7 @@ fn unknown(id: &str) -> Error {
 }
 
 /// How a person answered.
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Answer {
     Done,
@@ -373,7 +373,7 @@ pub async fn list(State(app): State<Arc<App>>) -> Json<Value> {
     Json(json!({"items": app.human.pending()}))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AnswerBody {
     answer: Answer,

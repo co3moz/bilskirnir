@@ -32,8 +32,9 @@ const READ_FILE: &str = include_str!("../../helpers/read_file.py");
 const UPLOAD_FILE: &str = include_str!("../../helpers/upload_file.py");
 const DOWNLOAD_FILE: &str = include_str!("../../helpers/download_file.py");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "VolumeMakeDirectory")]
 pub struct MakeDirectory {
     pub path: String,
 }
@@ -288,7 +289,7 @@ pub async fn delete(
     Ok(Json(value))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct DownloadQuery {
     pub path: String,
 }

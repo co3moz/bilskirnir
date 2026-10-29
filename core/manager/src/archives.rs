@@ -171,7 +171,7 @@ pub async fn export(
         .into_response())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Import {
     /// The archive's exact size, or none for one streamed as it is made.
     #[serde(default)]

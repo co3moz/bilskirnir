@@ -267,7 +267,7 @@ pub(crate) fn create(app: &App, operation: Operation) -> Result<Value> {
 }
 
 /// What a request may add to its link: an upload's size, when it sends no Content-Length.
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Size {
     size: Option<u64>,

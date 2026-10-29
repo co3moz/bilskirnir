@@ -183,7 +183,7 @@ pub async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> R
     }
     next.run(req).await
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct Login {
     pub username: String,
     pub password: String,

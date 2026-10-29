@@ -34,6 +34,7 @@ mod mcp;
 mod media;
 mod model;
 mod mount_parents;
+mod openapi;
 mod outbound;
 mod package_requests;
 mod process;
@@ -331,6 +332,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/human-requests/{id}/answer", post(human::answer))
         .route("/api/activity", get(activity::list))
         .route("/api/dependencies", get(dependencies::list))
+        .route("/api/openapi.json", get(openapi::serve))
         .route_layer(middleware::from_fn_with_state(app.clone(), auth::protect));
     Router::new()
         .merge(protected)
