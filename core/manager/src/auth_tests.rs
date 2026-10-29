@@ -2,8 +2,9 @@
 //! neighbour is refused after its attempts while another address still reaches the password check,
 //! the administrator signs in as often as they like, the address behind the HTTPS proxy counts in
 //! place of the proxy's, and nobody else can name an address of their choosing. Also the Host,
-//! Origin and session checks every route gets, whether sign-in is on or off, and that signing out
-//! ends the media connections of the session.
+//! Origin and session checks every route gets, whether sign-in is on or off, that signing out
+//! ends the media connections of the session, and that a password hash an earlier release made
+//! still signs in.
 use super::*;
 use crate::router;
 use crate::test_support::app;
@@ -21,16 +22,19 @@ const CADDY: &str = "172.18.0.3";
 /// A signed-in installation whose password hash is cheap to check, so a test can try it often.
 fn with_password() -> Arc<App> {
     let mut app = crate::test_support::app(true);
-    let salt = argon2::password_hash::SaltString::encode_b64(b"thoric-test!").unwrap();
     let cheap = Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::V0x13,
         argon2::Params::new(8, 1, 1, None).unwrap(),
     );
     Arc::get_mut(&mut app).unwrap().config.password_hash = Some(
-        argon2::PasswordHasher::hash_password(&cheap, PASSWORD.as_bytes(), &salt)
-            .unwrap()
-            .to_string(),
+        argon2::PasswordHasher::hash_password_with_salt(
+            &cheap,
+            PASSWORD.as_bytes(),
+            b"thoric-test!",
+        )
+        .unwrap()
+        .to_string(),
     );
     app
 }
@@ -68,6 +72,29 @@ async fn sign_in(
 
 async fn attempt(app: &Arc<App>, from: Option<&str>) -> StatusCode {
     sign_in(app, "wrong", from, None).await
+}
+
+/// What [`with_password`] stored before argon2 0.6: the PHC string an earlier release made.
+const EARLIER_HASH: &str =
+    "$argon2id$v=19$m=8,t=1,p=1$dGhvcmljLXRlc3Qh$KTST4D05cy2bFJH8k9FpmhvxIwHFcVEtlGeiSFuj0Os";
+
+#[tokio::test]
+async fn a_password_hash_an_earlier_release_made_still_signs_in() {
+    // The same password, salt and parameters give the very same string.
+    assert_eq!(
+        with_password().config.password_hash.as_deref(),
+        Some(EARLIER_HASH)
+    );
+    let mut app = app(true);
+    Arc::get_mut(&mut app).unwrap().config.password_hash = Some(EARLIER_HASH.into());
+    assert_eq!(
+        sign_in(&app, PASSWORD, Some("192.168.1.20"), None).await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        attempt(&app, Some("192.168.1.20")).await,
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]
