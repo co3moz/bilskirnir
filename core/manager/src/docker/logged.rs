@@ -40,6 +40,64 @@ impl Ran {
     }
 }
 
+/// How long a command's output may wait before it is written to the job's log, so a command that
+/// prints a little at a time commits once per batch instead of once per read, and a followed
+/// script saves its report as often.
+const BATCH: Duration = Duration::from_millis(250);
+/// How much output is written at once without waiting for the batch's time.
+const BATCH_BYTES: usize = 65_536;
+
+/// A command's output on its way to the job's log, in the order it arrived from both streams.
+struct Output<'a> {
+    /// The scripts' progress a build or a compose setup follows, which needs whole lines.
+    progress: Option<&'a mut ScriptProgress>,
+    lines: [crate::stages::Lines; 2],
+    batch: String,
+    /// When the batch is written, once it holds something.
+    due: Option<tokio::time::Instant>,
+    /// Whether what was written ends inside a line.
+    open_line: bool,
+}
+
+impl Output<'_> {
+    /// Add what arrived on `stream`; `end` once the stream closed.
+    fn add(&mut self, stream: usize, text: &str, end: bool) {
+        if self.progress.is_some() {
+            self.batch.push_str(&self.lines[stream].push(text));
+            if end {
+                self.batch.push_str(&self.lines[stream].finish());
+            }
+        } else {
+            self.batch.push_str(text);
+        }
+        if !self.batch.is_empty() && self.due.is_none() {
+            self.due = Some(tokio::time::Instant::now() + BATCH);
+        }
+    }
+    /// Resolves when the batch is due.
+    async fn due(&self) {
+        if let Some(due) = self.due {
+            tokio::time::sleep_until(due).await;
+        }
+    }
+    /// Write the batch: a followed script's lines through its progress, any other output as it
+    /// arrived.
+    fn write(&mut self, app: &App, id: &str) -> Result<()> {
+        self.due = None;
+        if self.batch.is_empty() {
+            return Ok(());
+        }
+        let text = std::mem::take(&mut self.batch);
+        match &mut self.progress {
+            Some(progress) => app.log_script_output(id, &text, progress),
+            None => {
+                self.open_line = !text.ends_with('\n');
+                app.db.append_job_log(id, &text)
+            }
+        }
+    }
+}
+
 /// Keep the last [`TAIL_LIMIT`] bytes of `tail` after adding `text`, from a character's start.
 fn keep_tail(tail: &mut String, text: &str) {
     tail.push_str(text);
@@ -139,27 +197,32 @@ impl App {
                 crate::process::TextDecoder::default(),
             );
             let (mut buf_a, mut buf_b) = ([0; 8192], [0; 8192]);
-            let mut script =
-                progress.map(|progress| (<[crate::stages::Lines; 2]>::default(), progress));
-            let mut log = |stream: usize, text: String, end: bool| {
-                keep_tail(&mut tail, &text);
-                match &mut script {
-                    Some((lines, progress)) => {
-                        let mut whole = lines[stream].push(&text);
-                        if end {
-                            whole.push_str(&lines[stream].finish());
-                        }
-                        self.log_script_output(id, &whole, progress)
-                    }
-                    None if text.is_empty() => Ok(()),
-                    None => self.append_log(id, &text),
-                }
+            let mut output = Output {
+                progress,
+                lines: Default::default(),
+                batch: String::new(),
+                due: None,
+                open_line: false,
             };
             while !a || !b {
-                tokio::select! {
-                    n = out.read(&mut buf_a), if !a => { let n=n?; a=n==0; let text=if a {dec_a.finish()} else {dec_a.push(&buf_a[..n])}; log(0,text,a)?; },
-                    n = err.read(&mut buf_b), if !b => { let n=n?; b=n==0; let text=if b {dec_b.finish()} else {dec_b.push(&buf_b[..n])}; log(1,text,b)?; },
+                let (stream, text, end) = tokio::select! {
+                    n = out.read(&mut buf_a), if !a => { let n=n?; a=n==0; (0, if a {dec_a.finish()} else {dec_a.push(&buf_a[..n])}, a) },
+                    n = err.read(&mut buf_b), if !b => { let n=n?; b=n==0; (1, if b {dec_b.finish()} else {dec_b.push(&buf_b[..n])}, b) },
+                    () = output.due(), if output.due.is_some() => {
+                        output.write(self, id)?;
+                        continue;
+                    }
+                };
+                keep_tail(&mut tail, &text);
+                output.add(stream, &text, end);
+                if output.batch.len() >= BATCH_BYTES {
+                    output.write(self, id)?;
                 }
+            }
+            output.write(self, id)?;
+            // What the manager logs next begins on a line of its own.
+            if output.open_line {
+                self.db.append_job_log(id, "\n")?;
             }
             anyhow::Ok(child.wait().await?)
         };

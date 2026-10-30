@@ -1,6 +1,7 @@
 //! Pins down what a logged command reports to a caller that reports it itself: its exit status,
 //! or none once it ran out of its time and was killed, and the end of its own output in the order
-//! it arrived, cut at a character's start, beside the job log that keeps all of it.
+//! it arrived, cut at a character's start, beside the job log that keeps all of it. Also that the
+//! log gets that output as it arrived in a few batches, not a write per read.
 use super::*;
 use crate::test_support::app;
 use std::sync::Arc;
@@ -91,5 +92,28 @@ async fn a_command_out_of_time_reports_no_status_and_is_killed() {
     assert!(started.elapsed() < Duration::from_secs(10));
     let error = ran.check(&app, &id, Duration::from_secs(120)).unwrap_err();
     assert!(error.to_string().contains("2-minute limit"), "{error:#}");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn output_is_written_in_batches_as_it_arrived() {
+    let (app, id, dir) = job(
+        "#!/bin/sh\nfor i in 1 2 3 4 5 6 7 8 9 10; do echo \"line $i\"; sleep 0.02; done\necho warning >&2\nsleep 0.1\nprintf partial\n",
+    );
+    app.docker_logged(&id, &["exec".into()]).await.unwrap();
+    app.append_log(&id, "Done.").unwrap();
+    let log = app.db.job(&id).unwrap().log;
+    let lines: String = (1..=10).map(|i| format!("line {i}\n")).collect();
+    assert_eq!(log, format!("{lines}warning\npartial\nDone.\n"));
+    // Ten reads a few milliseconds apart are one or two writes, not ten.
+    let chunks: i64 = app
+        .db
+        .connection()
+        .query_row("SELECT count(*) FROM job_log WHERE job=?1", [&id], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert!(chunks <= 4, "{chunks} chunks");
     std::fs::remove_dir_all(dir).unwrap();
 }

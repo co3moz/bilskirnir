@@ -20,7 +20,11 @@ pub struct Db {
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
         let mut conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+        // In WAL mode NORMAL syncs at checkpoints rather than at every commit, which a job's log
+        // makes often; a power loss can lose the last commits, never the database.
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
+        )?;
         migrations::run(&mut conn)
             .with_context(|| format!("Could not open the database {}", path.display()))?;
         crate::activity::opened(&conn)?;
