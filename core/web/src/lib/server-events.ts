@@ -2,7 +2,7 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import { api, sessionExpired } from "./api"
-import { openDialog, openedDialog } from "./dialogs"
+import { openDialog, openedDialog, whenDiscarded } from "./dialogs"
 import {
   endedJobs,
   jobNotice,
@@ -69,7 +69,10 @@ function announce(
   const options = {
     id: `job-${job.id}`,
     description: error ? [target, error].filter(Boolean).join(": ") : target || undefined,
-    action: { label: t("jobs.viewLog"), onClick: () => openDialog({ kind: "job", id: job.id }) },
+    action: {
+      label: t("jobs.viewLog"),
+      onClick: () => whenDiscarded(() => openDialog({ kind: "job", id: job.id })),
+    },
   }
   if (notice === "success") toast.success(t("events.jobCompleted", { action }), options)
   else if (job.status === "interrupted")

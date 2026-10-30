@@ -33,7 +33,7 @@ import { Switch } from "@/components/ui/switch"
 import { CodeEditor } from "@/components/code-editor"
 import { api } from "@/lib/api"
 import { rowsHeight } from "@/lib/code-editor"
-import { closeDialog } from "@/lib/dialogs"
+import { closeDialog, useDraft } from "@/lib/dialogs"
 import { refreshAll, useImages } from "@/lib/queries"
 import {
   newParameter,
@@ -210,6 +210,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
   })
   const [fresh] = React.useState(composeDraft)
   const [draft, setDraft] = React.useState<ComposeDraft>()
+  useDraft(draft)
   const { busy, error, submit } = useSubmit()
   const current = draft ?? (exists ? saved.data && composeDraft(saved.data) : fresh)
   const save = async (remove: boolean) => {

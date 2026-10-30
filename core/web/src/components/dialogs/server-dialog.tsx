@@ -27,7 +27,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { wsUrl } from "@/lib/api"
-import { closeDialog } from "@/lib/dialogs"
+import { closeDialog, useDraft } from "@/lib/dialogs"
 import { plural, rich, t } from "@/lib/i18n"
 import { SERVER_NAME_PATTERN, serverDraft, serverRequest, type ServerDraft } from "@/lib/mcp"
 import { addServer } from "@/lib/mcp-api"
@@ -125,6 +125,7 @@ export function ServerDialog({ container, ...props }: DialogProps & { container?
   const running = item?.state === "running"
   const [draft, setDraft] = React.useState<ServerDraft>(serverDraft)
   const [test, setTest] = React.useState<Test>()
+  useDraft({ chosen, draft })
   // A finished test speaks for the form as it was; a change makes it stale.
   const set = (patch: Partial<ServerDraft>) => {
     setDraft({ ...draft, ...patch })

@@ -933,6 +933,16 @@ export const de: Messages = {
     "Diese Seite stammt aus der vorherigen Version. Laden Sie sie neu, um die neue zu öffnen.",
   "errors.reload": "Neu laden",
   "errors.retry": "Erneut versuchen",
+  "unsaved.changes.title": "Änderungen verwerfen?",
+  "unsaved.changes.description":
+    "Was Sie in dieses Formular eingegeben haben, geht beim Schließen verloren.",
+  "unsaved.changes.keep": "Weiter bearbeiten",
+  "unsaved.changes.discard": "Verwerfen",
+  "unsaved.upload.title": "Upload abbrechen?",
+  "unsaved.upload.description":
+    "Dateien, die noch hochgeladen werden, werden angehalten. Bereits hochgeladene bleiben erhalten.",
+  "unsaved.upload.keep": "Weiter hochladen",
+  "unsaved.upload.discard": "Upload abbrechen",
   "docker.unreachable": "Keine Verbindung zu Docker",
   "docker.checkDaemon": "Prüfen Sie, ob der Docker-Daemon läuft.",
   "login.title": "Anmelden",

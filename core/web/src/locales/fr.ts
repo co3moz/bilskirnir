@@ -932,6 +932,16 @@ export const fr: Messages = {
     "Cette page vient de la version précédente. Rechargez-la pour ouvrir la nouvelle.",
   "errors.reload": "Recharger",
   "errors.retry": "Réessayer",
+  "unsaved.changes.title": "Abandonner les modifications ?",
+  "unsaved.changes.description":
+    "Ce que vous avez saisi dans ce formulaire est perdu à sa fermeture.",
+  "unsaved.changes.keep": "Continuer la modification",
+  "unsaved.changes.discard": "Abandonner",
+  "unsaved.upload.title": "Annuler le téléversement ?",
+  "unsaved.upload.description":
+    "Les fichiers en cours de téléversement s'arrêtent. Ceux déjà téléversés restent en place.",
+  "unsaved.upload.keep": "Continuer le téléversement",
+  "unsaved.upload.discard": "Annuler le téléversement",
   "docker.unreachable": "Impossible de se connecter à Docker",
   "docker.checkDaemon": "Vérifiez que le démon Docker est en cours d'exécution.",
   "login.title": "Connexion",

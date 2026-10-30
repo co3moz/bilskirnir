@@ -42,7 +42,7 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { rowsHeight } from "@/lib/code-editor"
-import { closeDialog } from "@/lib/dialogs"
+import { closeDialog, useDraft } from "@/lib/dialogs"
 import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
 import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
@@ -258,6 +258,22 @@ export function BuildImageDialog({
   const [values, setValues] = React.useState<OptionValues>({})
   const [importing, setImporting] = React.useState(false)
   const [advanced, setAdvanced] = React.useState(!simple)
+  useDraft({
+    name,
+    description,
+    icon,
+    templateIds,
+    base,
+    wanted,
+    script,
+    parts,
+    internet,
+    compose,
+    inherit,
+    servers,
+    options,
+    values,
+  })
   const parameterCount =
     compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
   const groups = optionGroups(options, parts)

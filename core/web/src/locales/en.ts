@@ -935,6 +935,15 @@ export const en = {
   "errors.updatedHint": "This page is from the previous version. Reload it to open the new one.",
   "errors.reload": "Reload",
   "errors.retry": "Try again",
+  "unsaved.changes.title": "Discard your changes?",
+  "unsaved.changes.description": "What you entered in this form is lost when it closes.",
+  "unsaved.changes.keep": "Keep editing",
+  "unsaved.changes.discard": "Discard",
+  "unsaved.upload.title": "Cancel the upload?",
+  "unsaved.upload.description":
+    "Files still uploading stop. Those already uploaded stay where they are.",
+  "unsaved.upload.keep": "Keep uploading",
+  "unsaved.upload.discard": "Cancel upload",
 
   "docker.unreachable": "Cannot connect to Docker",
   "docker.checkDaemon": "Check that the Docker daemon is running.",

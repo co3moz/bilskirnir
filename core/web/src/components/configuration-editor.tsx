@@ -37,7 +37,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api } from "@/lib/api"
-import { openDialog } from "@/lib/dialogs"
+import { openDialog, whenDiscarded } from "@/lib/dialogs"
 import { formatList, has, plural, t } from "@/lib/i18n"
 import { queryClient, useConfiguration, useSettings } from "@/lib/queries"
 import {
@@ -456,7 +456,10 @@ export function ConfigurationEditor() {
         if (finished.status === "completed") toast.success(t("settings.edit.done"))
         else if (finished.status === "failed")
           toast.error(t("settings.edit.failed"), {
-            action: { label: t("update.showLog"), onClick: () => openDialog({ kind: "job", id }) },
+            action: {
+              label: t("update.showLog"),
+              onClick: () => whenDiscarded(() => openDialog({ kind: "job", id })),
+            },
           })
       })
       .catch(() => {})
