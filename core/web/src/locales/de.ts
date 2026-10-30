@@ -1348,6 +1348,9 @@ export const de: Messages = {
   "desktop.micOff": "Mikrofon deaktivieren",
   "desktop.micPermission": "Warten auf Berechtigung…",
   "desktop.reconnect": "Neu verbinden",
+  "desktop.lost.failed":
+    "Die Verbindung zum Desktop ist abgebrochen. Verbinden Sie sich neu, um fortzufahren.",
+  "desktop.lost.disconnected": "Der Desktop hat die Verbindung beendet.",
   "desktop.exitFullscreen": "Vollbild beenden",
   "desktop.fullscreen": "Vollbild",
   "desktop.loading": "Container wird geladen…",

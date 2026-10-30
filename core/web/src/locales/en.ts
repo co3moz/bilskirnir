@@ -1348,6 +1348,8 @@ export const en = {
   "desktop.micOff": "Disable mic",
   "desktop.micPermission": "Waiting for permission…",
   "desktop.reconnect": "Reconnect",
+  "desktop.lost.failed": "The connection to the desktop was lost. Reconnect to continue.",
+  "desktop.lost.disconnected": "The desktop closed the connection.",
   "desktop.exitFullscreen": "Exit fullscreen",
   "desktop.fullscreen": "Fullscreen",
   "desktop.loading": "Loading container…",

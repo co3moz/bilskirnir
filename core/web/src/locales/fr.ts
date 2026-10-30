@@ -1341,6 +1341,8 @@ export const fr: Messages = {
   "desktop.micOff": "Désactiver le micro",
   "desktop.micPermission": "En attente de l'autorisation…",
   "desktop.reconnect": "Se reconnecter",
+  "desktop.lost.failed": "La connexion au bureau a été perdue. Reconnectez-vous pour continuer.",
+  "desktop.lost.disconnected": "Le bureau a fermé la connexion.",
   "desktop.exitFullscreen": "Quitter le plein écran",
   "desktop.fullscreen": "Plein écran",
   "desktop.loading": "Chargement du conteneur…",

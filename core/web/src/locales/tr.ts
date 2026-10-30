@@ -1320,6 +1320,8 @@ export const tr: Messages = {
   "desktop.micOff": "Mikrofonu kapat",
   "desktop.micPermission": "İzin bekleniyor…",
   "desktop.reconnect": "Yeniden bağlan",
+  "desktop.lost.failed": "Masaüstüyle bağlantı koptu. Devam etmek için yeniden bağlanın.",
+  "desktop.lost.disconnected": "Masaüstü bağlantıyı kapattı.",
   "desktop.exitFullscreen": "Tam ekrandan çık",
   "desktop.fullscreen": "Tam ekran",
   "desktop.loading": "Konteyner yükleniyor…",
