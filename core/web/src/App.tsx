@@ -15,7 +15,7 @@ import { closeDialog, openDialog } from "@/lib/dialogs"
 import { t, useLocale } from "@/lib/i18n"
 import { closeInspector } from "@/lib/inspector-session"
 import { useSession, useSettings } from "@/lib/queries"
-import { href, useRoute, type Page } from "@/lib/route"
+import { pageKey, useRoute, type Page } from "@/lib/route"
 import { useServerEvents } from "@/lib/server-events"
 import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
@@ -122,11 +122,11 @@ function Authenticated() {
   const route = useRoute()
   const settings = useSettings()
   const locale = useLocale()
-  const key = href(route)
+  const page = pageKey(route)
   useServerEvents()
 
-  // A dialog belongs to the page it was opened on.
-  React.useEffect(() => closeDialog(), [key])
+  // A dialog belongs to the page it was opened on; a filter or an item opened there keeps it.
+  React.useEffect(() => closeDialog(), [page])
   React.useEffect(() => {
     document.title = `${route.page === "desktop" ? t("nav.desktop") : pageTitle(route.page)} · Thoric`
   }, [route.page, locale])

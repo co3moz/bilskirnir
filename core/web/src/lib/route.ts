@@ -98,6 +98,10 @@ export function href(route: Route) {
   return `#/${route.page}`
 }
 
+/** What a dialog belongs to: the page, or the desktop, which a filter or an open item keeps. */
+export const pageKey = (route: Route) =>
+  route.page === "desktop" ? `desktop/${route.id}` : route.page
+
 export function navigate(route: Route) {
   location.hash = href(route)
 }
