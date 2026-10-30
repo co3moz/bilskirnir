@@ -27,8 +27,10 @@ SETTINGS_UNITS=(thoric-settings.path thoric-settings.service)
 # core/manager/src/config.rs, and the tests hold the two lists together. The rest of .env, such as
 # the password, the agent token and the published port, changes only with 'thoric settings'.
 DASHBOARD_SETTINGS=(SECURE_COOKIE ALLOWED_HOSTS DESKTOP_IMAGE DESKTOP_USER_NAMESPACES DESKTOP_PIDS_LIMIT WSL_GPU NVIDIA_COMPUTE GPU_ADAPTER AUDIO_ENABLED MICROPHONE_ENABLED INTERNET_ENABLED SUDO_ENABLED GAMEPAD_ENABLED VPN_ENABLED GPU_DEFAULT INTERNET_DEFAULT SUDO_DEFAULT AUDIO_DEFAULT MICROPHONE_DEFAULT GAMEPAD_DEFAULT VPN_DEFAULT UPLOAD_MAX_MB IMAGE_ARCHIVE_MAX_MB TEMPLATES_URL VOLUME_FILTER PROXY_URL PROXY_USERNAME PROXY_BYPASS UPDATE_CHECK)
-# How long apply-settings waits for the manager to answer with the new settings, in seconds.
+# How long apply-settings waits for the manager to answer with the new settings, and an update for
+# the new manager, which may first move its database to a new layout, in seconds.
 SETTINGS_WAIT=90
+UPDATE_WAIT=180
 
 # Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
@@ -40,7 +42,7 @@ Usage: thoric <command>
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Move the manager, its compose.yml and this command to the newest release, pull downloaded desktop images, recreate the manager
+  update    Move the manager, its compose.yml and this command to the newest release, recreate the manager (or go back when it does not answer), then pull downloaded desktop images
   doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
@@ -251,6 +253,49 @@ update_install_files() {
     done
     put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
+# What an update changes before the new manager answers: .env, with the pin and renamed settings,
+# and the installation files. keep_previous copies them into $tmp/previous, with owner and mode,
+# and notes the ones that were missing; take_back puts them back.
+UPDATED_FILES=(.env "${INSTALL_FILES[@]}" .shipped.sha256)
+keep_previous() {
+    local file
+    previous=$tmp/previous
+    mkdir -p "$previous"
+    for file in "${UPDATED_FILES[@]}"; do
+        if [[ -e $INSTALL/$file ]]; then
+            mkdir -p "$previous/$(dirname "$file")"
+            sudo cp -p "$INSTALL/$file" "$previous/$file"
+        else
+            echo "$file" >>"$previous/.missing"
+        fi
+    done
+}
+# The EXIT trap of an update from keep_previous on: until the new manager answers, which clears
+# $previous, any end of the update puts the files back and recreates the manager they name, so
+# .env never stays on a manager that does not start. The command and the units an update brought
+# stay, since they work with earlier managers as well.
+finish_update() {
+    local status=$? file
+    if [[ -n $previous ]]; then
+        status=1
+        echo "Taking the update back: $INSTALL/.env and the installation files are put back as they were."
+        for file in "${UPDATED_FILES[@]}"; do
+            if [[ -e $previous/$file ]]; then
+                put_file "$INSTALL/$file" "$previous/$file" || echo "Could not put back $INSTALL/$file." >&2
+            elif grep -qxF "$file" "$previous/.missing" 2>/dev/null; then
+                sudo rm -f "$INSTALL/$file"
+            fi
+        done
+        echo "Recreating the previous manager."
+        if compose up -d && manager_answers "$UPDATE_WAIT"; then
+            echo "The previous manager answers again."
+        else
+            echo "The previous manager does not answer either. Run 'thoric logs' and 'thoric doctor'."
+        fi
+    fi
+    rm -rf "$tmp"
+    exit "$status"
+}
 # The dashboard asks for an update or a settings change by leaving a request in $INSTALL/update,
 # which the manager sees at /update. thoric-update.path notices an update and
 # thoric-update.service runs this command's update as root; thoric-settings.path and
@@ -313,11 +358,12 @@ dashboard_setting() {
     done
     return 1
 }
-# Whether the manager answers its health check, asked inside its container, so whatever address
-# Compose publishes it on. A manager that refuses its settings exits, and Docker starts it again.
+# Whether the manager answers its health check within the seconds given, SETTINGS_WAIT unless
+# named, asked inside its container, so whatever address Compose publishes it on. A manager that
+# refuses its settings or its database exits, and Docker starts it again.
 manager_answers() {
     local _
-    for _ in $(seq 1 "$SETTINGS_WAIT"); do
+    for _ in $(seq 1 "${1:-$SETTINGS_WAIT}"); do
         if compose exec -T manager curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
             return 0
         fi
@@ -466,20 +512,35 @@ case ${1:-help} in
             fi
         fi
         # The installation files and the command come from the manager about to run, so it is pulled
-        # first, and the pin moves only once its image is here.
+        # first. A newer command takes the update over before anything here changes.
         docker pull "$image"
+        tmp=$(mktemp -d)
+        previous=""
+        trap 'rm -rf "$tmp"' EXIT
+        update_cli "$image"
+        keep_previous
+        trap finish_update EXIT
+        update_install_files "$image"
+        # The pin moves once the files of its release are in place, so .env never names a manager
+        # whose settings the compose.yml beside it does not pass.
         if [[ $image != "$current" ]]; then
             set_setting MANAGER_IMAGE "$image"
             echo "The manager moves from ${pinned:-latest} to $version."
         fi
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        update_cli "$image"
-        update_install_files "$image"
         update_units "$image"
         rename_settings
         compose pull
+        echo "Recreating the manager $image."
         compose up -d
+        # A manager that refuses its database or its settings exits again and again, while
+        # compose up has already succeeded, so the update waits for its health check.
+        if ! manager_answers "$UPDATE_WAIT"; then
+            echo "The manager $image did not answer within $UPDATE_WAIT seconds. Its last lines:"
+            compose logs --no-log-prefix --tail=30 manager || true
+            exit 1
+        fi
+        previous=""
+        echo "The manager answers."
         update_profiles
         ;;
     doctor)

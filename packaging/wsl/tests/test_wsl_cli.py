@@ -1,11 +1,12 @@
 """The WSL package's `thoric update`: which manager release it moves an installation to, which
 desktop images it refreshes for that manager, how it brings the installation files of that release
-without losing edits made by hand, and when it replaces the command itself with the one that
-release bundles.
+without losing edits made by hand, how it takes everything back when the new manager does not
+answer, and when it replaces the command itself with the one that release bundles.
 
 The script runs against a temporary installation directory with stand-ins for docker, curl,
-sudo and systemctl on PATH, each recording its arguments. `docker run` serves the manager
-image's files from a directory standing for its root filesystem.
+sudo, systemctl and sleep on PATH, each recording its arguments. `docker run` serves the manager
+image's files from a directory standing for its root filesystem, and the manager answers its
+health check unless .env holds the line in BROKEN.
 """
 
 import hashlib
@@ -31,7 +32,11 @@ case "$(basename "$0") $*" in
     "curl "*) [[ -n ${RELEASE:-} ]] || exit 22; printf '{\\n  "url": "x",\\n  "tag_name": "%s",\\n  "name": "%s"\\n}\\n' "$RELEASE" "$RELEASE" ;;
     "docker pull "*) exit "${PULL_STATUS:-0}" ;;
     "docker run "*) exec cat "$IMAGE_ROOT${*: -1}" ;;
-    "docker compose exec "*) printf '[{"reference": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}]\\n' ;;
+    "docker compose pull") exit "${COMPOSE_PULL_STATUS:-0}" ;;
+    "docker compose exec "*)
+        [[ -n ${BROKEN:-} ]] && grep -qxF "$BROKEN" "$ENV_FILE" && exit 1
+        printf '[{"reference": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}]\\n' ;;
+    "docker compose logs "*) echo "The database was moved to a later layout." ;;
     "docker compose ps "*) echo manager-container ;;
     "docker inspect "*) printf '%s\\n' "${RELEASE_LABEL-<no value>}" ;;
     "docker image inspect "*":24.04") [[ -n ${DOWNLOADED:-} ]] || exit 1 ;;
@@ -76,6 +81,7 @@ class UpdateTest(unittest.TestCase):
             ("CLI=/usr/local/bin/thoric", f"CLI={self.cli}"),
             ("PACKAGE_LEVEL=/usr/lib/wsl/package-level", f"PACKAGE_LEVEL={self.level}"),
             ("UNIT_DIR=/etc/systemd/system", f"UNIT_DIR={self.units}"),
+            ("UPDATE_WAIT=180", "UPDATE_WAIT=2"),
         ):
             self.assertEqual(self.script.count(f"\n{line}\n"), 1, line)
             self.script = self.script.replace(f"\n{line}\n", f"\n{replacement}\n")
@@ -85,7 +91,7 @@ class UpdateTest(unittest.TestCase):
         self.level.write_text(f"{package_level()[0]}\n")
         bin_dir = self.dir / "bin"
         bin_dir.mkdir()
-        for name in ("docker", "curl", "sudo", "systemctl"):
+        for name in ("docker", "curl", "sudo", "systemctl", "sleep"):
             (bin_dir / name).write_text(STUB)
             (bin_dir / name).chmod(0o755)
         self.calls = self.dir / "calls"
@@ -98,6 +104,7 @@ class UpdateTest(unittest.TestCase):
             "CALLS": str(self.calls),
             "IMAGE_ROOT": str(self.image),
             "TMPDIR": str(self.tmp),
+            "ENV_FILE": str(self.install / ".env"),
         }
         # The installation as the 0.2.0 package left it, and the files the newer manager bundles.
         self.old = {
@@ -291,6 +298,55 @@ class UpdateTest(unittest.TestCase):
         self.assertLess(copies[-1], calls.index("docker compose pull"))
         self.assertIn("Updated compose.yml.", result.stdout)
         self.assertNotIn("Updated deploy/Caddyfile.", result.stdout)
+        # The pin moves only once the files of its release are in place, so an update cut short in
+        # between never leaves .env naming a manager the compose.yml beside it does not know.
+        files = max(i for i, call in enumerate(calls) if call.startswith("sudo mv -f ") and call.endswith("/.shipped.sha256"))
+        pin = next(i for i, call in enumerate(calls) if call.startswith("sudo sed -i s|^MANAGER_IMAGE="))
+        self.assertLess(files, pin)
+        self.assertLess(pin, calls.index("docker compose up -d"))
+        self.assertIn("The manager answers.", result.stdout)
+
+    def test_a_manager_that_does_not_answer_is_taken_back(self):
+        # Such as a manager that refuses the database: compose up succeeds, and it exits again and again.
+        before = f"MANAGER_IMAGE={REPOSITORY}:0.2.0\nMCP_ENABLED=true\n"
+        result, env_file, calls = self.update(before, BROKEN=f"MANAGER_IMAGE={REPOSITORY}:0.3.0", DOWNLOADED="1",
+                                              RELEASE_LABEL="0.3.0")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        # .env comes back whole, the renamed setting too, since the earlier manager reads the old name.
+        self.assertEqual(env_file, before)
+        for name, content in self.old.items():
+            self.assertEqual(self.installed(name), content)
+        self.assertEqual(self.installed(".shipped.sha256"), shipped(self.old))
+        self.assertEqual(stat.S_IMODE((self.install / "compose.yml").stat().st_mode), 0o640)
+        self.assertEqual(calls.count("docker compose up -d"), 2)
+        # The log the dashboard's job shows says why.
+        self.assertIn(f"The manager {REPOSITORY}:0.3.0 did not answer within 2 seconds.", result.stdout)
+        self.assertIn("The database was moved to a later layout.", result.stdout)
+        self.assertIn("Taking the update back", result.stdout)
+        self.assertIn("The previous manager answers again.", result.stdout)
+        # The desktops stay on the images of the manager that runs.
+        self.assertFalse(any(call.startswith("docker pull ghcr.io/co3moz/thoric/") for call in calls))
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_an_update_cut_short_puts_the_files_back(self):
+        # Without checksums of its own, the installation gets the release's, which go with the files.
+        (self.install / ".shipped.sha256").unlink()
+        before = f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n"
+        result, env_file, calls = self.update(before, COMPOSE_PULL_STATUS="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(env_file, before)
+        self.assertEqual(self.installed("compose.yml"), self.old["compose.yml"])
+        self.assertFalse((self.install / ".shipped.sha256").exists())
+        self.assertEqual(calls.count("docker compose up -d"), 1)
+        self.assertIn("Taking the update back", result.stdout)
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_a_previous_manager_that_does_not_answer_either_is_said(self):
+        before = f"MANAGER_IMAGE={REPOSITORY}:0.2.0\n"
+        result, env_file, _ = self.update(before, BROKEN=f"MANAGER_IMAGE={REPOSITORY}:0.2.0", COMPOSE_PULL_STATUS="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(env_file, before)
+        self.assertIn("The previous manager does not answer either.", result.stdout)
 
     def test_a_file_edited_by_hand_is_saved_before_a_new_release_replaces_it(self):
         edited = self.old["compose.yml"] + '    ports: ["0.0.0.0:9000:8080"]\n'
@@ -413,12 +469,13 @@ class UpdateTest(unittest.TestCase):
         self.assertIn("command moves from 0.2.0 to 0.3.0", result.stdout)
         self.assertEqual(env_file, f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n")
         # The new command runs the whole update again, after the manager it came from is pulled and
-        # pinned: it copies the installation files by its own rules, finds itself current, recreates
-        # the manager once and refreshes the desktops for it.
+        # before anything else changes: it copies the installation files by its own rules, finds
+        # itself current, moves the pin, recreates the manager once and refreshes the desktops for it.
         restart = calls.index("new command update")
         self.assertLess(calls.index(f"docker pull {REPOSITORY}:0.3.0"), restart)
         self.assertFalse(any(call.startswith("docker compose ") for call in calls[:restart]))
         self.assertFalse(any("/app/install/compose.yml" in call for call in calls[:restart]))
+        self.assertFalse(any(call.startswith("sudo sed -i s|^MANAGER_IMAGE=") for call in calls[:restart]))
         self.assertEqual(sum(call.endswith("/app/install/thoric") for call in calls), 1)
         self.assertEqual(calls.count("docker compose up -d"), 1)
         desktop = "ghcr.io/co3moz/thoric/ubuntu-xfce"
