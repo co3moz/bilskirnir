@@ -27,7 +27,7 @@ import {
 } from "@/components/data-table"
 import { ConceptBadge, ConceptIcon } from "@/components/concept"
 import { ImageIcon } from "@/components/image-icon"
-import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
+import { DockerAlert, ListFailed, listFailed, PageBody, SectionHeading } from "@/components/page"
 import { JobLogButton, PendingName, PendingStatus } from "@/components/pending"
 import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -434,7 +434,15 @@ export function ImagesPage() {
       <div className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
         <DataTableView
           table={table}
-          empty={images.isPending ? t("images.loading") : t("images.none")}
+          empty={
+            images.isPending ? (
+              t("images.loading")
+            ) : listFailed(images) ? (
+              <ListFailed query={images} row />
+            ) : (
+              t("images.none")
+            )
+          }
           extra={pending.map((entry) => (
             <PendingImageRow key={entry.job.id} table={table} pending={entry} />
           ))}

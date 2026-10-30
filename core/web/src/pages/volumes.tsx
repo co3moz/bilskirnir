@@ -17,7 +17,7 @@ import {
   type DataColumn,
 } from "@/components/data-table"
 import { ConceptIcon } from "@/components/concept"
-import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
+import { DockerAlert, ListFailed, listFailed, PageBody, SectionHeading } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -244,7 +244,15 @@ export function VolumesPage() {
       <div className="flex flex-col gap-4 overflow-auto px-4 lg:px-6">
         <DataTableView
           table={table}
-          empty={volumes.isPending ? t("volumes.loading") : t("volumes.none")}
+          empty={
+            volumes.isPending ? (
+              t("volumes.loading")
+            ) : listFailed(volumes) ? (
+              <ListFailed query={volumes} row />
+            ) : (
+              t("volumes.none")
+            )
+          }
         />
         <DataTablePagination table={table} />
       </div>

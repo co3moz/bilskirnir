@@ -947,6 +947,7 @@ export const en = {
 
   "docker.unreachable": "Cannot connect to Docker",
   "docker.checkDaemon": "Check that the Docker daemon is running.",
+  "list.failed": "Could not read the list",
 
   "login.title": "Sign in",
   "login.description": "Use the administrator account of this installation.",

@@ -928,6 +928,7 @@ export const tr: Messages = {
   "unsaved.upload.discard": "Yüklemeyi iptal et",
   "docker.unreachable": "Docker'a bağlanılamıyor",
   "docker.checkDaemon": "Docker hizmetinin çalıştığını kontrol edin.",
+  "list.failed": "Liste okunamadı",
   "login.title": "Giriş yap",
   "login.description": "Bu kurulumun yönetici hesabını kullanın.",
   "login.username": "Kullanıcı adı",

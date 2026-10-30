@@ -932,6 +932,7 @@ export const es: Messages = {
   "unsaved.upload.discard": "Cancelar subida",
   "docker.unreachable": "No se puede conectar a Docker",
   "docker.checkDaemon": "Comprueba que el daemon de Docker se esté ejecutando.",
+  "list.failed": "No se pudo leer la lista",
   "login.title": "Iniciar sesión",
   "login.description": "Usa la cuenta de administrador de esta instalación.",
   "login.username": "Nombre de usuario",

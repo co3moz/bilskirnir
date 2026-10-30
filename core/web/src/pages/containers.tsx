@@ -4,7 +4,7 @@ import { RiAddLine, RiSearchLine } from "@remixicon/react"
 import { ViewTabs } from "@/components/data-table"
 import { ConceptMedia } from "@/components/concept"
 import { ContainerCard, PendingContainerCard } from "@/components/container-card"
-import { DockerAlert, PageBody } from "@/components/page"
+import { DockerAlert, ListFailed, listFailed, PageBody } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
@@ -66,6 +66,8 @@ export function ContainersPage() {
             </Card>
           ))}
         </div>
+      ) : listFailed(containers) ? (
+        <ListFailed query={containers} />
       ) : all.length === 0 && pending.length === 0 ? (
         <Empty className="mx-4 w-auto border lg:mx-6">
           <EmptyHeader>

@@ -944,6 +944,7 @@ export const fr: Messages = {
   "unsaved.upload.discard": "Annuler le téléversement",
   "docker.unreachable": "Impossible de se connecter à Docker",
   "docker.checkDaemon": "Vérifiez que le démon Docker est en cours d'exécution.",
+  "list.failed": "Impossible de lire la liste",
   "login.title": "Connexion",
   "login.description": "Utilisez le compte administrateur de cette installation.",
   "login.username": "Nom d'utilisateur",

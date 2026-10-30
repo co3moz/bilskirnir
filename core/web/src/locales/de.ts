@@ -945,6 +945,7 @@ export const de: Messages = {
   "unsaved.upload.discard": "Upload abbrechen",
   "docker.unreachable": "Keine Verbindung zu Docker",
   "docker.checkDaemon": "Prüfen Sie, ob der Docker-Daemon läuft.",
+  "list.failed": "Die Liste konnte nicht gelesen werden",
   "login.title": "Anmelden",
   "login.description": "Verwenden Sie das Administratorkonto dieser Installation.",
   "login.username": "Benutzername",
