@@ -21,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout},
 };
 
@@ -36,6 +36,7 @@ const LOG_LIMIT: usize = 16 * 1024;
 /// A connection unused this long is closed; the next call opens another.
 pub(super) const IDLE: Duration = Duration::from_secs(600);
 const ADAPTER: &str = include_str!("../../helpers/mcp_http_adapter.py");
+const LAUNCHER: &str = include_str!("../../helpers/mcp_launch.py");
 /// The desktop user's own programs come first, as in a login shell.
 const PATH: &str = "/home/desktop/.local/bin:/home/desktop/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -116,6 +117,35 @@ impl<R: AsyncRead + Unpin> AsyncRead for Bounded<R> {
     }
 }
 
+/// Read a line of at most `limit` bytes into `line`, its newline included, and whether it was cut:
+/// the rest of a longer line is read and dropped, so a desktop cannot make the manager hold an
+/// endless one. `None` once the stream ends.
+pub(super) async fn read_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    line: &mut Vec<u8>,
+    limit: usize,
+) -> std::io::Result<Option<bool>> {
+    line.clear();
+    let mut cut = false;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok((!line.is_empty() || cut).then_some(cut));
+        }
+        let (taken, ended) = match available.iter().position(|byte| *byte == b'\n') {
+            Some(at) => (at + 1, true),
+            None => (available.len(), false),
+        };
+        let kept = taken.min(limit.saturating_sub(line.len()));
+        line.extend_from_slice(&available[..kept]);
+        cut |= kept < taken;
+        reader.consume(taken);
+        if ended {
+            return Ok(Some(cut));
+        }
+    }
+}
+
 /// The `docker exec` arguments that start a server, and what its stdin receives first.
 pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
     let mut args: Vec<String> = ["exec", "-i", "--user", "1001:1001"]
@@ -128,7 +158,6 @@ pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
         first.push(b'\n');
         return Ok(Exec {
             args,
-            env: Vec::new(),
             first: Some(first),
         });
     }
@@ -149,29 +178,26 @@ pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
         args.push("--env".into());
         args.push(variable);
     }
-    // A declared variable may hold a resolved compose value: named alone, Docker reads it from
-    // the CLI's own environment, so the value is not on a command line `ps` shows.
-    let mut env = Vec::new();
-    for (key, value) in &spec.env {
-        args.push("--env".into());
-        args.push(key.clone());
-        env.push((key.clone(), value.clone()));
-    }
     args.push(container.into());
+    // A declared variable may hold a resolved compose value, so it is neither on a command line
+    // `ps` shows nor in the Docker CLI's environment, where one such as DOCKER_HOST would point
+    // the CLI elsewhere: the launcher reads the variables from stdin and becomes the program.
+    let mut first = None;
+    if !spec.env.is_empty() {
+        let variables = serde_json::to_vec(&spec.env)?;
+        let size = variables.len().to_string();
+        args.extend(["python3", "-I", "-c", LAUNCHER, size.as_str()].map(str::to_owned));
+        first = Some(variables);
+    }
     args.push(command.into());
     args.extend(spec.args.iter().cloned());
-    Ok(Exec {
-        args,
-        env,
-        first: None,
-    })
+    Ok(Exec { args, first })
 }
 
-/// How a server is started: the `docker exec` arguments, the variables the CLI's environment
-/// carries for `--env KEY`, and what the server's stdin receives first.
+/// How a server is started: the `docker exec` arguments and what the server's stdin receives
+/// first. The Docker CLI runs with the manager's own environment.
 pub(super) struct Exec {
     pub(super) args: Vec<String>,
-    pub(super) env: Vec<(String, String)>,
     pub(super) first: Option<Vec<u8>>,
 }
 
@@ -191,10 +217,9 @@ pub(super) async fn start(app: &App, container: &Container, spec: &ServerSpec) -
         bail!("Start the container before using its MCP servers");
     }
     let docker_id = info["Id"].as_str().context("Missing container ID")?;
-    let Exec { args, env, first } = exec_args(docker_id, &spec)?;
+    let Exec { args, first } = exec_args(docker_id, &spec)?;
     let mut child = app
         .command(&args)
-        .envs(env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -234,10 +259,17 @@ async fn connect(
     let logs = Arc::downgrade(app);
     let log_key = key.clone();
     tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
+        let mut stderr = BufReader::new(stderr);
+        let mut line = Vec::new();
+        while let Ok(Some(cut)) = read_line(&mut stderr, &mut line, LOG_LIMIT).await {
             let Some(app) = logs.upgrade() else { return };
-            app.desktop_mcp.log(&log_key, &line);
+            let text = String::from_utf8_lossy(&line);
+            let text = text.trim_end_matches(['\n', '\r']);
+            if cut {
+                app.desktop_mcp.log(&log_key, &format!("{text}…"));
+            } else {
+                app.desktop_mcp.log(&log_key, text);
+            }
         }
     });
     let listener = Listener {

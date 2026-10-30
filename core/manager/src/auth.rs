@@ -5,10 +5,11 @@ use crate::{
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     Json,
-    extract::{FromRequestParts, Request, State},
+    extract::{ConnectInfo, FromRequestParts, Request, State, connect_info::Connected},
     http::{HeaderMap, StatusCode, header, request::Parts},
     middleware::Next,
     response::{IntoResponse, Response},
+    serve::IncomingStream,
 };
 use serde::Deserialize;
 use std::{
@@ -16,12 +17,31 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::net::TcpListener;
 
 mod forwarded;
+mod interfaces;
 mod limiter;
 pub(crate) use forwarded::{HttpsProxy, spawn as follow_https_proxy};
+pub(crate) use interfaces::Interfaces;
 pub(crate) use limiter::Limiter;
 use limiter::Verdict;
+
+/// Both ends of a connection: the address it came from, and the manager's own address it reached,
+/// which tells the network it came on.
+#[derive(Clone, Copy, Debug)]
+pub struct Connection {
+    pub peer: SocketAddr,
+    pub local: Option<SocketAddr>,
+}
+impl Connected<IncomingStream<'_, TcpListener>> for Connection {
+    fn connect_info(stream: IncomingStream<'_, TcpListener>) -> Self {
+        Self {
+            peer: *stream.remote_addr(),
+            local: stream.io().local_addr().ok(),
+        }
+    }
+}
 
 /// The address a connection came from, when the listener records one. A request made without a
 /// connection, as the tests do, has none, and such requests share one count of failed sign-ins.
@@ -35,8 +55,8 @@ impl<S: Send + Sync> FromRequestParts<S> for Peer {
         Ok(Peer(
             parts
                 .extensions
-                .get::<axum::extract::ConnectInfo<SocketAddr>>()
-                .map(|info| info.0.ip()),
+                .get::<ConnectInfo<Connection>>()
+                .map(|info| info.0.peer.ip()),
         ))
     }
 }
@@ -155,6 +175,29 @@ impl App {
         sessions.retain(|_, expiry| *expiry > Instant::now());
         sessions.contains_key(&token)
     }
+}
+/// Refuse a connection that reached the manager on a desktop's network ([`interfaces`]), before
+/// anything else looks at the request. A request made without a connection, as the tests do,
+/// names no network.
+pub async fn check_network(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
+    let local = req
+        .extensions()
+        .get::<ConnectInfo<Connection>>()
+        .and_then(|info| info.0.local);
+    if let Some(local) = local {
+        match app.interfaces.answers(&app, local.ip()).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return Error(
+                    StatusCode::FORBIDDEN,
+                    "The manager does not answer on a desktop's network".into(),
+                )
+                .into_response();
+            }
+            Err(error) => return Error::from(error).into_response(),
+        }
+    }
+    next.run(req).await
 }
 pub async fn check_host(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
     if !app.host_allowed(req.headers()) {

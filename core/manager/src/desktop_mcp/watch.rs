@@ -11,10 +11,14 @@ use super::{
 use crate::{App, model::now};
 use rmcp::{RoleClient, service::Peer};
 use std::{process::Stdio, sync::Arc, time::Duration};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::BufReader;
 
 /// How often the manager looks for desktops that started or stopped.
 const SUPERVISE_EVERY: Duration = Duration::from_secs(10);
+/// The longest listing a desktop's helper prints: 64 declarations of at most 64 KiB in each of its
+/// two folders, each at most three times as long once escaped as JSON. The desktop can write a
+/// longer line, which is dropped.
+const LISTING_LIMIT: usize = 32 << 20;
 
 /// Watch every running desktop and close idle server connections. The MCP endpoints, which
 /// answer whether or not the root `/mcp` is on, and the MCP page need the servers' tool lists.
@@ -83,9 +87,18 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
             .take()
             .map(|stdin| tokio::spawn(report::send_reports(app.clone(), record_id.clone(), stdin)));
         if let Some(stdout) = child.stdout.take() {
-            let mut lines = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                let found = serde_json::from_str(&line)
+            let mut stdout = BufReader::new(stdout);
+            let mut line = Vec::new();
+            while let Ok(Some(cut)) = client::read_line(&mut stdout, &mut line, LISTING_LIMIT).await
+            {
+                if cut {
+                    tracing::debug!(
+                        "Desktop MCP servers of {record_id}: a listing longer than {} MiB",
+                        LISTING_LIMIT >> 20
+                    );
+                    continue;
+                }
+                let found = serde_json::from_slice(&line)
                     .map_err(anyhow::Error::from)
                     .and_then(|listing| super::registry::found(&listing));
                 match found {

@@ -357,6 +357,8 @@ for line in sys.stdin:
         result = {"tools": [{"name": "echo", "description": "Echo text", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}]}
     elif method == "tools/call":
         text = "echo: %s uid=%d display=%s" % (message["params"]["arguments"]["text"], os.getuid(), os.environ.get("DISPLAY"))
+        if "ECHO_TAG" in os.environ:
+            text += " tag=" + os.environ["ECHO_TAG"]
         result = {"content": [{"type": "text", "text": text}]}
     else:
         print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32601, "message": method}}), flush=True)
@@ -1412,7 +1414,8 @@ try:
     tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo.py","data":ECHO_SERVER})
     tool("write_file",{"container_id":env_id,"path":"/home/desktop/mcp/echo_http.py","data":ECHO_HTTP_SERVER})
     http_server = tool("launch_application",{"container_id":env_id,"command":"python3","args":["/home/desktop/mcp/echo_http.py"],"name":"mcp http test"})["structuredContent"]["application_id"]
-    registered = tool("register_mcp_server",{"container_id":env_id,"name":"echo","command":"python3","args":["/home/desktop/mcp/echo.py"]})["structuredContent"]
+    # A declared variable reaches the server through the launcher, never the Docker CLI's environment.
+    registered = tool("register_mcp_server",{"container_id":env_id,"name":"echo","command":"python3","args":["/home/desktop/mcp/echo.py"],"env":{"ECHO_TAG":"launched"}})["structuredContent"]
     assert registered["state"] == "ready" and [t["name"] for t in registered["tools"]] == ["echo"], registered
     docker("exec","--user","1001:1001",container,"thoric-mcp","add","api","--url","http://127.0.0.1:8931/mcp","--header","X-Test: yes")
     def server_ready(name):
@@ -1445,7 +1448,7 @@ try:
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
     assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container"}, offered
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"echo__echo","arguments":{"text":"hi"}})
-    assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0", echoed
+    assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0 tag=launched", echoed
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"api__echo","arguments":{"text":"over http"}})
     assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
     shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
@@ -1482,7 +1485,7 @@ try:
     before = echo_processes()
     described, (echoed, during) = inspected({"kind":"server","container":env_id,"name":"echo"}, ("tools/call",{"name":"echo","arguments":{"text":"inspected"}}))
     assert described["source"] == "container" and described["transport"] == "stdio", described
-    assert echoed["content"][0]["text"] == "echo: inspected uid=1001 display=:0" and during == before + 1, (echoed, during, before)
+    assert echoed["content"][0]["text"] == "echo: inspected uid=1001 display=:0 tag=launched" and during == before + 1, (echoed, during, before)
     wait_for(lambda: echo_processes() == before, 15)
     _, (echoed, _) = inspected({"kind":"server","container":env_id,"name":"api"}, ("tools/call",{"name":"echo","arguments":{"text":"inspected"}}))
     assert echoed["content"][0]["text"] == "echo: inspected header=yes", echoed
@@ -1749,10 +1752,18 @@ try:
         address = networks[network]["IPAddress"]
         reached = subprocess.run(["docker", "exec", container, "python3", "-c", vnc_script, address], capture_output=True)
         assert (reached.returncode == 0) == listening, (network, address, reached.stderr)
+    # The manager shares the private network to reach the desktop, never to be reached from it.
+    manager_address = json.loads(docker("inspect", manager))[0]["NetworkSettings"]["Networks"][f"thoric-{env_id}-private"]["IPAddress"]
+    manager_script = ("import sys, urllib.error, urllib.request\nopener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\n"
+                      "try:\n    print(opener.open(f'http://{sys.argv[1]}:8080{sys.argv[2]}', timeout=5).status)\n"
+                      "except urllib.error.HTTPError as error:\n    print(error.code)")
+    for path in ["/healthz", "/api/session", "/mcp"]:
+        answer = docker("exec", "--user", "desktop", container, "python3", "-c", manager_script, manager_address, path).decode().strip()
+        assert answer == "403", (path, answer)
     job(api(f"containers/{env_id}/internet", {"enabled": False}))
     assert api(f"containers/{env_id}/screenshot", raw=True).startswith(b"\xff\xd8")
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
-    print("PASS live internet on/off with VNC still reachable, and only on the private network", flush=True)
+    print("PASS live internet on/off with VNC still reachable, only on the private network, which never reaches the manager", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
     snap = job(snap_job)
