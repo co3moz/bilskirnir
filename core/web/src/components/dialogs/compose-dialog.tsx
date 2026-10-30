@@ -34,7 +34,7 @@ import { CodeEditor } from "@/components/code-editor"
 import { api } from "@/lib/api"
 import { rowsHeight } from "@/lib/code-editor"
 import { closeDialog, useDraft } from "@/lib/dialogs"
-import { refreshAll, useImages } from "@/lib/queries"
+import { refreshLists, useImages } from "@/lib/queries"
 import {
   newParameter,
   composeBody,
@@ -219,7 +219,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     else return
     closeDialog()
     toast.success(remove ? t("compose.removed") : t("compose.saved", { name: image?.name ?? "" }))
-    void refreshAll()
+    void refreshLists("images")
   }
   // Nothing is built again: the manager puts the base's steps before the image's own.
   const addBase = async () => {
@@ -227,7 +227,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     await api(`images/${id}/compose/base`, {})
     closeDialog()
     toast.success(t("compose.baseAdded", { base: base.name, name: image?.name ?? "" }))
-    void refreshAll()
+    void refreshLists("images")
   }
 
   return (

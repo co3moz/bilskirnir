@@ -45,7 +45,7 @@ import { rowsHeight } from "@/lib/code-editor"
 import { closeDialog, useDraft } from "@/lib/dialogs"
 import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
-import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
+import { refreshLists, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import {
   composeBody,
   composeDraft,
@@ -710,7 +710,7 @@ export function VolumeDeleteDialog({ name, ...props }: DialogProps & { name: str
             await api(volumeApi(name), undefined, "DELETE")
             closeDialog()
             toast.success(t("volumes.deleted", { name }))
-            void refreshAll()
+            void refreshLists("volumes")
           })}
         >
           <AlertDialogHeader>
@@ -766,7 +766,7 @@ export function ImageDeleteDialog({ id, ...props }: DialogProps & { id: string }
             closeDialog()
             const notice = image ? deletedNotice(image, result.image_removed) : "images.deleted"
             toast.success(t(notice, { name }))
-            void refreshAll()
+            void refreshLists("images")
           })}
         >
           <AlertDialogHeader>
@@ -816,7 +816,7 @@ export function VolumeDialog(props: DialogProps) {
             await api("volumes", { name })
             closeDialog()
             toast.success(t("volumes.created", { name }))
-            void refreshAll()
+            void refreshLists("volumes")
           })}
         >
           <DialogHeader>

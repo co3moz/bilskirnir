@@ -1,4 +1,4 @@
-import { quietWhileRestarting, refreshAll } from "./queries"
+import { queryClient, quietWhileRestarting } from "./queries"
 
 /**
  * Following an update or a settings change across the manager's restart. `thoric update` and
@@ -66,7 +66,8 @@ export function followRestart(restart: Restart, from: string, reloaded?: () => v
     if (step === "done") {
       following = false
       quietWhileRestarting(false)
-      void refreshAll()
+      // A new manager answers: anything it shows may have changed.
+      void queryClient.invalidateQueries()
       return
     }
     away ||= answer.kind === "away"

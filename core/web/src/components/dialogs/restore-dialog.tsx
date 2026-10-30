@@ -21,7 +21,7 @@ import {
 } from "@/lib/backup"
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { formatList, t } from "@/lib/i18n"
-import { refreshAll } from "@/lib/queries"
+import { refreshLists } from "@/lib/queries"
 import { shortDate } from "@/lib/format"
 import type { DialogProps } from "./side-drawer"
 
@@ -37,7 +37,7 @@ async function startRestore(file: File, limit: number) {
     return
   }
   toast.success(t("backup.restoring"), { description: t("backup.restoringDetail") })
-  void refreshAll()
+  void refreshLists("jobs")
   openDialog({ kind: "job", id: job })
 }
 

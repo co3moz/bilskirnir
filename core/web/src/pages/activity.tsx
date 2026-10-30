@@ -99,7 +99,8 @@ function Filters({
   /** Calls already loaded, which name containers no longer listed. */
   seen: ActivityEntry[]
 }) {
-  const endpoints = useMcpEndpoints().data ?? []
+  // Only their names, which the page's own lists do not change.
+  const endpoints = useMcpEndpoints(false).data ?? []
   const containerChoices = [...containerNames].sort((a, b) => a[1].localeCompare(b[1]))
   if (container && !containerNames.has(container)) {
     // A container no longer listed keeps the name its calls recorded.

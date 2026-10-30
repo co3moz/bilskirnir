@@ -5,7 +5,7 @@ import { archiveUrl } from "./archives"
 import { formatBuildConfig, readBuildConfig } from "./build-config"
 import { openDialog } from "./dialogs"
 import { plural, t } from "./i18n"
-import { refreshAll } from "./queries"
+import { refreshLists } from "./queries"
 import { navigate } from "./route"
 import type { BuildConfig, ImageItem, JobStarted } from "./types"
 import { fileSize } from "./uploads"
@@ -15,7 +15,7 @@ import { baseName, fileDownloadUrl, volumeArchiveUrl } from "./volume-files"
 export async function runJob(path: string, body?: unknown, method?: string) {
   const result = await api<JobStarted>(path, body, method)
   toast.success(t("jobs.queued"))
-  void refreshAll()
+  void refreshLists("jobs")
   openDialog({ kind: "job", id: result.job_id })
   return result
 }
@@ -30,7 +30,7 @@ export async function runJobs(requests: { path: string; body?: unknown }[]) {
   if (queued) toast.success(plural(queued, { one: "jobs.queued.one", other: "jobs.queued.other" }))
   for (const message of new Set(failed.map((result) => (result.reason as Error).message)))
     toast.error(message)
-  void refreshAll()
+  void refreshLists("jobs")
 }
 
 export const containerAction = (id: string, action: "start" | "stop" | "restart") =>
@@ -117,7 +117,7 @@ function archiving(message: string, description?: string) {
     description,
     action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
   })
-  setTimeout(() => void refreshAll(), 1000)
+  setTimeout(() => void refreshLists("jobs"), 1000)
 }
 
 /** Downloads a volume's files as a .tar.gz archive, recorded as a job like an image export. */
