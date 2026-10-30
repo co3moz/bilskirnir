@@ -28,7 +28,7 @@ irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
 
 `irm` downloads the helper and `iex` runs it, so nothing is saved and no script policy is in the way. While Thoric is not installed, it first checks WSL. Without WSL 2.4.4 or newer, or with the Virtual Machine Platform feature WSL 2 runs on turned off, it offers `wsl --install --no-distribution`, or `wsl --update` for an older WSL; both ask for administrator rights themselves. A feature they turn on works only after Windows restarts, and so does a Windows hypervisor that is not running yet, so the helper then stops and asks for a restart: run the line again afterwards. When the hypervisor still does not run, virtualization (Intel VT-x or AMD-V) is off in the computer's firmware settings.
 
-Next it shows the memory, processors and swap of WSL's virtual machine and offers values for those `%UserProfile%\.wslconfig` does not set, see [Memory and processors](#memory-and-processors). Then it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. Run the line again later for [everything else it does](#the-windows-helper).
+Next it shows the memory, processors and swap of WSL's virtual machine and offers values for those `%UserProfile%\.wslconfig` does not set, see [Memory and processors](#memory-and-processors). Then it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. The first start ends in a shell of the distribution; once you leave it with `exit`, the helper starts Thoric and keeps it running, as its `start` does, and offers to start it at every Windows sign-in, see [Keep it running](#keep-it-running). Run the line again later for [everything else it does](#the-windows-helper).
 
 ### Option 2: the package by hand
 
@@ -77,7 +77,7 @@ The helper handles what has to happen outside the distribution. Run it with the 
 | Update it to the newest release | `update` | Runs [`thoric update`](#update). |
 | Move its disk to another folder | `move <folder>` | Moves the disk, see [Disk](#disk). |
 | Change its disk's maximum size | `resize <size>` | Changes the disk's maximum size, see [Disk](#disk). |
-| Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task; with the task registered, the entry removes it instead (`autostart disable`). |
+| Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task, which starts the manager and keeps the distribution running; with the task registered, the entry removes it instead (`autostart disable`). |
 | Let other devices reach the dashboard | `lan enable` | Sets up Windows for [access from other devices](#access-from-other-devices); once that is set up, the entry removes it instead (`lan disable`). `lan status` shows what is set up. |
 | Set WSL's memory, processors and swap | `wslconfig` | Shows what `.wslconfig` sets for WSL's virtual machine and offers values for the rest, see [Memory and processors](#memory-and-processors). |
 | Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution and what `lan enable` set up, see [Remove](#remove). |
@@ -94,10 +94,10 @@ The helper handles what has to happen outside the distribution. Run it with the 
 
 WSL stops a distribution shortly after its last Windows-started process ends, even though Docker runs as a systemd service inside it. Two ways keep Thoric available:
 
-- The helper's `start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
-- Its `autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
+- The helper's `start` boots the distribution, keeps a hidden keep-alive process open and starts the manager. Its `install` does the same once the first start is done.
+- Its `autostart enable` registers a scheduled task that does the same at Windows sign-in: it runs `thoric start`, then the keep-alive process. Its output goes to the distribution's journal, which `journalctl -t thoric` shows.
 
-The helper's `stop` stops the manager and shuts the distribution down.
+The helper's `stop` stops the manager with `thoric stop` and shuts the distribution down. Docker starts with the distribution and brings back the containers that were running, since the manager and the desktops use `restart: unless-stopped`; a container stopped on purpose stays stopped, the manager after `stop` too, which is why `start` and the task run `thoric start`. A task registered by a helper before that ran only the keep-alive process; the helper's `start` registers it again.
 
 ## Access from other devices
 
