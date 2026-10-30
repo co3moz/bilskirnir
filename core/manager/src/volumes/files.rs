@@ -21,7 +21,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{process::Stdio, sync::Arc, time::Duration};
@@ -427,16 +426,28 @@ pub async fn upload(
         )
     })?;
     let revoked = app.session_revoked(session);
-    let transfer = app.volume_write(&name, async |volume| {
-        deliver(&app, volume, &request, body).await
-    });
+    let transfer = async {
+        // The body arrives before the volume is held, so file writes to it go on meanwhile.
+        app.open_volume(&name).await?;
+        let staged = crate::uploads::stage(&app, request.size, body).await?;
+        app.volume_write(&name, async |volume| {
+            deliver(&app, volume, &request, &staged).await
+        })
+        .await
+    };
     tokio::select! {
         result = tokio::time::timeout(Duration::from_secs(3600), transfer) => result.map_err(|_| Error(StatusCode::REQUEST_TIMEOUT, "Upload timed out".into()))?,
         _ = revoked => Err(Error(StatusCode::UNAUTHORIZED, "Session expired. Sign in again.".into())),
     }
 }
 
-async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Result<Json<Value>> {
+async fn deliver(
+    app: &App,
+    volume: &Volume,
+    request: &Upload,
+    staged: &crate::uploads::Staged,
+) -> Result<Json<Value>> {
+    let mut input = staged.open().await?;
     let helper = super::helper_name();
     let args = super::helper_args(
         volume,
@@ -470,47 +481,39 @@ async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Re
     ));
     let mut refused = false;
     let sent = async {
-        let mut stream = body.into_data_stream();
-        let mut received = 0u64;
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| anyhow!("Upload body interrupted: {error}"))?;
-            received += chunk.len() as u64;
-            if received > request.size {
-                bail!("File size does not match the upload");
-            }
-            // The helper stops reading when it fails; its message says why.
-            if stdin.write_all(&chunk).await.is_err() {
-                refused = true;
+        let mut buffer = vec![0; 65536];
+        loop {
+            let read = input.read(&mut buffer).await?;
+            if read == 0 {
                 break;
             }
-        }
-        if received != request.size {
-            bail!("File transfer was interrupted");
+            // The helper stops reading when it fails; its message says why.
+            if stdin.write_all(&buffer[..read]).await.is_err() {
+                refused = true;
+                bail!("The helper stopped reading the upload");
+            }
         }
         let _ = stdin.shutdown().await;
         drop(stdin);
-        anyhow::Ok(received)
+        anyhow::Ok(())
     }
     .await;
-    let received = match sent {
-        Ok(received) => received,
-        Err(error) => {
-            // An incomplete body must never be committed; the helper removes its temporary file.
-            let _ = child.start_kill();
-            let status = child.wait().await;
-            let _ = app.docker(&["rm", "--force", &helper]).await;
-            // A helper that stopped reading had refused the file, and its reason, such as a
-            // folder the desktop user cannot write, is the answer.
-            if refused
-                && status.is_ok_and(|status| !status.success())
-                && let Ok(Ok(errors)) = errors.await
-                && !errors.is_empty()
-            {
-                return Err(super::helper_error(&errors));
-            }
-            return Err(Error(StatusCode::BAD_REQUEST, format!("{error:#}")));
+    if let Err(error) = sent {
+        // An incomplete body must never be committed; the helper removes its temporary file.
+        let _ = child.start_kill();
+        let status = child.wait().await;
+        let _ = app.docker(&["rm", "--force", &helper]).await;
+        // A helper that stopped reading had refused the file, and its reason, such as a
+        // folder the desktop user cannot write, is the answer.
+        if refused
+            && status.is_ok_and(|status| !status.success())
+            && let Ok(Ok(errors)) = errors.await
+            && !errors.is_empty()
+        {
+            return Err(super::helper_error(&errors));
         }
-    };
+        return Err(Error(StatusCode::BAD_REQUEST, format!("{error:#}")));
+    }
     let status = child.wait().await.map_err(anyhow::Error::from)?;
     let errors = errors.await.map_err(anyhow::Error::from)??;
     if !status.success() {
@@ -523,6 +526,6 @@ async fn deliver(app: &App, volume: &Volume, request: &Upload, body: Body) -> Re
         } else {
             format!("{}/{}", request.destination, request.name)
         },
-        "bytes": received,
+        "bytes": request.size,
     })))
 }
