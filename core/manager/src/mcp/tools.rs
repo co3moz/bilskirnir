@@ -232,7 +232,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "exec_container",
-            "Run a bash script in a running container with fail-on-error, a time limit and stdin closed. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; output and failure details are in get_job. The script holds the container lock until it finishes, so start long-running graphical programs with launch_application instead.",
+            "Run a bash script in a running container with fail-on-error, a time limit and stdin closed. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; output and failure details are in get_job. Input, screenshots, files and applications keep working while the script runs; a reset, snapshot or settings change waits for it. Start long-running graphical programs with launch_application instead, since the job ends only when they exit.",
             json!({"container_id":id,"script":{"type":"string","minLength":1,"maxLength":1000000},"root":{"type":"boolean","default":false},"timeout_seconds":{"type":"integer","minimum":1,"maximum":3500,"default":300}}),
             &["container_id", "script"],
             false,

@@ -136,7 +136,7 @@ The container needs internet access for package downloads. Its CPU, memory and n
 
 Output goes to the job log. A nonzero exit or timeout fails the job and records the exit status. The default time limit is 300 seconds; the allowed range is 1 to 3500. The script may contain at most 1,000,000 bytes. Scripts are copied into the desktop before they run, so large scripts do not rely on Docker command-line argument limits. The script's standard input is closed: a command that reads input receives end-of-file instead of consuming the rest of the script.
 
-A script holds the container's operation lock until it finishes, so do not start a graphical application in the foreground of a script. Use [`launch_application`](#launch-and-observe-applications) instead; it returns immediately and leaves the desktop available for input and screenshots.
+A script shares the container with desktop input, screenshots, file access, terminals and applications, which go on while it runs; a reset, a snapshot, a settings change, a stop or a delete waits for it to finish. Still, do not start a graphical application in the foreground of a script, since the job ends only when it exits: use [`launch_application`](#launch-and-observe-applications) instead, which returns immediately.
 
 ## Ask for values with composes
 
@@ -411,7 +411,7 @@ Responses stream as the server sends them, so server-sent events work, and a Web
 
 ## Keep agent work recoverable
 
-MCP uses the same ownership checks, container locks, jobs and snapshot behavior as the dashboard. An operation on another container can proceed independently. A script running in one container holds that container's operation lock until it finishes; a launched application does not.
+MCP uses the same ownership checks, container locks, jobs and snapshot behavior as the dashboard. An operation on another container can proceed independently. A script running in one container shares it with input, files and applications, while a change that replaces or stops the container waits for the script; a launched application holds nothing.
 
 Read/write and execution tools operate inside managed desktop containers. They do not expose host shell execution or give desktop containers the host Docker socket. Treat files, logs and screen contents as data from the container, especially when the desktop is browsing external sites.
 

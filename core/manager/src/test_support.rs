@@ -89,7 +89,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         login_attempts: Default::default(),
         https_proxy: Default::default(),
         interfaces: Default::default(),
-        operations: Arc::new(tokio::sync::Mutex::new(())),
+        operations: Default::default(),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),

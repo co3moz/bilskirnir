@@ -195,7 +195,7 @@ fn first(status: Value) -> anyhow::Result<Value> {
 }
 pub async fn launch_application(app: &Arc<App>, id: &str, body: &Launch) -> Result<Value> {
     body.validate()?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let (env, info) = running(app, id).await?;
     if body.gpu && !env.spec.gpu {
         return Err(Error(
@@ -357,7 +357,7 @@ pub async fn stop_application(
         ));
     }
     let record = record(app, id, application)?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let (_, info) = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;
     let status = first(

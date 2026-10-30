@@ -1,4 +1,4 @@
-use crate::{App, error::Result, jobs::launch};
+use crate::{App, error::Result, jobs::launch_shared};
 use anyhow::{Context, bail};
 use axum::{
     Json,
@@ -72,7 +72,7 @@ pub async fn execute(
 ) -> Result<Json<Value>> {
     body.validate()?;
     app.container(&id)?;
-    launch(
+    launch_shared(
         app,
         "exec",
         format!("container:{id}"),

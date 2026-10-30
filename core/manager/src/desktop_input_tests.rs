@@ -1,5 +1,6 @@
 //! Pins down that an input request waits for a container held by a job without taking one of the
-//! input slots every container shares, and gives up with a busy answer in bounded time; that
+//! input slots every container shares, and gives up with a busy answer in bounded time, while a
+//! script that shares the container lets it through and another input request makes it wait; that
 //! relative motion is planned as one movement whose steps add up to its offset; and that sending a
 //! plan moves the pointer relatively through XTest in order with the VNC input, presses and
 //! releases buttons where that motion left the pointer, and emulates it when XTest cannot run. Also
@@ -27,6 +28,24 @@ async fn a_held_container_answers_busy_without_taking_an_input_slot() {
         .unwrap_err();
     assert_eq!(error.0, StatusCode::CONFLICT);
     assert_eq!(app.desktop_inputs.available_permits(), 4);
+}
+
+#[tokio::test]
+async fn input_shares_the_container_with_a_script_and_takes_turns_with_other_input() {
+    let app = crate::test_support::app(false);
+    let _script = app.resource_lock("container:busy").share_owned().await;
+    // Past the lock: the container that is not there is what fails it.
+    let error = perform(&app, "busy", &[]).await.unwrap_err();
+    assert_eq!(error.0, StatusCode::NOT_FOUND, "{}", error.1);
+    let _other = app.resource_lock("input:busy").lock_owned().await;
+    let error = tokio::time::timeout(
+        LOCK_WAIT + Duration::from_secs(2),
+        perform(&app, "busy", &[]),
+    )
+    .await
+    .expect("the wait is bounded")
+    .unwrap_err();
+    assert_eq!(error.0, StatusCode::CONFLICT);
 }
 
 fn actions(value: serde_json::Value) -> Vec<Action> {

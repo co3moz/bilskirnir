@@ -40,7 +40,7 @@ use axum::http::StatusCode;
 const RESOURCE: &str = "installation";
 
 /// Take the installation for a backup or a restore, or refuse at once while another holds it.
-fn installation(app: &App) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+fn installation(app: &App) -> Result<crate::jobs::Exclusive> {
     app.resource_lock(RESOURCE).try_lock_owned().map_err(|_| {
         Error(
             StatusCode::CONFLICT,
