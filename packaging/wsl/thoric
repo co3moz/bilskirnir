@@ -14,6 +14,7 @@ INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
 # one before it installs it, so they keep this form.
 CLI=/usr/local/bin/thoric
 CLI_VERSION=
+# shellcheck disable=SC2034 # read from this file by the command an update replaces
 NEEDS_PACKAGE=1
 # The package records the level of its own files here, such as the firewall watcher and its unit. A
 # package without the file is level 1.
@@ -27,8 +28,10 @@ SETTINGS_UNITS=(thoric-settings.path thoric-settings.service)
 # core/manager/src/config.rs, and the tests hold the two lists together. The rest of .env, such as
 # the password, the agent token and the published port, changes only with 'thoric settings'.
 DASHBOARD_SETTINGS=(SECURE_COOKIE ALLOWED_HOSTS DESKTOP_IMAGE DESKTOP_USER_NAMESPACES DESKTOP_PIDS_LIMIT WSL_GPU NVIDIA_COMPUTE GPU_ADAPTER AUDIO_ENABLED MICROPHONE_ENABLED INTERNET_ENABLED SUDO_ENABLED GAMEPAD_ENABLED VPN_ENABLED GPU_DEFAULT INTERNET_DEFAULT SUDO_DEFAULT AUDIO_DEFAULT MICROPHONE_DEFAULT GAMEPAD_DEFAULT VPN_DEFAULT UPLOAD_MAX_MB IMAGE_ARCHIVE_MAX_MB TEMPLATES_URL VOLUME_FILTER PROXY_URL PROXY_USERNAME PROXY_BYPASS UPDATE_CHECK)
-# How long apply-settings waits for the manager to answer with the new settings, in seconds.
+# How long apply-settings waits for the manager to answer with the new settings, and an update for
+# the new manager, which may first move its database to a new layout, in seconds.
 SETTINGS_WAIT=90
+UPDATE_WAIT=180
 
 # Tab completion offers the first word of each indented line, so every command is listed here.
 usage() {
@@ -40,8 +43,8 @@ Usage: thoric <command>
   restart   Recreate the manager with the current settings
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
-  update    Move the manager, its compose.yml and this command to the newest release, pull downloaded desktop images, recreate the manager
-  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
+  update    Move the manager, its compose.yml and this command to the newest release, recreate the manager (or go back when it does not answer), then pull downloaded desktop images
+  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and whether Docker reaches the registry
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
   settings  Edit /opt/thoric/.env, then run 'thoric restart'
@@ -140,14 +143,15 @@ newest_release() {
 # published with it and tags them as the catalog reference; a manager built from the source downloads
 # the reference itself. This does the same.
 update_profiles() {
-    local catalog release ref source source_was_here
+    local catalog release ref refs source source_was_here replaced
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
         ! release=$(docker inspect --format '{{index .Config.Labels "thoric.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
-    for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
-        if ! docker image inspect "$ref" >/dev/null 2>&1; then
+    mapfile -t refs < <(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog")
+    for ref in "${refs[@]}"; do
+        if ! replaced=$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null); then
             continue
         fi
         if [[ $release =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
@@ -161,7 +165,47 @@ update_profiles() {
         else
             docker pull "$ref"
         fi
+        remove_replaced "$ref" "$replaced"
     done
+}
+# Prints free when no record in the manager's database keeps the image its argument names: a
+# container record that starts from it, which a reset creates from it again, or a saved image's
+# record that names it. It fails when a record does not read, since that one may. The manager
+# applies the same rules (core/manager/src/image_removal.rs), and its tests hold the names read here
+# to its records.
+IMAGE_RECORDS='
+import json, os, sqlite3, sys
+path = os.path.join(os.environ.get("DATA_DIR", "data"), "state.sqlite")
+database = sqlite3.connect("file:" + path + "?mode=ro", uri=True)
+for kind, field in (("environment", "source_image_id"), ("image", "image_id")):
+    for (data,) in database.execute("SELECT data FROM records WHERE kind = ?", (kind,)):
+        if json.loads(data)[field] == sys.argv[1]:
+            sys.exit("needed")
+print("free")
+'
+# The image a catalog reference named before the update moved it, which Docker otherwise keeps
+# without a name, 1 to 2 GB for each release. It goes only when nothing needs it: no other tag,
+# such as a release tag that was here before, no record of the manager and no container, which
+# Docker checks itself, since nothing is forced.
+remove_replaced() {
+    local ref=$1 replaced=$2 short=${2#sha256:} tags needed
+    short=${short:0:12}
+    if [[ $(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null) == "$replaced" ]] ||
+        ! tags=$(docker image inspect --format '{{len .RepoTags}}' "$replaced" 2>/dev/null); then
+        return 0
+    fi
+    if [[ $tags != 0 ]]; then
+        echo "The image $ref named before, $short, stays, since another tag names it."
+        return 0
+    fi
+    needed=$(compose exec -T manager python3 -c "$IMAGE_RECORDS" "$replaced" 2>/dev/null) || needed=""
+    if [[ $needed != free ]]; then
+        echo "The image $ref named before, $short, stays, since a container or a saved image was made from it."
+    elif docker image rm "$replaced" >/dev/null 2>&1; then
+        echo "Removed the image $ref named before, $short."
+    else
+        echo "The image $ref named before, $short, stays, since a container or an image built on it uses it."
+    fi
 }
 checksum() {
     sha256sum <"$1" | cut -c1-64
@@ -170,11 +214,11 @@ checksum() {
 # renamed over it, so a failed write leaves the old one whole and a running command keeps reading the
 # file it started from. A file keeps its owner, and its mode unless a third argument names one.
 put_file() {
-    local target=$1 mode=(-m "${3:-0644}")
+    local target=$1 owner=(-m "${3:-0644}")
     if [[ -e $target ]]; then
-        mode=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
+        owner=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
     fi
-    sudo install -D "${mode[@]}" "$2" "$target.new"
+    sudo install -D "${owner[@]}" "$2" "$target.new"
     sudo mv -f "$target.new" "$target"
 }
 # The command comes only from releases, like the package's own, and never from a MANAGER_IMAGE chosen
@@ -251,6 +295,49 @@ update_install_files() {
     done
     put_file "$INSTALL/.shipped.sha256" "$tmp/.shipped.sha256"
 }
+# What an update changes before the new manager answers: .env, with the pin and renamed settings,
+# and the installation files. keep_previous copies them into $tmp/previous, with owner and mode,
+# and notes the ones that were missing; take_back puts them back.
+UPDATED_FILES=(.env "${INSTALL_FILES[@]}" .shipped.sha256)
+keep_previous() {
+    local file
+    previous=$tmp/previous
+    mkdir -p "$previous"
+    for file in "${UPDATED_FILES[@]}"; do
+        if [[ -e $INSTALL/$file ]]; then
+            mkdir -p "$previous/$(dirname "$file")"
+            sudo cp -p "$INSTALL/$file" "$previous/$file"
+        else
+            echo "$file" >>"$previous/.missing"
+        fi
+    done
+}
+# The EXIT trap of an update from keep_previous on: until the new manager answers, which clears
+# $previous, any end of the update puts the files back and recreates the manager they name, so
+# .env never stays on a manager that does not start. The command and the units an update brought
+# stay, since they work with earlier managers as well.
+finish_update() {
+    local status=$? file
+    if [[ -n $previous ]]; then
+        status=1
+        echo "Taking the update back: $INSTALL/.env and the installation files are put back as they were."
+        for file in "${UPDATED_FILES[@]}"; do
+            if [[ -e $previous/$file ]]; then
+                put_file "$INSTALL/$file" "$previous/$file" || echo "Could not put back $INSTALL/$file." >&2
+            elif grep -qxF "$file" "$previous/.missing" 2>/dev/null; then
+                sudo rm -f "$INSTALL/$file"
+            fi
+        done
+        echo "Recreating the previous manager."
+        if compose up -d && manager_answers "$UPDATE_WAIT"; then
+            echo "The previous manager answers again."
+        else
+            echo "The previous manager does not answer either. Run 'thoric logs' and 'thoric doctor'."
+        fi
+    fi
+    rm -rf "$tmp"
+    exit "$status"
+}
 # The dashboard asks for an update or a settings change by leaving a request in $INSTALL/update,
 # which the manager sees at /update. thoric-update.path notices an update and
 # thoric-update.service runs this command's update as root; thoric-settings.path and
@@ -313,11 +400,12 @@ dashboard_setting() {
     done
     return 1
 }
-# Whether the manager answers its health check, asked inside its container, so whatever address
-# Compose publishes it on. A manager that refuses its settings exits, and Docker starts it again.
+# Whether the manager answers its health check within the seconds given, SETTINGS_WAIT unless
+# named, asked inside its container, so whatever address Compose publishes it on. A manager that
+# refuses its settings or its database exits, and Docker starts it again.
 manager_answers() {
     local _
-    for _ in $(seq 1 "$SETTINGS_WAIT"); do
+    for _ in $(seq 1 "${1:-$SETTINGS_WAIT}"); do
         if compose exec -T manager curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
             return 0
         fi
@@ -403,7 +491,9 @@ apply_settings() {
     ' "$INSTALL/.env" >"$tmp/env"
     sudo cp -p "$INSTALL/.env" "$INSTALL/.env.previous"
     put_file "$INSTALL/.env" "$tmp/env"
-    echo "Wrote $(IFS=,; echo "${keys[*]}" | sed 's/,/, /g') to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
+    local written
+    written=$(IFS=,; echo "${keys[*]}")
+    echo "Wrote ${written//,/, } to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
     echo "Recreating the manager with the new settings."
     if compose up -d --force-recreate manager && manager_answers; then
         echo "The manager answers with the new settings."
@@ -466,20 +556,35 @@ case ${1:-help} in
             fi
         fi
         # The installation files and the command come from the manager about to run, so it is pulled
-        # first, and the pin moves only once its image is here.
+        # first. A newer command takes the update over before anything here changes.
         docker pull "$image"
+        tmp=$(mktemp -d)
+        previous=""
+        trap 'rm -rf "$tmp"' EXIT
+        update_cli "$image"
+        keep_previous
+        trap finish_update EXIT
+        update_install_files "$image"
+        # The pin moves once the files of its release are in place, so .env never names a manager
+        # whose settings the compose.yml beside it does not pass.
         if [[ $image != "$current" ]]; then
             set_setting MANAGER_IMAGE "$image"
             echo "The manager moves from ${pinned:-latest} to $version."
         fi
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        update_cli "$image"
-        update_install_files "$image"
         update_units "$image"
         rename_settings
         compose pull
+        echo "Recreating the manager $image."
         compose up -d
+        # A manager that refuses its database or its settings exits again and again, while
+        # compose up has already succeeded, so the update waits for its health check.
+        if ! manager_answers "$UPDATE_WAIT"; then
+            echo "The manager $image did not answer within $UPDATE_WAIT seconds. Its last lines:"
+            compose logs --no-log-prefix --tail=30 manager || true
+            exit 1
+        fi
+        previous=""
+        echo "The manager answers."
         update_profiles
         ;;
     doctor)
@@ -521,12 +626,35 @@ case ${1:-help} in
         if [[ $reach == other* && $networking == nat ]]; then printf '; other devices need mirrored networking or a port proxy on Windows'; fi
         echo
         if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|ALLOWED_HOSTS|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
-        # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
-        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
-        if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
+        # Docker downloads images itself, as a service, with the proxy its own settings give it and
+        # none of this shell's. So Docker looks up the manager's image: the Engine API's
+        # /distribution resolves its manifest in the registry and downloads nothing. A registry that
+        # answers with an error is reachable all the same.
+        image=""
+        if [[ -f $INSTALL/.env ]]; then image=$(setting MANAGER_IMAGE); fi
+        image=${image:-$MANAGER_REPOSITORY:latest}
+        registry=${image%%/*}
+        proxy=$(docker info --format '{{.HTTPSProxy}}' 2>/dev/null || true)
+        via="no proxy"
+        if [[ -n $proxy ]]; then via="proxy $proxy"; fi
+        answer=$(curl -sS --max-time 60 -w '\n%{http_code}' --unix-socket /var/run/docker.sock \
+            "http://localhost/distribution/$image/json" 2>&1 || true)
+        code=${answer##*$'\n'}
+        reason=$(sed -n 's/.*"message": *"\(.*\)".*/\1/p' <<<"$answer" | sed 's/\\"/"/g' | head -n1 | cut -c1-200)
+        case $code in
+            200) echo "registry:  Docker reaches $registry ($via)" ;;
+            4[0-9][0-9]) echo "registry:  Docker reaches $registry ($via), which answers about $image: $reason" ;;
+            *)
+                printf 'registry:  Docker does not reach %s (%s): %s' "$registry" "$via" "${reason:-Docker gave no answer}"
+                if [[ -z $proxy && -n ${HTTPS_PROXY:-${https_proxy:-}} ]]; then
+                    printf '. This shell has a proxy and Docker none'
+                fi
+                echo "; see 'Docker behind a proxy' in docs/WSL_PACKAGE.md"
+                ;;
+        esac
         ;;
     open)
-        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi
+        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else address; fi
         ;;
     mcp)
         require_settings
@@ -543,6 +671,9 @@ case ${1:-help} in
             exit 1
         fi
         distro=${WSL_DISTRO_NAME:-Thoric}
+        # The bridge runs in the manager's container, which MANAGER_CONTAINER names in Compose.
+        manager=$(setting MANAGER_CONTAINER)
+        manager=${manager:-thoric-manager}
         claude_shell=""
         if [[ $mode == none ]]; then
             echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
@@ -579,7 +710,7 @@ stdio bridge (no token in the client; it runs inside the manager container):
     "mcpServers": {
       "thoric": {
         "command": "wsl.exe",
-        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "thoric-manager", "python3", "/app/mcp_bridge.py"]
+        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "$manager", "python3", "/app/mcp_bridge.py"]
       }
     }
   }

@@ -5,7 +5,8 @@
 //! counts from non-terminal output, so pulls go through the Engine API socket and the job carries
 //! one aggregated `progress` value for the dashboard and for agents. A release manager downloads
 //! the catalog images published with it and tags them as the catalog reference
-//! (`CatalogImage::source`).
+//! (`CatalogImage::source`). The image the reference named before goes once nothing needs it
+//! (`App::remove_replaced`).
 use crate::{App, catalog::CatalogImage};
 use anyhow::{Context, Result, bail};
 use http_body_util::BodyExt;
@@ -369,6 +370,13 @@ impl App {
             job_id,
             &format!("Downloading {} from {source}.", image.name),
         )?;
+        // The image the reference names until the download moves it, which goes afterwards when
+        // nothing needs it.
+        let replaced = self
+            .inspect("image", &image.reference)
+            .await
+            .ok()
+            .and_then(|info| info["Id"].as_str().map(str::to_owned));
         // A release tag that was here before the download is someone else's and stays.
         let source_was_here =
             source != image.reference && self.image_present(source).await.unwrap_or(true);
@@ -400,8 +408,7 @@ impl App {
         if source != image.reference {
             self.docker(&["tag", source, &image.reference]).await?;
             self.append_log(job_id, &format!("Tagged it as {}.", image.reference))?;
-            // Without the release tag, the image the reference named before is left dangling,
-            // as pulling the reference itself would leave it.
+            // The release tag goes, so only the reference names the new image.
             if !source_was_here && let Err(error) = self.docker(&["image", "rm", source]).await {
                 tracing::warn!("Could not remove the tag {source}: {error:#}");
             }
@@ -410,6 +417,10 @@ impl App {
             .inspect("image", &image.reference)
             .await
             .context("The download finished, but Docker does not list the image")?;
+        if let Some(replaced) = replaced.filter(|replaced| info["Id"] != replaced.as_str()) {
+            let said = self.remove_replaced(&replaced, &image.reference).await;
+            self.append_log(job_id, &said)?;
+        }
         Ok(
             json!({"id": image.id, "kind": "catalog", "reference": image.reference, "image_id": info["Id"]}),
         )

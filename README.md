@@ -70,7 +70,7 @@ You need Windows 11 or Windows 10 with WSL 2.4.4 or newer, which the Windows hel
 3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `thoric mcp` shows them again.
 4. Open [localhost:8080](http://localhost:8080), or the port you chose, sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 
-WSL stops a distribution shortly after its last window closes; the helper's **Start** keeps it running and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `thoric` command, updates, also from the dashboard, and removal.
+WSL stops a distribution shortly after its last window closes; the helper starts Thoric and keeps it running once you leave the first start's shell, its **Start** does the same later, and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `thoric` command, updates, also from the dashboard, and removal.
 
 ## Custom installation
 

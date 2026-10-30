@@ -28,7 +28,7 @@ irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
 
 `irm` downloads the helper and `iex` runs it, so nothing is saved and no script policy is in the way. While Thoric is not installed, it first checks WSL. Without WSL 2.4.4 or newer, or with the Virtual Machine Platform feature WSL 2 runs on turned off, it offers `wsl --install --no-distribution`, or `wsl --update` for an older WSL; both ask for administrator rights themselves. A feature they turn on works only after Windows restarts, and so does a Windows hypervisor that is not running yet, so the helper then stops and asks for a restart: run the line again afterwards. When the hypervisor still does not run, virtualization (Intel VT-x or AMD-V) is off in the computer's firmware settings.
 
-Next it shows the memory, processors and swap of WSL's virtual machine and offers values for those `%UserProfile%\.wslconfig` does not set, see [Memory and processors](#memory-and-processors). Then it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. Run the line again later for [everything else it does](#the-windows-helper).
+Next it shows the memory, processors and swap of WSL's virtual machine and offers values for those `%UserProfile%\.wslconfig` does not set, see [Memory and processors](#memory-and-processors). Then it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. The first start ends in a shell of the distribution; once you leave it with `exit`, the helper starts Thoric and keeps it running, as its `start` does, and offers to start it at every Windows sign-in, see [Keep it running](#keep-it-running). Run the line again later for [everything else it does](#the-windows-helper).
 
 ### Option 2: the package by hand
 
@@ -77,7 +77,7 @@ The helper handles what has to happen outside the distribution. Run it with the 
 | Update it to the newest release | `update` | Runs [`thoric update`](#update). |
 | Move its disk to another folder | `move <folder>` | Moves the disk, see [Disk](#disk). |
 | Change its disk's maximum size | `resize <size>` | Changes the disk's maximum size, see [Disk](#disk). |
-| Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task; with the task registered, the entry removes it instead (`autostart disable`). |
+| Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task, which starts the manager and keeps the distribution running; with the task registered, the entry removes it instead (`autostart disable`). |
 | Let other devices reach the dashboard | `lan enable` | Sets up Windows for [access from other devices](#access-from-other-devices); once that is set up, the entry removes it instead (`lan disable`). `lan status` shows what is set up. |
 | Set WSL's memory, processors and swap | `wslconfig` | Shows what `.wslconfig` sets for WSL's virtual machine and offers values for the rest, see [Memory and processors](#memory-and-processors). |
 | Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution and what `lan enable` set up, see [Remove](#remove). |
@@ -88,16 +88,16 @@ The helper handles what has to happen outside the distribution. Run it with the 
 & ([scriptblock]::Create((irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1))) move D:\WSL\Thoric
 ```
 
-`install` takes `-Location <folder>`, `-VhdSize <size>` and `-Package <file>`, a package you already have. Every command takes `-Distro <name>` for a distribution installed under another name and `-Port <port>` for a dashboard port other than the one in `.env`, and `help` lists them all. A saved copy takes the same commands, run as `powershell -ExecutionPolicy Bypass -File .\thoric.ps1 <command>` because Windows runs a saved script only when allowed to; in a clone of the repository it is `windows\thoric.ps1`.
+`install` takes `-Location <folder>`, `-VhdSize <size>` and `-Package <file>`, a package you already have. Every command takes `-Distro <name>` for a distribution installed under another name and `-Port <port>` for a dashboard port other than the one in `.env`, and `help` lists them all. A saved copy takes the same commands, run as `powershell -ExecutionPolicy Bypass -File .\thoric.ps1 <command>` because Windows runs a saved script only when allowed to; in a clone of the repository it is `packaging\windows\thoric.ps1`.
 
 ## Keep it running
 
 WSL stops a distribution shortly after its last Windows-started process ends, even though Docker runs as a systemd service inside it. Two ways keep Thoric available:
 
-- The helper's `start` boots the distribution, keeps a hidden keep-alive process open and starts the manager.
-- Its `autostart enable` registers a scheduled task that runs the keep-alive process at Windows sign-in. Docker and the manager start with the distribution because the manager container uses `restart: unless-stopped`.
+- The helper's `start` boots the distribution, keeps a hidden keep-alive process open and starts the manager. Its `install` does the same once the first start is done.
+- Its `autostart enable` registers a scheduled task that does the same at Windows sign-in: it runs `thoric start`, then the keep-alive process. Its output goes to the distribution's journal, which `journalctl -t thoric` shows.
 
-The helper's `stop` stops the manager and shuts the distribution down.
+The helper's `stop` stops the manager with `thoric stop` and shuts the distribution down. Docker starts with the distribution and brings back the containers that were running, since the manager and the desktops use `restart: unless-stopped`; a container stopped on purpose stays stopped, the manager after `stop` too, which is why `start` and the task run `thoric start`. A task registered by a helper before that ran only the keep-alive process; the helper's `start` registers it again.
 
 ## Access from other devices
 
@@ -129,6 +129,20 @@ New-NetFirewallRule -Name Thoric -DisplayName Thoric -Direction Inbound -Protoco
 
 [Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking) covers both modes.
 
+### HTTPS
+
+The [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan) of the installation guide runs in the package too. The package's `/opt/thoric/compose.yml` is the guide's `compose.ghcr.yml`, so run its Compose commands from `/opt/thoric` without `-f compose.ghcr.yml`. Set the guide's values with `thoric settings`, `COMPOSE_PROFILES=https` among them, without which `thoric start`, `stop` and `update` leave Caddy alone, then run `thoric start`, which recreates the manager with them and starts Caddy.
+
+Caddy makes a certificate authority of its own, which every device that opens the dashboard has to trust. In PowerShell on Windows, copy its certificate out of the distribution and trust it for your Windows account, which Windows asks you to confirm:
+
+```powershell
+wsl -d Thoric -- sh -c "cd /opt/thoric && docker compose cp https:/data/caddy/pki/authorities/local/root.crt /tmp/caddy-root.crt"
+Copy-Item \\wsl.localhost\Thoric\tmp\caddy-root.crt $HOME\Downloads\caddy-root.crt
+Import-Certificate -FilePath $HOME\Downloads\caddy-root.crt -CertStoreLocation Cert:\CurrentUser\Root
+```
+
+Edge and Chrome use that list; Firefox keeps its own, under **Certificates** in its settings. Bring `caddy-root.crt` from `Downloads` to the other devices and trust it there as their system describes. They reach the HTTPS port through Windows once `lan enable -Port 8443` opens it, see above.
+
 ## Everyday commands
 
 Inside the distribution, `thoric` manages the installation:
@@ -138,9 +152,9 @@ Inside the distribution, `thoric` manages the installation:
 | `thoric start` | Starts Docker if needed, downloads the manager if it is missing and starts it. |
 | `thoric status` | Shows the Compose services, the dashboard address and who can reach it. |
 | `thoric logs` | Shows the manager's recent log. |
-| `thoric update` | Moves the manager, its `compose.yml` and the `thoric` command to the newest release, pulls the catalog images already downloaded, then recreates the manager. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
+| `thoric update` | Moves the manager, its `compose.yml` and the `thoric` command to the newest release and recreates the manager, going back when the new one does not answer, then pulls the catalog images already downloaded in the new manager's version. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
 | `thoric settings` | Opens `/opt/thoric/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `thoric restart` afterwards. The dashboard changes some settings itself, see [Settings from the dashboard](#settings-from-the-dashboard). |
-| `thoric doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and registry reachability. |
+| `thoric doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and whether Docker reaches the registry, see [Troubleshooting](#troubleshooting). |
 | `thoric open` | Opens the dashboard in the Windows browser. |
 | `thoric mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
@@ -148,11 +162,13 @@ Tab completes the commands: type `thoric re` and press Tab for `restart`. The pa
 
 `thor` is a short name for the same command: `thor status` is `thoric status`, and Tab completes it too.
 
-The installation files live in `/opt/thoric`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard), and `.env.previous` after a settings change from the dashboard. [`thoric update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/thoric`.
+The installation files live in `/opt/thoric`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard), and `.env.previous` after a settings change from the dashboard. [`thoric update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and [HTTPS](#https); run the Compose commands from `/opt/thoric`, without the guide's `-f compose.ghcr.yml`, since `compose.yml` there is that file.
 
 ## Update
 
-`thoric update` looks up the newest release on GitHub, downloads its manager, writes it to `MANAGER_IMAGE` in `.env` and recreates the manager. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. In the same step it downloads the catalog images you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with their usual catalog reference, `ubuntu-xfce:24.04`, which containers and images record.
+`thoric update` looks up the newest release on GitHub, downloads its manager, brings that release's installation files, writes the manager to `MANAGER_IMAGE` in `.env` and recreates it. It never moves to a release older than the installed one, and leaves `.env` as it was when the lookup or the download fails. Once the new manager answers its health check, it downloads the catalog images you already have again, in the version the new manager uses: a release manager takes the images published with it, such as `ubuntu-xfce:1.2.0`, and tags them with their usual catalog reference, `ubuntu-xfce:24.04`, which containers and images record. The image the reference named before goes by the rules of the dashboard's update button, see [Update the images](INSTALLATION.md#update-the-images): only once nothing needs it, never forced, and the update says which ones stay.
+
+The update waits up to three minutes for the new manager to answer. A manager that does not start, for example because it refuses the database, would otherwise leave the dashboard gone. So when it does not answer, or the update stops for any other reason after it began changing files, the update prints the manager's last log lines, puts `.env` and the installation files back as they were, recreates the previous manager and fails. The catalog images stay as they were too. A newer `thoric` command and the units of [Update from the dashboard](#update-from-the-dashboard) stay, since they work with earlier managers as well.
 
 A `MANAGER_IMAGE` set by hand to anything other than a release of `ghcr.io/co3moz/thoric`, such as `edge`, which follows `master` (see [Edge builds](#edge-builds)), `latest`, which names the newest release, or a digest, is only pulled again. To return to releases, set it to one with `thoric settings`, for example `ghcr.io/co3moz/thoric:1.2.0`, and run `thoric update`.
 
@@ -191,7 +207,7 @@ Then set `MANAGER_IMAGE` to that release, as described above, and run `thoric up
 
 ### Update from the dashboard
 
-The manager looks up the newest release on GitHub when it starts and every six hours, and at once when you select **Check now** on the dashboard's **Management** page. When one is newer than the manager, the sidebar and that page name it, link to its notes and offer **Update**. **Update** runs the same `thoric update` in the distribution, as root: it moves `MANAGER_IMAGE` in `.env` to that release, brings the release's installation files and command, recreates the manager and downloads the catalog images you already have again. Containers keep running. The job's log is the command's output. The dashboard reloads once the new manager answers, and asks you to sign in again, since sessions end with the old manager; the new manager follows the rest of the update in the same job. The dashboard waits for running jobs to finish first, since they would end with the manager.
+The manager looks up the newest release on GitHub when it starts and every six hours, and at once when you select **Check now** on the dashboard's **Management** page. When one is newer than the manager, the sidebar and that page name it, link to its notes and offer **Update**. **Update** runs the same `thoric update` in the distribution, as root: it brings the release's installation files and command, moves `MANAGER_IMAGE` in `.env` to that release, recreates the manager and, once it answers, downloads the catalog images you already have again. Containers keep running. The job's log is the command's output. When the new manager does not answer, the update [goes back](#update) to the previous one, which then shows the job as failed with that log. The dashboard reloads once the new manager answers, and asks you to sign in again, since sessions end with the old manager; the new manager follows the rest of the update in the same job. The dashboard waits for running jobs to finish first, since they would end with the manager.
 
 The manager cannot reach the distribution from its container, so the two meet in `/opt/thoric/update`, which `compose.yml` mounts into the manager at `/update`. The manager leaves a `request` there, `thoric-update.path` notices it and starts `thoric-update.service`, which renames it to `started`, writes the command's output to `log` and how it ended to `exit`. The request only names the dashboard's job; what runs is always `/usr/local/bin/thoric update`. `systemctl status thoric-update.service` and `/opt/thoric/update/log` show the last update. The dashboard offers **Update** once that folder holds `watched`, which the package and an update write when they install the two units. On another installation the sidebar only names the release.
 
@@ -262,7 +278,7 @@ WSL reads these settings only when the virtual machine starts, and the helper's 
 wsl --shutdown
 ```
 
-The manager comes back on its own; containers do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `thoric doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `thoric doctor` warns when it is below 8 GB.
+When Docker starts with the distribution, the manager and the containers that were running come back on their own, since they use `restart: unless-stopped`; a container you stopped stays stopped. Their running applications and memory are lost, as with any restart of a computer. Afterwards the dashboard's **MEMORY** figure and `thoric doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `thoric doctor` warns when it is below 8 GB.
 
 A container without a memory limit can use all of the virtual machine's memory. When that runs out, Linux ends processes inside the virtual machine, which can include the manager or another container; Windows itself stays protected by the limit above. Give containers that run heavy applications a memory limit when you [create them](USAGE.md#create-and-connect) or change their settings. A limit is a ceiling, not a reservation: memory a container does not use stays available to the rest.
 
@@ -277,7 +293,7 @@ To change them later, choose **Move its disk to another folder** or **Change its
 & ([scriptblock]::Create((irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1))) resize 200GB
 ```
 
-WSL changes a disk only while nothing has it attached, and it keeps a stopped distribution's disk attached until the WSL virtual machine shuts down. So both stop the manager and run `wsl --shutdown`, which stops every WSL distribution; when others are running, they name them and ask first. Then they change the disk and start Thoric again. The manager comes back on its own; containers do not, so start them again from the dashboard. A move to another drive copies the whole disk, which takes a while for a large one, and the folder must not hold a disk already.
+WSL changes a disk only while nothing has it attached, and it keeps a stopped distribution's disk attached until the WSL virtual machine shuts down. So both stop the manager and run `wsl --shutdown`, which stops every WSL distribution; when others are running, they name them and ask first. Then they change the disk and start Thoric again. The containers that were running come back when Docker starts, as after `wsl --shutdown` above, with their running applications and memory lost. A move to another drive copies the whole disk, which takes a while for a large one, and the folder must not hold a disk already.
 
 A smaller maximum works only while the data still fits. `thoric doctor` shows the space left before the maximum and warns below 10 GB.
 
@@ -307,6 +323,63 @@ sudo systemctl mask nftables
 ```
 
 The `thoric-firewall` service repairs the damage when the rules disappear anyway. Every 10 seconds it checks that each Docker network still has its rule in Docker's `DOCKER-FORWARD` chain; when one is missing twice in a row, it restarts Docker. Docker runs with `live-restore`, so containers and the manager keep running, but an operation talking to Docker at that moment, such as a script whose output is being streamed, can fail. `journalctl -u thoric-firewall` lists the repairs and `thoric doctor` shows the current state.
+
+## Troubleshooting
+
+Start with `thoric doctor` inside the distribution and `thoric status`, which says whether the manager answers inside it. When it answers there but not in the Windows browser, the cause is between Windows and the distribution.
+
+### Docker behind a proxy
+
+Docker in the distribution downloads the manager and the desktop images itself, as a systemd service. It takes no proxy from your shell, from `.bashrc` or from Windows, so a network that allows the internet only through a proxy lets `curl` in the shell through while `thoric start` and `thoric update` fail to download. `thoric doctor` asks Docker to look up the manager's image in the registry, which downloads nothing, and says whether Docker reaches it and through which proxy. Give Docker the proxy in a drop-in file, with your proxy's address:
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf <<'EOF'
+[Service]
+Environment="HTTP_PROXY=http://proxy.example:3128"
+Environment="HTTPS_PROXY=http://proxy.example:3128"
+Environment="NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+Docker runs with `live-restore`, so containers keep running across the restart. `docker info` then names the proxy, with any user name and password hidden, and `thoric doctor` checks again. A proxy that asks for a password takes it in the address, `http://user:password@proxy.example:3128`; the file keeps it readable for every user of the distribution, which is the one user the package creates.
+
+`PROXY_URL` in `.env` is another thing: the proxy the programs in desktops go through, see [Proxy](USAGE.md#proxy). It does not reach Docker's downloads, nor the manager's own requests, such as its look for a newer release on GitHub.
+
+### The dashboard's port is taken on Windows
+
+The dashboard answers at `localhost` on Windows through WSL's forwarding, on the port of `PORT` in `.env`, 8080 unless the first start chose another. When a Windows program already listens on that port, the browser reaches that program instead, or nothing; under mirrored networking, `thoric start` fails with `address already in use`. Windows can also reserve ranges of ports for Hyper-V, which no program gets. In PowerShell, see which program has the port, and which ranges are reserved:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080 -State Listen | ForEach-Object { Get-Process -Id $_.OwningProcess }
+```
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+`wslrelay` is WSL's own forwarding and means the port is Thoric's. For any other program, or a reserved range, choose another port: set `PORT` with `thoric settings`, run `thoric restart`, and open the dashboard on the new port. When other devices reach the dashboard, run the helper's `lan enable` again for the new port.
+
+### Localhost forwarding is off
+
+Under NAT networking, the WSL default, Windows reaches a port of the distribution at `localhost` only while localhost forwarding is on. `localhostForwarding=false` under `[wsl2]` in `%UserProfile%\.wslconfig` turns it off for every distribution; `thoric status` then says the manager answers while the Windows browser cannot connect. Remove that line, or set it to `true`, and run `wsl --shutdown`, which stops every distribution, then the helper's `start`. Mirrored networking needs no forwarding; `thoric doctor` names the mode in use.
+
+### Docker does not start
+
+`thoric start` then stops with `Docker did not become ready`, and `thoric doctor` shows `docker:` as `failed` or `inactive`. Docker says why in its journal:
+
+```bash
+journalctl -u docker -b --no-pager | tail -n 40
+```
+
+- `systemd:` in `thoric doctor` other than `running` or `degraded`: Docker starts with systemd, which `/etc/wsl.conf` turns on with `systemd=true` under `[boot]`, as the package installs it. Run `wsl --shutdown` and start Thoric again after changing it.
+- A `daemon.json` edited by hand that Docker refuses: `sudo dockerd --validate --config-file /etc/docker/daemon.json` names the error.
+- `iptables` errors such as `No chain/target/match by that name`: another distribution cleared the firewall, see [Docker in other WSL distributions](#docker-in-other-wsl-distributions).
+- A full disk: `thoric doctor` shows the space left, see [Disk](#disk).
+
+After the cause is fixed, `sudo systemctl restart docker` and `thoric start` bring Thoric back.
 
 ## Build the package
 

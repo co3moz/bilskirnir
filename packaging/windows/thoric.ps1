@@ -27,6 +27,10 @@ function Invoke-Thoric {
     # -Address, -TaskUser and -Log are what 'lan' hands the copy of this script that runs as administrator.
     $ErrorActionPreference = "Stop"
     $taskName = "Thoric keep-alive"
+    # What the auto-start task runs in the distribution: 'thoric start' first, since a manager that 'stop'
+    # or 'thoric stop' stopped stays down under Compose's 'restart: unless-stopped', then the keep-alive
+    # process. The output of 'thoric start' goes to the journal, 'journalctl -t thoric'.
+    $autoStart = "thoric start 2>&1 | logger -t thoric; exec /usr/lib/wsl/keepalive.sh"
     # Under NAT, a task with administrator rights points the port proxy at the address in this file, which
     # 'start' and the keep-alive task write without them.
     $lanTaskName = "Thoric LAN"
@@ -43,7 +47,7 @@ Usage: thoric.ps1 [command] [options]
 Without a command it offers to install Thoric, or lists what it can do with an installed one.
 
   install                             Install or update WSL when needed, then download the latest package,
-                                      register it and run its first-start setup
+                                      register it, run its first-start setup and start it
       -Location D:\WSL\Thoric     Keep the distribution's disk in this folder
       -VhdSize 200GB                  Set the disk's maximum size (1 TB unless given)
       -Package .\thoric.wsl       Install this package file instead of downloading one
@@ -72,7 +76,8 @@ values for .wslconfig, which WSL reads when its virtual machine starts. A newly 
 needs a restart of Windows before the package installs.
 
 WSL stops a distribution shortly after its last Windows-started process ends, so 'start' and the
-auto-start task keep a hidden keep-alive process open while Docker and the manager run inside.
+auto-start task keep a hidden keep-alive process open while Docker and the manager run inside. Both
+run 'thoric start' too, which brings back a manager that 'stop' stopped.
 
 WSL lets go of a stopped distribution's disk only when its virtual machine shuts down, so 'move'
 and 'resize' shut WSL down, asking first when other distributions are running, and then start
@@ -263,9 +268,11 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         return 8080
     }
     function Test-Loopback { param([string]$Bind) return ($Bind -like "127.*" -or $Bind -eq "localhost") }
-    # Matches this distribution's keep-alive only, as started here or by the auto-start task.
+    # Matches this distribution's keep-alive only, as started here or by the auto-start task of this
+    # helper or an earlier one. It starts the keep-alive process alone, since 'start' runs 'thoric start'
+    # in this window right after.
     function Start-KeepAlive {
-        $running = Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" | Where-Object { $_.CommandLine -like "*-d $Distro -- /usr/lib/wsl/keepalive.sh*" }
+        $running = Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" | Where-Object { $_.CommandLine -like "*-d $Distro -- *keepalive.sh*" }
         if (-not $running) {
             Start-Process -FilePath "wsl.exe" -ArgumentList @("-d", $Distro, "--", "/usr/lib/wsl/keepalive.sh") -WindowStyle Hidden | Out-Null
         }
@@ -280,12 +287,24 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
                 "if (`$line -match 'inet ([0-9.]+)/') { Set-Content -LiteralPath '$file' -Value `$Matches[1]; Start-ScheduledTask -TaskName '$lanTaskName'; break }; Start-Sleep -Seconds 2 }"
             $actions += New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -Command `"$lookup`""
         }
-        $actions += New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $Distro -- /usr/lib/wsl/keepalive.sh"
+        $actions += New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $Distro -- sh -c `"$autoStart`""
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
         $settings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName $taskName -Action $actions -Trigger $trigger -Settings $settings -Force | Out-Null
     }
+    # A task an earlier helper registered runs only the keep-alive process, so a stopped manager stayed
+    # down; registering it again brings 'thoric start'.
+    function Update-KeepAlive {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($task -and -not ($task.Actions | Where-Object { $_.Arguments -like "*thoric start*" })) { Register-KeepAlive }
+    }
+    # Whether the first start finished: it writes the settings last.
+    function Test-Settings {
+        & wsl.exe -d $Distro -- test -f /opt/thoric/.env
+        return $LASTEXITCODE -eq 0
+    }
     function Start-Thoric {
+        Update-KeepAlive
         Start-KeepAlive
         Invoke-Wsl @("-d", $Distro, "--", "thoric", "start")
         try { Update-PortProxy } catch { Write-Warning "Other devices may not reach Thoric: $($_.Exception.Message)" }
@@ -639,8 +658,24 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             if ($VhdSize) { $arguments += @("--vhd-size", $VhdSize) }
             try { Invoke-Wsl $arguments } finally { if (-not $Package) { Remove-Item $file -ErrorAction SilentlyContinue } }
             Write-Host "The distribution is registered. Its first start asks for the username and password used by Linux and the dashboard."
-            Invoke-Wsl @("-d", $Distro)
-            Write-Host "Run the helper again to start Thoric, keep it running, open it to other devices or move its disk."
+            # The first start ends in a shell, whose last command gives the exit code.
+            & wsl.exe -d $Distro
+            if (-not (Test-Settings)) {
+                Write-Host "The first start did not finish. Run 'wsl -d $Distro' to finish it, then the helper's 'start'."
+                return
+            }
+            # WSL stops the distribution shortly after that shell ends, and Thoric with it.
+            Write-Host "Starting Thoric and keeping it running."
+            Start-Thoric
+            if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+                if ((Read-Host "Start Thoric at every Windows sign-in too? Enter for yes, 'no' to skip") -in "", "y", "yes") {
+                    Register-KeepAlive
+                    Write-Host "Thoric will start when you sign in to Windows; 'autostart disable' turns that off."
+                } else {
+                    Write-Host "After Windows restarts, run the helper again and choose to start Thoric, or 'autostart enable' for every sign-in."
+                }
+            }
+            Write-Host "Run the helper again to stop Thoric, open it to other devices or move its disk."
         }
         "start" {
             if (-not (Test-Registered)) { throw "The $Distro distribution is not registered. Run 'install' first." }
@@ -674,7 +709,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
             switch ($Option.ToLower()) {
                 "enable" {
                     Register-KeepAlive
-                    Write-Host "Thoric will keep running after you sign in to Windows."
+                    Write-Host "Thoric will start and keep running after you sign in to Windows."
                 }
                 "disable" {
                     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
