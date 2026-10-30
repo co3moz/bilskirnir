@@ -172,7 +172,10 @@ export const useImageLayers = (id: string) =>
     meta: { quiet: true },
   })
 
-/** Every container's desktop MCP servers, as the manager last read them. */
+/**
+ * Every container's desktop MCP servers, as the manager last read them. Their state changes inside
+ * the desktops, which the event stream does not report, so a page that shows them polls.
+ */
 export const useMcpServers = (poll = true) =>
   useQuery({
     queryKey: ["mcp", "servers"],
@@ -180,11 +183,15 @@ export const useMcpServers = (poll = true) =>
     refetchInterval: poll ? LIST_INTERVAL : false,
   })
 
+/**
+ * The MCP endpoints. They change with this page's own actions and with the jobs that create and
+ * delete containers, which the event stream reports, so they are polled slowly while it is up.
+ */
 export const useMcpEndpoints = (poll = true) =>
   useQuery({
     queryKey: ["mcp", "endpoints"],
     queryFn: () => api<{ items: McpEndpoint[] }>(endpointApi()).then((data) => data.items),
-    refetchInterval: poll ? LIST_INTERVAL : false,
+    refetchInterval: () => streamedInterval(poll),
   })
 
 /** The tools an endpoint exposes, exactly as an agent there sees them. */
@@ -214,5 +221,16 @@ export const useTemplates = (list: string | null | undefined) =>
     meta: { quiet: true },
   })
 
-/** The desktop MCP servers a template declares, for its card. */
-export const refreshAll = () => queryClient.invalidateQueries()
+/**
+ * Reads again what an action changed by itself: the jobs once it queued one, or the lists it
+ * changed. What a job changes is read when its end is heard on the event stream (`staleKeys`), or
+ * by the lists' own polling while the stream is down, so nothing else, such as the template list
+ * from another host, is asked for again.
+ */
+export const refreshLists = (...keys: string[]) =>
+  Promise.all(
+    keys.map((key) =>
+      // The MCP pages keep several lists under one key.
+      queryClient.invalidateQueries({ queryKey: [key], exact: key !== "mcp" })
+    )
+  )

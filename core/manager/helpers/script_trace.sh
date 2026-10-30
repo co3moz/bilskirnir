@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Read by bash through BASH_ENV before a build or compose setup script runs. Each time the script
 # reaches a line further down than any before, `THORIC_LINE=<line>` goes to the stderr the script
 # started with, which the manager turns into the job's progress and leaves out of its log. Only

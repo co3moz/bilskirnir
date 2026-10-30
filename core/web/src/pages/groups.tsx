@@ -3,7 +3,7 @@ import { RiAddLine, RiArrowLeftLine, RiGroupLine, RiLinkUnlinkM } from "@remixic
 
 import { ConceptIcon, ConceptMedia } from "@/components/concept"
 import { AliasBadges, ContainerCard } from "@/components/container-card"
-import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
+import { DockerAlert, ListFailed, listFailed, PageBody, SectionHeading } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -217,6 +217,8 @@ export function GroupsPage() {
             </Card>
           ))}
         </div>
+      ) : listFailed(containers) ? (
+        <ListFailed query={containers} />
       ) : open !== undefined ? (
         <GroupMembers
           name={open}

@@ -1,7 +1,7 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { href, parseRoute } from "../src/lib/route"
+import { href, pageKey, parseRoute } from "../src/lib/route"
 
 test("page links survive a reload and unknown pages fall back to the dashboard", () => {
   for (const page of [
@@ -79,4 +79,14 @@ test("the activity page keeps its container, caller and open call in its link", 
   assert.deepEqual(parseRoute("#/activity?entry=-3"), { page: "activity" })
   // Other pages ignore what follows a question mark.
   assert.deepEqual(parseRoute("#/jobs?x=1"), { page: "jobs" })
+})
+
+test("a dialog stays while its page filters or opens an item, and closes with another page", () => {
+  const key = (hash: string) => pageKey(parseRoute(hash))
+  assert.equal(key("#/activity"), key("#/activity?container=c1&entry=7"))
+  assert.equal(key("#/files"), key("#/files/c1"))
+  assert.equal(key("#/groups"), key("#/groups/build"))
+  assert.notEqual(key("#/activity"), key("#/jobs"))
+  // Each desktop is a page of its own.
+  assert.notEqual(key("#/desktop/c1"), key("#/desktop/c2"))
 })

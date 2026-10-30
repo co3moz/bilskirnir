@@ -1,12 +1,13 @@
 """The Windows launcher, packaging/windows/thoric.ps1, which releases attach next to the package
-and nothing else runs before a user does: that Windows PowerShell 5.1 reads it as written, that it
-parses, that its administrator side, the copy of itself that 'lan' starts through UAC, runs
+and nothing else runs before a user does: that Windows PowerShell 5.1 reads it as written, that its
+auto-start brings the manager back, that it parses, that its administrator side, the copy of itself that 'lan' starts through UAC, runs
 nothing from the distribution, whose user has passwordless sudo, and that the settings it offers
 for .wslconfig fit the computer and leave the rest of the file alone.
 
 All but the first need PowerShell: pwsh on Linux, or Windows PowerShell from Windows or WSL.
 """
 
+import fnmatch
 import json
 from pathlib import Path
 import re
@@ -61,6 +62,24 @@ def call(*expressions, functions=("Get-WslSuggestion", "Read-WslConfig", "Add-Ws
 
 
 class WindowsLauncherTest(unittest.TestCase):
+    def test_auto_start_brings_a_stopped_manager_back(self):
+        # 'stop' runs 'thoric stop', after which Compose's 'restart: unless-stopped' leaves the manager
+        # down, so the task runs 'thoric start' before it keeps the distribution alive with the package's
+        # keep-alive process.
+        script = SCRIPT.read_text()
+        command = re.search(r'(?m)^    \$autoStart = "([^"]+)"$', script).group(1)
+        self.assertRegex(command, r"^thoric start\b[^;]*; exec (\S+)$")
+        keepalive = command.rsplit(" ", 1)[1]
+        self.assertRegex((ROOT / "packaging/wsl/Dockerfile").read_text(),
+                         rf"(?m)^COPY --chmod=0755 packaging/wsl/keepalive\.sh {re.escape(keepalive)}$")
+        self.assertIn('-Argument "-d $Distro -- sh -c `"$autoStart`""', script)
+        # 'start' finds the keep-alive of this task, and of the tasks earlier helpers registered, by its
+        # command line, which is matched as PowerShell's -like does, ignoring case.
+        pattern = re.search(r'\$_\.CommandLine -like "([^"]+)"', script).group(1).replace("$Distro", "Thoric")
+        for line in (f'"wsl.exe" -d Thoric -- sh -c "{command}"', f"wsl.exe -d Thoric -- {keepalive}"):
+            self.assertTrue(fnmatch.fnmatchcase(line.lower(), pattern.lower()), line)
+        self.assertFalse(fnmatch.fnmatchcase(f"wsl.exe -d Thoric2 -- {keepalive}".lower(), pattern.lower()))
+
     def test_windows_powershell_reads_it_as_written(self):
         # Windows PowerShell 5.1 reads a script without a byte order mark in the ANSI code page, so any
         # character outside ASCII would reach users garbled.

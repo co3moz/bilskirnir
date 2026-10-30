@@ -84,9 +84,19 @@ export function resolveRef(schema: unknown, root: JsonSchema): JsonSchema {
   return current
 }
 
-/** Resolve refs and simplify nullable types and unions, so the right field can be picked. */
-export function normalizeSchema(schema: unknown, root: JsonSchema): JsonSchema {
+/**
+ * Resolve refs and simplify nullable types and unions, so the right field can be picked. A ref met
+ * again inside its own union, as a recursive type such as a tree that may be null has, is taken
+ * without its union, so the schema of a desktop server cannot recurse without end.
+ */
+export function normalizeSchema(
+  schema: unknown,
+  root: JsonSchema,
+  within: readonly string[] = []
+): JsonSchema {
+  const ref = asSchema(schema).$ref
   let current = resolveRef(schema, root)
+  if (typeof ref === "string" && within.includes(ref)) current = omit(current, "anyOf", "oneOf")
   let nullable = false
   if (Array.isArray(current.type)) {
     const types = current.type.filter((type) => type !== "null")
@@ -95,7 +105,8 @@ export function normalizeSchema(schema: unknown, root: JsonSchema): JsonSchema {
   }
   const union = current.anyOf ?? current.oneOf
   if (Array.isArray(union)) {
-    const options = union.map((option) => normalizeSchema(option, root))
+    const path = typeof ref === "string" ? [...within, ref] : within
+    const options = union.map((option) => normalizeSchema(option, root, path))
     const others = options.filter((option) => option.type !== "null")
     nullable ||= others.length !== options.length
     if (others.length === 1) {

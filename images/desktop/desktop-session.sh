@@ -6,6 +6,7 @@ cleanup() {
     rm -f /run/desktop/ready
     local pids
     pids=$(jobs -pr)
+    # shellcheck disable=SC2086 # one argument per process ID
     if [[ -n "$pids" ]]; then kill $pids 2>/dev/null || true; fi
     wait || true
 }

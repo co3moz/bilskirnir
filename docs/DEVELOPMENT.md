@@ -277,6 +277,14 @@ Check the Python code, the bundled stdio bridge, the manager's helpers and depen
 python3 tests/unit.py
 ```
 
+Check the shell scripts, those of the WSL package and the desktop image and the manager's script trace, with [ShellCheck](https://www.shellcheck.net). The script finds them by their name or their first line and runs the ShellCheck release it names in Docker, as the checks do:
+
+```bash
+bash tests/shellcheck.sh
+```
+
+A finding that is wrong for the code is turned off on the line it fires on, with the reason beside it, such as `# shellcheck disable=SC2086 # one argument per process ID`, never for a whole file. A script that bash reads without running it names its shell in a `# shellcheck shell=bash` line.
+
 Validate both installation manifests:
 
 ```bash

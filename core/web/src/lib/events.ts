@@ -65,6 +65,8 @@ const changes: Record<string, string[]> = {
   "image-import": ["images"],
   "volume-import": ["volumes"],
   "volume-copy": ["volumes"],
+  // A restore creates containers, images, volumes and endpoints from the backup.
+  restore: ["containers", "images", "volumes", "mcp"],
   // Archives, downloads and scripts leave the lists as they were.
   "image-export": [],
   "volume-export": [],
