@@ -43,7 +43,7 @@ Usage: thoric <command>
   status    Show the manager state and the dashboard address
   logs      Show the manager's recent log output
   update    Move the manager, its compose.yml and this command to the newest release, recreate the manager (or go back when it does not answer), then pull downloaded desktop images
-  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and registry reachability
+  doctor    Check Docker, its firewall, memory, disk, GPU access, settings and whether Docker reaches the registry
   open      Open the dashboard in the Windows browser
   mcp       Show the agent (MCP) endpoint, its token and client configuration
   settings  Edit /opt/thoric/.env, then run 'thoric restart'
@@ -622,9 +622,32 @@ case ${1:-help} in
         if [[ $reach == other* && $networking == nat ]]; then printf '; other devices need mirrored networking or a port proxy on Windows'; fi
         echo
         if [[ -f $INSTALL/.env ]]; then echo "settings:  $INSTALL/.env"; grep -E '^(WSL_GPU|NVIDIA_COMPUTE|GPU_ADAPTER|AUTH_MODE|ADMIN_USERNAME|PORT|BIND_ADDRESS|ALLOWED_HOSTS|ROOT_MCP_ENABLED|MCP_ENABLED|MCP_AUTH_MODE)=' "$INSTALL/.env" | sed 's/^/           /' || true; else echo "settings:  missing"; fi
-        # The registry answers an anonymous /v2/ with 401, so any HTTP answer means it is reachable.
-        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://ghcr.io/v2/ || true)
-        if [[ $code =~ ^[1-5][0-9][0-9]$ ]]; then echo "registry:  ghcr.io reachable (HTTP $code)"; else echo "registry:  ghcr.io not reachable (no answer within 10 seconds)"; fi
+        # Docker downloads images itself, as a service, with the proxy its own settings give it and
+        # none of this shell's. So Docker looks up the manager's image: the Engine API's
+        # /distribution resolves its manifest in the registry and downloads nothing. A registry that
+        # answers with an error is reachable all the same.
+        image=""
+        if [[ -f $INSTALL/.env ]]; then image=$(setting MANAGER_IMAGE); fi
+        image=${image:-$MANAGER_REPOSITORY:latest}
+        registry=${image%%/*}
+        proxy=$(docker info --format '{{.HTTPSProxy}}' 2>/dev/null || true)
+        via="no proxy"
+        if [[ -n $proxy ]]; then via="proxy $proxy"; fi
+        answer=$(curl -sS --max-time 60 -w '\n%{http_code}' --unix-socket /var/run/docker.sock \
+            "http://localhost/distribution/$image/json" 2>&1 || true)
+        code=${answer##*$'\n'}
+        reason=$(sed -n 's/.*"message": *"\(.*\)".*/\1/p' <<<"$answer" | sed 's/\\"/"/g' | head -n1 | cut -c1-200)
+        case $code in
+            200) echo "registry:  Docker reaches $registry ($via)" ;;
+            4[0-9][0-9]) echo "registry:  Docker reaches $registry ($via), which answers about $image: $reason" ;;
+            *)
+                printf 'registry:  Docker does not reach %s (%s): %s' "$registry" "$via" "${reason:-Docker gave no answer}"
+                if [[ -z $proxy && -n ${HTTPS_PROXY:-${https_proxy:-}} ]]; then
+                    printf '. This shell has a proxy and Docker none'
+                fi
+                echo "; see 'Docker behind a proxy' in docs/WSL_PACKAGE.md"
+                ;;
+        esac
         ;;
     open)
         if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi

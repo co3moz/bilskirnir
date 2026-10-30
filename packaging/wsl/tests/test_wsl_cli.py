@@ -1090,3 +1090,68 @@ class AccessTest(unittest.TestCase):
             with self.subTest(settings=settings):
                 port = "9090" if "9090" in settings else "8080"
                 self.assertEqual(self.dashboard(settings), [f"Dashboard: http://localhost:{port}, reachable from {reach}"])
+
+
+# docker and curl for `thoric doctor`: Docker's proxy is DOCKER_PROXY, and the Engine API answers
+# ANSWER with the status CODE; curl records the address it was given. Everything else fails.
+DOCTOR_STUB = """#!/usr/bin/env bash
+case "$(basename "$0") $*" in
+    "docker info --format {{.HTTPSProxy}}") printf '%s\n' "${DOCKER_PROXY:-}" ;;
+    "docker info "*) echo "engine 29.0.0" ;;
+    "curl "*) printf '%s\n' "${*: -1}" >> "$CALLS"; printf '%s\n%s' "$ANSWER" "$CODE" ;;
+    *) exit 1 ;;
+esac
+"""
+
+
+@unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "needs bash on a POSIX system")
+class DoctorTest(unittest.TestCase):
+    """`thoric doctor` asks Docker itself whether it reaches the registry, since Docker downloads
+    images as a service with a proxy of its own, never the shell's."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.install = self.dir / "install"
+        self.install.mkdir()
+        (self.install / ".env").write_text(f"MANAGER_IMAGE='{REPOSITORY}:1.2.3'\n")
+        self.cli = self.dir / "thoric"
+        self.cli.write_text(CLI.read_text().replace("\nINSTALL=/opt/thoric\n", f"\nINSTALL={self.install}\n"))
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        for name in ("docker", "curl", "sudo", "systemctl"):
+            (bin_dir / name).write_text(DOCTOR_STUB)
+            (bin_dir / name).chmod(0o755)
+        self.calls = self.dir / "calls"
+        self.env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(self.dir), "CALLS": str(self.calls)}
+
+    def registry(self, code, answer="", **env):
+        result = subprocess.run(["bash", str(self.cli), "doctor"], env={**self.env, "CODE": code, "ANSWER": answer, **env},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return [line for line in result.stdout.splitlines() if line.startswith("registry:")]
+
+    def test_docker_looks_up_the_managers_image_in_the_registry(self):
+        self.assertEqual(self.registry("200", '{"Descriptor":{}}'), ["registry:  Docker reaches ghcr.io (no proxy)"])
+        # The Engine API's lookup of the manager in .env, which downloads nothing.
+        self.assertEqual(self.calls.read_text(), f"http://localhost/distribution/{REPOSITORY}:1.2.3/json\n")
+        # A registry that answers with an error is reachable, through the proxy Docker reports.
+        proxy = "http://xxxxx:xxxxx@proxy.example:3128"
+        self.assertEqual(
+            self.registry("404", '{"message":"manifest unknown"}', DOCKER_PROXY=proxy),
+            [f"registry:  Docker reaches ghcr.io (proxy {proxy}), which answers about {REPOSITORY}:1.2.3: manifest unknown"],
+        )
+
+    def test_a_docker_without_the_shells_proxy_is_named(self):
+        # As Docker answers, with the quotes in its message escaped.
+        answer = '{"message":"Get \\"https://ghcr.io/v2/\\": dial tcp: lookup ghcr.io: no such host"}'
+        self.assertEqual(
+            self.registry("500", answer, HTTPS_PROXY="http://proxy.example:3128"),
+            ['registry:  Docker does not reach ghcr.io (no proxy): Get "https://ghcr.io/v2/": dial tcp: lookup ghcr.io: '
+             "no such host. This shell has a proxy and Docker none; see 'Docker behind a proxy' in docs/WSL_PACKAGE.md"],
+        )
+        self.assertEqual(
+            self.registry("000"),
+            ["registry:  Docker does not reach ghcr.io (no proxy): Docker gave no answer; see 'Docker behind a proxy' in "
+             "docs/WSL_PACKAGE.md"],
+        )

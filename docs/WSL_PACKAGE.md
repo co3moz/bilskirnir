@@ -140,7 +140,7 @@ Inside the distribution, `thoric` manages the installation:
 | `thoric logs` | Shows the manager's recent log. |
 | `thoric update` | Moves the manager, its `compose.yml` and the `thoric` command to the newest release and recreates the manager, going back when the new one does not answer, then pulls the catalog images already downloaded in the new manager's version. The dashboard's **Update** runs it too, see [Update from the dashboard](#update-from-the-dashboard). |
 | `thoric settings` | Opens `/opt/thoric/.env` through `sudoedit` in your editor (`VISUAL` or `EDITOR`, nano by default); run `thoric restart` afterwards. The dashboard changes some settings itself, see [Settings from the dashboard](#settings-from-the-dashboard). |
-| `thoric doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and registry reachability. |
+| `thoric doctor` | Checks systemd, Docker, its firewall rules, memory, processors, free disk space, the GPU device, CUDA libraries, who can reach the dashboard with the WSL networking mode, settings and whether Docker reaches the registry, see [Troubleshooting](#troubleshooting). |
 | `thoric open` | Opens the dashboard in the Windows browser. |
 | `thoric mcp` | Shows the agent endpoint, its token and ready-to-paste client settings. |
 
@@ -309,6 +309,63 @@ sudo systemctl mask nftables
 ```
 
 The `thoric-firewall` service repairs the damage when the rules disappear anyway. Every 10 seconds it checks that each Docker network still has its rule in Docker's `DOCKER-FORWARD` chain; when one is missing twice in a row, it restarts Docker. Docker runs with `live-restore`, so containers and the manager keep running, but an operation talking to Docker at that moment, such as a script whose output is being streamed, can fail. `journalctl -u thoric-firewall` lists the repairs and `thoric doctor` shows the current state.
+
+## Troubleshooting
+
+Start with `thoric doctor` inside the distribution and `thoric status`, which says whether the manager answers inside it. When it answers there but not in the Windows browser, the cause is between Windows and the distribution.
+
+### Docker behind a proxy
+
+Docker in the distribution downloads the manager and the desktop images itself, as a systemd service. It takes no proxy from your shell, from `.bashrc` or from Windows, so a network that allows the internet only through a proxy lets `curl` in the shell through while `thoric start` and `thoric update` fail to download. `thoric doctor` asks Docker to look up the manager's image in the registry, which downloads nothing, and says whether Docker reaches it and through which proxy. Give Docker the proxy in a drop-in file, with your proxy's address:
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf <<'EOF'
+[Service]
+Environment="HTTP_PROXY=http://proxy.example:3128"
+Environment="HTTPS_PROXY=http://proxy.example:3128"
+Environment="NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+Docker runs with `live-restore`, so containers keep running across the restart. `docker info` then names the proxy, with any user name and password hidden, and `thoric doctor` checks again. A proxy that asks for a password takes it in the address, `http://user:password@proxy.example:3128`; the file keeps it readable for every user of the distribution, which is the one user the package creates.
+
+`PROXY_URL` in `.env` is another thing: the proxy the programs in desktops go through, see [Proxy](USAGE.md#proxy). It does not reach Docker's downloads, nor the manager's own requests, such as its look for a newer release on GitHub.
+
+### The dashboard's port is taken on Windows
+
+The dashboard answers at `localhost` on Windows through WSL's forwarding, on the port of `PORT` in `.env`, 8080 unless the first start chose another. When a Windows program already listens on that port, the browser reaches that program instead, or nothing; under mirrored networking, `thoric start` fails with `address already in use`. Windows can also reserve ranges of ports for Hyper-V, which no program gets. In PowerShell, see which program has the port, and which ranges are reserved:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080 -State Listen | ForEach-Object { Get-Process -Id $_.OwningProcess }
+```
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+`wslrelay` is WSL's own forwarding and means the port is Thoric's. For any other program, or a reserved range, choose another port: set `PORT` with `thoric settings`, run `thoric restart`, and open the dashboard on the new port. When other devices reach the dashboard, run the helper's `lan enable` again for the new port.
+
+### Localhost forwarding is off
+
+Under NAT networking, the WSL default, Windows reaches a port of the distribution at `localhost` only while localhost forwarding is on. `localhostForwarding=false` under `[wsl2]` in `%UserProfile%\.wslconfig` turns it off for every distribution; `thoric status` then says the manager answers while the Windows browser cannot connect. Remove that line, or set it to `true`, and run `wsl --shutdown`, which stops every distribution, then the helper's `start`. Mirrored networking needs no forwarding; `thoric doctor` names the mode in use.
+
+### Docker does not start
+
+`thoric start` then stops with `Docker did not become ready`, and `thoric doctor` shows `docker:` as `failed` or `inactive`. Docker says why in its journal:
+
+```bash
+journalctl -u docker -b --no-pager | tail -n 40
+```
+
+- `systemd:` in `thoric doctor` other than `running` or `degraded`: Docker starts with systemd, which `/etc/wsl.conf` turns on with `systemd=true` under `[boot]`, as the package installs it. Run `wsl --shutdown` and start Thoric again after changing it.
+- A `daemon.json` edited by hand that Docker refuses: `sudo dockerd --validate --config-file /etc/docker/daemon.json` names the error.
+- `iptables` errors such as `No chain/target/match by that name`: another distribution cleared the firewall, see [Docker in other WSL distributions](#docker-in-other-wsl-distributions).
+- A full disk: `thoric doctor` shows the space left, see [Disk](#disk).
+
+After the cause is fixed, `sudo systemctl restart docker` and `thoric start` bring Thoric back.
 
 ## Build the package
 
