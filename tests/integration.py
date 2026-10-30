@@ -1072,6 +1072,13 @@ try:
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
     image = stdio_tool("screenshot", {"container_id":env_id})["content"][0]
     assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")
+    # A scaled or cropped screenshot says, as text too, how its pixels map back to the desktop.
+    scaled = tool("screenshot", {"container_id":env_id,"max_width":320})
+    placed = scaled["structuredContent"]
+    assert scaled["content"][1]["type"] == "text" and json.loads(scaled["content"][1]["text"]) == placed, scaled["content"][1]
+    assert placed["width"] == 320 and abs(placed["scale"] - 320 / placed["desktop_width"]) < 1e-5 and (placed["origin_x"], placed["origin_y"]) == (0, 0), placed
+    cropped = tool("screenshot", {"container_id":env_id,"region":"40,30,200,100"})["structuredContent"]
+    assert (cropped["width"], cropped["scale"], cropped["origin_x"], cropped["origin_y"]) == (200, 1.0, 40, 30), cropped
     saved = tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg","capture":{"max_width":320}})["structuredContent"]
     assert saved["path"] == "/home/desktop/Downloads/agent-shot.jpg" and saved["bytes"] > 0 and saved["width"] == 320
     assert saved["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-shot.jpg"

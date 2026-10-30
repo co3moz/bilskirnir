@@ -103,7 +103,7 @@ The server currently exposes 77 tools:
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
 
-Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. A result that carries data sends it once, in a content block of its own before the text: `download_file` returns a PNG, JPEG, GIF or WebP picture as an image block and any other file as an embedded resource whose `blob` is the file in base64, while `structuredContent` and the text describe the file without its bytes. `screenshot` and `act_and_observe` return a JPEG image content block with the image size in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
+Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. A result that carries data sends it once, in a content block of its own before the text: `download_file` returns a PNG, JPEG, GIF or WebP picture as an image block and any other file as an embedded resource whose `blob` is the file in base64, while `structuredContent` and the text describe the file without its bytes. `screenshot` and `act_and_observe` return a JPEG image block and `capture_audio` a WAV audio block the same way, with the image's size and place on the desktop, or the sound's levels, as text and in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
 
 ## Build from a template
 
@@ -211,7 +211,7 @@ Stopping a recording turns its frames into `recording.mp4` beside them, an H.264
 
 ## Use the mouse and keyboard
 
-`desktop_input` sends actions through RFB, the VNC protocol, to the same desktop used by the browser. It opens a shared connection, so another viewer can stay connected. Coordinates are desktop pixels; they match a screenshot taken at full resolution, not a scaled or cropped image.
+`desktop_input` sends actions through RFB, the VNC protocol, to the same desktop used by the browser. It opens a shared connection, so another viewer can stay connected. Coordinates are desktop pixels; they match a screenshot taken at full resolution. For a scaled or cropped screenshot, the `scale` and origin it returned map a point of the image back: `x = origin_x + image_x / scale` and `y = origin_y + image_y / scale`.
 
 ```json
 {
@@ -235,7 +235,7 @@ Key chords press the supplied keys together, then release them in reverse order;
 
 Requests allow 1 to 100 actions, up to 10,000 typed characters, single waits or holds of at most 10 seconds and at most 30 seconds of combined waits, holds and gesture delays. The whole action batch is validated against the connected desktop's dimensions before input is sent.
 
-`screenshot` captures the desktop at full resolution by default. `max_width` scales the image down, `region` crops `x,y,width,height` and `window_id` captures one window from `list_windows`. The result's `structuredContent` holds `width`, `height` and `captured_at`. `act_and_observe` sends actions, waits `settle_ms` (default 500) and returns the screenshot together with the input result, which is the shortest loop for driving an application.
+`screenshot` captures the desktop at full resolution by default. `max_width` scales the image down, `region` crops `x,y,width,height` and `window_id` captures one window from `list_windows`. The result's text and `structuredContent` hold `width`, `height`, `captured_at` and where the image sits on the desktop: `scale`, image pixels per desktop pixel, `origin_x` and `origin_y`, the desktop pixel at its top left, and `desktop_width` and `desktop_height`. A part the desktop image cannot tell, such as a window's place without `xwininfo`, is `null`. `desktop_input` takes desktop pixels only, so a point of the image is converted with the formula above rather than sent as it is. MCP clients and models often scale a large image down before the model sees it, which shifts every coordinate read off it; pass `max_width`, such as 1280, so the image arrives at the size the model sees, and the returned `scale` maps it back. `act_and_observe` sends actions, waits `settle_ms` (default 500) and returns the screenshot together with the input result, which is the shortest loop for driving an application.
 
 `save_screenshot` takes the same options under `capture` and writes the JPEG inside the desktop at `path`, an absolute file path in the desktop home, a writable mounted volume or a compose folder, as the desktop user and under the upload destination rules. It returns the file's `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`. An existing file needs `replace=true`. `screenshot` stays a read-only tool; the image it returns reaches the agent, not necessarily the person.
 

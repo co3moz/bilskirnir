@@ -784,7 +784,7 @@ Whatever a desktop serves would appear on the dashboard's address, and a desktop
 
 `POST /api/containers/{id}/screenshots` with `{"path":"/home/desktop/Downloads/clock.jpg","replace":false,"capture":{"max_width":960}}` captures with the same options and writes the JPEG inside the desktop as the desktop user, under the upload destination rules. It returns `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`; an existing file returns 409 unless `replace` is set.
 
-`POST /api/containers/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0 to 10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","jpeg_base64"}}`.
+`POST /api/containers/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0 to 10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","scale","origin_x","origin_y","desktop_width","desktop_height","jpeg_base64"}}`. `scale` is image pixels per desktop pixel and `origin_x`, `origin_y` the desktop pixel at the image's top left, so a point of the image is `/input`'s `origin_x + x / scale`, `origin_y + y / scale`; each is `null` when the desktop image cannot tell it.
 
 ## Text on the screen
 

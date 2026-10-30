@@ -34,17 +34,17 @@ fn string(args: &Value, key: &str) -> error::Result<String> {
         .map(str::to_owned)
         .ok_or_else(|| error::Error(StatusCode::BAD_REQUEST, format!("{key} must be a string")))
 }
-fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
+/// A screenshot with its size and its place on the desktop, which the agent needs as text too to
+/// map a point of a scaled or cropped image back to desktop_input's coordinates.
+pub(super) fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
     let mut summary = shot.summary();
     if let Some(input) = input {
         summary["input"] = input;
     }
-    let mut result = CallToolResult::success(vec![ContentBlock::image(
-        STANDARD.encode(&shot.jpeg),
-        "image/jpeg",
-    )]);
-    result.structured_content = Some(summary);
-    result
+    with_data(
+        ContentBlock::image(STANDARD.encode(&shot.jpeg), "image/jpeg"),
+        summary,
+    )
 }
 fn sound(mut value: Value) -> CallToolResult {
     let wav = value
@@ -52,9 +52,7 @@ fn sound(mut value: Value) -> CallToolResult {
         .and_then(|object| object.remove("wav_base64"))
         .and_then(|data| data.as_str().map(str::to_owned))
         .unwrap_or_default();
-    let mut result = CallToolResult::success(vec![ContentBlock::audio(wav, "audio/wav")]);
-    result.structured_content = Some(value);
-    result
+    with_data(ContentBlock::audio(wav, "audio/wav"), value)
 }
 fn structured(value: Value) -> CallToolResult {
     // Keep an object result for clients using the 2025 protocol versions.
