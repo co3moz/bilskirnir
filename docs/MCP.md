@@ -342,11 +342,11 @@ A server is never published on a port and never reached over the desktop's netwo
 
 | Scope | Tools, bound to that container |
 | --- | --- |
-| `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `save_screenshot`, `list_windows`, `inspect_ui`, `find_text`, `wait_for_condition` |
+| `view` | `get_container`, `container_logs`, `container_diagnostics`, `get_usage`, `screenshot`, `list_windows`, `inspect_ui`, `find_text`, `wait_for_condition`, all of them read-only |
 | `input` | `desktop_input`, `act_and_observe`, `focus_window`, `set_window_geometry`, `gamepad_input`, and `request_human`, which changes nothing in the container but asks a person to take over its screen |
 | `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
 | `files_read` | `list_files`, `read_file`, `download_file` |
-| `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file` |
+| `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file`, and `save_screenshot`, which writes the image into the desktop |
 | `commands` | `exec_container` and the terminal tools, as the desktop user; with `sudo` enabled for the container that is root inside it |
 | `media` | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts`, `capture_audio`, `inject_audio` |
 | `power` | `container_action` |

@@ -460,6 +460,21 @@ fn a_bound_tool_describes_only_what_the_endpoint_offers() {
     assert!(exec.description.unwrap().contains("never as root"));
 }
 
+/// view held save_screenshot, which with replace=true overwrites any file the desktop user may
+/// write, so a grant meant to watch a desktop could change its files. The scopes that read hold
+/// only tools that say they are read-only.
+#[test]
+fn the_reading_scopes_change_nothing() {
+    for scope in [Scope::View, Scope::FilesRead] {
+        for name in scope.tools() {
+            let tool = crate::mcp::listed_tool(name).unwrap();
+            let read_only = tool.annotations.and_then(|a| a.read_only_hint);
+            assert_eq!(read_only, Some(true), "{} offers {name}", scope.id());
+        }
+    }
+    assert!(Scope::FilesWrite.offers("save_screenshot"));
+}
+
 #[test]
 fn an_endpoint_offers_its_scopes_tools_and_never_the_administrators() {
     let app = app(false);

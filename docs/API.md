@@ -684,7 +684,7 @@ An endpoint is created with:
 ```json
 {"name": "chrome-dev",
  "grants": [{"container_id": "...", "alias": "chrome-dev", "scopes": ["view", "input", "files_read"], "servers": "all",
-             "excluded_tools": ["save_screenshot", "chrome__browser_run_code_unsafe"]}]}
+             "excluded_tools": ["container_diagnostics", "chrome__browser_run_code_unsafe"]}]}
 ```
 
 `alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). `excluded_tools`, optional and empty by default, names tools left out although their scope or server is granted, as the endpoint exposes them for that container alone: a container tool's own name, which must be one of the granted scopes', or `SERVER__TOOL`, the `exposed` name of the server lists, kept whether or not the server is known now. Each grant is returned with its list, empty when nothing is left out. The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.

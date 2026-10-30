@@ -1459,7 +1459,7 @@ try:
     print("PASS the desktop reads its servers' states and endpoints, and the MCP tray runs", flush=True)
     session = endpoint_session("acceptance-mcp", scoped)
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
-    assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container"}, offered
+    assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container","save_screenshot"}, offered
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"echo__echo","arguments":{"text":"hi"}})
     assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0 tag=launched", echoed
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"api__echo","arguments":{"text":"over http"}})
@@ -1526,11 +1526,11 @@ try:
     # Single tools are left out by the names the endpoint gives them, a container tool's and a
     # server's alike; the list above, without one, was everything the scope and the servers give.
     assert registered["tools"][0]["exposed"] == "echo__echo", registered
-    narrowed = tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["save_screenshot","echo__echo"]}]})["structuredContent"]
-    assert narrowed["grants"][0]["excluded_tools"] == ["save_screenshot","echo__echo"], narrowed
+    narrowed = tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["container_diagnostics","echo__echo"]}]})["structuredContent"]
+    assert narrowed["grants"][0]["excluded_tools"] == ["container_diagnostics","echo__echo"], narrowed
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
-    assert {"screenshot","api__echo"} <= offered and not offered & {"save_screenshot","echo__echo"}, offered
-    for name in ["save_screenshot","echo__echo"]:
+    assert {"screenshot","api__echo"} <= offered and not offered & {"container_diagnostics","echo__echo"}, offered
+    for name in ["container_diagnostics","echo__echo"]:
         _, reply = endpoint_post("acceptance-mcp", scoped, {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":name,"arguments":{"text":"hi"}}}, session)
         assert "Unknown tool" in reply["error"]["message"], reply
     assert tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["desktop_input"]}]}, allow_error=True)["isError"]
@@ -1545,7 +1545,7 @@ try:
     assert served and all(c["credential"] == "endpoint_token" and c["container_id"] == env_id for c in served), calls
     assert all(c["arguments"]["text"].get("$masked") == "string" for c in served) and '"over http"' not in json.dumps(calls), served
     assert any(c["tool"] == "screenshot" and c["kind"] == "read" and c["outcome"] == "ok" for c in calls), calls
-    assert any(c["tool"] == "save_screenshot" and c["outcome"] == "refused" for c in calls), calls
+    assert any(c["tool"] == "container_diagnostics" and c["outcome"] == "refused" for c in calls), calls
     assert all(c["endpoint"] == "acceptance-mcp" for c in api("activity?container=" + env_id + "&caller=endpoint")["items"])
     print("PASS the agent activity log records an endpoint's calls with masked server arguments", flush=True)
     try:

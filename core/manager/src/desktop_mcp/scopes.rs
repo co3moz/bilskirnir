@@ -62,13 +62,13 @@ impl Scope {
     /// The Thoric MCP tools of the scope, each of which works on one container.
     pub fn tools(self) -> &'static [&'static str] {
         match self {
+            // Only what reads: save_screenshot writes a file, so it is files_write's.
             Scope::View => &[
                 "get_container",
                 "container_logs",
                 "container_diagnostics",
                 "get_usage",
                 "screenshot",
-                "save_screenshot",
                 "list_windows",
                 "inspect_ui",
                 "find_text",
@@ -94,7 +94,13 @@ impl Scope {
                 "sample_metrics",
             ],
             Scope::FilesRead => &["list_files", "read_file", "download_file"],
-            Scope::FilesWrite => &["write_file", "upload_file", "move_file", "delete_file"],
+            Scope::FilesWrite => &[
+                "write_file",
+                "upload_file",
+                "move_file",
+                "delete_file",
+                "save_screenshot",
+            ],
             Scope::Commands => &[
                 "exec_container",
                 "open_terminal",

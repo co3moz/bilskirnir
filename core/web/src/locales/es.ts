@@ -1498,7 +1498,8 @@ export const es: Messages = {
   "mcp.scope.files_read": "Leer archivos",
   "mcp.scope.files_read.description": "Listar, leer y descargar archivos.",
   "mcp.scope.files_write": "Escribir archivos",
-  "mcp.scope.files_write.description": "Escribir, subir, mover y eliminar archivos.",
+  "mcp.scope.files_write.description":
+    "Escribir, subir, mover y eliminar archivos, y guardar capturas de pantalla.",
   "mcp.scope.commands": "Comandos",
   "mcp.scope.commands.description":
     "Scripts y terminales como el usuario del escritorio, nunca como root. Con sudo activado en el contenedor, eso incluye root dentro de él.",
