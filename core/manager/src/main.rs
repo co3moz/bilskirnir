@@ -77,6 +77,8 @@ pub struct App {
     login_attempts: auth::Limiter,
     /// The addresses of the bundled HTTPS proxy, whose forwarded address a sign-in counts by.
     https_proxy: auth::HttpsProxy,
+    /// The manager's own addresses, of which those on a desktop's network are not answered.
+    interfaces: auth::Interfaces,
     operations: Arc<tokio::sync::Mutex<()>>,
     resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
     session_events: tokio::sync::Notify,
@@ -366,6 +368,10 @@ fn router(app: Arc<App>) -> Router {
             app.clone(),
             auth::check_host,
         ))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            auth::check_network,
+        ))
         .layer(middleware::from_fn(
             move |req: axum::extract::Request, next: middleware::Next| {
                 let csp = csp.clone();
@@ -483,6 +489,7 @@ async fn main() -> anyhow::Result<()> {
         sessions: Mutex::new(HashMap::new()),
         login_attempts: Default::default(),
         https_proxy: Default::default(),
+        interfaces: Default::default(),
         operations: Arc::new(tokio::sync::Mutex::new(())),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
@@ -545,7 +552,7 @@ async fn main() -> anyhow::Result<()> {
     let closing = app.clone();
     axum::serve(
         listener,
-        router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        router(app).into_make_service_with_connect_info::<auth::Connection>(),
     )
     .with_graceful_shutdown(async move {
         let _ = tokio::signal::ctrl_c().await;

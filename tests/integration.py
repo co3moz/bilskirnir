@@ -1749,10 +1749,18 @@ try:
         address = networks[network]["IPAddress"]
         reached = subprocess.run(["docker", "exec", container, "python3", "-c", vnc_script, address], capture_output=True)
         assert (reached.returncode == 0) == listening, (network, address, reached.stderr)
+    # The manager shares the private network to reach the desktop, never to be reached from it.
+    manager_address = json.loads(docker("inspect", manager))[0]["NetworkSettings"]["Networks"][f"thoric-{env_id}-private"]["IPAddress"]
+    manager_script = ("import sys, urllib.error, urllib.request\nopener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\n"
+                      "try:\n    print(opener.open(f'http://{sys.argv[1]}:8080{sys.argv[2]}', timeout=5).status)\n"
+                      "except urllib.error.HTTPError as error:\n    print(error.code)")
+    for path in ["/healthz", "/api/session", "/mcp"]:
+        answer = docker("exec", "--user", "desktop", container, "python3", "-c", manager_script, manager_address, path).decode().strip()
+        assert answer == "403", (path, answer)
     job(api(f"containers/{env_id}/internet", {"enabled": False}))
     assert api(f"containers/{env_id}/screenshot", raw=True).startswith(b"\xff\xd8")
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
-    print("PASS live internet on/off with VNC still reachable, and only on the private network", flush=True)
+    print("PASS live internet on/off with VNC still reachable, only on the private network, which never reaches the manager", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
     snap = job(snap_job)

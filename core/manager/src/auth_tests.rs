@@ -61,7 +61,10 @@ async fn sign_in(
         .unwrap();
     if let Some(from) = from {
         let address: SocketAddr = format!("{from}:40000").parse().unwrap();
-        request.extensions_mut().insert(ConnectInfo(address));
+        request.extensions_mut().insert(ConnectInfo(Connection {
+            peer: address,
+            local: None,
+        }));
     }
     crate::router(app.clone())
         .oneshot(request)

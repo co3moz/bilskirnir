@@ -34,7 +34,7 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
-| `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. |
+| `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. Programs in the desktops never reach it either way: the manager refuses requests that arrive on a desktop's private network. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
 | `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.6.3: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `thoric update` renames it. |

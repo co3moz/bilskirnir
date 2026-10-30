@@ -20,7 +20,7 @@ curl --cookie-jar thoric.cookies \
   http://localhost:8080/api/login
 ```
 
-Send that cookie with subsequent requests. POST and DELETE requests also need `X-Thoric-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary.
+Send that cookie with subsequent requests. POST and DELETE requests also need `X-Thoric-Request: 1`. If you send an Origin header, it must match the request's host and port. These request checks still apply when `AUTH_MODE=none`; only sign-in and the cookie become unnecessary. A request that reaches the manager on a desktop's private network is refused with 403 before any of this, on every route, `/mcp` and `/healthz` included: a desktop never needs the manager, which reaches it the other way round.
 
 The MCP bearer token authenticates `/mcp`, not these API routes; a [transfer link](#transfer-links) that an agent gets from MCP authorizes one file or archive transfer without either. Sessions last 12 hours; `/api/logout` revokes the session.
 
