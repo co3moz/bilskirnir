@@ -51,6 +51,42 @@ import { href } from "@/lib/route"
 type Connection = "connecting" | "connected" | "disconnected" | "failed"
 const connectionText = (connection: Connection) => t(`desktop.connection.${connection}`)
 
+/**
+ * What covers the screen until it shows: a spinner while it connects, and once the connection
+ * failed or closed, why, with **Reconnect**, rather than a black screen.
+ */
+function ConnectionOverlay({
+  connection,
+  onReconnect,
+}: {
+  connection: Exclude<Connection, "connected">
+  onReconnect: () => void
+}) {
+  if (connection === "connecting")
+    return (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-white/70">
+        <Spinner />
+        {connectionText(connection)}
+      </div>
+    )
+  return (
+    <Empty className="absolute inset-0 bg-black/70 text-white/80">
+      <EmptyHeader>
+        <EmptyTitle className="text-base">{connectionText(connection)}</EmptyTitle>
+        <EmptyDescription className="text-white/70">
+          {t(`desktop.lost.${connection}`)}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button onClick={onReconnect}>
+          <RiRestartLine data-icon="inline-start" />
+          {t("desktop.reconnect")}
+        </Button>
+      </EmptyContent>
+    </Empty>
+  )
+}
+
 /** A compact toolbar button: an icon with its label on wide screens and a tooltip on narrow ones. */
 function ToolButton({
   label,
@@ -196,7 +232,8 @@ export function DesktopPage({ id }: { id: string }) {
                     : "bg-muted-foreground"
               )}
             />
-            <span className="hidden sm:inline">{connectionText(connection)}</span>
+            {/* Below 640 px only the dot shows; screen readers still hear the state. */}
+            <span className="sr-only sm:not-sr-only">{connectionText(connection)}</span>
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
@@ -281,7 +318,15 @@ export function DesktopPage({ id }: { id: string }) {
         )}
       >
         {running ? (
-          <div ref={screen} className="vnc-screen size-full overflow-hidden" />
+          <>
+            <div ref={screen} className="vnc-screen size-full overflow-hidden" />
+            {connection !== "connected" && (
+              <ConnectionOverlay
+                connection={connection}
+                onReconnect={() => setGeneration((value) => value + 1)}
+              />
+            )}
+          </>
         ) : (
           <Empty className="h-full text-white/80">
             <EmptyHeader>

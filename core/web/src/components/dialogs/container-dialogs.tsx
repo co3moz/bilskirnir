@@ -42,7 +42,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
-import { closeDialog } from "@/lib/dialogs"
+import { closeDialog, useDraft } from "@/lib/dialogs"
 import { imageChoices, initialImage, restartNotice } from "@/lib/format"
 import { knownGroups } from "@/lib/groups"
 import { formatList, plural, t } from "@/lib/i18n"
@@ -167,6 +167,7 @@ export function CreateContainerDialog({ image, ...props }: DialogProps & { image
   const [values, setValues] = React.useState<Record<string, string>>({})
   const servers = imageServers(images, chosen)
   const [endpoint, setEndpoint] = React.useState(true)
+  useDraft({ name, selected, draft, values, endpoint })
   const { busy, error, submit } = useSubmit()
   const id = React.useId()
 
@@ -276,6 +277,7 @@ export function SettingsDialog({ id, ...props }: DialogProps & { id: string }) {
   const [identity, setIdentityState] = React.useState<IdentityDraft>(() =>
     identityDraft(spec ?? {})
   )
+  useDraft({ name, draft, identity })
   // A restart warning is confirmed for one set of values; editing the form asks again.
   const [notice, setNotice] = React.useState("")
   const { busy, error, submit } = useSubmit()

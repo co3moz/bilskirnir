@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { ErrorBoundary } from "@/components/error-boundary"
 import { DockerAlert, PageBody } from "@/components/page"
 import { SectionCards } from "@/components/section-cards"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -21,12 +22,16 @@ export function DashboardPage() {
       <DockerAlert />
       <SectionCards />
       <div className="flex flex-col gap-4 px-4 md:gap-6 lg:px-6">
-        <React.Suspense fallback={<Skeleton className="h-[22rem] rounded-xl" />}>
-          <UsageOverview />
-        </React.Suspense>
-        <React.Suspense fallback={<Skeleton className="h-[22rem] rounded-xl" />}>
-          <ChartAreaInteractive />
-        </React.Suspense>
+        <ErrorBoundary variant="section">
+          <React.Suspense fallback={<Skeleton className="h-[22rem] rounded-xl" />}>
+            <UsageOverview />
+          </React.Suspense>
+        </ErrorBoundary>
+        <ErrorBoundary variant="section">
+          <React.Suspense fallback={<Skeleton className="h-[22rem] rounded-xl" />}>
+            <ChartAreaInteractive />
+          </React.Suspense>
+        </ErrorBoundary>
       </div>
     </PageBody>
   )

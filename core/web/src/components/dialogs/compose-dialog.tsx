@@ -33,8 +33,8 @@ import { Switch } from "@/components/ui/switch"
 import { CodeEditor } from "@/components/code-editor"
 import { api } from "@/lib/api"
 import { rowsHeight } from "@/lib/code-editor"
-import { closeDialog } from "@/lib/dialogs"
-import { refreshAll, useImages } from "@/lib/queries"
+import { closeDialog, useDraft } from "@/lib/dialogs"
+import { refreshLists, useImages } from "@/lib/queries"
 import {
   newParameter,
   composeBody,
@@ -210,6 +210,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
   })
   const [fresh] = React.useState(composeDraft)
   const [draft, setDraft] = React.useState<ComposeDraft>()
+  useDraft(draft)
   const { busy, error, submit } = useSubmit()
   const current = draft ?? (exists ? saved.data && composeDraft(saved.data) : fresh)
   const save = async (remove: boolean) => {
@@ -218,7 +219,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     else return
     closeDialog()
     toast.success(remove ? t("compose.removed") : t("compose.saved", { name: image?.name ?? "" }))
-    void refreshAll()
+    void refreshLists("images")
   }
   // Nothing is built again: the manager puts the base's steps before the image's own.
   const addBase = async () => {
@@ -226,7 +227,7 @@ export function ComposeDialog({ id, ...props }: DialogProps & { id: string }) {
     await api(`images/${id}/compose/base`, {})
     closeDialog()
     toast.success(t("compose.baseAdded", { base: base.name, name: image?.name ?? "" }))
-    void refreshAll()
+    void refreshLists("images")
   }
 
   return (

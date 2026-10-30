@@ -24,6 +24,7 @@ import {
   rememberFolder,
   uploadProblem,
 } from "@/lib/desktop-paths"
+import { useUnsaved } from "@/lib/dialogs"
 import { useContainers, useSettings } from "@/lib/queries"
 import { formatNumber, t } from "@/lib/i18n"
 import { FileUploads, fileSize, uploadStatus } from "@/lib/uploads"
@@ -41,8 +42,9 @@ function useUploads() {
         onUnauthorized: sessionExpired,
       })
   )
-  // Closing the dialog cancels what is left; completed files stay in the container.
+  // Closing the dialog cancels what is left, once the user agrees; completed files stay.
   React.useEffect(() => () => uploads.cancel(), [uploads])
+  useUnsaved(uploads.running && "upload")
   return uploads
 }
 

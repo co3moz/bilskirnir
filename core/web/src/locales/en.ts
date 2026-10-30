@@ -930,9 +930,24 @@ export const en = {
   "nav.sidebarHint": "Displays the mobile sidebar.",
 
   "app.connectionFailed": "Connection failed",
+  "errors.title": "Something went wrong",
+  "errors.updated": "Thoric was updated",
+  "errors.updatedHint": "This page is from the previous version. Reload it to open the new one.",
+  "errors.reload": "Reload",
+  "errors.retry": "Try again",
+  "unsaved.changes.title": "Discard your changes?",
+  "unsaved.changes.description": "What you entered in this form is lost when it closes.",
+  "unsaved.changes.keep": "Keep editing",
+  "unsaved.changes.discard": "Discard",
+  "unsaved.upload.title": "Cancel the upload?",
+  "unsaved.upload.description":
+    "Files still uploading stop. Those already uploaded stay where they are.",
+  "unsaved.upload.keep": "Keep uploading",
+  "unsaved.upload.discard": "Cancel upload",
 
   "docker.unreachable": "Cannot connect to Docker",
   "docker.checkDaemon": "Check that the Docker daemon is running.",
+  "list.failed": "Could not read the list",
 
   "login.title": "Sign in",
   "login.description": "Use the administrator account of this installation.",
@@ -1333,6 +1348,8 @@ export const en = {
   "desktop.micOff": "Disable mic",
   "desktop.micPermission": "Waiting for permission…",
   "desktop.reconnect": "Reconnect",
+  "desktop.lost.failed": "The connection to the desktop was lost. Reconnect to continue.",
+  "desktop.lost.disconnected": "The desktop closed the connection.",
   "desktop.exitFullscreen": "Exit fullscreen",
   "desktop.fullscreen": "Fullscreen",
   "desktop.loading": "Loading container…",

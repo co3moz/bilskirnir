@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { createContext, useContext, useSyncExternalStore } from "react"
 
 export type Page =
   | "dashboard"
@@ -98,6 +98,10 @@ export function href(route: Route) {
   return `#/${route.page}`
 }
 
+/** What a dialog belongs to: the page, or the desktop, which a filter or an open item keeps. */
+export const pageKey = (route: Route) =>
+  route.page === "desktop" ? `desktop/${route.id}` : route.page
+
 export function navigate(route: Route) {
   location.hash = href(route)
 }
@@ -112,7 +116,19 @@ const subscribe = (listener: () => void) => {
   return () => window.removeEventListener("hashchange", listener)
 }
 
-export function useRoute(): Route {
+/** The route in the address bar. */
+export function useAddress(): Route {
   const hash = useSyncExternalStore(subscribe, () => location.hash)
   return parseRoute(hash)
+}
+
+/**
+ * The route the page shows, which stays while the user is asked whether to leave it, such as with
+ * uploads still going; see App.tsx.
+ */
+export const ShownRoute = createContext<Route | null>(null)
+
+export function useRoute(): Route {
+  const address = useAddress()
+  return useContext(ShownRoute) ?? address
 }

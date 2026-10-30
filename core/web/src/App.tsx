@@ -4,17 +4,26 @@ import { toast } from "sonner"
 
 import { AppSidebar, pageIcon, pageParent, pageSection, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
-import { closeDialog, openDialog } from "@/lib/dialogs"
+import { closeDialog, openDialog, whenLeaving } from "@/lib/dialogs"
 import { t, useLocale } from "@/lib/i18n"
 import { closeInspector } from "@/lib/inspector-session"
 import { useSession, useSettings } from "@/lib/queries"
-import { href, useRoute, type Page } from "@/lib/route"
+import {
+  href,
+  pageKey,
+  parseRoute,
+  replaceRoute,
+  ShownRoute,
+  useAddress,
+  type Page,
+} from "@/lib/route"
 import { useServerEvents } from "@/lib/server-events"
 import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
@@ -108,21 +117,45 @@ function Shell({ page }: { page: Page }) {
           {page === "groups" && <NewGroupButton />}
         </SiteHeader>
         <HumanRequestsBanner />
-        <Content />
+        {/* A page that fails to render leaves the sidebar, so another page can still open. */}
+        <ErrorBoundary key={page} variant="section" className="px-4 py-4 md:py-6 lg:px-6">
+          <Content />
+        </ErrorBoundary>
       </SidebarInset>
     </SidebarProvider>
   )
 }
 
+/**
+ * The route the page shows: the address, once the page it leaves lets it go. A page with uploads
+ * still going, or a dialog with changes, asks first, and the address goes back when the user stays.
+ */
+function useShownRoute() {
+  const target = href(useAddress())
+  const [shown, setShown] = React.useState(() => parseRoute(target))
+  React.useEffect(() => {
+    if (target === href(shown)) return
+    const next = parseRoute(target)
+    const within = pageKey(next) === pageKey(shown)
+    whenLeaving(
+      () => {
+        // A dialog belongs to the page it was opened on; a filter or an item opened there keeps it.
+        if (!within) closeDialog()
+        setShown(next)
+      },
+      () => replaceRoute(shown),
+      within
+    )
+  }, [target, shown])
+  return shown
+}
+
 function Authenticated() {
-  const route = useRoute()
+  const route = useShownRoute()
   const settings = useSettings()
   const locale = useLocale()
-  const key = href(route)
   useServerEvents()
 
-  // A dialog belongs to the page it was opened on.
-  React.useEffect(() => closeDialog(), [key])
   React.useEffect(() => {
     document.title = `${route.page === "desktop" ? t("nav.desktop") : pageTitle(route.page)} · Thoric`
   }, [route.page, locale])
@@ -130,16 +163,18 @@ function Authenticated() {
   if (settings.isPending) return <Loading />
   if (settings.error) return <ConnectionFailed message={settings.error.message} />
   return (
-    <>
+    <ShownRoute value={route}>
       {route.page === "desktop" ? (
-        <React.Suspense fallback={<Loading />}>
-          <DesktopPage id={route.id} />
-        </React.Suspense>
+        <ErrorBoundary key={route.id}>
+          <React.Suspense fallback={<Loading />}>
+            <DesktopPage id={route.id} />
+          </React.Suspense>
+        </ErrorBoundary>
       ) : (
         <Shell page={route.page} />
       )}
       <DialogHost />
-    </>
+    </ShownRoute>
   )
 }
 

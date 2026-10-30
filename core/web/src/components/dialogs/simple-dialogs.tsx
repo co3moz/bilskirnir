@@ -42,10 +42,10 @@ import { runJob } from "@/lib/actions"
 import { api } from "@/lib/api"
 import { parseBuildConfig, type ImportedBuild } from "@/lib/build-config"
 import { rowsHeight } from "@/lib/code-editor"
-import { closeDialog } from "@/lib/dialogs"
+import { closeDialog, useDraft } from "@/lib/dialogs"
 import { deletedNotice, imageChoices, imageHolders, initialImage } from "@/lib/format"
 import { formatList, formatNumber, rich, t } from "@/lib/i18n"
-import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
+import { refreshLists, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import {
   composeBody,
   composeDraft,
@@ -258,6 +258,22 @@ export function BuildImageDialog({
   const [values, setValues] = React.useState<OptionValues>({})
   const [importing, setImporting] = React.useState(false)
   const [advanced, setAdvanced] = React.useState(!simple)
+  useDraft({
+    name,
+    description,
+    icon,
+    templateIds,
+    base,
+    wanted,
+    script,
+    parts,
+    internet,
+    compose,
+    inherit,
+    servers,
+    options,
+    values,
+  })
   const parameterCount =
     compose?.steps.reduce((count, step) => count + step.parameters.length, 0) ?? 0
   const groups = optionGroups(options, parts)
@@ -694,7 +710,7 @@ export function VolumeDeleteDialog({ name, ...props }: DialogProps & { name: str
             await api(volumeApi(name), undefined, "DELETE")
             closeDialog()
             toast.success(t("volumes.deleted", { name }))
-            void refreshAll()
+            void refreshLists("volumes")
           })}
         >
           <AlertDialogHeader>
@@ -750,7 +766,7 @@ export function ImageDeleteDialog({ id, ...props }: DialogProps & { id: string }
             closeDialog()
             const notice = image ? deletedNotice(image, result.image_removed) : "images.deleted"
             toast.success(t(notice, { name }))
-            void refreshAll()
+            void refreshLists("images")
           })}
         >
           <AlertDialogHeader>
@@ -800,7 +816,7 @@ export function VolumeDialog(props: DialogProps) {
             await api("volumes", { name })
             closeDialog()
             toast.success(t("volumes.created", { name }))
-            void refreshAll()
+            void refreshLists("volumes")
           })}
         >
           <DialogHeader>
