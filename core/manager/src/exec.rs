@@ -90,9 +90,12 @@ pub async fn execute(
                     env.spec.name, user, body.timeout_seconds
                 ),
             )?;
+            let container = info["Id"].as_str().context("Missing container ID")?;
+            // The script's name, its $0, marks its `timeout` for a cancel to find.
+            let marker = format!("thoric-exec-{job_id}");
             let mut args = desktop_exec(user, body.root);
             args.extend([
-                info["Id"].as_str().context("Missing container ID")?.into(),
+                container.into(),
                 "timeout".into(),
                 "--signal=TERM".into(),
                 "--kill-after=5s".into(),
@@ -100,7 +103,17 @@ pub async fn execute(
                 "bash".into(),
                 "-c".into(),
                 WRAPPER.into(),
+                marker.clone(),
             ]);
+            app.cancels.on_stop(&job_id, {
+                let app = app.clone();
+                let args = stop_args(container, user, &marker);
+                async move {
+                    if let Err(error) = app.docker_args(&args).await {
+                        tracing::debug!("Stopping a cancelled script: {error:#}");
+                    }
+                }
+            });
             let started = std::time::Instant::now();
             let ran = app
                 .docker_logged_outcome(&job_id, &args, body.script.into_bytes())
@@ -127,6 +140,25 @@ pub async fn execute(
             }
         },
     )
+}
+
+/// The `docker exec` that stops a cancelled script in its desktop as its time limit would: `timeout`,
+/// found by the `marker` it was started with, passes the TERM on to the script's processes and
+/// sends KILL five seconds later. It runs as the script's user, so it reaches nothing else.
+pub(crate) fn stop_args(container: &str, user: &str, marker: &str) -> Vec<String> {
+    [
+        "exec",
+        "--user",
+        user,
+        container,
+        "pkill",
+        "--signal",
+        "TERM",
+        "--full",
+        &format!("^timeout .* {marker}$"),
+    ]
+    .map(str::to_owned)
+    .to_vec()
 }
 
 /// How a script ended, which its job's result carries whether it succeeded or failed.

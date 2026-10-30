@@ -656,6 +656,11 @@ pub(super) fn all() -> Vec<Route> {
             JOBS,
             "Start a failed or interrupted job again with the request it was started with.",
         ),
+        post(
+            "/api/jobs/{id}/cancel",
+            JOBS,
+            "Cancel a queued job, or stop a running script, build or image download; it ends as failed.",
+        ),
         get(
             "/api/jobs/{id}/request",
             JOBS,

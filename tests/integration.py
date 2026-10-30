@@ -530,7 +530,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 77
+    assert len(mcp("tools/list")["tools"]) == 78
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1054,6 +1054,16 @@ try:
     assert "124" in timeout["log"] and timeout["result"]["timed_out"] is True, timeout["result"]
     time.sleep(1)
     assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
+    # A cancelled script stops inside its desktop too, and input reaches the desktop meanwhile.
+    script = tool("exec_container", {"container_id":env_id,"script":"sleep 60\nprintf must-not-exist > /home/desktop/after-cancel"})["structuredContent"]["job_id"]
+    wait_for(lambda: tool("get_job", {"job_id":script})["structuredContent"]["status"] == "running", 30)
+    assert not tool("desktop_input", {"container_id":env_id,"actions":[{"type":"move","x":5,"y":5}]}).get("isError")
+    assert tool("cancel_job", {"job_id":script})["structuredContent"]["cancelled"] is True
+    cancelled = wait_for(lambda: (j if (j := tool("get_job", {"job_id":script,"wait_seconds":10})["structuredContent"])["status"] != "running" else None), 60)
+    assert cancelled["status"] == "failed" and "Cancelled by request" in cancelled["log"], cancelled
+    wait_for(lambda: docker("exec",container,"pgrep","-f",f"thoric-exec-{script}",check=False) == b"", 15)
+    assert docker("exec",container,"test","!","-e","/home/desktop/after-cancel") == b""
+    print("PASS a cancelled script stops in its desktop, which took input while it ran", flush=True)
     written = stdio_tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
     assert written["bytes"] == 15
     read = api(f"containers/{env_id}/files/read", {"path":written["path"]})

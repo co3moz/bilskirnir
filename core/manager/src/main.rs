@@ -99,6 +99,8 @@ pub struct App {
     releases: releases::Releases,
     /// What the signed-in dashboards hear as it happens, such as a job that ended.
     events: events::Hub,
+    /// The jobs that have not ended, which a cancel reaches.
+    cancels: jobs::cancel::Cancels,
     /// Agents' requests for a person, in memory only.
     human: human::Requests,
     /// The proxies inside the desktops that use one.
@@ -330,6 +332,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route("/api/jobs/{id}/retry", post(jobs::retry::retry))
+        .route("/api/jobs/{id}/cancel", post(jobs::cancel::cancel))
         .route("/api/jobs/{id}/request", get(jobs::retry::request))
         .route("/api/events", get(events::stream))
         .route("/api/human-requests", get(human::list))
@@ -503,6 +506,7 @@ async fn main() -> anyhow::Result<()> {
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
         events: events::Hub::default(),
+        cancels: Default::default(),
         human: human::Requests::default(),
         outbound: outbound::Outbound::default(),
     });

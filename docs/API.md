@@ -155,6 +155,7 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
 | GET | `/api/jobs/{job_id}` | Job status, log and result. Optional `wait_seconds`, `log_tail_bytes` and `log_offset` [wait for it and read part of its log](#follow-a-job). |
 | POST | `/api/jobs/{job_id}/retry` | Start a [failed or interrupted job again](#retry-a-job) with the request it was started with; returns the new `job_id`. |
+| POST | `/api/jobs/{job_id}/cancel` | [Cancel](#cancel-a-job) a queued job, or stop a running script, build or image download. |
 | GET | `/api/jobs/{job_id}/request` | The request a failed or interrupted job would be retried with, as `{"kind", "request"}`. |
 | GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, agents' requests for a person, and the lists Docker changes by itself, while the session lasts. |
 | GET | `/api/human-requests` | The [requests for a person](#requests-for-a-person) that wait for an answer, oldest first, in `items`. |
@@ -278,6 +279,10 @@ With either log parameter the answer adds `log_start`, where the returned log be
 ```bash
 curl --cookie thoric.cookies 'http://localhost:8080/api/jobs/JOB_ID?wait_seconds=60&log_tail_bytes=4096'
 ```
+
+## Cancel a job
+
+`POST /api/jobs/{job_id}/cancel` cancels a queued job of any kind, which then never runs, and stops a running one of the kinds that can stop anywhere: a script (`exec`), a script build (`build`) and a catalog image's download (`image-pull`) or source build (`source-build`). Stopping drops the job's Docker commands, and a script is stopped inside its desktop as its time limit stops it, TERM to its processes and KILL five seconds later; a build still cleans up after itself. Any other running job changes a container, an image or a volume and is answered with 409, and so is a job that has already ended. The answer is `{"job_id", "cancelled": true}`, and the job ends as `failed` with the error `Cancelled by request` shortly after. A job's detail says `cancellable: true` while a cancel reaches it; lists leave it out. A cancelled build, snapshot or download keeps its request and can be [retried](#retry-a-job).
 
 ## Retry a job
 

@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
+pub(crate) mod cancel;
 pub(crate) mod read;
 pub(crate) mod retry;
 
@@ -217,36 +218,66 @@ where
         app.db.put(retry::REQUESTS, &id, request)?;
     }
     app.events.job(&job, None);
+    let cancelled = app.cancels.queued(&id, kind);
     let lock = (hold != Hold::Nothing).then(|| app.resource_lock(&resource));
     let (done, outcome) = tokio::sync::oneshot::channel();
     let task_id = id.clone();
     tokio::spawn(async move {
-        let _shared = match &lock {
-            Some(lock) if hold == Hold::Shared => Some(lock.clone().share_owned().await),
-            _ => None,
+        let held = async {
+            let shared = match &lock {
+                Some(lock) if hold == Hold::Shared => Some(lock.clone().share_owned().await),
+                _ => None,
+            };
+            let alone = match lock {
+                Some(lock) if hold == Hold::Exclusive => Some(lock.lock_owned().await),
+                _ => None,
+            };
+            (shared, alone)
         };
-        let _alone = match lock {
-            Some(lock) if hold == Hold::Exclusive => Some(lock.lock_owned().await),
-            _ => None,
+        // A job cancelled while it waits for its resource never runs.
+        let held = tokio::select! {
+            biased;
+            () = cancelled.cancelled() => None,
+            held = held => Some(held),
         };
         let mut job: Job = match app.db.get("job", &task_id) {
             Ok(j) => j,
             Err(e) => {
                 tracing::error!("{e}");
+                app.cancels.forget(&task_id);
                 return;
             }
+        };
+        let Some(_held) = held else {
+            app.cancels.forget(&task_id);
+            let _ = done.send(finish(
+                &app,
+                &task_id,
+                job,
+                Err(anyhow::anyhow!(cancel::CANCELLED)),
+            ));
+            return;
         };
         job.status = "running".into();
         if let Err(e) = app.db.put("job", &task_id, &job) {
             tracing::error!("{e}");
+            app.cancels.forget(&task_id);
             return;
         }
+        app.cancels.running(&task_id);
         app.events.job(&job, None);
-        let result =
-            std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
-                .catch_unwind()
-                .await;
-        let result = result.unwrap_or_else(|_| Err(anyhow::anyhow!("Job ended unexpectedly")));
+        let work = std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
+            .catch_unwind();
+        // A cancel drops the work, which kills the commands it runs, and then stops what it
+        // started elsewhere.
+        let result = tokio::select! {
+            result = work => result.unwrap_or_else(|_| Err(anyhow::anyhow!("Job ended unexpectedly"))),
+            () = cancelled.cancelled() => {
+                app.cancels.stop(&task_id).await;
+                Err(anyhow::anyhow!(cancel::CANCELLED))
+            }
+        };
+        app.cancels.forget(&task_id);
         // Includes failures during context preparation and panics; cleanup cannot depend on the script succeeding.
         if job.kind == "build" {
             // A failed build's last stage stays the one it failed in.

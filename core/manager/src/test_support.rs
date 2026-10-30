@@ -102,6 +102,7 @@ pub(crate) fn app(auth: bool) -> Arc<App> {
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
         events: events::Hub::default(),
+        cancels: Default::default(),
         human: human::Requests::default(),
         outbound: outbound::Outbound::default(),
     })

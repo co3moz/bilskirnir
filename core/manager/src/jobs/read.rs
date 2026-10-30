@@ -53,7 +53,8 @@ impl Read {
     }
 }
 
-/// The job `id` as `read` asks for it, `retryable` once it can be started again. `caller` is the
+/// The job `id` as `read` asks for it, `retryable` once it can be started again and `cancellable`
+/// while a cancel reaches it. `caller` is the
 /// MCP call that waits, which hears progress and may give the wait up.
 pub(crate) async fn answer(
     app: &App,
@@ -76,6 +77,9 @@ pub(crate) async fn answer(
     }
     if retryable {
         value["retryable"] = json!(true);
+    }
+    if app.cancels.cancellable(id) {
+        value["cancellable"] = json!(true);
     }
     Ok(value)
 }

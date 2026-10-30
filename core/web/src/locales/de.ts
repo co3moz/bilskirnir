@@ -104,6 +104,8 @@ export const de: Messages = {
   "jobs.copyLog": "Protokoll kopieren",
   "jobs.retry": "Erneut versuchen",
   "jobs.editRetry": "Bearbeiten und erneut versuchen",
+  "jobs.cancel": "Auftrag abbrechen",
+  "jobs.cancelling": "Auftrag wird abgebrochen.",
   "jobs.archiveProgress": "Archivfortschritt",
   "jobs.downloadProgress": "Fortschritt des Image-Downloads",
   "jobs.scriptProgress": "Fortschritt des Einrichtungsskripts",

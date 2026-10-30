@@ -103,6 +103,8 @@ export const fr: Messages = {
   "jobs.copyLog": "Copier le journal",
   "jobs.retry": "Réessayer",
   "jobs.editRetry": "Modifier et réessayer",
+  "jobs.cancel": "Annuler la tâche",
+  "jobs.cancelling": "Annulation de la tâche.",
   "jobs.archiveProgress": "Progression de l'archive",
   "jobs.downloadProgress": "Progression du téléchargement de l'image",
   "jobs.scriptProgress": "Progression du script de configuration",

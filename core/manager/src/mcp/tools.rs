@@ -357,6 +357,15 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
             false,
             false,
         ),
+        tool(
+            "cancel_job",
+            "Cancel a job: a queued one of any kind ends before it runs, and a running exec_container script, build_image or build_catalog_image build or pull_image download is stopped, a script as its timeout would stop it. Other running jobs, which change a container, an image or a volume, are refused and finish. The job ends as failed with the error Cancelled by request; get_job with wait_seconds shows when.",
+            json!({"job_id":text}),
+            &["job_id"],
+            false,
+            true,
+            false,
+        ),
     ];
     tools.push(tool("upload_file", "Upload at most 512 KiB of standard-base64 file data into the desktop home, a writable mounted volume or a folder in the container's setup.places, as the desktop user. Existing files are preserved unless replace=true. Rejects symlink traversal.", json!({"container_id":id,"destination":text,"name":text,"data_base64":{"type":"string","maxLength":699052},"replace":{"type":"boolean","default":false}}), &["container_id","destination","name","data_base64"], false, true, false));
     tools.push(tool("read_file", "Read a regular file inside a running container as the desktop user. Returns utf8 text or base64 data with byte offsets, size and eof for paging. Symlinks and special files are rejected; at most 512 KiB per call.", json!({"container_id":id,"path":text,"encoding":{"type":"string","enum":["utf8","base64"],"default":"utf8"},"offset":{"type":"integer","minimum":0,"default":0},"limit":{"type":"integer","minimum":1,"maximum":524288,"default":65536}}), &["container_id","path"], true, false, false));

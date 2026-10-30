@@ -203,6 +203,11 @@ impl ThoricMcp {
             }
             "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
+            "cancel_job" => {
+                jobs::cancel::cancel(state, Path(string(&args, "job_id")?))
+                    .await?
+                    .0
+            }
             "get_job" => {
                 let (id, read) = jobs::read::mcp_arguments(args)?;
                 jobs::read::answer(&self.app, &id, &read, None).await?

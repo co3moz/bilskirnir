@@ -170,6 +170,7 @@ pub(super) fn policy(tool: &str) -> Option<&'static [Rule]> {
         "create_volume" | "delete_volume" => &[("name", Text, true)],
         "copy_volume" => &[("volume", Text, true), ("name", Text, true)],
         "get_usage" => &[("seconds", Text, false)],
+        "cancel_job" => &[("job_id", Text, true)],
         "get_job" => &[
             ("job_id", Text, true),
             ("wait_seconds", Text, false),
