@@ -196,3 +196,20 @@ fn a_screenshot_says_where_its_pixels_are_on_the_desktop() {
             "origin_x": 0, "origin_y": 0, "desktop_width": 1920, "desktop_height": 1080})
     );
 }
+
+/// A screenshot waited for its turn without a limit, so two desktops that did not answer held
+/// up every container's screenshots for as long as Docker took. The wait is bounded.
+#[tokio::test]
+async fn a_screenshot_waits_a_bounded_time_for_its_turn() {
+    let app = crate::test_support::app(false);
+    let _held = app.screenshots.acquire_many(2).await.unwrap();
+    let error = tokio::time::timeout(
+        PERMIT_WAIT + Duration::from_secs(2),
+        capture(&app, "missing", &Capture::default()),
+    )
+    .await
+    .expect("the wait is bounded")
+    .err()
+    .expect("no turn came");
+    assert_eq!(error.0, StatusCode::TOO_MANY_REQUESTS);
+}

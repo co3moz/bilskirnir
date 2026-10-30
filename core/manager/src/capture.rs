@@ -219,12 +219,23 @@ fn now_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
+/// How long a screenshot waits for one of the two that may be taken at once, so desktops that do
+/// not answer cannot hold up every other container's screenshots.
+const PERMIT_WAIT: Duration = Duration::from_secs(5);
+/// How long one capture may take. A desktop answers in about a second, so a longer one is stuck,
+/// and Docker's general limit would keep its permit for two minutes.
+const CAPTURE_LIMIT: Duration = Duration::from_secs(20);
+
 pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screenshot> {
     options.validate()?;
-    let _permit = app
-        .screenshots
-        .acquire()
+    let _permit = tokio::time::timeout(PERMIT_WAIT, app.screenshots.acquire())
         .await
+        .map_err(|_| {
+            Error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "Two screenshots are already being taken; retry in a moment".into(),
+            )
+        })?
         .map_err(|e| anyhow::anyhow!(e))?;
     let env = app.container(id)?;
     let info = app.owned(&env).await?;
@@ -250,7 +261,7 @@ pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screensho
     .map(str::to_owned);
     let output = process::capture(
         app.command(&args),
-        Duration::from_secs(120),
+        CAPTURE_LIMIT,
         4 * 1024 * 1024,
         process::Overflow::Reject,
     )
