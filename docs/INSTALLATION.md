@@ -28,7 +28,7 @@ Edit the exported `.env` before starting the manager. Run these export commands 
 
 The minimal README example keeps settings directly in Compose. The full manifests read them from `.env`. Recreate the manager with `docker compose up -d` after changing its environment; for the full registry manifest, use `docker compose -f compose.ghcr.yml up -d`.
 
-The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
+The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself and `RUST_LOG` goes to the logger.
 
 In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `DESKTOP_PIDS_LIMIT`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER`, `PROXY_URL`, `PROXY_USERNAME`, `PROXY_BYPASS` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `PROXY_PASSWORD`, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `thoric settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
@@ -83,6 +83,7 @@ The full manifests also accept these Compose settings:
 | `MANAGER_IMAGE` | `ghcr.io/co3moz/thoric:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` is the newest release and `edge` follows `master`, see [Edge builds](#edge-builds); the WSL package sets the release it belongs to. |
 | `DESKTOP_HOST` | `localhost` | The hostname for the optional HTTPS service; also added to accepted hosts. |
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
+| `RUST_LOG` | `thoric=info,tower_http=info` | The manager's log filter, which the manifests pass to its logger: `thoric=debug` adds the reads repeated on a timer, see [If something does not start](#if-something-does-not-start). Empty keeps the default. |
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
 
