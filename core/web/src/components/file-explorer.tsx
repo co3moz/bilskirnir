@@ -239,15 +239,18 @@ export function FileExplorer({
     }
   }
 
-  const save = () =>
-    editing &&
-    run(
+  const save = () => {
+    if (!editing) return
+    const { path: target, text } = editing
+    return run(
       async () => {
-        await api(`${base}/files/write`, { path: editing.path, data: editing.text, replace: true })
-        setEditing({ ...editing, saved: editing.text })
+        await api(`${base}/files/write`, { path: target, data: text, replace: true })
+        // Typing goes on while the file saves: what was sent is saved, and the text stays as it is.
+        setEditing((current) => (current?.path === target ? { ...current, saved: text } : current))
       },
-      t("files.saved", { path: editing.path })
+      t("files.saved", { path: target })
     )
+  }
 
   const entries = sortEntries(listing.data?.items ?? [])
   const changed = !!editing && editing.text !== editing.saved
