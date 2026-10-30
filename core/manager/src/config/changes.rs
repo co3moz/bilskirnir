@@ -54,7 +54,8 @@ pub(crate) fn editable(dir: &Path) -> bool {
 }
 
 /// `GET /api/configuration`: the installation's settings for the Settings page, without secrets,
-/// whether the page can change them and the change that is running, if any.
+/// whether the page can change them, the change that is running, if any, and what answers without
+/// a credential beyond this computer (`auth::exposure`).
 pub async fn configuration(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let running = app
         .db
@@ -65,6 +66,7 @@ pub async fn configuration(State(app): State<Arc<App>>) -> Result<Json<Value>> {
         "variables": app.config.shown(),
         "editable": editable(&app.config.update_dir),
         "job_id": running.map(|job| job.id),
+        "exposure": crate::auth::exposure(&app).await,
     })))
 }
 

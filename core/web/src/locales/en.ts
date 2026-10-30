@@ -991,6 +991,15 @@ export const en = {
   "settings.configurationHint":
     "What the manager runs with, read from its environment when it started. Passwords and tokens are never shown.",
   "settings.configurationFailed": "The configuration could not be read",
+  "settings.exposure.title": "Anyone who reaches this address is the administrator",
+  "settings.exposure.dashboard":
+    "Sign-in is off and the manager is published on {addresses}. Every device that reaches it, and every desktop with internet access, uses the dashboard and the API without a password.",
+  "settings.exposure.mcp":
+    "/mcp takes no token and the manager is published on {addresses}. Every device that reaches it, and every desktop with internet access, controls every container through MCP.",
+  "settings.exposure.both":
+    "Sign-in is off, /mcp takes no token and the manager is published on {addresses}. Every device that reaches it, and every desktop with internet access, controls every container.",
+  "settings.exposure.fix":
+    "Set a password and an MCP token, or publish the manager on this computer only with BIND_ADDRESS=127.0.0.1.",
   "settings.secretSet": "Set, hidden",
   "settings.notSet": "Not set",
   "settings.idle": "No effect while {name} is off.",

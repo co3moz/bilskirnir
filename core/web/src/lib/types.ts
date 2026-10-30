@@ -482,6 +482,8 @@ export type Configuration = {
   editable?: boolean
   /** The settings change that is running, which outlives the manager it restarts. */
   job_id?: string | null
+  /** What answers without a credential while Docker publishes the manager beyond loopback. */
+  exposure?: { open: ("dashboard" | "mcp")[]; published: string[] } | null
 }
 
 /** `POST configuration` with `dry_run`: what is wrong with a change, before anything restarts. */

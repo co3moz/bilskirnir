@@ -512,6 +512,7 @@ async fn main() -> anyhow::Result<()> {
     releases::spawn(app.clone());
     outbound::spawn(app.clone());
     auth::follow_https_proxy(app.clone());
+    auth::warn_exposure(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
     }

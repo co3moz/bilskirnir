@@ -970,6 +970,15 @@ export const tr: Messages = {
   "settings.configurationHint":
     "Manager'ın açılışta ortamından okuduğu ve şu an kullandığı değerler. Parola ve token'lar hiçbir zaman gösterilmez.",
   "settings.configurationFailed": "Yapılandırma okunamadı",
+  "settings.exposure.title": "Bu adrese ulaşan herkes yöneticidir",
+  "settings.exposure.dashboard":
+    "Oturum açma kapalı ve manager {addresses} üzerinde yayımlanıyor. Ona ulaşan her cihaz ve internet erişimi olan her masaüstü, panoyu ve API'yi parolasız kullanır.",
+  "settings.exposure.mcp":
+    "/mcp token istemiyor ve manager {addresses} üzerinde yayımlanıyor. Ona ulaşan her cihaz ve internet erişimi olan her masaüstü, MCP ile her konteyneri yönetir.",
+  "settings.exposure.both":
+    "Oturum açma kapalı, /mcp token istemiyor ve manager {addresses} üzerinde yayımlanıyor. Ona ulaşan her cihaz ve internet erişimi olan her masaüstü, her konteyneri yönetir.",
+  "settings.exposure.fix":
+    "Bir parola ve bir MCP token'ı belirleyin ya da manager'ı BIND_ADDRESS=127.0.0.1 ile yalnızca bu bilgisayarda yayımlayın.",
   "settings.secretSet": "Ayarlı, gizli",
   "settings.notSet": "Ayarlanmamış",
   "settings.idle": "{name} kapalıyken etkisi yok.",

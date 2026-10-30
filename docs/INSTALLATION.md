@@ -34,7 +34,7 @@ In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also c
 
 | Setting | Default | What it changes |
 | --- | --- | --- |
-| `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. Programs in the desktops never reach it either way: the manager refuses requests that arrive on a desktop's private network. |
+| `AUTH_MODE` | `password` | Use `none` to open the manager without a sign-in screen. Programs in the desktops do not reach it on their private network, which the manager refuses, but with `BIND_ADDRESS=0.0.0.0` a desktop with internet access reaches the published port through the host like any device on the network. Keep sign-in on then; the manager warns at startup and on the Management page when it is off. |
 | `ADMIN_USERNAME` | `admin` | The single administrator's sign-in name. |
 | `ADMIN_PASSWORD` | Empty | Set a password of at least eight characters when login is enabled. |
 | `ROOT_MCP_ENABLED` | `false` | Enable the root agent endpoint at `/mcp`, which reaches every container. The [MCP endpoints](MCP.md#mcp-endpoints-for-one-agent) made on the dashboard answer with their own tokens whether or not it is on. Called `MCP_ENABLED` before 0.6.3: an `.env` that still has the old name keeps its value while `ROOT_MCP_ENABLED` is missing, the manager logs that it should be renamed, and refuses to start when the two names disagree. In the WSL package `thoric update` renames it. |
@@ -112,7 +112,7 @@ For the minimal Compose example, change the port binding to `0.0.0.0:8080:8080`.
 
 The manager accepts localhost and private LAN IP addresses. If you use a DNS name, add it to `ALLOWED_HOSTS`. The host's firewall must also allow the connection, and under WSL so must the Windows firewall and the forwarding into WSL; Compose does not configure those host settings. The WSL package asks at first start whether other devices may connect, on which port and by which names, and [describes the Windows side](WSL_PACKAGE.md#access-from-other-devices).
 
-Keep login enabled when other people can reach the manager. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user container permissions.
+Keep login enabled when other people can reach the manager, and when any desktop has internet access: such a desktop reaches the published address through the host as the LAN does, and with sign-in off, or `MCP_AUTH_MODE=none`, its programs control every container. The manager warns about that combination at startup and on the Management page. Its Docker socket connection gives it control of the host Engine. The current application has one administrator, with no separate accounts or per-user container permissions.
 
 ## HTTPS and microphone access over LAN
 

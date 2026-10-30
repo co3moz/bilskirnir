@@ -53,7 +53,13 @@ import {
   shownValue,
   textProblem,
 } from "@/lib/settings"
-import type { ConfigVariable, ConfigurationCheck, Job, JobStarted } from "@/lib/types"
+import type {
+  ConfigVariable,
+  Configuration,
+  ConfigurationCheck,
+  Job,
+  JobStarted,
+} from "@/lib/types"
 import { followRestart } from "@/lib/update"
 
 /** The job of a settings change the page reloaded from, for the notice after the reload. */
@@ -425,6 +431,28 @@ function ApplyDialog({
   )
 }
 
+/** Sign-in or the MCP token off while the manager is published beyond loopback. */
+function ExposureAlert({ exposure }: { exposure: NonNullable<Configuration["exposure"]> }) {
+  const dashboard = exposure.open.includes("dashboard")
+  const mcp = exposure.open.includes("mcp")
+  const key =
+    dashboard && mcp
+      ? "settings.exposure.both"
+      : dashboard
+        ? "settings.exposure.dashboard"
+        : "settings.exposure.mcp"
+  return (
+    <Alert variant="destructive">
+      <RiAlertLine />
+      <AlertTitle>{t("settings.exposure.title")}</AlertTitle>
+      <AlertDescription>
+        <p>{t(key, { addresses: formatList(exposure.published) })}</p>
+        <p>{t("settings.exposure.fix")}</p>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 /**
  * The installation's settings by section. Where the WSL package takes changes, the editable ones
  * get a control, and **Apply and restart** has the package write them to `.env` and recreate
@@ -540,7 +568,8 @@ export function ConfigurationEditor() {
 
   return (
     <>
-      <div className="px-4 lg:px-6">
+      <div className="flex flex-col gap-3 px-4 lg:px-6">
+        {data.exposure && <ExposureAlert exposure={data.exposure} />}
         {job ? (
           <Alert>
             <Spinner />

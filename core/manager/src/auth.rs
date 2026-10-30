@@ -19,9 +19,11 @@ use std::{
 };
 use tokio::net::TcpListener;
 
+mod exposure;
 mod forwarded;
 mod interfaces;
 mod limiter;
+pub(crate) use exposure::{exposure, warn as warn_exposure};
 pub(crate) use forwarded::{HttpsProxy, spawn as follow_https_proxy};
 pub(crate) use interfaces::Interfaces;
 pub(crate) use limiter::Limiter;

@@ -974,6 +974,15 @@ export const es: Messages = {
   "settings.configurationHint":
     "Los valores con los que funciona el gestor, leídos de su entorno al arrancar. Las contraseñas y los tokens nunca se muestran.",
   "settings.configurationFailed": "No se pudo leer la configuración",
+  "settings.exposure.title": "Quien llegue a esta dirección es el administrador",
+  "settings.exposure.dashboard":
+    "El inicio de sesión está desactivado y el gestor se publica en {addresses}. Cualquier dispositivo que llegue a él, y cualquier escritorio con acceso a internet, usa el panel y la API sin contraseña.",
+  "settings.exposure.mcp":
+    "/mcp no pide token y el gestor se publica en {addresses}. Cualquier dispositivo que llegue a él, y cualquier escritorio con acceso a internet, controla todos los contenedores por MCP.",
+  "settings.exposure.both":
+    "El inicio de sesión está desactivado, /mcp no pide token y el gestor se publica en {addresses}. Cualquier dispositivo que llegue a él, y cualquier escritorio con acceso a internet, controla todos los contenedores.",
+  "settings.exposure.fix":
+    "Define una contraseña y un token MCP, o publica el gestor solo en este equipo con BIND_ADDRESS=127.0.0.1.",
   "settings.secretSet": "Definido, oculto",
   "settings.notSet": "Sin definir",
   "settings.idle": "Sin efecto mientras {name} esté desactivado.",
