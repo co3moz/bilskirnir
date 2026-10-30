@@ -21,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout},
 };
 
@@ -114,6 +114,35 @@ impl<R: AsyncRead + Unpin> AsyncRead for Bounded<R> {
             )));
         }
         Poll::Ready(Ok(()))
+    }
+}
+
+/// Read a line of at most `limit` bytes into `line`, its newline included, and whether it was cut:
+/// the rest of a longer line is read and dropped, so a desktop cannot make the manager hold an
+/// endless one. `None` once the stream ends.
+pub(super) async fn read_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    line: &mut Vec<u8>,
+    limit: usize,
+) -> std::io::Result<Option<bool>> {
+    line.clear();
+    let mut cut = false;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok((!line.is_empty() || cut).then_some(cut));
+        }
+        let (taken, ended) = match available.iter().position(|byte| *byte == b'\n') {
+            Some(at) => (at + 1, true),
+            None => (available.len(), false),
+        };
+        let kept = taken.min(limit.saturating_sub(line.len()));
+        line.extend_from_slice(&available[..kept]);
+        cut |= kept < taken;
+        reader.consume(taken);
+        if ended {
+            return Ok(Some(cut));
+        }
     }
 }
 
@@ -230,10 +259,17 @@ async fn connect(
     let logs = Arc::downgrade(app);
     let log_key = key.clone();
     tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
+        let mut stderr = BufReader::new(stderr);
+        let mut line = Vec::new();
+        while let Ok(Some(cut)) = read_line(&mut stderr, &mut line, LOG_LIMIT).await {
             let Some(app) = logs.upgrade() else { return };
-            app.desktop_mcp.log(&log_key, &line);
+            let text = String::from_utf8_lossy(&line);
+            let text = text.trim_end_matches(['\n', '\r']);
+            if cut {
+                app.desktop_mcp.log(&log_key, &format!("{text}…"));
+            } else {
+                app.desktop_mcp.log(&log_key, text);
+            }
         }
     });
     let listener = Listener {

@@ -3,7 +3,7 @@
 //! out, and that an endpoint's token opens that endpoint and no other route, also one an earlier
 //! release stored the hash of.
 use super::{
-    client::{Exec, MAX_TOOLS, check_tool_list, exec_args, relayed},
+    client::{Exec, MAX_TOOLS, check_tool_list, exec_args, read_line, relayed},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of, summary},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
@@ -24,6 +24,7 @@ use axum::{
 };
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
+use tokio::io::BufReader;
 use tower::ServiceExt;
 
 const ADMIN: &str = "test-token-with-at-least-32-characters";
@@ -347,6 +348,33 @@ fn a_server_runs_as_the_desktop_user_and_secret_values_reach_neither_a_command_l
     let first: Value = serde_json::from_slice(&first.unwrap()).unwrap();
     assert_eq!(first["headers"]["Authorization"], "Bearer hunter2");
     assert_eq!(first["url"], "http://127.0.0.1:8931/mcp");
+}
+
+#[tokio::test]
+async fn a_desktop_cannot_make_the_manager_hold_an_endless_line() {
+    let endless = [
+        b"short\n".as_slice(),
+        &[b'x'; 100],
+        b"\n\xff\xfe not text\n",
+        b"last",
+    ]
+    .concat();
+    // A small buffer, so a line arrives over several reads as from a pipe.
+    let mut reader = BufReader::with_capacity(16, endless.as_slice());
+    let mut line = Vec::new();
+    let mut read = Vec::new();
+    while let Some(cut) = read_line(&mut reader, &mut line, 10).await.unwrap() {
+        read.push((line.clone(), cut));
+    }
+    assert_eq!(
+        read,
+        [
+            (b"short\n".to_vec(), false),
+            (b"xxxxxxxxxx".to_vec(), true),
+            (b"\xff\xfe not tex".to_vec(), true),
+            (b"last".to_vec(), false),
+        ]
+    );
 }
 
 #[test]
