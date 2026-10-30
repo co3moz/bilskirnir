@@ -76,7 +76,7 @@ export function useDataTable<T extends RowData>({
   sorting?: SortingState
   hidden?: Record<string, boolean>
 }) {
-  return useTable({
+  const table = useTable({
     features,
     data,
     columns,
@@ -89,6 +89,14 @@ export function useDataTable<T extends RowData>({
       columnVisibility: Object.fromEntries(Object.keys(hidden).map((key) => [key, !hidden[key]])),
     },
   })
+  // A list that shrank, such as after deleting the last row of the last page, or a view with fewer
+  // rows, would leave the table past its end with nothing to show; it goes to the last page.
+  const { pageIndex } = table.state.pagination
+  const last = Math.max(table.getPageCount() - 1, 0)
+  React.useEffect(() => {
+    if (pageIndex > last) table.setPageIndex(last)
+  }, [pageIndex, last, table])
+  return table
 }
 
 export function SortHeader<T extends RowData>({
