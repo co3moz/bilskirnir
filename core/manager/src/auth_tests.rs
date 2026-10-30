@@ -361,3 +361,39 @@ async fn expired_session_is_not_accepted() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn another_site_cannot_start_work_with_a_get() {
+    let get = |uri: &'static str, site: Option<&'static str>| {
+        let mut request = Request::builder()
+            .header("host", "localhost:8080")
+            .method("GET")
+            .uri(uri);
+        if let Some(site) = site {
+            request = request.header("sec-fetch-site", site);
+        }
+        router(app(false)).oneshot(request.body(Body::empty()).unwrap())
+    };
+    for uri in [
+        "/api/backup",
+        "/api/containers/c1/files/download?path=/home/desktop/project",
+        "/api/images/i1/archive",
+        "/api/volumes/projects/archive",
+        "/api/volumes/projects/files/download?path=/",
+    ] {
+        // An <img> or a link of another site, also one on another port of this host.
+        for site in ["cross-site", "same-site"] {
+            let response = get(uri, Some(site)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{uri} {site}");
+        }
+        // The dashboard, an address opened by hand and a client that is no browser get on to
+        // the route, which answers for itself.
+        for site in [Some("same-origin"), Some("none"), None] {
+            let response = get(uri, site).await.unwrap();
+            assert_ne!(response.status(), StatusCode::FORBIDDEN, "{uri} {site:?}");
+        }
+    }
+    // A read that starts nothing stays as it was.
+    let response = get("/api/containers", Some("cross-site")).await.unwrap();
+    assert_ne!(response.status(), StatusCode::FORBIDDEN);
+}
