@@ -274,9 +274,11 @@ impl App {
                 bail!("Container image does not match");
             }
         } else {
-            self.inspect("image", env.container_image()).await.context(
+            let image = self.inspect("image", env.container_image()).await.context(
                 "Container image is missing; setup stopped without changing the saved image ID",
             )?;
+            // A record restored from a backup names its image by ID, which can be any image here.
+            crate::catalog::check_desktop(&image["Config"]["Labels"])?;
         }
         for (name, internal) in [(&env.private_network, true), (&env.egress_network, false)] {
             if let Some(info) = self.optional_inspect("network", name).await? {

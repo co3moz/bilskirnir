@@ -7,7 +7,7 @@ use super::{
     format::{MANIFEST_LIMIT, Name, RECORDS_LIMIT, SMALL_LIMIT},
     installation,
     manifest::{Ending, Manifest, PartKind, Records},
-    remap::{Loaded, not_created, remap},
+    remap::{Loaded, leave_out_unlisted, not_created, remap, switch_off_disabled},
     review::{
         Present, check_manifest, check_records, conflict_message, files_reference, image_reference,
         parse_manifest, review,
@@ -199,6 +199,12 @@ impl App {
         self.set_progress(job_id, None)?;
 
         self.begin_stage(job_id, "records")?;
+        let tokens = records
+            .endpoints
+            .iter()
+            .filter(|endpoint| endpoint.token_hash.is_some())
+            .map(|endpoint| endpoint.name.clone())
+            .collect::<Vec<_>>();
         let saved = self.save_records(job_id, records, &loaded).await;
         let (records, skipped) = match saved {
             Ok(saved) => saved,
@@ -222,12 +228,6 @@ impl App {
                 waiting.push(json!({"id": container.id, "name": name, "reason": reason}));
                 continue;
             }
-            if let Err(error) = self.installation_allows(&container.spec) {
-                self.append_log(
-                    job_id,
-                    &format!("\"{name}\" keeps its settings, although {error:#}."),
-                )?;
-            }
             let lock = self.resource_lock(&format!("container:{}", container.id));
             let _guard = lock.lock().await;
             match self.create_stopped(container, &manager).await {
@@ -248,10 +248,13 @@ impl App {
                 }
             }
         }
-        if !records.endpoints.is_empty() {
+        if !tokens.is_empty() {
             self.append_log(
                 job_id,
-                "The MCP endpoints keep their tokens: an agent's token opens the same endpoint here.",
+                &format!(
+                    "The MCP endpoints {} come without their tokens, so a token from the backup's installation opens nothing here. Give their agents new ones with Create token on the Endpoints page.",
+                    tokens.join(", ")
+                ),
             )?;
         }
         Ok(json!({
@@ -261,6 +264,7 @@ impl App {
             "images": loaded.images.len(),
             "volumes": created.volumes,
             "endpoints": records.endpoints.iter().map(|e| &e.name).collect::<Vec<_>>(),
+            "endpoints_without_tokens": tokens,
             "secrets_left_out": manifest.secrets_left_out,
             "missing_volumes": review.missing_volumes,
         }))
@@ -367,12 +371,12 @@ impl App {
         let loaded = load.finish().await?;
         let info = self.inspect("image", &loaded).await?;
         let image_id = info["Id"].as_str().context("Missing image ID")?.to_owned();
-        if info["Config"]["Labels"]["thoric.desktop"] != "true" {
+        if let Err(error) = crate::catalog::check_desktop(&info["Config"]["Labels"]) {
             // An untagged image is this restore's own; a tagged one was already on the host.
             if info["RepoTags"].as_array().is_none_or(Vec::is_empty) {
                 let _ = self.docker(&["image", "rm", &image_id]).await;
             }
-            bail!("Part {index} of the backup is not a Thoric desktop image");
+            return Err(error.context(format!("Part {index} of the backup")));
         }
         Ok(image_id)
     }
@@ -420,6 +424,19 @@ impl App {
         .lines()
         .map(str::to_owned)
         .collect();
+        // The volumes a request may mount here, as the volume list shows them.
+        let listed: HashSet<String> = match self.config.volume_filter.as_deref() {
+            None => volumes.clone(),
+            Some(filter) => String::from_utf8_lossy(
+                &self
+                    .docker_args(&crate::volumes::list_args(Some(filter)))
+                    .await?,
+            )
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter_map(|volume| volume["Name"].as_str().map(str::to_owned))
+            .collect(),
+        };
         let passwords: HashSet<String> = records
             .proxy_passwords
             .iter()
@@ -427,6 +444,27 @@ impl App {
             .collect();
         let mut skipped = HashMap::new();
         for container in &mut records.containers {
+            let name = container.spec.name.clone();
+            let off = switch_off_disabled(&self.config, &mut container.spec);
+            if !off.is_empty() {
+                self.append_log(
+                    job_id,
+                    &format!(
+                        "\"{name}\": switched off {}, which this installation disables.",
+                        off.join(", ")
+                    ),
+                )?;
+            }
+            let left_out = leave_out_unlisted(container, &volumes, &listed);
+            if !left_out.is_empty() {
+                self.append_log(
+                    job_id,
+                    &format!(
+                        "\"{name}\": left out the volumes {}, which VOLUME_FILTER does not list here.",
+                        left_out.join(", ")
+                    ),
+                )?;
+            }
             if let Some(reason) = not_created(container, &volumes) {
                 container.last_error = Some(reason.clone());
                 skipped.insert(container.id.clone(), reason);
@@ -496,14 +534,21 @@ impl App {
     /// The image a reset, or a retry that creates a missing container again, starts it from: the
     /// source image ID its record keeps, or, when Docker no longer has it, as on an installation
     /// restored from a backup of another, the catalog image its settings name, downloaded when
-    /// needed. Any other missing image is an error, and the container is left as it is.
+    /// needed. Any other missing image is an error, and so is one that is not a Thoric desktop
+    /// image of a level this manager handles; the container is left as it is.
     pub(crate) async fn source_image(
         &self,
         env: &mut Container,
         job_id: &str,
     ) -> anyhow::Result<()> {
-        if self.inspect("image", &env.source_image_id).await.is_ok() {
-            return Ok(());
+        if let Ok(info) = self.inspect("image", &env.source_image_id).await {
+            // A backup names the image by ID, which can be any image this host has.
+            return crate::catalog::check_desktop(&info["Config"]["Labels"]).with_context(|| {
+                format!(
+                    "The image the container starts from, {}",
+                    env.source_image_id
+                )
+            });
         }
         let Some(image) = crate::catalog::catalog()
             .into_iter()

@@ -607,7 +607,7 @@ export const de: Messages = {
     "Die ganze Installation in einer Datei sichern oder eine Sicherung hierher übernehmen.",
   "backup.create": "Sichern",
   "backup.always":
-    "Eine Sicherung enthält immer die Container mit ihren Einstellungen und ihrer Maschinenidentität, ihre Compose-Werte und die MCP-Endpunkte mit ihren Tokens.",
+    "Eine Sicherung enthält immer die Container mit ihren Einstellungen und ihrer Maschinenidentität, ihre Compose-Werte und die MCP-Endpunkte, die eine Wiederherstellung ohne ihre Tokens zurückbringt.",
   "backup.images": "Gespeicherte Images",
   "backup.imagesHint.one":
     "{count} gespeichertes Image mit Symbol und Compose. Katalog-Images werden dort, wo es wiederhergestellt wird, neu heruntergeladen.",

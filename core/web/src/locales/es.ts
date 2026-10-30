@@ -598,7 +598,7 @@ export const es: Messages = {
   "backup.description": "Guarda toda la instalación en un archivo o trae una copia a esta.",
   "backup.create": "Crear copia",
   "backup.always":
-    "Una copia siempre incluye los contenedores con sus ajustes e identidad de máquina, los valores de sus composes y los puntos de acceso MCP con sus tokens.",
+    "Una copia siempre incluye los contenedores con sus ajustes e identidad de máquina, los valores de sus composes y los puntos de acceso MCP, que una restauración devuelve sin sus tokens.",
   "backup.images": "Imágenes guardadas",
   "backup.imagesHint.one":
     "{count} imagen guardada, con su icono y su compose. Las imágenes del catálogo se vuelven a descargar donde se restaure.",

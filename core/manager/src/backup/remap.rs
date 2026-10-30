@@ -2,12 +2,19 @@
 //! image store computes, which need not be the one the backup's installation had, so every record
 //! that names an image ID is moved to the image here; the restored images go by Thoric's own
 //! tags; and the names of a container's Docker objects are made from its id again rather than
-//! taken from the file.
+//! taken from the file. The endpoints come without their token hashes, so a token for the
+//! installation the backup came from, or one written into the file, opens nothing here. What this
+//! installation does not allow a container is switched off or left out, as the create route
+//! would refuse it.
 use super::{
     manifest::Records,
     review::{docker_names, files_reference, image_kind, image_reference},
 };
-use crate::model::{Container, WorkingImage};
+use crate::{
+    config::Config,
+    model::{Container, ContainerSpec, WorkingImage},
+    outbound::ProxyChoice,
+};
 use std::collections::{HashMap, HashSet};
 
 /// What the restore loaded and what Docker resolves here.
@@ -75,7 +82,62 @@ pub(crate) fn remap(mut records: Records, loaded: &Loaded) -> Records {
             crate::compose::setup_again(container);
         }
     }
+    for endpoint in &mut records.endpoints {
+        endpoint.token_hash = None;
+    }
     records
+}
+
+/// Switch off in a restored container's settings what this installation disables, which the
+/// create route refuses, and return the settings switched off. A GPU stays asked for: without a
+/// route to one the container is not created, and says why.
+pub(crate) fn switch_off_disabled(config: &Config, spec: &mut ContainerSpec) -> Vec<&'static str> {
+    let mut off = Vec::new();
+    for (on, allowed, name) in [
+        (&mut spec.internet, config.internet, "internet"),
+        (&mut spec.sudo, config.sudo, "sudo"),
+        (&mut spec.gamepad, config.gamepad, "gamepad"),
+        (&mut spec.vpn, config.vpn, "vpn"),
+        (&mut spec.audio, config.audio, "audio"),
+        (
+            &mut spec.microphone,
+            config.microphone && config.audio,
+            "microphone",
+        ),
+    ] {
+        if *on && !allowed {
+            *on = false;
+            off.push(name);
+        }
+    }
+    if spec.proxy == Some(ProxyChoice::Installation) && config.proxy.is_none() {
+        spec.proxy = None;
+        off.push("proxy");
+    }
+    off
+}
+
+/// Leave out of a restored container the volumes it mounts that are here but that `VOLUME_FILTER`
+/// does not list, which no request could mount on this installation, and return their names. A
+/// volume that is not here at all stays: the container waits for it.
+pub(crate) fn leave_out_unlisted(
+    container: &mut Container,
+    present: &HashSet<String>,
+    listed: &HashSet<String>,
+) -> Vec<String> {
+    let hidden = |volume: &str| present.contains(volume) && !listed.contains(volume);
+    let mut named = HashSet::new();
+    let left_out = container
+        .mounts()
+        .into_iter()
+        .filter(|mount| hidden(&mount.volume) && named.insert(mount.volume.clone()))
+        .map(|mount| mount.volume)
+        .collect::<Vec<_>>();
+    container.spec.mounts.retain(|mount| !hidden(&mount.volume));
+    if let Some(setup) = &mut container.setup {
+        setup.mounts.retain(|mount| !hidden(&mount.volume));
+    }
+    left_out
 }
 
 /// Why a restored container is not created now, which its record shows until a retry creates it;

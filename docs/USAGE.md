@@ -284,7 +284,7 @@ The build of the manager image writes the list, so it is the list of the release
 
 ## Back up or move the whole installation
 
-**Management** has **Backup and restore**, which keeps the whole installation in one `.tar.gz` file or brings it into another installation. A backup always carries the containers with their settings and machine identity, their composes and values, and the MCP endpoints with their tokens. Tick what else it carries:
+**Management** has **Backup and restore**, which keeps the whole installation in one `.tar.gz` file or brings it into another installation. A backup always carries the containers with their settings and machine identity, their composes and values, and the MCP endpoints. Restored endpoints come without their tokens, so give their agents new ones with **Create token**. Tick what else it carries:
 
 - **Saved images**: snapshots, script builds and imports with their icons and composes. Catalog images never travel; the other installation downloads them when it needs them.
 - **Containers' files**: what is installed and saved in each container outside its volumes, so a container comes back as it was instead of as after a reset. Docker pauses a running desktop briefly while it saves its files.

@@ -604,7 +604,7 @@ export const fr: Messages = {
     "Conservez toute l'installation dans un fichier, ou apportez une sauvegarde dans celle-ci.",
   "backup.create": "Sauvegarder",
   "backup.always":
-    "Une sauvegarde contient toujours les conteneurs avec leurs réglages et leur identité de machine, les valeurs de leurs composes et les points d'accès MCP avec leurs jetons.",
+    "Une sauvegarde contient toujours les conteneurs avec leurs réglages et leur identité de machine, les valeurs de leurs composes et les points d'accès MCP, qu'une restauration rétablit sans leurs jetons.",
   "backup.images": "Images enregistrées",
   "backup.imagesHint.one":
     "{count} image enregistrée, avec son icône et son compose. Les images du catalogue sont téléchargées à nouveau là où elle est restaurée.",

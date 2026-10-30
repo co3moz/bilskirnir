@@ -596,7 +596,7 @@ export const tr: Messages = {
     "Tüm kurulumu tek bir dosyada saklayın ya da bir yedeği bu kuruluma getirin.",
   "backup.create": "Yedekle",
   "backup.always":
-    "Bir yedek her zaman konteynerleri ayarları ve makine kimlikleriyle, compose değerlerini ve MCP uç noktalarını token'larıyla birlikte içerir.",
+    "Bir yedek her zaman konteynerleri ayarları ve makine kimlikleriyle, compose değerlerini ve MCP uç noktalarını içerir; geri yükleme uç noktaları token'ları olmadan getirir.",
   "backup.images": "Kayıtlı imajlar",
   "backup.imagesHint.one":
     "Simgesi ve compose'uyla {count} kayıtlı imaj. Katalog imajları, yedeğin geri yüklendiği yerde yeniden indirilir.",

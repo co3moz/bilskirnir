@@ -610,7 +610,7 @@ export const en = {
   "backup.description": "Keep the whole installation in one file, or bring a backup into this one.",
   "backup.create": "Back up",
   "backup.always":
-    "A backup always holds the containers with their settings and machine identity, their compose values and the MCP endpoints with their tokens.",
+    "A backup always holds the containers with their settings and machine identity, their compose values and the MCP endpoints, which a restore brings back without their tokens.",
   "backup.images": "Saved images",
   "backup.imagesHint.one":
     "{count} saved image, with its icon and compose. Catalog images download again where it is restored.",

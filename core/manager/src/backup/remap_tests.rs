@@ -145,3 +145,98 @@ fn a_container_waits_without_its_files_or_a_volume_it_mounts() {
             .contains("the volume elsewhere is not on this installation")
     );
 }
+
+#[test]
+fn restored_endpoints_come_without_their_tokens() {
+    let mut records = records();
+    records.endpoints = vec![crate::backup::tests::endpoint("desk", &["c1"])];
+    assert!(records.endpoints[0].token_hash.is_some());
+    let records = remap(records, &loaded());
+    assert_eq!(records.endpoints[0].token_hash, None);
+}
+
+#[test]
+fn what_this_installation_disables_is_switched_off() {
+    let mut config = crate::config::Config::for_tests();
+    let mut spec = container("c1", "Desk", CATALOG, &[]).spec;
+    spec.internet = true;
+    spec.sudo = true;
+    spec.gamepad = true;
+    spec.vpn = true;
+    spec.audio = true;
+    spec.microphone = true;
+    spec.gpu = true;
+    spec.proxy = Some(ProxyChoice::Installation);
+    let allowed = |config: &mut crate::config::Config| {
+        config.internet = true;
+        config.sudo = true;
+        config.gamepad = true;
+        config.vpn = true;
+        config.audio = true;
+        config.microphone = true;
+    };
+    allowed(&mut config);
+    config.proxy = crate::outbound::installation(
+        &|name| (name == "PROXY_URL").then(|| "http://proxy.example:3128".to_owned()),
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert!(config.proxy.is_some());
+    let mut kept = spec.clone();
+    assert!(switch_off_disabled(&config, &mut kept).is_empty());
+    assert!(kept.gamepad && kept.vpn && kept.proxy.is_some());
+
+    config.internet = false;
+    config.sudo = false;
+    config.gamepad = false;
+    config.vpn = false;
+    config.audio = false;
+    config.proxy = None;
+    let off = switch_off_disabled(&config, &mut spec);
+    assert_eq!(
+        off,
+        [
+            "internet",
+            "sudo",
+            "gamepad",
+            "vpn",
+            "audio",
+            "microphone",
+            "proxy"
+        ]
+    );
+    assert!(!spec.internet && !spec.sudo && !spec.gamepad && !spec.vpn);
+    assert!(!spec.audio && !spec.microphone && spec.proxy.is_none());
+    // The GPU stays asked for: the container then says why it was not created.
+    assert!(spec.gpu);
+    spec.validate().unwrap();
+}
+
+#[test]
+fn volumes_volume_filter_hides_are_left_out_and_missing_ones_waited_for() {
+    let mut desk = container(
+        "c1",
+        "Desk",
+        CATALOG,
+        &["hidden", "listed", "missing", "hidden"],
+    );
+    desk.working_image = Some(WorkingImage {
+        image_id: "sha256:files".into(),
+        reference: "thoric/container:restored-c1".into(),
+    });
+    desk.setup.as_mut().unwrap().mounts = vec![crate::model::Mount {
+        volume: "hidden".into(),
+        target: "/home/desktop/compose".into(),
+        readonly: false,
+    }];
+    let present = HashSet::from(["listed".to_owned(), "hidden".to_owned()]);
+    let listed = HashSet::from(["listed".to_owned()]);
+    assert_eq!(leave_out_unlisted(&mut desk, &present, &listed), ["hidden"]);
+    let volumes = desk
+        .mounts()
+        .into_iter()
+        .map(|mount| mount.volume)
+        .collect::<Vec<_>>();
+    assert_eq!(volumes, ["listed", "missing"]);
+    assert!(not_created(&desk, &present).is_some_and(|reason| reason.contains("missing")));
+}

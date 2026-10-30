@@ -86,6 +86,14 @@ pub fn check_level(labels: &Value) -> anyhow::Result<()> {
         None => Ok(()),
     }
 }
+/// Refuses an image, by its labels, that is not a Thoric desktop image of a level this manager
+/// handles: what every container starts from.
+pub fn check_desktop(labels: &Value) -> anyhow::Result<()> {
+    if labels["thoric.desktop"] != "true" {
+        anyhow::bail!("Image must be derived from a Thoric desktop image");
+    }
+    check_level(labels)
+}
 /// Why this manager cannot use a desktop image with these labels, if it cannot.
 pub fn level_refusal(labels: &Value) -> Option<String> {
     refusal_for(&labels[LEVEL_LABEL], MIN_DESKTOP_LEVEL, DESKTOP_LEVEL)
