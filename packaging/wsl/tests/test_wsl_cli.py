@@ -10,10 +10,12 @@ health check unless .env holds the line in BROKEN.
 """
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import shutil
+import sqlite3
 import stat
 import subprocess
 import tempfile
@@ -30,15 +32,23 @@ STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$(basename "$0") $*" >> "$CALLS"
 case "$(basename "$0") $*" in
     "curl "*) [[ -n ${RELEASE:-} ]] || exit 22; printf '{\\n  "url": "x",\\n  "tag_name": "%s",\\n  "name": "%s"\\n}\\n' "$RELEASE" "$RELEASE" ;;
+    "docker pull "*":24.04") touch "$MOVED"; exit "${PULL_STATUS:-0}" ;;
     "docker pull "*) exit "${PULL_STATUS:-0}" ;;
+    "docker tag "*) touch "$MOVED" ;;
     "docker run "*) exec cat "$IMAGE_ROOT${*: -1}" ;;
     "docker compose pull") exit "${COMPOSE_PULL_STATUS:-0}" ;;
+    "docker compose exec -T manager python3 "*) printf '%s\\n' "${RECORDS_SAY-free}"; exit "${RECORDS_STATUS:-0}" ;;
     "docker compose exec "*)
         [[ -n ${BROKEN:-} ]] && grep -qxF "$BROKEN" "$ENV_FILE" && exit 1
         printf '[{"reference": "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04"}]\\n' ;;
     "docker compose logs "*) echo "The database was moved to a later layout." ;;
     "docker compose ps "*) echo manager-container ;;
     "docker inspect "*) printf '%s\\n' "${RELEASE_LABEL-<no value>}" ;;
+    "docker image inspect --format {{.Id}} "*":24.04")
+        [[ -n ${DOWNLOADED:-} ]] || exit 1
+        if [[ -e $MOVED ]]; then echo "${NEW_ID:-}"; else echo "${OLD_ID:-}"; fi ;;
+    "docker image inspect --format {{len .RepoTags}} "*) echo "${OLD_TAGS:-0}" ;;
+    "docker image rm sha256:"*) exit "${RM_STATUS:-0}" ;;
     "docker image inspect "*":24.04") [[ -n ${DOWNLOADED:-} ]] || exit 1 ;;
     "docker image inspect "*) [[ -n ${RELEASE_TAG_HERE:-} ]] || exit 1 ;;
     "sudo "*) exec "$@" ;;
@@ -105,6 +115,8 @@ class UpdateTest(unittest.TestCase):
             "IMAGE_ROOT": str(self.image),
             "TMPDIR": str(self.tmp),
             "ENV_FILE": str(self.install / ".env"),
+            # Exists once a pull or a tag moved the desktop's catalog reference to a new image.
+            "MOVED": str(self.dir / "moved"),
         }
         # The installation as the 0.2.0 package left it, and the files the newer manager bundles.
         self.old = {
@@ -146,6 +158,7 @@ class UpdateTest(unittest.TestCase):
 
     def update(self, env_file, release="v0.3.0", pull_status=0, **stubs):
         (self.install / ".env").write_text(env_file)
+        (self.dir / "moved").unlink(missing_ok=True)
         env = {**self.env, "RELEASE": release or "", "PULL_STATUS": str(pull_status), **stubs}
         result = subprocess.run(["bash", str(self.cli), "update"], env=env, capture_output=True, text=True)
         calls = self.calls.read_text().splitlines() if self.calls.exists() else []
@@ -254,6 +267,73 @@ class UpdateTest(unittest.TestCase):
                 _, _, calls = self.update(before, DOWNLOADED="1", RELEASE_LABEL=label)
                 self.assertIn(f"docker pull {desktop}:24.04", calls)
                 self.assertFalse(any(call.startswith("docker tag ") for call in calls))
+
+    def test_the_desktop_image_an_update_replaced_goes_when_nothing_needs_it(self):
+        desktop = "ghcr.io/co3moz/thoric/ubuntu-xfce"
+        old, new = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+        before = f"MANAGER_IMAGE={REPOSITORY}:0.3.0\n"
+        stubs = {"DOWNLOADED": "1", "RELEASE_LABEL": "0.3.0", "OLD_ID": old, "NEW_ID": new}
+        result, _, calls = self.update(before, **stubs)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # Without force, after the catalog tag moved and once the manager's records keep nothing of it.
+        self.assertLess(calls.index(f"docker tag {desktop}:0.3.0 {desktop}:24.04"), calls.index(f"docker image rm {old}"))
+        # The call spans lines, since the script does; the image is its last argument.
+        records = next(i for i, call in enumerate(calls) if call.startswith("docker compose exec -T manager python3 -c "))
+        self.assertLess(records, calls.index(f" {old}"))
+        self.assertLess(calls.index(f" {old}"), calls.index(f"docker image rm {old}"))
+        self.assertIn(f"Removed the image {desktop}:24.04 named before, aaaaaaaaaaaa.", result.stdout)
+        self.assertFalse(any("prune" in call or call.startswith("docker image rm -f") for call in calls))
+        for changed, said, removed in (
+            # A release tag that was here before still names it.
+            ({"OLD_TAGS": "1"}, "stays, since another tag names it", False),
+            # A record keeps it, or the records cannot be read.
+            ({"RECORDS_SAY": "", "RECORDS_STATUS": "1"}, "stays, since a container or a saved image was made from it", False),
+            ({"RECORDS_SAY": "needed"}, "stays, since a container or a saved image was made from it", False),
+            # Docker refuses while a container uses it.
+            ({"RM_STATUS": "1"}, "stays, since a container or an image built on it uses it", True),
+            # The reference still names the image it named before.
+            ({"NEW_ID": old}, None, False),
+        ):
+            with self.subTest(changed=changed):
+                self.calls.unlink()
+                result, _, calls = self.update(before, **{**stubs, **changed})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(f"docker image rm {old}" in calls, removed)
+                if said:
+                    self.assertIn(f"The image {desktop}:24.04 named before, aaaaaaaaaaaa, {said}.", result.stdout)
+                else:
+                    self.assertNotIn("named before", result.stdout)
+
+    @unittest.skipUnless(shutil.which("python3"), "needs python3")
+    def test_the_records_that_keep_an_image_are_read_from_the_managers_database(self):
+        # The script the update runs with python3 inside the manager's container, against a database
+        # with the manager's records table.
+        script = re.search(r"^IMAGE_RECORDS='(.*?)^'$", CLI.read_text(), re.M | re.S).group(1)
+        data = self.dir / "data"
+        data.mkdir()
+        database = sqlite3.connect(data / "state.sqlite")
+        database.execute("CREATE TABLE records(kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id))")
+        for kind, record in (
+            ("environment", {"id": "a", "source_image_id": "sha256:started"}),
+            ("image", {"id": "s", "image_id": "sha256:saved"}),
+            ("job", {"id": "j", "image_id": "sha256:free"}),
+        ):
+            database.execute("INSERT INTO records VALUES (?, ?, ?)", (kind, record["id"], json.dumps(record)))
+        database.commit()
+
+        def records(image):
+            return subprocess.run(["python3", "-c", script, image], env={**os.environ, "DATA_DIR": str(data)},
+                                  capture_output=True, text=True)
+
+        self.assertEqual(records("sha256:free").stdout, "free\n")
+        for image in ("sha256:started", "sha256:saved"):
+            self.assertNotEqual(records(image).returncode, 0)
+            self.assertEqual(records(image).stdout, "")
+        # A record that does not read may keep it.
+        database.execute("INSERT INTO records VALUES ('environment', 'b', '{')")
+        database.commit()
+        self.assertNotEqual(records("sha256:free").returncode, 0)
+        database.close()
 
 
     def test_a_renamed_setting_gets_its_new_name_before_the_manager_starts(self):

@@ -142,14 +142,14 @@ newest_release() {
 # published with it and tags them as the catalog reference; a manager built from the source downloads
 # the reference itself. This does the same.
 update_profiles() {
-    local catalog release ref source source_was_here
+    local catalog release ref source source_was_here replaced
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
         ! release=$(docker inspect --format '{{index .Config.Labels "thoric.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
     for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
-        if ! docker image inspect "$ref" >/dev/null 2>&1; then
+        if ! replaced=$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null); then
             continue
         fi
         if [[ $release =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
@@ -163,7 +163,47 @@ update_profiles() {
         else
             docker pull "$ref"
         fi
+        remove_replaced "$ref" "$replaced"
     done
+}
+# Prints free when no record in the manager's database keeps the image its argument names: a
+# container record that starts from it, which a reset creates from it again, or a saved image's
+# record that names it. It fails when a record does not read, since that one may. The manager
+# applies the same rules (core/manager/src/image_removal.rs), and its tests hold the names read here
+# to its records.
+IMAGE_RECORDS='
+import json, os, sqlite3, sys
+path = os.path.join(os.environ.get("DATA_DIR", "data"), "state.sqlite")
+database = sqlite3.connect("file:" + path + "?mode=ro", uri=True)
+for kind, field in (("environment", "source_image_id"), ("image", "image_id")):
+    for (data,) in database.execute("SELECT data FROM records WHERE kind = ?", (kind,)):
+        if json.loads(data)[field] == sys.argv[1]:
+            sys.exit("needed")
+print("free")
+'
+# The image a catalog reference named before the update moved it, which Docker otherwise keeps
+# without a name, 1 to 2 GB for each release. It goes only when nothing needs it: no other tag,
+# such as a release tag that was here before, no record of the manager and no container, which
+# Docker checks itself, since nothing is forced.
+remove_replaced() {
+    local ref=$1 replaced=$2 short=${2#sha256:} tags needed
+    short=${short:0:12}
+    if [[ $(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null) == "$replaced" ]] ||
+        ! tags=$(docker image inspect --format '{{len .RepoTags}}' "$replaced" 2>/dev/null); then
+        return 0
+    fi
+    if [[ $tags != 0 ]]; then
+        echo "The image $ref named before, $short, stays, since another tag names it."
+        return 0
+    fi
+    needed=$(compose exec -T manager python3 -c "$IMAGE_RECORDS" "$replaced" 2>/dev/null) || needed=""
+    if [[ $needed != free ]]; then
+        echo "The image $ref named before, $short, stays, since a container or a saved image was made from it."
+    elif docker image rm "$replaced" >/dev/null 2>&1; then
+        echo "Removed the image $ref named before, $short."
+    else
+        echo "The image $ref named before, $short, stays, since a container or an image built on it uses it."
+    fi
 }
 checksum() {
     sha256sum <"$1" | cut -c1-64

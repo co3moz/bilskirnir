@@ -4,6 +4,7 @@
 //! saved image goes by its own tag, or by its ID once that tag is gone, and its record goes with
 //! it; an image registered from the host keeps its Docker image; Docker's refusal keeps the record
 //! and its meaning; nothing is forced or pruned, and a busy image is refused instead of waited for.
+//! The image a catalog download replaced goes only when no record, tag or container needs it.
 use super::*;
 use axum::{body::Body, http::Request};
 use tower::ServiceExt;
@@ -413,4 +414,112 @@ async fn tags_without_a_record_are_dropped_at_startup() {
         ]
     );
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn an_image_a_download_replaced_goes_only_when_nothing_needs_it() {
+    let reference = "ghcr.io/co3moz/thoric/ubuntu-xfce:24.04";
+    let untagged = |id: &str| {
+        format!(
+            "  'image inspect sha256:{id}') echo '[{{\"Id\":\"sha256:{id}\",\"RepoTags\":[]}}]' ;;\n"
+        )
+    };
+    let mut cases = ["started", "saved", "used", "unread"]
+        .map(untagged)
+        .concat();
+    cases.push_str(concat!(
+        "  'image inspect sha256:free') [ -e free-gone ] && { echo 'Error response from daemon: No such image: sha256:free' >&2; exit 1; }; echo '[{\"Id\":\"sha256:free\",\"RepoTags\":[]}]' ;;\n",
+        "  'image rm sha256:free') touch free-gone; echo 'Deleted: sha256:free' ;;\n",
+        "  'image inspect sha256:gone') echo 'Error response from daemon: No such image: sha256:gone' >&2; exit 1 ;;\n",
+        "  'image inspect sha256:tagged') echo '[{\"Id\":\"sha256:tagged\",\"RepoTags\":[\"ghcr.io/co3moz/thoric/ubuntu-xfce:1.2.0\"]}]' ;;\n",
+        "  'image rm sha256:used') echo 'Error response from daemon: conflict: unable to delete sha256:used (must be forced) - image is being used by stopped container 1234' >&2; exit 1 ;;\n",
+        "  'image rm sha256:unread') echo 'Deleted: sha256:unread' ;;\n",
+    ));
+    let (app, dir) = fake_docker(&cases);
+    // A reset creates this container from the image again, and the import names it.
+    app.db
+        .put(CONTAINERS, "a", &container("a", "sha256:started"))
+        .unwrap();
+    let import = record("s", "import", "sha256:saved", "someone/desktop:1");
+    app.db.put("image", "s", &import).unwrap();
+    let said = |id: &str| {
+        let app = app.clone();
+        let id = id.to_owned();
+        async move { app.remove_replaced(&id, reference).await }
+    };
+    assert_eq!(
+        said("sha256:free").await,
+        format!("Removed the image {reference} named before, free.")
+    );
+    assert_eq!(
+        said("sha256:gone").await,
+        format!("The image {reference} named before, gone, is gone already.")
+    );
+    // A release tag that was here before the download keeps it.
+    assert_eq!(
+        said("sha256:tagged").await,
+        format!(
+            "The image {reference} named before, tagged, stays, since ghcr.io/co3moz/thoric/ubuntu-xfce:1.2.0 names it too."
+        )
+    );
+    for id in ["started", "saved"] {
+        assert_eq!(
+            said(&format!("sha256:{id}")).await,
+            format!(
+                "The image {reference} named before, {id}, stays, since a container or a saved image was made from it."
+            )
+        );
+    }
+    // Docker refuses it while a container uses it, and nothing is forced.
+    assert_eq!(
+        said("sha256:used").await,
+        format!(
+            "The image {reference} named before, used, stays, since a container or an image built on it uses it."
+        )
+    );
+    // A record that does not read may start from it.
+    app.db
+        .connection()
+        .execute(
+            "INSERT INTO records(kind,id,data) VALUES(?1,'broken','{')",
+            [CONTAINERS],
+        )
+        .unwrap();
+    assert!(
+        said("sha256:unread")
+            .await
+            .ends_with("stays, since a container or a saved image was made from it.")
+    );
+    assert_eq!(
+        removals(&dir),
+        ["image rm sha256:free", "image rm sha256:used"]
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn the_wsl_update_asks_the_records_that_keep_an_image() {
+    // `thoric update` in the WSL package removes the desktop images it replaced by the same rules,
+    // reading this database inside the manager's container. Checked from here, since a change to
+    // the records, their kinds or the database's place is what leaves it behind.
+    let script = include_str!("../../../packaging/wsl/thoric");
+    let started = serde_json::to_value(container("a", "sha256:a")).unwrap();
+    let saved =
+        serde_json::to_value(record("s", "import", "sha256:s", "someone/desktop:1")).unwrap();
+    assert_eq!(started["source_image_id"], "sha256:a");
+    assert_eq!(saved["image_id"], "sha256:s");
+    for read in [
+        format!("((\"{CONTAINERS}\", \"source_image_id\"), (\"image\", \"image_id\"))"),
+        format!(
+            "os.environ.get(\"DATA_DIR\", \"data\"), \"{}\"",
+            crate::db::FILE
+        ),
+        "SELECT data FROM records WHERE kind = ?".to_owned(),
+    ] {
+        assert!(
+            script.contains(&read),
+            "packaging/wsl/thoric must read {read}"
+        );
+    }
 }
