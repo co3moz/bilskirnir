@@ -1,9 +1,11 @@
 //! The administrator's MCP channel at `/mcp`: Streamable HTTP through the official Rust SDK,
 //! behind its bearer token and Thoric's Host and Origin checks. This file is the transport and
 //! the server handler, which refuses an unknown tool or arguments its schema does not take;
-//! `tools` is the catalog of every tool and its schema, and `dispatch` runs a call through the
-//! HTTP handler or the function behind its route, under the same locks.
+//! `tools` is the catalog of every tool and its schema, `hints` gives each its title and whether
+//! it is idempotent, and `dispatch` runs a call through the HTTP handler or the function behind
+//! its route, under the same locks.
 mod dispatch;
+mod hints;
 mod tools;
 
 use crate::{App, activity, auth, error, human};

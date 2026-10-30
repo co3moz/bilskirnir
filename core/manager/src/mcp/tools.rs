@@ -33,7 +33,6 @@ fn tool(
         ToolAnnotations::new()
             .read_only(read_only)
             .destructive(destructive)
-            .idempotent(read_only)
             .open_world(open_world),
     );
     tool
@@ -61,7 +60,6 @@ fn derived<T: JsonSchema>(
         ToolAnnotations::new()
             .read_only(read_only)
             .destructive(destructive)
-            .idempotent(read_only)
             .open_world(open_world),
     );
     tool
@@ -484,12 +482,12 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ToolAnnotations::new()
             .read_only(false)
             .destructive(true)
-            .idempotent(false)
             .open_world(true),
     );
     tools.push(input_tool);
     tools.extend(compose_tools());
     tools.extend(desktop_mcp_tools(id_schema()));
+    super::hints::annotate(&mut tools);
     tools
 });
 

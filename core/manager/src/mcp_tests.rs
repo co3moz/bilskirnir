@@ -551,3 +551,42 @@ fn a_downloaded_file_travels_once_within_the_reply_limit() {
         serde_json::json!({"uri": "file:///home/desktop/build%20log.tar.gz", "mimeType": "application/gzip", "blob": "H4s="})
     );
 }
+
+/// idempotentHint copied readOnlyHint, so no tool that changes something said that calling it
+/// again changes nothing more, and no tool had a title for a client to show a person. Every tool
+/// has a title, and the hint is true for the read-only tools and those `hints` names.
+#[test]
+fn every_tool_has_a_title_and_its_own_idempotent_hint() {
+    let tools = &*super::tools::TOOLS;
+    let find = |name: &str| tools.iter().find(|tool| tool.name == name);
+    for tool in tools {
+        let annotations = tool.annotations.as_ref().unwrap();
+        assert!(
+            tool.title.as_deref().is_some_and(|title| !title.is_empty()),
+            "{} has no title",
+            tool.name
+        );
+        assert_eq!(annotations.title, tool.title);
+        if annotations.read_only_hint == Some(true) {
+            assert_eq!(annotations.idempotent_hint, Some(true), "{}", tool.name);
+        }
+    }
+    for (name, _) in super::hints::TITLES {
+        assert!(find(name).is_some(), "a title for {name}, which is no tool");
+    }
+    for name in super::hints::IDEMPOTENT {
+        let tool = find(name).unwrap_or_else(|| panic!("{name} is no tool"));
+        let annotations = tool.annotations.as_ref().unwrap();
+        assert_eq!(annotations.read_only_hint, Some(false), "{name}");
+        assert_eq!(annotations.idempotent_hint, Some(true), "{name}");
+    }
+    for name in [
+        "container_action",
+        "exec_container",
+        "desktop_input",
+        "snapshot",
+    ] {
+        let annotations = find(name).unwrap().annotations.as_ref().unwrap();
+        assert_eq!(annotations.idempotent_hint, Some(false), "{name}");
+    }
+}
