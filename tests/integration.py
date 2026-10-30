@@ -1076,6 +1076,9 @@ try:
     assert saved["path"] == "/home/desktop/Downloads/agent-shot.jpg" and saved["bytes"] > 0 and saved["width"] == 320
     assert saved["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-shot.jpg"
     assert docker("exec",container,"cat",saved["path"]).startswith(b"\xff\xd8")
+    picture = tool("download_file", {"container_id":env_id,"path":saved["path"]})["content"][0]
+    assert picture["type"] == "image" and picture["mimeType"] == "image/jpeg" and base64.b64decode(picture["data"]).startswith(b"\xff\xd8")
+    assert "max_bytes" in tool("download_file", {"container_id":env_id,"path":saved["path"],"max_bytes":3*1024*1024}, allow_error=True)["content"][0]["text"]
     assert tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg"}, allow_error=True)["isError"]
     assert tool("save_screenshot", {"container_id":env_id,"path":"/etc/agent-shot.jpg"}, allow_error=True)["isError"]
     assert api(f"containers/{env_id}/screenshots", {"path":"/home/desktop/Downloads/agent-shot.jpg","replace":True,"capture":{"max_width":160}})["width"] == 160
@@ -1241,7 +1244,7 @@ try:
     assert video["path"] == f"{finished['directory']}/recording.mp4" and video["frames"] == finished["frames"] and video["bytes"] > 0, video
     assert video["download_url"] == f"/api/containers/{env_id}/files/download?path={video['path']}" and 500 <= video["duration_ms"] <= 10000, video
     assert video["width"] % 2 == 0 and video["height"] % 2 == 0 and video["width"] <= 320, video
-    mp4 = base64.b64decode(tool("download_file", {"container_id":env_id,"path":video["path"]})["structuredContent"]["data_base64"])
+    mp4 = base64.b64decode(tool("download_file", {"container_id":env_id,"path":video["path"]})["content"][0]["resource"]["blob"])
     assert mp4[4:8] == b"ftyp" and b"avc1" in mp4 and b"avcC" in mp4 and 0 < mp4.find(b"moov") < mp4.find(b"mdat"), mp4[:64]
     assert any(r["recording_id"] == recording["recording_id"] and r["frames"] == finished["frames"] and r["video"]["path"] == video["path"] for r in tool("list_recordings", {"container_id":env_id})["structuredContent"]["items"])
     frames = tool("list_files", {"container_id":env_id,"path":finished["directory"]})["structuredContent"]
@@ -1262,10 +1265,13 @@ try:
     assert docker("exec",container,"test","!","-e","/home/desktop/agent-files") == b""
     tool("stop_application", {"container_id":env_id,"application_id":second})
     print("PASS waits, diagnostics, metrics, frame recordings with their H.264 video, artifact export and file tools", flush=True)
-    downloaded = tool("download_file", {"container_id":env_id,"path":exported["path"]})["structuredContent"]
+    # The bytes travel once, as an embedded resource beside the JSON that describes them.
+    result = tool("download_file", {"container_id":env_id,"path":exported["path"]})
+    downloaded, resource = result["structuredContent"], result["content"][0]["resource"]
     assert downloaded["download_url"] == exported["download_url"] == f"/api/containers/{env_id}/files/download?path={exported['path']}"
     assert downloaded["bytes"] == exported["bytes"] and downloaded["mime_type"] == "application/gzip", downloaded["bytes"]
-    assert base64.b64decode(downloaded["data_base64"])[:2] == b"\x1f\x8b"
+    assert "data_base64" not in downloaded and resource["mimeType"] == "application/gzip" and resource["uri"] == "file://" + exported["path"], resource["uri"]
+    assert base64.b64decode(resource["blob"])[:2] == b"\x1f\x8b" and json.dumps(result).count(resource["blob"]) == 1
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{env_id}/files/download?" + urllib.parse.urlencode({"path":exported["path"]}))
     with client.open(request, timeout=60) as response:
         assert response.headers["Content-Length"] == str(exported["bytes"]) and "evidence.tar.gz" in response.headers["Content-Disposition"], dict(response.headers)

@@ -348,6 +348,17 @@ const DOWNLOAD: &str = include_str!("../helpers/download_file.py");
 /// It is served from the same address as the dashboard and the MCP endpoint, so it is valid
 /// wherever the manager is reachable, and it needs a dashboard sign-in in the browser.
 pub fn download_url(id: &str, path: &str) -> String {
+    format!(
+        "/api/containers/{id}/files/download?path={}",
+        encode_path(path)
+    )
+}
+/// The `file://` URI an MCP result names a desktop file by, which MCP allows for resources that
+/// behave like a filesystem without being on the client's own.
+pub fn file_uri(path: &str) -> String {
+    format!("file://{}", encode_path(path))
+}
+fn encode_path(path: &str) -> String {
     let mut encoded = String::with_capacity(path.len());
     for byte in path.bytes() {
         if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
@@ -356,19 +367,22 @@ pub fn download_url(id: &str, path: &str) -> String {
             encoded.push_str(&format!("%{byte:02X}"));
         }
     }
-    format!("/api/containers/{id}/files/download?path={encoded}")
+    encoded
 }
+/// The most bytes `download_file` returns. They travel once, as base64 in a content block of
+/// their own, and the whole MCP reply must stay within the 8 MiB `/mcp` sends.
+pub const DOWNLOAD_LIMIT: usize = 2 * 1024 * 1024;
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Download {
     /// Canonical absolute path of a regular file.
     pub path: String,
-    /// Maximum bytes to return (1 to 5242880).
+    /// Maximum bytes to return (1 to 2097152, default 1048576); a larger file is refused.
     #[serde(default = "download_limit")]
     pub max_bytes: usize,
 }
 fn download_limit() -> usize {
-    4 * 1024 * 1024
+    1024 * 1024
 }
 #[derive(Deserialize, JsonSchema)]
 pub struct DownloadQuery {
@@ -384,6 +398,7 @@ pub fn mime_type(name: &str) -> &'static str {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
+        "webp" => "image/webp",
         "svg" => "image/svg+xml",
         "txt" | "log" | "md" | "cfg" | "ini" | "csv" => "text/plain; charset=utf-8",
         "json" => "application/json",
@@ -420,12 +435,14 @@ async fn running_container(app: &App, id: &str) -> Result<Value> {
     }
     Ok(container)
 }
-pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value> {
+/// A whole file for `download_file`: what it is, and its bytes, which the MCP result carries
+/// once in a content block of their own.
+pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<(Value, Vec<u8>)> {
     let (_, name) = split_path(&body.path)?;
-    if body.max_bytes == 0 || body.max_bytes > 5 * 1024 * 1024 {
+    if body.max_bytes == 0 || body.max_bytes > DOWNLOAD_LIMIT {
         return Err(Error(
             StatusCode::BAD_REQUEST,
-            "max_bytes must be 1 to 5242880".into(),
+            format!("max_bytes must be 1 to {DOWNLOAD_LIMIT}"),
         ));
     }
     let _guard = app.hold(&format!("container:{id}")).await?;
@@ -452,14 +469,14 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<Value
     if !output.status.success() {
         return Err(Error::helper(&output));
     }
-    Ok(json!({
+    let summary = json!({
         "path": body.path,
         "name": name,
         "bytes": output.stdout.len(),
         "mime_type": mime_type(name),
         "download_url": download_url(id, &body.path),
-        "data_base64": STANDARD.encode(&output.stdout),
-    }))
+    });
+    Ok((summary, output.stdout))
 }
 /// Stream a file or a folder from the desktop as the desktop user: a regular file as it is, with
 /// its size known up front and limited by UPLOAD_MAX_MB, a folder as a `.tar.gz`.

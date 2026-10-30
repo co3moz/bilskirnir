@@ -491,3 +491,43 @@ fn build_image_takes_a_template_with_mcp_servers() {
         serde_json::from_value(template["mcp"].clone()).unwrap();
     crate::desktop_mcp::check_declarations(&declared).unwrap();
 }
+
+/// `download_file` once returned its base64 in the text block and again in structuredContent, so
+/// a 4 MiB file outgrew the 8 MiB reply and the client got a 502 instead of a result. The bytes
+/// travel once: a picture as an image block, any other file as an embedded resource.
+#[test]
+fn a_downloaded_file_travels_once_within_the_reply_limit() {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let bytes = vec![0x5a; crate::files::DOWNLOAD_LIMIT];
+    let encoded = STANDARD.encode(&bytes);
+    for (path, kind) in [
+        ("/home/desktop/shot.png", "image"),
+        ("/home/desktop/build log.tar.gz", "resource"),
+    ] {
+        let name = path.rsplit('/').next().unwrap();
+        let summary = serde_json::json!({
+            "path": path,
+            "name": name,
+            "bytes": bytes.len(),
+            "mime_type": crate::files::mime_type(name),
+            "download_url": crate::files::download_url("c1", path),
+        });
+        let result = super::dispatch::file(summary.clone(), &bytes);
+        let wire = serde_json::to_string(&result).unwrap();
+        assert!(wire.len() < 4 * 1024 * 1024, "{path}: {} bytes", wire.len());
+        assert_eq!(wire.matches(encoded.as_str()).count(), 1, "{path}");
+        let value = serde_json::to_value(&result).unwrap();
+        assert_eq!(value["isError"], false);
+        assert_eq!(value["content"][0]["type"], kind, "{path}");
+        assert_eq!(value["structuredContent"], summary);
+        let text: serde_json::Value =
+            serde_json::from_str(value["content"][1]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(text, summary);
+    }
+    let summary = serde_json::json!({"path": "/home/desktop/build log.tar.gz", "mime_type": "application/gzip"});
+    let value = serde_json::to_value(super::dispatch::file(summary, b"\x1f\x8b")).unwrap();
+    assert_eq!(
+        value["content"][0]["resource"],
+        serde_json::json!({"uri": "file:///home/desktop/build%20log.tar.gz", "mimeType": "application/gzip", "blob": "H4s="})
+    );
+}

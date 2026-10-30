@@ -103,7 +103,7 @@ The server currently exposes 77 tools:
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals.
 
-Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. `screenshot` and `act_and_observe` return a JPEG image content block with the image size in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
+Successful data results are returned as `structuredContent`, with text content for clients that do not use structured results. Lists are wrapped in an `items` object. A result that carries data sends it once, in a content block of its own before the text: `download_file` returns a PNG, JPEG, GIF or WebP picture as an image block and any other file as an embedded resource whose `blob` is the file in base64, while `structuredContent` and the text describe the file without its bytes. `screenshot` and `act_and_observe` return a JPEG image content block with the image size in `structuredContent`. Tool failures return `isError=true` and an explanation; invalid tool names or missing/unknown top-level arguments return a protocol error.
 
 ## Build from a template
 
@@ -171,7 +171,7 @@ A compose makes a saved image ask for values, such as an account, when a contain
 
 Both tools reject path traversal and symlinks. Reads accept regular files only, so devices, sockets and FIFOs cannot turn a bounded read into an endless stream.
 
-`list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file as base64 with its size and a guessed MIME type, up to 5 MiB; the HTTP download route streams larger files, and a folder as a `.tar.gz`. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
+`list_files` returns a directory's entries with type, size, modification time and mode. `move_file` renames or moves within the same volume and needs `replace=true` to overwrite. `delete_file` removes a file, a symlink itself or, with `recursive=true`, a directory with its contents; it refuses top-level directories, the desktop home and mounted volume roots. `download_file` returns a whole regular file of at most `max_bytes`, 1 MiB by default and 2 MiB at most, with its size and a guessed MIME type: a picture as an image block a model can look at, any other file as an embedded resource, so its bytes travel once and the reply stays within its 8 MiB. `create_transfer` and the HTTP download route move larger files, and a folder as a `.tar.gz`. Its result also carries `download_url`, described under [Hand files to the user](#hand-files-to-the-user).
 
 `upload_file` is the smaller-file counterpart of the browser upload feature. It accepts standard base64 data and a destination folder anywhere in the desktop home, in a writable mounted volume or in one of the `places` of the container's `setup`. Its MCP limit is 512 KiB; for larger files, `create_transfer` issues a link to the streaming HTTP upload route that needs no dashboard session, as [move large files](#move-large-files) describes. See [files in the HTTP API](API.md#files).
 
@@ -261,7 +261,7 @@ The bundled TigerVNC server acknowledges input with RFB Fence. This confirms tha
 
 ## Move large files
 
-The file tools carry at most 512 KiB per call as base64 through the conversation, and the HTTP routes that stream files and archives of any size take the dashboard's session cookie, not the MCP token. `create_transfer` connects the two: it issues a link for one HTTP request, which the agent sends with curl or another HTTP client from the machine it runs on.
+The file tools carry at most 512 KiB per call as base64 through the conversation, and `download_file` 2 MiB, and the HTTP routes that stream files and archives of any size take the dashboard's session cookie, not the MCP token. `create_transfer` connects the two: it issues a link for one HTTP request, which the agent sends with curl or another HTTP client from the machine it runs on.
 
 | `operation` | Arguments | Request |
 | --- | --- | --- |

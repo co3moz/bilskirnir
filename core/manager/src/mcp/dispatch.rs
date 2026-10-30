@@ -14,7 +14,7 @@ use axum::{
     http::StatusCode,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use rmcp::model::{CallToolResult, ContentBlock};
+use rmcp::model::{CallToolResult, ContentBlock, ResourceContents};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -63,6 +63,32 @@ fn structured(value: Value) -> CallToolResult {
     } else {
         json!({"items":value})
     })
+}
+/// A result whose data travels once, in a content block of its own, before the JSON that
+/// describes it as text and as structuredContent. Data inside the JSON would travel twice, since
+/// the text block repeats structuredContent for clients that read only text.
+fn with_data(data: ContentBlock, summary: Value) -> CallToolResult {
+    let mut result = CallToolResult::structured(summary);
+    result.content.insert(0, data);
+    result
+}
+/// The pictures a model can look at, which a downloaded file is returned as an image block for.
+const VIEWABLE: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+/// A file `download_file` read: a picture as an image block, anything else as an embedded
+/// resource whose blob is the file.
+pub(super) fn file(summary: Value, bytes: &[u8]) -> CallToolResult {
+    let data = STANDARD.encode(bytes);
+    let mime_type = summary["mime_type"]
+        .as_str()
+        .unwrap_or("application/octet-stream")
+        .to_owned();
+    let block = if VIEWABLE.contains(&mime_type.as_str()) {
+        ContentBlock::image(data, mime_type)
+    } else {
+        let uri = files::file_uri(summary["path"].as_str().unwrap_or_default());
+        ContentBlock::resource(ResourceContents::blob(data, uri).with_mime_type(mime_type))
+    };
+    with_data(block, summary)
 }
 
 impl ThoricMcp {
@@ -295,7 +321,11 @@ impl ThoricMcp {
                     .0
             }
             "list_files" => files::list_files(&self.app, &id.unwrap(), &parse(args)?).await?,
-            "download_file" => files::download_file(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "download_file" => {
+                let (summary, bytes) =
+                    files::download_file(&self.app, &id.unwrap(), &parse(args)?).await?;
+                return Ok(file(summary, &bytes));
+            }
             "capture_audio" => {
                 let value = audio::capture_audio(&self.app, &id.unwrap(), &parse(args)?).await?;
                 return Ok(sound(value));
