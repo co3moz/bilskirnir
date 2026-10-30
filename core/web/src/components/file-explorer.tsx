@@ -38,6 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { downloadFile, downloadFolder } from "@/lib/actions"
 import { api, sessionExpired } from "@/lib/api"
+import { useUnsaved } from "@/lib/dialogs"
 import { canonicalFolder, HOME, placeGroups, type QuickFolder } from "@/lib/desktop-paths"
 import { shortDate } from "@/lib/format"
 import { codeLanguage, type CodeLanguage } from "@/lib/highlight"
@@ -93,6 +94,8 @@ function useUploads(onDone: () => void) {
       })
   )
   React.useEffect(() => () => uploads.cancel(), [uploads])
+  // Leaving the page, or closing the dialog the explorer is in, asks first while files upload.
+  useUnsaved(uploads.running && "upload")
   const running = React.useRef(false)
   React.useEffect(() => {
     if (running.current && !uploads.running) onDone()

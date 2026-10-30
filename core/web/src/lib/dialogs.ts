@@ -133,6 +133,17 @@ export function whenDiscarded(then: () => void) {
   else then()
 }
 
+/**
+ * Leaves the page for another, or with `within` moves within it, such as to another container's
+ * files: `then` runs at once, or once the user agrees to lose what the page holds, and its dialog
+ * too when the page goes. `keep` runs when they stay.
+ */
+export function whenLeaving(then: () => void, keep: () => void, within = false) {
+  const reason = (within ? null : dialogUnsaved()) ?? held(null)
+  if (reason) ask(reason, then, keep)
+  else then()
+}
+
 /** The user agreed to lose it: the dialog closes as it is and what waited runs. */
 export function confirmDiscard() {
   const asking = state.asking

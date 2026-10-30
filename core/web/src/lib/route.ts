@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { createContext, useContext, useSyncExternalStore } from "react"
 
 export type Page =
   | "dashboard"
@@ -116,7 +116,19 @@ const subscribe = (listener: () => void) => {
   return () => window.removeEventListener("hashchange", listener)
 }
 
-export function useRoute(): Route {
+/** The route in the address bar. */
+export function useAddress(): Route {
   const hash = useSyncExternalStore(subscribe, () => location.hash)
   return parseRoute(hash)
+}
+
+/**
+ * The route the page shows, which stays while the user is asked whether to leave it, such as with
+ * uploads still going; see App.tsx.
+ */
+export const ShownRoute = createContext<Route | null>(null)
+
+export function useRoute(): Route {
+  const address = useAddress()
+  return useContext(ShownRoute) ?? address
 }

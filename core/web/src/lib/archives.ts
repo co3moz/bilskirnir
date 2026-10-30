@@ -1,4 +1,5 @@
 import { t } from "./i18n"
+import { holdUnload } from "./unload"
 import { fileSize, type UploadRequest } from "./uploads"
 import type { DesktopInfo } from "./types"
 
@@ -146,6 +147,7 @@ export class ArchiveImport {
     }
     this.status = "uploading"
     this.onChange()
+    const release = holdUnload()
     try {
       this.jobId = await this.send(file, details)
       this.status = "started"
@@ -153,6 +155,7 @@ export class ArchiveImport {
       this.status = this.cancelled ? "cancelled" : "failed"
       this.error = (error as Error).message
     } finally {
+      release()
       this.request = null
       this.onChange()
     }

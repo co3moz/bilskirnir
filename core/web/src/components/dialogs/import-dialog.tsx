@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { api, sessionExpired } from "@/lib/api"
 import { ArchiveImport, archiveName, readArchiveInfo, type ArchiveInfo } from "@/lib/archives"
-import { closeDialog, openDialog } from "@/lib/dialogs"
+import { closeDialog, openDialog, useUnsaved } from "@/lib/dialogs"
 import { t } from "@/lib/i18n"
 import { refreshAll, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
@@ -46,6 +46,7 @@ function useArchiveImport() {
       })
   )
   React.useEffect(() => () => upload.cancel(), [upload])
+  useUnsaved(upload.running && "upload")
   return upload
 }
 

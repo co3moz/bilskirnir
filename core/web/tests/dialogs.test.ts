@@ -11,6 +11,7 @@ import {
   openDialog,
   openedDialog,
   whenDiscarded,
+  whenLeaving,
 } from "../src/lib/dialogs"
 
 const releases: (() => void)[] = []
@@ -99,4 +100,35 @@ test("closing a dialog from code drops a waiting question", () => {
   closeDialog()
   assert.equal(discardQuestion(), null)
   assert.equal(openedDialog(), null)
+})
+
+test("leaving a page asks for its uploads, and for its dialog's changes only when the page goes", () => {
+  const seq = openDialog({ kind: "settings", id: "c1" })
+  held(seq, "changes")
+  const steps: string[] = []
+  const leave = (within = false) =>
+    whenLeaving(
+      () => steps.push("left"),
+      () => steps.push("stayed"),
+      within
+    )
+  // A filter or an item opened on the same page keeps the dialog as it is.
+  leave(true)
+  assert.deepEqual(steps, ["left"])
+  leave()
+  assert.equal(discardQuestion()?.reason, "changes")
+  keepEditing()
+  assert.deepEqual(steps, ["left", "stayed"])
+  assert.deepEqual(openedDialog(), { kind: "settings", id: "c1" })
+
+  closeDialog()
+  // The Files page uploading holds even a move to another container's files.
+  const release = held(null, "upload")
+  leave(true)
+  assert.equal(discardQuestion()?.reason, "upload")
+  confirmDiscard()
+  assert.deepEqual(steps, ["left", "stayed", "left"])
+  release()
+  leave()
+  assert.deepEqual(steps, ["left", "stayed", "left", "left"])
 })
