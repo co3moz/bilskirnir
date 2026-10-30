@@ -2,7 +2,9 @@
 //! a CAPTCHA, a second sign-in factor, a license window or a sign-in screen, asks with the MCP
 //! tool `request_human` and waits. The dashboard shows the request on every page and above the
 //! container's desktop until someone answers Done or Decline, with an optional reply, and the
-//! waiting call returns that answer. Requests live in memory: a manager restart ends them.
+//! waiting call returns that answer. A request belongs to the container and the MCP channel it
+//! was asked through, and deleting the container ends it. Requests live in memory: a manager
+//! restart ends them.
 use crate::{
     App,
     error::{Error, Result},
@@ -44,6 +46,10 @@ pub(crate) const DEFAULT_WAIT: u64 = 45;
 pub(crate) const MAX_WAIT: u64 = 300;
 /// How often a waiting call reports progress to a client that asked for it.
 const PROGRESS_EVERY: Duration = Duration::from_secs(10);
+/// The reply a request of a deleted container gets, and one of a deleted endpoint.
+const CONTAINER_DELETED: &str = "The container was deleted, which ended this request for a person.";
+const ENDPOINT_DELETED: &str =
+    "The MCP endpoint was deleted, which ended this request for a person.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -81,7 +87,8 @@ pub(crate) struct Requests {
 
 impl Requests {
     /// Ask on behalf of an agent, or join the request still waiting with the same message for the
-    /// same container, as an agent does that lost its call and asks again.
+    /// same container through the same endpoint, as an agent does that lost its call and asks
+    /// again. Another endpoint's agent asks a request of its own, whose answer it alone reads.
     pub(crate) fn ask(
         &self,
         container: &Container,
@@ -100,6 +107,7 @@ impl Requests {
         if let Some(open) = items.iter().find(|request| {
             request.status == Status::Pending
                 && request.container_id == container.id
+                && request.endpoint.as_deref() == endpoint
                 && request.message == message
         }) {
             return Ok(open.clone());
@@ -169,6 +177,50 @@ impl Requests {
         self.answered.notify_waiters();
         hub.publish(json!({"type": "human-request-answered", "request": answered}));
         Ok(answered)
+    }
+
+    /// Decline the requests that wait in a deleted container, so they leave the dashboard and the
+    /// limit, and a call that waits on one returns saying why.
+    pub(crate) fn end_container(&self, container_id: &str, hub: &Hub) {
+        self.end(
+            |request| request.container_id == container_id,
+            CONTAINER_DELETED,
+            hub,
+        );
+    }
+
+    /// Decline the requests a deleted MCP endpoint asked, which nobody waits on any more and an
+    /// endpoint made later with its name must not join.
+    pub(crate) fn end_endpoint(&self, endpoint: &str, hub: &Hub) {
+        self.end(
+            |request| request.endpoint.as_deref() == Some(endpoint),
+            ENDPOINT_DELETED,
+            hub,
+        );
+    }
+
+    fn end(&self, which: impl Fn(&HumanRequest) -> bool, reply: &str, hub: &Hub) {
+        let ended = {
+            let mut items = self.items.lock().unwrap();
+            let at = now();
+            items
+                .iter_mut()
+                .filter(|request| request.status == Status::Pending && which(request))
+                .map(|request| {
+                    request.status = Status::Declined;
+                    request.reply = Some(reply.into());
+                    request.answered_at = Some(at);
+                    request.clone()
+                })
+                .collect::<Vec<_>>()
+        };
+        if ended.is_empty() {
+            return;
+        }
+        self.answered.notify_waiters();
+        for request in ended {
+            hub.publish(json!({"type": "human-request-answered", "request": request}));
+        }
     }
 
     /// The requests that wait for a person, oldest first.
@@ -259,7 +311,7 @@ fn unknown(id: &str) -> Error {
     Error(
         StatusCode::NOT_FOUND,
         format!(
-            "No request {id} for a person is open or was answered within the hour for this container. A manager restart ends every open request; ask again with message if a person is still needed."
+            "No request {id} for a person is open or was answered within the hour for this container through this MCP channel. A manager restart ends every open request; ask again with message if a person is still needed."
         ),
     )
 }
@@ -343,9 +395,15 @@ pub(crate) async fn request(
                 .id
         }
         (None, Some(id)) => {
-            // Only a request of this container, so an endpoint's agent cannot read another's.
+            // Only a request of this container asked through the same endpoint, so an agent
+            // cannot read another endpoint's.
             match app.human.get(&id) {
-                Some(request) if request.container_id == container_id => id,
+                Some(request)
+                    if request.container_id == container_id
+                        && request.endpoint.as_deref() == caller.endpoint() =>
+                {
+                    id
+                }
                 _ => return Err(unknown(&id)),
             }
         }

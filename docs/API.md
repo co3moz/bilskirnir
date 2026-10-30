@@ -925,7 +925,7 @@ An agent that reaches something only a person may do in its desktop, such as a C
 }]}
 ```
 
-`container_name` is the container's name when the agent asked, kept if the container is deleted meanwhile, and `endpoint` the [MCP endpoint](#desktop-mcp-servers-and-endpoints) it asked through, `null` for `/mcp`. `POST /api/human-requests/{id}/answer` with `{"answer": "done"}`, or `{"answer": "decline", "reply": "No phone at hand"}`, answers it: `status` becomes `done` or `declined`, a `reply` of at most 1,000 characters goes to the agent, and the waiting call returns at once. The first answer counts; a second one gets `409`. Each new request and each answer is also an [event](#event-stream).
+`container_name` is the container's name when the agent asked, kept if the container is deleted meanwhile, and `endpoint` the [MCP endpoint](#desktop-mcp-servers-and-endpoints) it asked through, `null` for `/mcp`. `POST /api/human-requests/{id}/answer` with `{"answer": "done"}`, or `{"answer": "decline", "reply": "No phone at hand"}`, answers it: `status` becomes `done` or `declined`, a `reply` of at most 1,000 characters goes to the agent, and the waiting call returns at once. The first answer counts; a second one gets `409`. Deleting a container declines its open requests, and deleting an MCP endpoint those asked through it, with a `reply` that says so. Each new request and each answer is also an [event](#event-stream).
 
 Requests live in the manager's memory, at most 64 waiting at once, and an answered one can be read by its agent for an hour. A manager restart ends them all: a waiting call then fails with an error saying so, and the agent has to ask again.
 

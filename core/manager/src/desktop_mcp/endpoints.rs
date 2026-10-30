@@ -345,11 +345,12 @@ pub(crate) fn announce(app: &App, container_id: &str) {
 
 /// End what an endpoint holds open after it changed or went away.
 /// Forget what a deleted endpoint reached, so an endpoint made later with its name starts with
-/// nothing: the jobs it started, and the terminals it opened, which only the administrator reaches
-/// from now on.
+/// nothing: the jobs it started, the requests for a person it asked, which are declined, and the
+/// terminals it opened, which only the administrator reaches from now on.
 fn forget(app: &App, name: &str) -> anyhow::Result<()> {
     app.desktop_mcp.close_service(name);
     app.desktop_mcp.jobs.lock().unwrap().remove(name);
+    app.human.end_endpoint(name, &app.events);
     crate::terminal::forget_endpoint(app, name)
 }
 

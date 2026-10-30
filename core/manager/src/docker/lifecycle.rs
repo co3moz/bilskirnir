@@ -492,6 +492,7 @@ impl App {
         self.forget_proxy_password(&env.id)?;
         self.db.remove(CONTAINERS, &env.id)?;
         crate::desktop_mcp::forget_container(self, &env.id)?;
+        self.human.end_container(&env.id, &self.events);
         self.append_log(
             job_id,
             &if removed.deleted.is_empty() {
