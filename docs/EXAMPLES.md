@@ -46,7 +46,7 @@ The request: "Check that sign-up works on my branch, and show me." The agent has
 4. `start_recording` with `{"fps": 2}` starts keeping frames of the desktop.
 5. `launch_application` opens Chrome at the page with `{"command": "google-chrome", "args": ["http://localhost:5173/signup"]}`, and `wait_for_condition` with `"window_title": "Google Chrome"` waits for its window. From there the agent fills in the form with `act_and_observe`: each call clicks or types and returns the screenshot that follows, so the agent reads the page before its next step. It can use the desktop's Playwright server instead, which works by the page's structure rather than by pixels: `call_mcp_server_tool` with `{"container_id": "CONTAINER_ID", "server": "playwright", "tool": "browser_navigate", "arguments": {"url": "http://localhost:5173/signup"}}` calls one of its tools from `/mcp`, and `list_mcp_servers` with the `container_id` lists them with their arguments. An agent connected to the container's endpoint has the same tools as its own.
 6. When something looks wrong, `save_screenshot` keeps that moment as a file in the desktop with a `download_url`.
-7. `stop_recording` ends the recording and writes `recording.avi`, a video of it. `export_artifacts` packs the frames, the video and the server's log:
+7. `stop_recording` ends the recording and writes `recording.mp4`, an H.264 video of it that browsers play, or `recording.avi` on a desktop image without an H.264 encoder, which `video.fallback` explains. `export_artifacts` packs the frames, the video and the server's log:
 
    ```json
    {"container_id": "CONTAINER_ID", "destination": "/home/desktop", "name": "signup-test.tar.gz", "recording_ids": ["RECORDING_ID"], "application_ids": ["SERVER_APPLICATION_ID"]}
