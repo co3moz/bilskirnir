@@ -18,7 +18,10 @@ use std::{sync::Arc, time::Duration};
 
 const RUNNER: &str = include_str!("../helpers/terminal_runner.py");
 const CONTROL: &str = include_str!("../helpers/terminal_control.py");
-pub const ROOT: &str = "/tmp/thoric-terminals";
+/// Where the desktop user's terminals keep their files, and root's, in a folder of its own that only
+/// root opens, so a desktop user without sudo reaches none of a root shell's files.
+const FOLDER: &str = "/tmp/thoric-terminals";
+const ROOT_FOLDER: &str = "/tmp/thoric-root-terminals";
 /// The MCP tools of terminals, which `mcp::dispatch` gives the endpoint that calls.
 pub(crate) const TOOLS: [&str; 5] = [
     "open_terminal",
@@ -129,7 +132,8 @@ fn user(record: &Terminal) -> &'static str {
     if record.root { "root" } else { "1001:1001" }
 }
 fn directory(record: &Terminal) -> String {
-    format!("{ROOT}/{}", record.id)
+    let folder = if record.root { ROOT_FOLDER } else { FOLDER };
+    format!("{folder}/{}", record.id)
 }
 /// How long a terminal's runner has to make its folder before a terminal without one is gone.
 const STARTING: u64 = 60;

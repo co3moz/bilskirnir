@@ -1,6 +1,7 @@
 """The terminal runner and its control: statuses of several terminals in one call, a terminal whose
-files are gone marked so, and a closed terminal that always ends, even a shell that ignores the
-hangup, and leaves no files behind."""
+files are gone marked so, a closed terminal that always ends, even a shell that ignores the
+hangup, and leaves no files behind, and terminals kept in a folder of the user's own that nothing
+another user prepared, such as a link, takes the place of."""
 
 import base64
 import json
@@ -79,6 +80,57 @@ class TerminalTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 9)
         self.assertFalse(directory.exists())
         self.assertEqual(runner.wait(10), 0)
+
+
+class FolderTest(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.elsewhere = self.root / "elsewhere"
+        self.elsewhere.mkdir()
+
+    def test_a_runner_refuses_terminals_folder_that_is_a_link(self):
+        parent = self.root / "terminals"
+        parent.symlink_to(self.elsewhere)
+        result = subprocess.run([sys.executable, str(RUNNER), str(parent / "t1"), str(self.root)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(self.elsewhere.iterdir()), [])
+        # Its control counts no terminal there, and stopping one makes nothing through the link.
+        (self.elsewhere / "t1").mkdir()
+        self.assertTrue(control("status", str(parent / "t1"))[0]["gone"])
+        control("stop", str(parent / "t1"), "0")
+        self.assertEqual(list((self.elsewhere / "t1").iterdir()), [])
+
+    def test_the_terminals_folder_is_made_private(self):
+        parent = self.root / "terminals"
+        parent.mkdir(mode=0o755)
+        os.chmod(parent, 0o755)
+        runner = subprocess.Popen([sys.executable, str(RUNNER), str(parent / "t1"), str(self.root)])
+        self.addCleanup(runner.wait)
+        self.addCleanup(runner.kill)
+        deadline = time.monotonic() + 10
+        while control("status", str(parent / "t1"))[0]["state"] != "running":
+            self.assertLess(time.monotonic(), deadline, "the terminal did not start")
+            time.sleep(0.1)
+        self.assertEqual(parent.stat().st_mode & 0o777, 0o700)
+        # A terminal folder that exists already is not taken over.
+        second = subprocess.run([sys.executable, str(RUNNER), str(parent / "t1"), str(self.root)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(second.returncode, 0)
+
+    def test_closing_follows_no_link_left_in_a_terminals_folder(self):
+        parent = self.root / "terminals"
+        parent.mkdir(mode=0o700)
+        directory = parent / "t1"
+        directory.mkdir()
+        victim = self.elsewhere / "victim"
+        victim.write_text("kept")
+        (directory / "stop").symlink_to(victim)
+        result = subprocess.run([sys.executable, str(CONTROL), "stop", str(directory), "0"],
+                                capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(victim.read_text(), "kept")
 
 
 if __name__ == "__main__":

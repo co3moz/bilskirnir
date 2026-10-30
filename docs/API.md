@@ -297,7 +297,7 @@ POST to `/api/containers/{id}/exec`:
 }
 ```
 
-The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1 to 3500 seconds, defaulting to 300. The working directory is `/home/desktop`; the container's network and resource limits apply. The script holds the container's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
+The default user is UID/GID 1001:1001; root execution must be explicit. Bash runs with fail-on-error and with standard input closed, so a command that reads input receives end-of-file instead of consuming the rest of the script. The response is a job, with output and exit failures in its log. Timeouts range from 1 to 3500 seconds, defaulting to 300. The working directory is `/home/desktop`, or `/root` for a root script, so nothing it starts imports modules the desktop user left in their home; the container's network and resource limits apply. The script holds the container's operation lock until it finishes, so start graphical programs with the [applications API](#applications-and-windows) instead of a script. See [command execution](MCP.md#run-commands-and-install-software) for more detail.
 
 ## Images
 
@@ -420,7 +420,7 @@ A saved image can carry a compose: parameters that a new container from it asks 
 | --- | --- | --- |
 | `parameters` | `[]` | Up to 32 objects with `name` and optional `label`, `description`, `type`, `display`, `required`, `default` and the fields of their type, below. |
 | `script` | Required | Bash script of at most 1,000,000 bytes, run with fail-on-error and standard input closed. |
-| `root` | `false` | Run as root instead of the desktop user, UID/GID 1001:1001. |
+| `root` | `false` | Run as root, in `/root`, instead of the desktop user, UID/GID 1001:1001, in `/home/desktop`. |
 | `timeout_seconds` | `600` | From 1 to 7200 seconds, two hours, for setups that download large files. |
 
 ### Steps

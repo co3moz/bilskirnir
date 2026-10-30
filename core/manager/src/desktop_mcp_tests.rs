@@ -1766,3 +1766,36 @@ async fn a_deleted_endpoint_leaves_nothing_to_one_made_later_with_its_name() {
     let kept: crate::model::Terminal = app.db.get("terminal", "t1").unwrap();
     assert_eq!(kept.endpoint, None);
 }
+
+#[test]
+fn the_desktop_users_declarations_name_no_secret_value() {
+    let app = app(false);
+    let pinned: crate::compose::Pinned = serde_json::from_value(json!({
+        "compose": {
+            "parameters": [{"name": "EMAIL"}, {"name": "API_TOKEN", "secret": true}],
+            "script": "echo set up",
+        },
+        "values": {"EMAIL": "a@example.com", "API_TOKEN": "s3cret"},
+    }))
+    .unwrap();
+    app.save_pinned("c1", &pinned).unwrap();
+    let spec: ServerSpec = serde_json::from_value(json!({
+        "command": "server",
+        "args": ["--user", "${EMAIL}", "--token", "${API_TOKEN}"],
+    }))
+    .unwrap();
+    // The image's folder, which only a build writes, gets every value.
+    let image = spec.resolve(&Source::Image.values(&app, "c1")).unwrap();
+    assert_eq!(image.args[3], "s3cret");
+    // The desktop user writes their own folder, and their servers run as them.
+    let error = spec
+        .resolve(&Source::Container.values(&app, "c1"))
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("API_TOKEN"), "{error:#}");
+    let public: ServerSpec =
+        serde_json::from_value(json!({"command": "server", "args": ["${EMAIL}"]})).unwrap();
+    let resolved = public
+        .resolve(&Source::Container.values(&app, "c1"))
+        .unwrap();
+    assert_eq!(resolved.args, ["a@example.com"]);
+}

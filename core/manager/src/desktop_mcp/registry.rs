@@ -351,6 +351,18 @@ pub(crate) enum Source {
     Container,
 }
 
+impl Source {
+    /// The compose values a declaration from here may name as `${NAME}`: every one in the image's
+    /// folder, which only a build writes, and those that are not secret in the desktop user's,
+    /// which that user writes and whose servers run as that user.
+    pub(super) fn values(self, app: &App, container_id: &str) -> BTreeMap<String, String> {
+        match self {
+            Source::Image => app.compose_values(container_id),
+            Source::Container => app.public_compose_values(container_id),
+        }
+    }
+}
+
 /// A server the manager knows, with the tools it last read from it.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct ServerRecord {

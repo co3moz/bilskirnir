@@ -130,10 +130,11 @@ pub async fn register_server(
 ) -> Result<Json<Value>> {
     declaration.validate()?;
     let container = app.container(&id)?;
-    // Values are resolved now too, so a name that is not a compose value fails here.
+    // Values are resolved now too, so a name that is not a compose value, or a secret one, which
+    // the desktop user's servers do not get, fails here.
     declaration
         .spec
-        .resolve(&app.compose_values(&id))
+        .resolve(&Source::Container.values(&app, &id))
         .map_err(|e| Error(StatusCode::BAD_REQUEST, format!("{e:#}")))?;
     let docker_id = running(&app, &container).await?;
     app.write_server(&docker_id, &declaration).await?;

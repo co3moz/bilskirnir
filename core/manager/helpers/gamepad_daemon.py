@@ -1,4 +1,5 @@
-"""Create a virtual Xbox-style gamepad with uinput and apply commands from a FIFO; runs as root."""
+"""Create a virtual Xbox-style gamepad with uinput and apply commands from a FIFO; runs as root, in
+a folder only root opens."""
 import fcntl
 import json
 import os
@@ -19,7 +20,23 @@ UI_DEV_CREATE, UI_DEV_DESTROY = 0x5501, 0x5502
 UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_ABSBIT = 0x40045564, 0x40045565, 0x40045567
 UI_GET_SYSNAME = (2 << 30) | (64 << 16) | (0x55 << 8) | 0x2C
 
-os.makedirs(directory, 0o755, exist_ok=True)
+def private_folder(path):
+    """Make PATH a folder only this user opens, or take the one it made before. One another user
+    made, or a link, is refused: the desktop user can make either in /tmp before a root helper."""
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(descriptor).st_uid != os.geteuid():
+            raise RuntimeError(path + " belongs to another user")
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)
+
+
+private_folder(directory)
 fifo = os.path.join(directory, "input")
 if not os.path.exists(fifo):
     os.mkfifo(fifo, 0o600)

@@ -1,28 +1,47 @@
-"""Write to, read from or stop an interactive terminal session run by the terminal runner."""
+"""Write to, read from or stop an interactive terminal session run by the terminal runner.
+
+A terminal counts only in a folder of this user's own, as the runner makes it, and its files are
+opened without following links, so a root terminal's control touches nothing the desktop user
+prepared."""
 import base64
 import json
 import os
 import re
+import stat
 import sys
 import time
 
 ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
 
 
-def status(directory):
+def ours(directory):
+    """Whether the terminal's folder is in one of this user's own, as the runner makes it."""
     try:
-        with open(os.path.join(directory, "status")) as handle:
-            return json.load(handle)
-    except (OSError, ValueError):
-        if os.path.isdir(directory):
-            return {"state": "starting", "written": 0, "base": 0}
-        return {"state": "unknown", "written": 0, "base": 0, "gone": True,
-                "error": "Terminal files are not available; the desktop may have restarted"}
+        info = os.lstat(os.path.dirname(directory))
+    except OSError:
+        return False
+    return stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+
+
+def opened(path, flags=os.O_RDONLY):
+    return os.open(path, flags | os.O_NOFOLLOW, 0o600)
+
+
+def status(directory):
+    if ours(directory):
+        try:
+            with os.fdopen(opened(os.path.join(directory, "status"))) as handle:
+                return json.load(handle)
+        except (OSError, ValueError):
+            if os.path.isdir(directory):
+                return {"state": "starting", "written": 0, "base": 0}
+    return {"state": "unknown", "written": 0, "base": 0, "gone": True,
+            "error": "Terminal files are not available; the desktop may have restarted"}
 
 
 def read_file(path):
     try:
-        with open(path, "rb") as handle:
+        with os.fdopen(opened(path), "rb") as handle:
             return handle.read()
     except OSError:
         return b""
@@ -32,7 +51,7 @@ def write(directory, encoded):
     info = status(directory)
     if info.get("state") != "running":
         raise RuntimeError("Terminal is not running")
-    descriptor = os.open(os.path.join(directory, "input"), os.O_WRONLY)
+    descriptor = opened(os.path.join(directory, "input"), os.O_WRONLY)
     try:
         os.write(descriptor, base64.b64decode(encoded))
     finally:
@@ -70,9 +89,8 @@ def remove(directory):
 
 
 def stop(directory, wait_seconds):
-    if os.path.isdir(directory):
-        with open(os.path.join(directory, "stop"), "w"):
-            pass
+    if ours(directory) and os.path.isdir(directory):
+        os.close(opened(os.path.join(directory, "stop"), os.O_WRONLY | os.O_CREAT))
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline and status(directory).get("state") in ("running", "starting"):
         time.sleep(0.1)

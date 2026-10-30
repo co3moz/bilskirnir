@@ -119,7 +119,7 @@ The dashboard's **Templates** page lists ready-made images, applications such as
 
 ## Run commands and install software
 
-`exec_container` takes `container_id`, `script`, optional `root` and optional `timeout_seconds`. It runs bash with fail-on-error. The default user is UID/GID 1001:1001 and the working directory is `/home/desktop`.
+`exec_container` takes `container_id`, `script`, optional `root` and optional `timeout_seconds`. It runs bash with fail-on-error. The default user is UID/GID 1001:1001 and the working directory is `/home/desktop`, or `/root` with `root`.
 
 For example:
 
@@ -315,7 +315,7 @@ The desktop user's declaration of a name replaces the image's. A declaration is 
 {"url": "http://127.0.0.1:8931/mcp", "headers": {"Authorization": "Bearer ${API_TOKEN}"}}
 ```
 
-Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several, secret ones included; the manager fills them in when it connects, so a secret never has to be written into the image or the file. A template's declaration names its values alone, and keeps working once its image is merged with another template or [built on](API.md#a-base-images-compose): `${NAME}` stands for the one step's value of that name, and is refused with the names to use when several steps have one. Inside the desktop, `thoric-mcp` writes the desktop user's files:
+Values in `args`, `env`, `url` and `headers` may name the container's [compose](API.md#composes) values as `${NAME}`, or `${STEP.NAME}` for one step of several; the manager fills them in when it connects, so a secret never has to be written into the image or the file. Secret values are filled in only for a declaration in the image's `/etc/thoric/mcp.d`, which only a build writes. One in the desktop user's folder, as `thoric-mcp add` and `register_mcp_server` write it, names only values that are not secret, since that user writes the file and its server runs as that user. That keeps the desktop user from asking for a secret; it does not hide one an image's server is given, since that server runs as the desktop user too, who can read its environment. Give a secret only to a server whose desktop user may know it. A template's declaration names its values alone, and keeps working once its image is merged with another template or [built on](API.md#a-base-images-compose): `${NAME}` stands for the one step's value of that name, and is refused with the names to use when several steps have one. Inside the desktop, `thoric-mcp` writes the desktop user's files:
 
 ```bash
 thoric-mcp add x --description "My extension's helper" -- node /home/desktop/ext/mcp.js

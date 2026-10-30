@@ -13,7 +13,9 @@ use std::sync::Arc;
 const WRAPPER: &str = "script=$(mktemp /tmp/thoric-exec.XXXXXX) && cat >\"$script\" && exec 3<\"$script\" && rm -f -- \"$script\" && exec bash -e /dev/fd/3 </dev/null";
 
 /// `docker exec` arguments up to the container, for a script that reads its input from the
-/// manager and runs in the desktop session's environment.
+/// manager and runs in the desktop session's environment. Root starts in its own home, since a
+/// Python started there, such as the compose runner or a script's `python3 -m`, imports from the
+/// folder it starts in, and the desktop user writes theirs.
 pub(crate) fn desktop_exec(user: &str, root: bool) -> Vec<String> {
     [
         "exec",
@@ -21,7 +23,7 @@ pub(crate) fn desktop_exec(user: &str, root: bool) -> Vec<String> {
         "--user",
         user,
         "--workdir",
-        "/home/desktop",
+        if root { "/root" } else { "/home/desktop" },
         "--env",
         if root {
             "HOME=/root"
