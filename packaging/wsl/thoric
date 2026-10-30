@@ -667,6 +667,9 @@ case ${1:-help} in
             exit 1
         fi
         distro=${WSL_DISTRO_NAME:-Thoric}
+        # The bridge runs in the manager's container, which MANAGER_CONTAINER names in Compose.
+        manager=$(setting MANAGER_CONTAINER)
+        manager=${manager:-thoric-manager}
         claude_shell=""
         if [[ $mode == none ]]; then
             echo "Agent access (MCP) is enabled without a token. Anything that reaches the address controls every desktop."
@@ -703,7 +706,7 @@ stdio bridge (no token in the client; it runs inside the manager container):
     "mcpServers": {
       "thoric": {
         "command": "wsl.exe",
-        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "thoric-manager", "python3", "/app/mcp_bridge.py"]
+        "args": ["-d", "$distro", "--", "docker", "exec", "-i", "$manager", "python3", "/app/mcp_bridge.py"]
       }
     }
   }

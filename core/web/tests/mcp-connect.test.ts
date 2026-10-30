@@ -154,6 +154,9 @@ test("the WSL bridge reaches the endpoint by its path and never carries a token"
   const args = wslBridge(endpoint).args
   assert.ok(args.includes("MCP_BRIDGE_URL=http://127.0.0.1:8080/mcp/chrome-dev"))
   assert.ok(!JSON.stringify(wslBridge(endpoint)).includes("s3cr3t"))
+  // A manager that MANAGER_CONTAINER names otherwise runs the bridge in its own container.
+  const named = wslBridge({ ...admin, container: "desk-manager" }).args
+  assert.ok(named.includes("desk-manager") && !named.includes("thoric-manager"))
 })
 
 test("mcp-remote passes the header through its environment and allows plain HTTP on the LAN", () => {

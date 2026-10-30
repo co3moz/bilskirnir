@@ -14,7 +14,12 @@ export type ConnectTarget = {
   path: string
   /** The bearer token, or `null` when the client sends no Authorization header. */
   token: string | null
+  /** The manager's container, which the stdio bridge runs in: `MANAGER_CONTAINER`, when known. */
+  container?: string
 }
+
+/** The manager's container unless `MANAGER_CONTAINER` names another, as in the Compose manifests. */
+export const MANAGER_CONTAINER = "thoric-manager"
 
 /** Stand-ins for a token the dialog was not given; the documentation uses the same words. */
 export const ENDPOINT_TOKEN = "ENDPOINT_TOKEN"
@@ -116,7 +121,7 @@ export function wslBridge(target: ConnectTarget) {
       "exec",
       "-i",
       ...inside,
-      "thoric-manager",
+      target.container || MANAGER_CONTAINER,
       "python3",
       "/app/mcp_bridge.py",
     ],

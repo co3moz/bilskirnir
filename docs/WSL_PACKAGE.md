@@ -88,7 +88,7 @@ The helper handles what has to happen outside the distribution. Run it with the 
 & ([scriptblock]::Create((irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1))) move D:\WSL\Thoric
 ```
 
-`install` takes `-Location <folder>`, `-VhdSize <size>` and `-Package <file>`, a package you already have. Every command takes `-Distro <name>` for a distribution installed under another name and `-Port <port>` for a dashboard port other than the one in `.env`, and `help` lists them all. A saved copy takes the same commands, run as `powershell -ExecutionPolicy Bypass -File .\thoric.ps1 <command>` because Windows runs a saved script only when allowed to; in a clone of the repository it is `windows\thoric.ps1`.
+`install` takes `-Location <folder>`, `-VhdSize <size>` and `-Package <file>`, a package you already have. Every command takes `-Distro <name>` for a distribution installed under another name and `-Port <port>` for a dashboard port other than the one in `.env`, and `help` lists them all. A saved copy takes the same commands, run as `powershell -ExecutionPolicy Bypass -File .\thoric.ps1 <command>` because Windows runs a saved script only when allowed to; in a clone of the repository it is `packaging\windows\thoric.ps1`.
 
 ## Keep it running
 
@@ -129,6 +129,20 @@ New-NetFirewallRule -Name Thoric -DisplayName Thoric -Direction Inbound -Protoco
 
 [Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking) covers both modes.
 
+### HTTPS
+
+The [HTTPS service](INSTALLATION.md#https-and-microphone-access-over-lan) of the installation guide runs in the package too. The package's `/opt/thoric/compose.yml` is the guide's `compose.ghcr.yml`, so run its Compose commands from `/opt/thoric` without `-f compose.ghcr.yml`. Set the guide's values with `thoric settings`, `COMPOSE_PROFILES=https` among them, without which `thoric start`, `stop` and `update` leave Caddy alone, then run `thoric start`, which recreates the manager with them and starts Caddy.
+
+Caddy makes a certificate authority of its own, which every device that opens the dashboard has to trust. In PowerShell on Windows, copy its certificate out of the distribution and trust it for your Windows account, which Windows asks you to confirm:
+
+```powershell
+wsl -d Thoric -- sh -c "cd /opt/thoric && docker compose cp https:/data/caddy/pki/authorities/local/root.crt /tmp/caddy-root.crt"
+Copy-Item \\wsl.localhost\Thoric\tmp\caddy-root.crt $HOME\Downloads\caddy-root.crt
+Import-Certificate -FilePath $HOME\Downloads\caddy-root.crt -CertStoreLocation Cert:\CurrentUser\Root
+```
+
+Edge and Chrome use that list; Firefox keeps its own, under **Certificates** in its settings. Bring `caddy-root.crt` from `Downloads` to the other devices and trust it there as their system describes. They reach the HTTPS port through Windows once `lan enable -Port 8443` opens it, see above.
+
 ## Everyday commands
 
 Inside the distribution, `thoric` manages the installation:
@@ -148,7 +162,7 @@ Tab completes the commands: type `thoric re` and press Tab for `restart`. The pa
 
 `thor` is a short name for the same command: `thor status` is `thoric status`, and Tab completes it too.
 
-The installation files live in `/opt/thoric`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard), and `.env.previous` after a settings change from the dashboard. [`thoric update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and HTTPS; run the Compose commands from `/opt/thoric`.
+The installation files live in `/opt/thoric`: `compose.yml` (the published-image manifest), `.env`, `.env.example` and `deploy/Caddyfile`, beside the `update` folder of [Update from the dashboard](#update-from-the-dashboard) and [Settings from the dashboard](#settings-from-the-dashboard), and `.env.previous` after a settings change from the dashboard. [`thoric update`](#update) keeps all but `.env` in step with the manager. Everything in the [installation guide](INSTALLATION.md) applies, including LAN access and [HTTPS](#https); run the Compose commands from `/opt/thoric`, without the guide's `-f compose.ghcr.yml`, since `compose.yml` there is that file.
 
 ## Update
 
@@ -264,7 +278,7 @@ WSL reads these settings only when the virtual machine starts, and the helper's 
 wsl --shutdown
 ```
 
-The manager comes back on its own; containers do not, so start them again from the dashboard. Their running applications and memory are lost, as with any stop. Afterwards the dashboard's **MEMORY** figure and `thoric doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `thoric doctor` warns when it is below 8 GB.
+When Docker starts with the distribution, the manager and the containers that were running come back on their own, since they use `restart: unless-stopped`; a container you stopped stays stopped. Their running applications and memory are lost, as with any restart of a computer. Afterwards the dashboard's **MEMORY** figure and `thoric doctor` show the new amount, slightly below the configured value because the kernel keeps part of it. `thoric doctor` warns when it is below 8 GB.
 
 A container without a memory limit can use all of the virtual machine's memory. When that runs out, Linux ends processes inside the virtual machine, which can include the manager or another container; Windows itself stays protected by the limit above. Give containers that run heavy applications a memory limit when you [create them](USAGE.md#create-and-connect) or change their settings. A limit is a ceiling, not a reservation: memory a container does not use stays available to the rest.
 
@@ -279,7 +293,7 @@ To change them later, choose **Move its disk to another folder** or **Change its
 & ([scriptblock]::Create((irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1))) resize 200GB
 ```
 
-WSL changes a disk only while nothing has it attached, and it keeps a stopped distribution's disk attached until the WSL virtual machine shuts down. So both stop the manager and run `wsl --shutdown`, which stops every WSL distribution; when others are running, they name them and ask first. Then they change the disk and start Thoric again. The manager comes back on its own; containers do not, so start them again from the dashboard. A move to another drive copies the whole disk, which takes a while for a large one, and the folder must not hold a disk already.
+WSL changes a disk only while nothing has it attached, and it keeps a stopped distribution's disk attached until the WSL virtual machine shuts down. So both stop the manager and run `wsl --shutdown`, which stops every WSL distribution; when others are running, they name them and ask first. Then they change the disk and start Thoric again. The containers that were running come back when Docker starts, as after `wsl --shutdown` above, with their running applications and memory lost. A move to another drive copies the whole disk, which takes a while for a large one, and the folder must not hold a disk already.
 
 A smaller maximum works only while the data still fits. `thoric doctor` shows the space left before the maximum and warns below 10 GB.
 

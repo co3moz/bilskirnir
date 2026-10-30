@@ -1043,6 +1043,12 @@ class McpTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("URL:     http://localhost:8080/mcp", result.stdout)
                 self.assertIn("Authorization: Bearer secret-token", result.stdout)
+                self.assertIn('"docker", "exec", "-i", "thoric-manager", "python3"', result.stdout)
+
+    def test_the_bridge_runs_in_the_container_compose_names(self):
+        result = self.mcp("ROOT_MCP_ENABLED=true\nMCP_TOKEN=x\nMANAGER_CONTAINER='desk-manager'\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('"docker", "exec", "-i", "desk-manager", "python3"', result.stdout)
 
     def test_without_the_root_endpoint_it_points_at_the_dashboards_endpoints(self):
         for settings in ("ROOT_MCP_ENABLED=false\nMCP_ENABLED=true\nMCP_TOKEN=x\n", "MCP_TOKEN=x\n"):

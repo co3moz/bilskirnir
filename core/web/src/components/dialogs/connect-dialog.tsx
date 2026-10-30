@@ -30,7 +30,7 @@ import {
   type McpClient,
   type Snippet,
 } from "@/lib/mcp-connect"
-import { useMcpEndpoints } from "@/lib/queries"
+import { useConfiguration, useMcpEndpoints } from "@/lib/queries"
 import type { DialogProps } from "./side-drawer"
 
 const CLIENT_KEY = "thoric.mcp.client"
@@ -170,11 +170,16 @@ export function ConnectDialog({ name, ...props }: DialogProps & { name?: string 
   const [token, setToken] = React.useState("")
   const [header, setHeader] = React.useState(true)
   const path = name ? (endpoint?.path ?? `/mcp/${name}`) : "/mcp"
+  const manager = useConfiguration().data?.variables.find(
+    (variable) => variable.name === "MANAGER_CONTAINER"
+  )
   const target: ConnectTarget = {
     name: name ?? "thoric",
     url: endpointUrl(location.origin, path),
     path,
     token: header ? token.trim() || (name ? ENDPOINT_TOKEN : ADMIN_TOKEN) : null,
+    container:
+      manager && !manager.secret && typeof manager.value === "string" ? manager.value : undefined,
   }
   const tokenHint = !name
     ? t("mcp.connect.tokenAdmin")

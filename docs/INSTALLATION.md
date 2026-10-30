@@ -126,20 +126,23 @@ BIND_ADDRESS=0.0.0.0
 DESKTOP_HOST=desktop.lan
 HTTPS_PORT=8443
 SECURE_COOKIE=true
+COMPOSE_PROFILES=https
 ```
+
+`COMPOSE_PROFILES=https` has every Compose command of the installation include Caddy, so `up`, `stop` and `pull` start, stop and update it with the manager, and in the WSL package `thoric start`, `stop` and `update` do too. Without it, Caddy runs only while a command names `--profile https`. `DESKTOP_HOST` has to be a name every client device finds the host under, through your network's DNS or each device's hosts file; the manager accepts it without an entry in `ALLOWED_HOSTS`.
 
 Start the manager and Caddy, then copy the CA certificate:
 
 ```bash
-docker compose -f compose.ghcr.yml --profile https up -d manager https
+docker compose -f compose.ghcr.yml up -d
 docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
 ```
 
-Trust `caddy-root.crt` on the client device and open [desktop.lan:8443](https://desktop.lan:8443). Once secure cookies are enabled, sign in through HTTPS.
+Trust `caddy-root.crt` on every client device and open [desktop.lan:8443](https://desktop.lan:8443). On Windows, `Import-Certificate -FilePath .\caddy-root.crt -CertStoreLocation Cert:\CurrentUser\Root` in PowerShell trusts it for Edge and Chrome after Windows asks to confirm; Firefox keeps its own list, under **Certificates** in its settings. The WSL package's guide shows [how to bring the file to Windows](WSL_PACKAGE.md#https). Once secure cookies are enabled, sign in through HTTPS.
 
 Every browser reaches the manager from Caddy's address, so the manager counts failed sign-ins by the address Caddy forwards in `X-Forwarded-For`. It believes that header only from the running `https` service of its own Compose project, whose addresses it reads from Docker every 20 seconds and logs when they change; from anyone else, such as a desktop or a LAN client that connects to the manager's port, the connection's own address counts. A proxy of your own in front of the manager is not trusted this way, so all sign-ins through it share one count of 20 failures a minute.
 
-Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest.
+Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest, and in the WSL package, whose `/opt/thoric/compose.yml` is `compose.ghcr.yml` under the name Compose reads by itself.
 
 ## Update the images
 
