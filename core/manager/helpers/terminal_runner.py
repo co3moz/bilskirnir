@@ -48,8 +48,10 @@ record()
 output_path = os.path.join(directory, "output")
 output = open(output_path, "ab", buffering=0)
 size = 0
+stopped = False
 while True:
     if os.path.exists(os.path.join(directory, "stop")):
+        stopped = True
         try:
             os.kill(pid, signal.SIGHUP)
         except ProcessLookupError:
@@ -81,6 +83,17 @@ while True:
         if data:
             os.write(master, data)
 output.close()
+if stopped:
+    # A shell that ignores the hangup is killed, so a closed terminal always ends.
+    deadline = time.monotonic() + 3
+    try:
+        while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None:
+            if time.monotonic() > deadline:
+                os.kill(pid, signal.SIGKILL)
+                break
+            time.sleep(0.1)
+    except (ChildProcessError, ProcessLookupError):
+        pass
 try:
     _, status = os.waitpid(pid, 0)
 except ChildProcessError:

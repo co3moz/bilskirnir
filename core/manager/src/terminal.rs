@@ -128,6 +128,24 @@ async fn running(app: &App, id: &str) -> Result<Value> {
 fn user(record: &Terminal) -> &'static str {
     if record.root { "root" } else { "1001:1001" }
 }
+fn directory(record: &Terminal) -> String {
+    format!("{ROOT}/{}", record.id)
+}
+/// How long a terminal's runner has to make its folder before a terminal without one is gone.
+const STARTING: u64 = 60;
+/// Whether the terminal ended for good: its files went with a desktop restart, or the container
+/// stopped, which empties its `/tmp`. A record that new may still wait for its runner.
+fn gone(record: &Terminal, status: &Value) -> bool {
+    status["gone"] == true && now().saturating_sub(record.created_at) >= STARTING
+}
+/// What a stopped container's terminals report: they ended with it.
+fn stopped() -> Value {
+    json!({"state": "unknown", "gone": true, "error": "Container is not running"})
+}
+/// The first status of a `status` answer, which lists one for each folder asked about.
+fn first(statuses: Value) -> Option<Value> {
+    statuses.as_array()?.first().cloned()
+}
 async fn control(app: &App, container: &str, who: &str, arguments: &[&str]) -> Result<Value> {
     let mut args = vec!["exec", "--user", who, container, "python3", "-c", CONTROL];
     args.extend(arguments);
@@ -185,7 +203,7 @@ pub async fn open_terminal(
         created_at: now(),
         endpoint: endpoint.map(str::to_owned),
     };
-    let directory = format!("{ROOT}/{}", record.id);
+    let directory = directory(&record);
     let container = info["Id"].as_str().context("Missing container ID")?;
     app.docker(&[
         "exec",
@@ -212,7 +230,9 @@ pub async fn open_terminal(
     tokio::time::sleep(Duration::from_millis(400)).await;
     let status = control(app, container, user(&record), &["status", &directory])
         .await
-        .unwrap_or_else(|_| json!({"state": "starting"}));
+        .ok()
+        .and_then(first)
+        .unwrap_or_else(|| json!({"state": "starting"}));
     Ok(describe(&record, status))
 }
 pub async fn terminal_input(
@@ -234,11 +254,7 @@ pub async fn terminal_input(
         app,
         container,
         user(&record),
-        &[
-            "write",
-            &format!("{ROOT}/{}", record.id),
-            &STANDARD.encode(text),
-        ],
+        &["write", &directory(&record), &STANDARD.encode(text)],
     )
     .await?;
     Ok(describe(&record, status))
@@ -260,7 +276,7 @@ pub async fn terminal_output(
         user(&record),
         &[
             "read",
-            &format!("{ROOT}/{}", record.id),
+            &directory(&record),
             &body.offset.to_string(),
             &body.limit.to_string(),
             if body.strip_ansi { "true" } else { "false" },
@@ -276,15 +292,24 @@ pub async fn close_terminal(
     endpoint: Option<&str>,
 ) -> Result<Value> {
     let record = record(app, id, terminal, endpoint)?;
-    let info = running(app, id).await?;
-    let container = info["Id"].as_str().context("Missing container ID")?;
-    let status = control(
-        app,
-        container,
-        user(&record),
-        &["stop", &format!("{ROOT}/{}", record.id), "10"],
-    )
-    .await?;
+    let env = app.container(id)?;
+    let info = app.owned(&env).await?;
+    let status = if info["State"]["Running"] == true {
+        let container = info["Id"].as_str().context("Missing container ID")?;
+        control(
+            app,
+            container,
+            user(&record),
+            &["stop", &directory(&record), "10"],
+        )
+        .await?
+    } else {
+        stopped()
+    };
+    // A shell that ended took its files along, and a terminal without them is over too.
+    if status["state"] == "exited" || status["gone"] == true {
+        app.db.remove("terminal", &record.id)?;
+    }
     Ok(describe(&record, status))
 }
 pub async fn list_terminals(app: &App, id: &str, endpoint: Option<&str>) -> Result<Value> {
@@ -297,22 +322,44 @@ pub async fn list_terminals(app: &App, id: &str, endpoint: Option<&str>) -> Resu
         .filter(|record| record.container_id == id && reaches(record, endpoint))
         .take(50)
         .collect::<Vec<_>>();
+    let mut statuses = vec![stopped(); records.len()];
+    if info["State"]["Running"] == true {
+        let container = info["Id"].as_str().context("Missing container ID")?;
+        // One call for the desktop user's terminals and one for root's, whose folders only root
+        // reads, instead of one for each terminal.
+        for root in [false, true] {
+            let mine = (0..records.len())
+                .filter(|&index| records[index].root == root)
+                .collect::<Vec<_>>();
+            let Some(&one) = mine.first() else {
+                continue;
+            };
+            let directories = mine
+                .iter()
+                .map(|&index| directory(&records[index]))
+                .collect::<Vec<_>>();
+            let mut arguments = vec!["status"];
+            arguments.extend(directories.iter().map(String::as_str));
+            let answer = control(app, container, user(&records[one]), &arguments)
+                .await
+                .ok()
+                .and_then(|answer| answer.as_array().cloned())
+                .unwrap_or_default();
+            for (at, &index) in mine.iter().enumerate() {
+                statuses[index] = answer
+                    .get(at)
+                    .cloned()
+                    .unwrap_or_else(|| json!({"state": "unknown"}));
+            }
+        }
+    }
     let mut items = Vec::new();
-    for record in &records {
-        let status = if info["State"]["Running"] == true {
-            let container = info["Id"].as_str().context("Missing container ID")?;
-            control(
-                app,
-                container,
-                user(record),
-                &["status", &format!("{ROOT}/{}", record.id)],
-            )
-            .await
-            .unwrap_or_else(|_| json!({"state": "unknown"}))
+    for (record, status) in records.iter().zip(statuses) {
+        if gone(record, &status) {
+            app.db.remove("terminal", &record.id)?;
         } else {
-            json!({"state": "unknown", "error": "Container is not running"})
-        };
-        items.push(describe(record, status));
+            items.push(describe(record, status));
+        }
     }
     Ok(json!({"items": items}))
 }

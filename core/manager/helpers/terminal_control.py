@@ -16,7 +16,7 @@ def status(directory):
     except (OSError, ValueError):
         if os.path.isdir(directory):
             return {"state": "starting", "written": 0, "base": 0}
-        return {"state": "unknown", "written": 0, "base": 0,
+        return {"state": "unknown", "written": 0, "base": 0, "gone": True,
                 "error": "Terminal files are not available; the desktop may have restarted"}
 
 
@@ -58,6 +58,17 @@ def read(directory, offset, limit, strip):
     return result
 
 
+def remove(directory):
+    """Delete the files of a terminal that ended, which only its runner and this helper write."""
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for name in os.listdir(descriptor):
+            os.unlink(name, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
+    os.rmdir(directory)
+
+
 def stop(directory, wait_seconds):
     if os.path.isdir(directory):
         with open(os.path.join(directory, "stop"), "w"):
@@ -65,19 +76,26 @@ def stop(directory, wait_seconds):
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline and status(directory).get("state") in ("running", "starting"):
         time.sleep(0.1)
-    return status(directory)
+    info = status(directory)
+    if info.get("state") == "exited":
+        try:
+            remove(directory)
+        except OSError:
+            pass
+    return info
 
 
-command, directory, *arguments = sys.argv[1:]
+command, *arguments = sys.argv[1:]
 try:
     if command == "status":
-        print(json.dumps(status(directory)))
+        # Every terminal of a list in one call, in the order asked.
+        print(json.dumps([status(directory) for directory in arguments]))
     elif command == "write":
-        print(json.dumps(write(directory, arguments[0])))
+        print(json.dumps(write(arguments[0], arguments[1])))
     elif command == "read":
-        print(json.dumps(read(directory, int(arguments[0]), int(arguments[1]), arguments[2] == "true")))
+        print(json.dumps(read(arguments[0], int(arguments[1]), int(arguments[2]), arguments[3] == "true")))
     elif command == "stop":
-        print(json.dumps(stop(directory, float(arguments[0]))))
+        print(json.dumps(stop(arguments[0], float(arguments[1]))))
     else:
         sys.exit(2)
 except Exception as error:

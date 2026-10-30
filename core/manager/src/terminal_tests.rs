@@ -58,3 +58,21 @@ async fn an_endpoint_opens_no_root_shell() {
     assert_eq!(error.0, StatusCode::BAD_REQUEST, "{}", error.1);
     assert!(app.db.list::<Terminal>("terminal").unwrap().is_empty());
 }
+
+#[test]
+fn a_terminal_without_files_is_gone_once_its_runner_had_time_to_make_them() {
+    let mut record = terminal("t", false, None);
+    record.created_at = now();
+    // A runner that has not made the folder yet.
+    assert!(!gone(&record, &stopped()));
+    record.created_at = now() - STARTING;
+    assert!(gone(&record, &stopped()));
+    assert!(gone(
+        &record,
+        &json!({"state": "unknown", "gone": true, "error": "Terminal files are not available"})
+    ));
+    // A terminal whose shell exited keeps its output until it is closed, and one the helper could
+    // not be asked about stays too.
+    assert!(!gone(&record, &json!({"state": "exited", "exit_code": 0})));
+    assert!(!gone(&record, &json!({"state": "unknown"})));
+}
