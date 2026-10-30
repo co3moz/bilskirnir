@@ -71,6 +71,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: Check Python tests
         run: python3 tests/unit.py
+      # Every shell script of the repository, with the ShellCheck release the script names.
+      - name: Check shell scripts
+        run: bash tests/shellcheck.sh
       - name: Check backend
         run: |
           cargo fmt --check

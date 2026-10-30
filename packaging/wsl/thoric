@@ -14,6 +14,7 @@ INSTALL_FILES=(compose.yml deploy/Caddyfile .env.example)
 # one before it installs it, so they keep this form.
 CLI=/usr/local/bin/thoric
 CLI_VERSION=
+# shellcheck disable=SC2034 # read from this file by the command an update replaces
 NEEDS_PACKAGE=1
 # The package records the level of its own files here, such as the firewall watcher and its unit. A
 # package without the file is level 1.
@@ -142,13 +143,14 @@ newest_release() {
 # published with it and tags them as the catalog reference; a manager built from the source downloads
 # the reference itself. This does the same.
 update_profiles() {
-    local catalog release ref source source_was_here replaced
+    local catalog release ref refs source source_was_here replaced
     if ! catalog=$(compose exec -T manager cat /app/desktop/profiles.json) ||
         ! release=$(docker inspect --format '{{index .Config.Labels "thoric.release"}}' "$(compose ps -q manager)"); then
         echo "Could not read the profile catalog from the manager; desktop images were not updated." >&2
         return 1
     fi
-    for ref in $(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog"); do
+    mapfile -t refs < <(sed -n 's/.*"reference": *"\([^"]*\)".*/\1/p' <<<"$catalog")
+    for ref in "${refs[@]}"; do
         if ! replaced=$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null); then
             continue
         fi
@@ -212,11 +214,11 @@ checksum() {
 # renamed over it, so a failed write leaves the old one whole and a running command keeps reading the
 # file it started from. A file keeps its owner, and its mode unless a third argument names one.
 put_file() {
-    local target=$1 mode=(-m "${3:-0644}")
+    local target=$1 owner=(-m "${3:-0644}")
     if [[ -e $target ]]; then
-        mode=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
+        owner=(-m "${3:-$(stat -c %a "$target")}" -o "$(stat -c %u "$target")" -g "$(stat -c %g "$target")")
     fi
-    sudo install -D "${mode[@]}" "$2" "$target.new"
+    sudo install -D "${owner[@]}" "$2" "$target.new"
     sudo mv -f "$target.new" "$target"
 }
 # The command comes only from releases, like the package's own, and never from a MANAGER_IMAGE chosen
@@ -489,7 +491,9 @@ apply_settings() {
     ' "$INSTALL/.env" >"$tmp/env"
     sudo cp -p "$INSTALL/.env" "$INSTALL/.env.previous"
     put_file "$INSTALL/.env" "$tmp/env"
-    echo "Wrote $(IFS=,; echo "${keys[*]}" | sed 's/,/, /g') to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
+    local written
+    written=$(IFS=,; echo "${keys[*]}")
+    echo "Wrote ${written//,/, } to $INSTALL/.env; the previous file is $INSTALL/.env.previous."
     echo "Recreating the manager with the new settings."
     if compose up -d --force-recreate manager && manager_answers; then
         echo "The manager answers with the new settings."
@@ -650,7 +654,7 @@ case ${1:-help} in
         esac
         ;;
     open)
-        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else echo "$(address)"; fi
+        if command -v explorer.exe >/dev/null; then explorer.exe "$(address)" || true; else address; fi
         ;;
     mcp)
         require_settings
