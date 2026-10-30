@@ -1052,7 +1052,7 @@ try:
     time.sleep(1)
     assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
     written = stdio_tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
-    assert written["bytes"] == 15
+    assert written["bytes"] == 15 and written["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/agent-files/hello.txt", written
     read = api(f"containers/{env_id}/files/read", {"path":written["path"]})
     assert read["data"] == "Hello from MCP\n" and read["eof"]
     assert docker("exec",container,"stat","-c","%u:%g %a",written["path"]).strip() == b"1001:1001 600"
@@ -1071,7 +1071,8 @@ try:
     # An argument the schema does not take is a tool error the model can read, not a protocol error.
     refused = tool("read_file", {"container_id":env_id,"path":"/home/desktop","bogus":1}, allow_error=True)
     assert refused["isError"] and refused["content"][0]["text"] == "Unknown argument: bogus", refused
-    tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})
+    uploaded = tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})["structuredContent"]
+    assert uploaded["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-upload.bin", uploaded
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
     image = stdio_tool("screenshot", {"container_id":env_id})["content"][0]
     assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")

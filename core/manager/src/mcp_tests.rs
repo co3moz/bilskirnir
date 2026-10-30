@@ -154,7 +154,13 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         save["inputSchema"]["required"],
         serde_json::json!(["path", "container_id"])
     );
-    for name in ["save_screenshot", "download_file", "export_artifacts"] {
+    for name in [
+        "save_screenshot",
+        "download_file",
+        "export_artifacts",
+        "write_file",
+        "upload_file",
+    ] {
         let tool = tools.iter().find(|t| t["name"] == name).unwrap();
         assert!(
             tool["description"]

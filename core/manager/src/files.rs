@@ -168,7 +168,9 @@ pub async fn write(
     if !output.status.success() {
         return Err(Error::helper(&output));
     }
-    Ok(Json(json!({"path":body.path,"bytes":size})))
+    Ok(Json(
+        json!({"path":body.path,"bytes":size,"download_url":download_url(&id, &body.path)}),
+    ))
 }
 
 const FILE_OPS: &str = include_str!("../helpers/file_ops.py");

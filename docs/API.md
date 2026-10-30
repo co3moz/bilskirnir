@@ -494,7 +494,7 @@ Write request:
 {"path":"/home/desktop/project/config.json","data":"{\"enabled\":true}\n","encoding":"utf8","replace":false}
 ```
 
-Writes are atomic, create missing parent directories and use mode 0600. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
+Writes are atomic, create missing parent directories and use mode 0600, and return the `path`, its `bytes` and its `download_url`. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
 
 `POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/mkdir` with `{"path":"/home/desktop/project/assets"}` creates one folder in an existing parent and returns 409 when the name exists. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks, files larger than `UPLOAD_MAX_MB` and, with 403, a file the desktop user cannot open, which is tried before any headers are sent so a refused file never arrives as a body cut short. Responses that describe a saved file, such as `download_file`, `export_artifacts` and saved screenshots, include this route as a root-relative `download_url` for the dashboard session.
 
@@ -515,7 +515,7 @@ curl --cookie thoric.cookies \
   'http://localhost:8080/api/containers/CONTAINER_ID/files?destination=/home/desktop/Downloads&name=notes.txt&size=FILE_SIZE_IN_BYTES'
 ```
 
-Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB`. They return the saved path and byte count, and create missing folders of the destination.
+Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB`. They return the saved `path`, its `bytes` and its `download_url`, and create missing folders of the destination.
 
 Uploads, saved screenshots and exported artifacts follow the same destination rule. The folder may be anywhere in the desktop home, `/home/desktop`, in a volume mounted writable, by the `mounts` setting or a compose's volume parameter, or in one of the `places` in the container's `setup`; nothing under a read-only volume is accepted. The rule keeps writes out of the system folders. What protects the desktop is that files are written as the desktop user, so its permissions apply, and that no symlink in the destination is followed.
 
