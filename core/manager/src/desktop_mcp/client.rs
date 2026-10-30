@@ -36,6 +36,7 @@ const LOG_LIMIT: usize = 16 * 1024;
 /// A connection unused this long is closed; the next call opens another.
 pub(super) const IDLE: Duration = Duration::from_secs(600);
 const ADAPTER: &str = include_str!("../../helpers/mcp_http_adapter.py");
+const LAUNCHER: &str = include_str!("../../helpers/mcp_launch.py");
 /// The desktop user's own programs come first, as in a login shell.
 const PATH: &str = "/home/desktop/.local/bin:/home/desktop/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -128,7 +129,6 @@ pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
         first.push(b'\n');
         return Ok(Exec {
             args,
-            env: Vec::new(),
             first: Some(first),
         });
     }
@@ -149,29 +149,26 @@ pub(super) fn exec_args(container: &str, spec: &ServerSpec) -> Result<Exec> {
         args.push("--env".into());
         args.push(variable);
     }
-    // A declared variable may hold a resolved compose value: named alone, Docker reads it from
-    // the CLI's own environment, so the value is not on a command line `ps` shows.
-    let mut env = Vec::new();
-    for (key, value) in &spec.env {
-        args.push("--env".into());
-        args.push(key.clone());
-        env.push((key.clone(), value.clone()));
-    }
     args.push(container.into());
+    // A declared variable may hold a resolved compose value, so it is neither on a command line
+    // `ps` shows nor in the Docker CLI's environment, where one such as DOCKER_HOST would point
+    // the CLI elsewhere: the launcher reads the variables from stdin and becomes the program.
+    let mut first = None;
+    if !spec.env.is_empty() {
+        let variables = serde_json::to_vec(&spec.env)?;
+        let size = variables.len().to_string();
+        args.extend(["python3", "-I", "-c", LAUNCHER, size.as_str()].map(str::to_owned));
+        first = Some(variables);
+    }
     args.push(command.into());
     args.extend(spec.args.iter().cloned());
-    Ok(Exec {
-        args,
-        env,
-        first: None,
-    })
+    Ok(Exec { args, first })
 }
 
-/// How a server is started: the `docker exec` arguments, the variables the CLI's environment
-/// carries for `--env KEY`, and what the server's stdin receives first.
+/// How a server is started: the `docker exec` arguments and what the server's stdin receives
+/// first. The Docker CLI runs with the manager's own environment.
 pub(super) struct Exec {
     pub(super) args: Vec<String>,
-    pub(super) env: Vec<(String, String)>,
     pub(super) first: Option<Vec<u8>>,
 }
 
@@ -191,10 +188,9 @@ pub(super) async fn start(app: &App, container: &Container, spec: &ServerSpec) -
         bail!("Start the container before using its MCP servers");
     }
     let docker_id = info["Id"].as_str().context("Missing container ID")?;
-    let Exec { args, env, first } = exec_args(docker_id, &spec)?;
+    let Exec { args, first } = exec_args(docker_id, &spec)?;
     let mut child = app
         .command(&args)
-        .envs(env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

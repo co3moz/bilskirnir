@@ -300,24 +300,41 @@ fn the_desktop_users_declaration_replaces_the_images_and_bad_files_become_errors
 }
 
 #[test]
-fn a_server_runs_as_the_desktop_user_and_header_values_stay_off_the_command_line() {
+fn a_server_runs_as_the_desktop_user_and_secret_values_reach_neither_a_command_line_nor_the_cli() {
     let spec = ServerSpec {
         env: BTreeMap::from([("BROWSER".into(), "chrome".into())]),
         args: vec!["--headless".into()],
         ..stdio("playwright-mcp")
     };
-    let Exec { args, env, first } = exec_args("abc", &spec).unwrap();
-    assert!(first.is_none());
+    let Exec { args, first } = exec_args("abc", &spec).unwrap();
     assert_eq!(&args[..4], ["exec", "-i", "--user", "1001:1001"]);
-    // The variable is named on the command line and its value travels in the CLI's environment,
-    // which may hold a compose secret.
-    assert!(args.contains(&"BROWSER".to_owned()));
+    // The value, which may hold a compose secret, is on no command line and reaches the launcher
+    // on stdin, sized on its command line; the Docker CLI's environment is the manager's own.
     assert!(!args.iter().any(|a| a.contains("chrome")));
-    assert_eq!(env, [("BROWSER".to_owned(), "chrome".to_owned())]);
+    let first = first.unwrap();
+    let variables: Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(variables, serde_json::json!({"BROWSER": "chrome"}));
     assert!(
         args.iter()
             .any(|a| a.starts_with("PATH=/home/desktop/.local/bin:"))
     );
+    let at = args.iter().position(|a| a == "abc").unwrap();
+    assert_eq!(&args[at + 1..at + 3], ["python3", "-I"]);
+    assert_eq!(
+        &args[at + 5..],
+        [
+            first.len().to_string().as_str(),
+            "playwright-mcp",
+            "--headless"
+        ]
+    );
+    // Without variables the program runs itself, as before.
+    let plain = ServerSpec {
+        args: vec!["--headless".into()],
+        ..stdio("playwright-mcp")
+    };
+    let Exec { args, first } = exec_args("abc", &plain).unwrap();
+    assert!(first.is_none());
     let at = args.iter().position(|a| a == "abc").unwrap();
     assert_eq!(&args[at + 1..], ["playwright-mcp", "--headless"]);
     let http = ServerSpec {
