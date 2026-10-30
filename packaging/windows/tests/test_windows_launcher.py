@@ -1,9 +1,10 @@
 """The Windows launcher, packaging/windows/thoric.ps1, which releases attach next to the package
 and nothing else runs before a user does: that Windows PowerShell 5.1 reads it as written, that it
-parses, and that its administrator side, the copy of itself that 'lan' starts through UAC, runs
-nothing from the distribution, whose user has passwordless sudo.
+parses, that its administrator side, the copy of itself that 'lan' starts through UAC, runs
+nothing from the distribution, whose user has passwordless sudo, and that the settings it offers
+for .wslconfig fit the computer and leave the rest of the file alone.
 
-The last two need PowerShell: pwsh on Linux, or Windows PowerShell from Windows or WSL.
+All but the first need PowerShell: pwsh on Linux, or Windows PowerShell from Windows or WSL.
 """
 
 import json
@@ -37,6 +38,27 @@ while ($todo.Count) { $n = $todo.Dequeue();
 @{ errors = @($e | ForEach-Object { $_.Message }); commands = $commands; strings = $strings; functions = @($seen.Keys) } | ConvertTo-Json -Compress
 """.split())
 
+# Reads the script, the names of some of its functions and PowerShell expressions as JSON from stdin,
+# defines those functions on their own and prints what each expression returns. Like ANALYZE, one line
+# without double quotes.
+CALL = " ".join("""
+$i = [Console]::In.ReadToEnd() | ConvertFrom-Json;
+$a = [System.Management.Automation.Language.Parser]::ParseInput($i.script, [ref]$null, [ref]$null);
+foreach ($d in $a.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
+  if ($i.functions -contains $d.Name) { . ([scriptblock]::Create($d.Extent.Text)) } };
+ConvertTo-Json -Compress -Depth 5 -InputObject @($i.calls | ForEach-Object { , (& ([scriptblock]::Create($_))) })
+""".split())
+
+
+def call(*expressions, functions=("Get-WslSuggestion", "Read-WslConfig", "Add-WslSettings")):
+    """What each PowerShell expression returns with the script's own functions defined."""
+    request = json.dumps({"script": SCRIPT.read_text(), "functions": list(functions), "calls": list(expressions)})
+    result = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", CALL],
+                            input=request, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        raise AssertionError(result.stderr)
+    return json.loads(result.stdout)
+
 
 class WindowsLauncherTest(unittest.TestCase):
     def test_windows_powershell_reads_it_as_written(self):
@@ -58,6 +80,33 @@ class WindowsLauncherTest(unittest.TestCase):
         self.assertEqual([command for command in commands if re.fullmatch(r"wsl(\.exe)?", command)], [])
         # The LAN task's command is a string, so no string may start wsl either.
         self.assertEqual([text for text in report["strings"] if re.search(r"(?i)\bwsl(\.exe)?(\s|$)", text)], [])
+
+    @unittest.skipUnless(POWERSHELL, "needs PowerShell")
+    def test_wsl_settings_leave_windows_its_share(self):
+        big, small, tiny = call("Get-WslSuggestion 128 24", "Get-WslSuggestion 16 8", "Get-WslSuggestion 4 2")
+        # A quarter of the memory and processors stays with Windows, and swap stops at 8 GB.
+        self.assertEqual(big, {"memory": "96GB", "processors": "18", "swap": "8GB"})
+        self.assertEqual(small, {"memory": "12GB", "processors": "6", "swap": "3GB"})
+        # WSL still gets 2 GB on a small computer, and four processors or fewer are all shared.
+        self.assertEqual(tiny, {"memory": "2GB", "processors": "2", "swap": "1GB"})
+
+    @unittest.skipUnless(POWERSHELL, "needs PowerShell")
+    def test_wsl_settings_are_added_without_touching_the_rest(self):
+        lines = ["[boot]", "systemd=true", "", "[WSL2]", "networkingMode = mirrored", "# swap=0", "",
+                 "[experimental]", "memory=1GB"]
+        given = "@(" + ", ".join(f"'{line}'" for line in lines) + ")"
+        settings = "([ordered]@{ memory = '96GB'; swap = '8GB' })"
+        read, inserted, appended, created = call(
+            f"Read-WslConfig {given}",
+            f"Add-WslSettings {given} {settings}",
+            f"Add-WslSettings @('[boot]', 'systemd=true', '', '') {settings}",
+            f"Add-WslSettings @() {settings}",
+        )
+        # Only [wsl2] counts, whatever its case, and a comment sets nothing.
+        self.assertEqual(read, {"networkingmode": "mirrored"})
+        self.assertEqual(inserted, lines[:4] + ["memory=96GB", "swap=8GB"] + lines[4:])
+        self.assertEqual(appended, ["[boot]", "systemd=true", "", "[wsl2]", "memory=96GB", "swap=8GB"])
+        self.assertEqual(created, ["[wsl2]", "memory=96GB", "swap=8GB"])
 
 
 if __name__ == "__main__":

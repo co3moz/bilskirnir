@@ -46,7 +46,7 @@ Thoric serves one administrator on a local machine or LAN.
 
 ## Getting started
 
-You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also need a Windows GPU driver with WSL support.
+You need Windows 11 or Windows 10 with WSL 2.4.4 or newer, which the Windows helper below installs or updates when it finds none or an older one. GPU containers also need a Windows GPU driver with WSL support.
 
 1. Install the `thoric.wsl` package from the [latest release](https://github.com/co3moz/thoric/releases/latest), in one of two ways.
 
@@ -56,7 +56,7 @@ You need Windows 11 or Windows 10 with WSL 2.4.4 or newer. GPU containers also n
    irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
    ```
 
-   It asks for a folder for the distribution's disk, which holds every image and container, and its maximum size, then downloads the package and installs it. Run the same line again later to start, stop, update, move or remove Thoric.
+   It installs or updates WSL first when needed and offers memory, processor and swap settings for WSL's virtual machine that `.wslconfig` leaves out. Then it asks for a folder for the distribution's disk, which holds every image and container, and its maximum size, downloads the package and installs it. Run the same line again later to start, stop, update, move or remove Thoric.
 
    **Option 2, the package by hand.** Download it and install it with WSL; `--location D:\WSL\Thoric` keeps the disk on another drive:
 
