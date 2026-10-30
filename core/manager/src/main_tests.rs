@@ -52,6 +52,9 @@ async fn the_content_security_policy_allows_the_templates_host_only() {
         "{github}"
     );
     assert!(github.contains("script-src 'self';"), "{github}");
+    for directive in ["base-uri 'none'", "form-action 'self'", "object-src 'none'"] {
+        assert!(none.contains(directive), "{none}");
+    }
 }
 
 #[tokio::test]

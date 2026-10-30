@@ -105,12 +105,13 @@ pub struct App {
     outbound: outbound::Outbound,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
-/// and their icons from another host, which is the one exception to `'self'`.
+/// and their icons from another host, which is the one exception to `'self'`. No page needs a
+/// `<base>`, a plugin or a form that posts elsewhere, so an injected one does nothing.
 fn content_security_policy(templates: Option<&str>) -> HeaderValue {
     let other = templates
         .map(|origin| format!(" {origin}"))
         .unwrap_or_default();
-    HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:{other}; connect-src 'self'{other}; worker-src 'self' blob:; frame-ancestors 'self'"))
+    HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:{other}; connect-src 'self'{other}; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"))
         .unwrap_or_else(|_| content_security_policy(None))
 }
 fn router(app: Arc<App>) -> Router {
