@@ -926,6 +926,12 @@ export const fr: Messages = {
   "nav.sidebar": "Barre latérale",
   "nav.sidebarHint": "Affiche la barre latérale mobile.",
   "app.connectionFailed": "Échec de la connexion",
+  "errors.title": "Une erreur s'est produite",
+  "errors.updated": "Thoric a été mis à jour",
+  "errors.updatedHint":
+    "Cette page vient de la version précédente. Rechargez-la pour ouvrir la nouvelle.",
+  "errors.reload": "Recharger",
+  "errors.retry": "Réessayer",
   "docker.unreachable": "Impossible de se connecter à Docker",
   "docker.checkDaemon": "Vérifiez que le démon Docker est en cours d'exécution.",
   "login.title": "Connexion",

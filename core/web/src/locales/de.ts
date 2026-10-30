@@ -927,6 +927,12 @@ export const de: Messages = {
   "nav.sidebar": "Seitenleiste",
   "nav.sidebarHint": "Zeigt die mobile Seitenleiste an.",
   "app.connectionFailed": "Verbindung fehlgeschlagen",
+  "errors.title": "Etwas ist schiefgelaufen",
+  "errors.updated": "Thoric wurde aktualisiert",
+  "errors.updatedHint":
+    "Diese Seite stammt aus der vorherigen Version. Laden Sie sie neu, um die neue zu öffnen.",
+  "errors.reload": "Neu laden",
+  "errors.retry": "Erneut versuchen",
   "docker.unreachable": "Keine Verbindung zu Docker",
   "docker.checkDaemon": "Prüfen Sie, ob der Docker-Daemon läuft.",
   "login.title": "Anmelden",

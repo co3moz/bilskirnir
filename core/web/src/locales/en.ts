@@ -930,6 +930,11 @@ export const en = {
   "nav.sidebarHint": "Displays the mobile sidebar.",
 
   "app.connectionFailed": "Connection failed",
+  "errors.title": "Something went wrong",
+  "errors.updated": "Thoric was updated",
+  "errors.updatedHint": "This page is from the previous version. Reload it to open the new one.",
+  "errors.reload": "Reload",
+  "errors.retry": "Try again",
 
   "docker.unreachable": "Cannot connect to Docker",
   "docker.checkDaemon": "Check that the Docker daemon is running.",

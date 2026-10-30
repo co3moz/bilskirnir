@@ -4,6 +4,7 @@ import { toast } from "sonner"
 
 import { AppSidebar, pageIcon, pageParent, pageSection, pageTitle } from "@/components/app-sidebar"
 import { DialogHost } from "@/components/dialogs/dialog-host"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { HumanRequestsBanner } from "@/components/human-requests"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -108,7 +109,10 @@ function Shell({ page }: { page: Page }) {
           {page === "groups" && <NewGroupButton />}
         </SiteHeader>
         <HumanRequestsBanner />
-        <Content />
+        {/* A page that fails to render leaves the sidebar, so another page can still open. */}
+        <ErrorBoundary key={page} variant="section" className="px-4 py-4 md:py-6 lg:px-6">
+          <Content />
+        </ErrorBoundary>
       </SidebarInset>
     </SidebarProvider>
   )
@@ -132,9 +136,11 @@ function Authenticated() {
   return (
     <>
       {route.page === "desktop" ? (
-        <React.Suspense fallback={<Loading />}>
-          <DesktopPage id={route.id} />
-        </React.Suspense>
+        <ErrorBoundary key={route.id}>
+          <React.Suspense fallback={<Loading />}>
+            <DesktopPage id={route.id} />
+          </React.Suspense>
+        </ErrorBoundary>
       ) : (
         <Shell page={route.page} />
       )}
