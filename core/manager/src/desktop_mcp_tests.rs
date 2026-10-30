@@ -1065,7 +1065,8 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         message.contains("Unknown tool") && message.contains("list the tools again"),
         "{body}"
     );
-    // The container is the endpoint's own: an argument naming another is refused.
+    // The container is the endpoint's own: an argument naming another is refused, as a tool
+    // error the agent reads.
     let (_, _, body) = call(
         app.clone(),
         "/mcp/chrome-dev",
@@ -1074,12 +1075,10 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_container","arguments":{"container_id":"other"}}}),
     )
     .await;
-    assert!(
-        body["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("Unknown argument"),
-        "{body}"
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Unknown argument: container_id"
     );
 
     // The endpoint's token is not the administrator's: not /mcp, not the API, not ports.
@@ -1616,7 +1615,11 @@ async fn request_human_comes_with_input_and_asks_only_for_the_endpoints_containe
     let (_, _, body) = ask(json!({"request_id": other.id, "wait_seconds": 0})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
     let (_, _, body) = ask(json!({"container_id": "c2", "message": "Elsewhere"})).await;
-    assert!(body["error"].is_object(), "{body}");
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Unknown argument: container_id"
+    );
 }
 
 #[test]

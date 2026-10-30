@@ -273,8 +273,11 @@ impl EndpointMcp {
         super::audit::describe(&self.app, &entry, &args, call);
         // A container tool's schema is Thoric's own, so its arguments are checked here as
         // /mcp checks them. A desktop server checks its own.
-        if !matches!(entry.target, Target::Server { .. }) {
-            mcp::check_arguments(&entry.tool, &args)?;
+        if !matches!(entry.target, Target::Server { .. })
+            && let Err(message) = mcp::check_arguments(&entry.tool, &args)
+        {
+            call.refused();
+            return Ok(mcp::refusal(message));
         }
         // In a task of its own, as /mcp's requests run, so a session's machinery does not add to
         // the stack the container tools' dispatch needs.

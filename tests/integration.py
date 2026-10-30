@@ -1068,6 +1068,9 @@ try:
     tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64","data":base64.b64encode(binary).decode()})
     assert base64.b64decode(tool("read_file", {"container_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64"})["structuredContent"]["data"]) == binary
     assert tool("read_file", {"container_id":env_id,"path":"/dev/zero"}, allow_error=True)["isError"]
+    # An argument the schema does not take is a tool error the model can read, not a protocol error.
+    refused = tool("read_file", {"container_id":env_id,"path":"/home/desktop","bogus":1}, allow_error=True)
+    assert refused["isError"] and refused["content"][0]["text"] == "Unknown argument: bogus", refused
     tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
     image = stdio_tool("screenshot", {"container_id":env_id})["content"][0]

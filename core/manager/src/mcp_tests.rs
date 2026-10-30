@@ -256,16 +256,32 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     );
 }
 
+/// An unknown tool is a protocol error. Arguments the schema refuses are a tool error naming the
+/// argument, which the model reads and can correct its call from, as MCP 2025-11-25 asks; as a
+/// protocol error most clients showed it only as a failed call.
 #[tokio::test]
 async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
     let app = mcp_app();
-    for args in [
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
         serde_json::json!({"name":"not_a_tool","arguments":{}}),
-        serde_json::json!({"name":"delete_container","arguments":{}}),
-        serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32602, "{body}");
+    for (args, refusal) in [
+        (
+            serde_json::json!({"name":"delete_container","arguments":{}}),
+            "Missing argument: container_id",
+        ),
+        (
+            serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+            "Unknown argument: unexpected",
+        ),
     ] {
         let (_, body) = mcp_request(app.clone(), "tools/call", args).await;
-        assert_eq!(body["error"]["code"], -32602, "{body}");
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        assert_eq!(body["result"]["content"][0]["text"], refusal, "{body}");
     }
     let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_container","arguments":{"container_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
@@ -299,7 +315,11 @@ async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
         serde_json::json!({"name":"copy_volume","arguments":{"name":"project-copy"}}),
     )
     .await;
-    assert_eq!(body["error"]["code"], -32602, "{body}");
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Missing argument: volume"
+    );
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
 
