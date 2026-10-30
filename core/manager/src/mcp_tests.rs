@@ -109,7 +109,7 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     let (status, body) = mcp_request(app.clone(), "tools/list", serde_json::json!({})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let tools = body["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 77);
+    assert_eq!(tools.len(), 78);
     // Usage is read for every container unless one is named.
     let usage = tools.iter().find(|t| t["name"] == "get_usage").unwrap();
     assert_eq!(usage["annotations"]["readOnlyHint"], true);
@@ -154,7 +154,13 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
         save["inputSchema"]["required"],
         serde_json::json!(["path", "container_id"])
     );
-    for name in ["save_screenshot", "download_file", "export_artifacts"] {
+    for name in [
+        "save_screenshot",
+        "download_file",
+        "export_artifacts",
+        "write_file",
+        "upload_file",
+    ] {
         let tool = tools.iter().find(|t| t["name"] == name).unwrap();
         assert!(
             tool["description"]
@@ -256,16 +262,32 @@ async fn mcp_negotiates_and_lists_tools_with_useful_results() {
     );
 }
 
+/// An unknown tool is a protocol error. Arguments the schema refuses are a tool error naming the
+/// argument, which the model reads and can correct its call from, as MCP 2025-11-25 asks; as a
+/// protocol error most clients showed it only as a failed call.
 #[tokio::test]
 async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
     let app = mcp_app();
-    for args in [
+    let (_, body) = mcp_request(
+        app.clone(),
+        "tools/call",
         serde_json::json!({"name":"not_a_tool","arguments":{}}),
-        serde_json::json!({"name":"delete_container","arguments":{}}),
-        serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32602, "{body}");
+    for (args, refusal) in [
+        (
+            serde_json::json!({"name":"delete_container","arguments":{}}),
+            "Missing argument: container_id",
+        ),
+        (
+            serde_json::json!({"name":"create_container","arguments":{"name":"test","image":"ubuntu","unexpected":true}}),
+            "Unknown argument: unexpected",
+        ),
     ] {
         let (_, body) = mcp_request(app.clone(), "tools/call", args).await;
-        assert_eq!(body["error"]["code"], -32602, "{body}");
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        assert_eq!(body["result"]["content"][0]["text"], refusal, "{body}");
     }
     let (_,body) = mcp_request(app.clone(),"tools/call",serde_json::json!({"name":"exec_container","arguments":{"container_id":"missing","script":"echo ok","timeout_seconds":0}})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
@@ -299,7 +321,11 @@ async fn mcp_rejects_invalid_tools_and_arguments_without_mutating() {
         serde_json::json!({"name":"copy_volume","arguments":{"name":"project-copy"}}),
     )
     .await;
-    assert_eq!(body["error"]["code"], -32602, "{body}");
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Missing argument: volume"
+    );
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
 }
 
@@ -490,4 +516,83 @@ fn build_image_takes_a_template_with_mcp_servers() {
     let declared: Vec<crate::desktop_mcp::Declaration> =
         serde_json::from_value(template["mcp"].clone()).unwrap();
     crate::desktop_mcp::check_declarations(&declared).unwrap();
+}
+
+/// `download_file` once returned its base64 in the text block and again in structuredContent, so
+/// a 4 MiB file outgrew the 8 MiB reply and the client got a 502 instead of a result. The bytes
+/// travel once: a picture as an image block, any other file as an embedded resource.
+#[test]
+fn a_downloaded_file_travels_once_within_the_reply_limit() {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let bytes = vec![0x5a; crate::files::DOWNLOAD_LIMIT];
+    let encoded = STANDARD.encode(&bytes);
+    for (path, kind) in [
+        ("/home/desktop/shot.png", "image"),
+        ("/home/desktop/build log.tar.gz", "resource"),
+    ] {
+        let name = path.rsplit('/').next().unwrap();
+        let summary = serde_json::json!({
+            "path": path,
+            "name": name,
+            "bytes": bytes.len(),
+            "mime_type": crate::files::mime_type(name),
+            "download_url": crate::files::download_url("c1", path),
+        });
+        let result = super::dispatch::file(summary.clone(), &bytes);
+        let wire = serde_json::to_string(&result).unwrap();
+        assert!(wire.len() < 4 * 1024 * 1024, "{path}: {} bytes", wire.len());
+        assert_eq!(wire.matches(encoded.as_str()).count(), 1, "{path}");
+        let value = serde_json::to_value(&result).unwrap();
+        assert_eq!(value["isError"], false);
+        assert_eq!(value["content"][0]["type"], kind, "{path}");
+        assert_eq!(value["structuredContent"], summary);
+        let text: serde_json::Value =
+            serde_json::from_str(value["content"][1]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(text, summary);
+    }
+    let summary = serde_json::json!({"path": "/home/desktop/build log.tar.gz", "mime_type": "application/gzip"});
+    let value = serde_json::to_value(super::dispatch::file(summary, b"\x1f\x8b")).unwrap();
+    assert_eq!(
+        value["content"][0]["resource"],
+        serde_json::json!({"uri": "file:///home/desktop/build%20log.tar.gz", "mimeType": "application/gzip", "blob": "H4s="})
+    );
+}
+
+/// idempotentHint copied readOnlyHint, so no tool that changes something said that calling it
+/// again changes nothing more, and no tool had a title for a client to show a person. Every tool
+/// has a title, and the hint is true for the read-only tools and those `hints` names.
+#[test]
+fn every_tool_has_a_title_and_its_own_idempotent_hint() {
+    let tools = &*super::tools::TOOLS;
+    let find = |name: &str| tools.iter().find(|tool| tool.name == name);
+    for tool in tools {
+        let annotations = tool.annotations.as_ref().unwrap();
+        assert!(
+            tool.title.as_deref().is_some_and(|title| !title.is_empty()),
+            "{} has no title",
+            tool.name
+        );
+        assert_eq!(annotations.title, tool.title);
+        if annotations.read_only_hint == Some(true) {
+            assert_eq!(annotations.idempotent_hint, Some(true), "{}", tool.name);
+        }
+    }
+    for (name, _) in super::hints::TITLES {
+        assert!(find(name).is_some(), "a title for {name}, which is no tool");
+    }
+    for name in super::hints::IDEMPOTENT {
+        let tool = find(name).unwrap_or_else(|| panic!("{name} is no tool"));
+        let annotations = tool.annotations.as_ref().unwrap();
+        assert_eq!(annotations.read_only_hint, Some(false), "{name}");
+        assert_eq!(annotations.idempotent_hint, Some(true), "{name}");
+    }
+    for name in [
+        "container_action",
+        "exec_container",
+        "desktop_input",
+        "snapshot",
+    ] {
+        let annotations = find(name).unwrap().annotations.as_ref().unwrap();
+        assert_eq!(annotations.idempotent_hint, Some(false), "{name}");
+    }
 }

@@ -1,9 +1,11 @@
 //! The administrator's MCP channel at `/mcp`: Streamable HTTP through the official Rust SDK,
 //! behind its bearer token and Thoric's Host and Origin checks. This file is the transport and
 //! the server handler, which refuses an unknown tool or arguments its schema does not take;
-//! `tools` is the catalog of every tool and its schema, and `dispatch` runs a call through the
-//! HTTP handler or the function behind its route, under the same locks.
+//! `tools` is the catalog of every tool and its schema, `hints` gives each its title and whether
+//! it is idempotent, and `dispatch` runs a call through the HTTP handler or the function behind
+//! its route, under the same locks.
 mod dispatch;
+mod hints;
 mod tools;
 
 use crate::{App, activity, auth, error, human};
@@ -167,9 +169,10 @@ impl ServerHandler for ThoricMcp {
     ) -> Result<CallToolResponse, ErrorData> {
         // Every call is recorded in the agent activity log; see activity.rs.
         let caller = activity::Caller::of(&self.app, None, &context);
-        let call = activity::Call::start(&self.app, caller.clone(), &request);
+        let mut call = activity::Call::start(&self.app, caller.clone(), &request);
         let asker = human::Caller::new(&context, None);
-        let response = activity::as_caller(caller, Box::pin(self.answer(request, asker))).await;
+        let answer = Box::pin(self.answer(request, asker, &mut call));
+        let response = activity::as_caller(caller, answer).await;
         call.finish(&self.app, &response);
         response
     }
@@ -179,18 +182,22 @@ impl ThoricMcp {
     pub(crate) fn new(app: Arc<App>) -> Self {
         Self { app }
     }
-    /// Run a tool call: an unknown tool or arguments its schema does not take are refused, and an
-    /// error of the tool itself is its result.
+    /// Run a tool call: an unknown tool is a protocol error, arguments its schema does not take
+    /// are refused as a tool error, and an error of the tool itself is its result.
     async fn answer(
         &self,
         request: CallToolRequestParams,
         asker: human::Caller,
+        call: &mut activity::Call,
     ) -> Result<CallToolResponse, ErrorData> {
         let tool = self
             .get_tool(&request.name)
             .ok_or_else(|| ErrorData::invalid_params("Unknown Thoric tool", None))?;
         let args = Value::Object(request.arguments.unwrap_or_default());
-        check_arguments(&tool, &args)?;
+        if let Err(message) = check_arguments(&tool, &args) {
+            call.refused();
+            return Ok(refusal(message));
+        }
         let result = match self.dispatch_with(&request.name, args, asker).await {
             Ok(result) => result,
             Err(error) => CallToolResult::error(vec![ContentBlock::text(error.1)]),
@@ -199,8 +206,9 @@ impl ThoricMcp {
     }
 }
 
-/// Refuse arguments the tool's schema does not list, and required ones that are missing.
-pub(crate) fn check_arguments(tool: &Tool, args: &Value) -> Result<(), ErrorData> {
+/// Refuse arguments the tool's schema does not list, and required ones that are missing, with
+/// the message the agent reads.
+pub(crate) fn check_arguments(tool: &Tool, args: &Value) -> Result<(), String> {
     let allowed = tool.input_schema["properties"]
         .as_object()
         .expect("tool properties");
@@ -210,10 +218,7 @@ pub(crate) fn check_arguments(tool: &Tool, args: &Value) -> Result<(), ErrorData
         .flat_map(|object| object.keys())
         .find(|key| !allowed.contains_key(*key))
     {
-        return Err(ErrorData::invalid_params(
-            format!("Unknown argument: {key}"),
-            None,
-        ));
+        return Err(format!("Unknown argument: {key}"));
     }
     for key in tool.input_schema["required"]
         .as_array()
@@ -222,13 +227,16 @@ pub(crate) fn check_arguments(tool: &Tool, args: &Value) -> Result<(), ErrorData
         .filter_map(Value::as_str)
     {
         if args.get(key).is_none() {
-            return Err(ErrorData::invalid_params(
-                format!("Missing argument: {key}"),
-                None,
-            ));
+            return Err(format!("Missing argument: {key}"));
         }
     }
     Ok(())
+}
+/// The answer to arguments a tool's schema refuses: a tool error, which the model reads and can
+/// correct its call from, as MCP 2025-11-25 asks of input validation. A protocol error would
+/// reach most clients as a failure without the message.
+pub(crate) fn refusal(message: String) -> CallToolResponse {
+    CallToolResult::error(vec![ContentBlock::text(message)]).into()
 }
 /// A tool of the administrator's channel by name, which MCP endpoints offer bound to a container.
 pub(crate) fn listed_tool(name: &str) -> Option<Tool> {

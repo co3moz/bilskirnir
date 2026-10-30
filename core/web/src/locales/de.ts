@@ -1531,7 +1531,8 @@ export const de: Messages = {
   "mcp.scope.files_read": "Dateien lesen",
   "mcp.scope.files_read.description": "Dateien auflisten, lesen und herunterladen.",
   "mcp.scope.files_write": "Dateien schreiben",
-  "mcp.scope.files_write.description": "Dateien schreiben, hochladen, verschieben und löschen.",
+  "mcp.scope.files_write.description":
+    "Dateien schreiben, hochladen, verschieben und löschen sowie Bildschirmfotos speichern.",
   "mcp.scope.commands": "Befehle",
   "mcp.scope.commands.description":
     "Skripte und Terminals als Desktop-Benutzer, nie als root. Ist Sudo im Container an, schließt das root darin ein.",

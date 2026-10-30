@@ -1,8 +1,8 @@
 use crate::{
     App,
     desktop_input::{self, Action},
-    error::{Error, Result},
-    files, uploads,
+    error::{self, Error, Result},
+    files, process, uploads,
 };
 use anyhow::{Context, bail};
 use axum::{
@@ -70,10 +70,112 @@ pub struct Screenshot {
     pub width: u16,
     pub height: u16,
     pub captured_at: u64,
+    pub placement: Placement,
 }
 impl Screenshot {
     pub fn summary(&self) -> Value {
-        json!({"width": self.width, "height": self.height, "captured_at": self.captured_at, "bytes": self.jpeg.len()})
+        let Placement {
+            scale,
+            origin,
+            desktop,
+        } = self.placement;
+        json!({
+            "width": self.width,
+            "height": self.height,
+            "captured_at": self.captured_at,
+            "bytes": self.jpeg.len(),
+            "scale": scale,
+            "origin_x": origin.map(|(x, _)| x),
+            "origin_y": origin.map(|(_, y)| y),
+            "desktop_width": desktop.map(|(width, _)| width),
+            "desktop_height": desktop.map(|(_, height)| height),
+        })
+    }
+}
+
+/// Where a screenshot's pixels are on the desktop, which desktop_input takes coordinates of: the
+/// desktop pixel under image pixel (x, y) is origin + (x, y) / scale. A part is `None` when the
+/// desktop image could not tell it, such as a window's place without xwininfo.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Placement {
+    /// Image pixels per desktop pixel: 1 at full resolution, less once max_width scaled it down.
+    pub scale: Option<f64>,
+    /// The desktop pixel at the image's top left.
+    pub origin: Option<(i64, i64)>,
+    /// The whole desktop's width and height.
+    pub desktop: Option<(i64, i64)>,
+}
+
+/// A rectangle as xwininfo reports it: its absolute left and top, its width and its height.
+type Rect = [i64; 4];
+
+/// Runs the image's desktop-screenshot and, once it has succeeded, prints on stderr what xwininfo
+/// tells of the desktop and of the window it captured, so the result can say where its pixels
+/// are. Without xwininfo the screenshot is taken all the same.
+const SHOT: &str = r#"geometry=$({ xwininfo -root; [[ -z $3 ]] || xwininfo -id "$3"; } 2>/dev/null)
+/usr/local/bin/desktop-screenshot "$@" || exit
+printf '%s\n' "$geometry" >&2"#;
+
+/// The rectangles in xwininfo's output, the desktop's first and then the captured window's.
+fn rectangles(text: &str) -> Vec<Rect> {
+    let mut found = Vec::new();
+    let (mut x, mut y, mut width) = (None, None, None);
+    for line in text.lines() {
+        let Some((key, value)) = line.trim().split_once(':') else {
+            continue;
+        };
+        let Ok(value) = value.trim().parse::<i64>() else {
+            continue;
+        };
+        match key {
+            "Absolute upper-left X" => x = Some(value),
+            "Absolute upper-left Y" => y = Some(value),
+            "Width" => width = Some(value),
+            "Height" => {
+                if let (Some(x), Some(y), Some(width)) = (x.take(), y.take(), width.take()) {
+                    found.push([x, y, width, value]);
+                }
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
+/// Where an image `width` pixels wide, taken with `options`, sits on the desktop. desktop-screenshot
+/// crops the window, or the whole desktop, to the region, which ImageMagick clips to it, and then
+/// scales the result down to max_width only when it is wider.
+fn place(options: &Capture, rects: &[Rect], width: u16) -> Placement {
+    let desktop = rects.first().map(|&[_, _, width, height]| (width, height));
+    let window = options.window_id.is_some();
+    let base = if window {
+        rects.get(1).copied()
+    } else {
+        rects
+            .first()
+            .map(|&[_, _, width, height]| [0, 0, width, height])
+    };
+    let region = options.region().ok().flatten().map(|r| r.map(i64::from));
+    let (origin, source) = match (region, base) {
+        (Some([x, y, w, _]), Some([left, top, base_width, _])) => {
+            (Some((left + x, top + y)), Some(w.min(base_width - x)))
+        }
+        (Some([x, y, w, _]), None) if !window => (Some((x, y)), Some(w)),
+        (None, Some([left, top, base_width, _])) => (Some((left, top)), Some(base_width)),
+        (None, None) if !window => (Some((0, 0)), None),
+        _ => (None, None),
+    };
+    let width = i64::from(width);
+    let scale = match source {
+        Some(source) if source > 0 => Some((width as f64 / source as f64 * 1e6).round() / 1e6),
+        // Not scaled down: the image is narrower than max_width, or there was none.
+        _ if options.max_width.is_none_or(|max| width < i64::from(max)) => Some(1.0),
+        _ => None,
+    };
+    Placement {
+        scale,
+        origin,
+        desktop,
     }
 }
 /// Read the frame size from a JPEG start-of-frame segment.
@@ -117,12 +219,23 @@ fn now_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
+/// How long a screenshot waits for one of the two that may be taken at once, so desktops that do
+/// not answer cannot hold up every other container's screenshots.
+const PERMIT_WAIT: Duration = Duration::from_secs(5);
+/// How long one capture may take. A desktop answers in about a second, so a longer one is stuck,
+/// and Docker's general limit would keep its permit for two minutes.
+const CAPTURE_LIMIT: Duration = Duration::from_secs(20);
+
 pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screenshot> {
     options.validate()?;
-    let _permit = app
-        .screenshots
-        .acquire()
+    let _permit = tokio::time::timeout(PERMIT_WAIT, app.screenshots.acquire())
         .await
+        .map_err(|_| {
+            Error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "Two screenshots are already being taken; retry in a moment".into(),
+            )
+        })?
         .map_err(|e| anyhow::anyhow!(e))?;
     let env = app.container(id)?;
     let info = app.owned(&env).await?;
@@ -130,30 +243,45 @@ pub async fn capture(app: &App, id: &str, options: &Capture) -> Result<Screensho
         .region()?
         .map(|[x, y, width, height]| format!("{x},{y},{width},{height}"))
         .unwrap_or_default();
-    let bytes = app
-        .docker(&[
-            "exec",
-            "--user",
-            "desktop",
-            "--env",
-            "DISPLAY=:0",
-            info["Id"].as_str().context("Missing container ID")?,
-            "/usr/local/bin/desktop-screenshot",
-            &options.max_width.unwrap_or(0).to_string(),
-            &region,
-            options.window_id.as_deref().unwrap_or(""),
-        ])
-        .await?;
+    let args = [
+        "exec",
+        "--user",
+        "desktop",
+        "--env",
+        "DISPLAY=:0",
+        info["Id"].as_str().context("Missing container ID")?,
+        "bash",
+        "-c",
+        SHOT,
+        "desktop-screenshot",
+        &options.max_width.unwrap_or(0).to_string(),
+        &region,
+        options.window_id.as_deref().unwrap_or(""),
+    ]
+    .map(str::to_owned);
+    let output = process::capture(
+        app.command(&args),
+        CAPTURE_LIMIT,
+        4 * 1024 * 1024,
+        process::Overflow::Reject,
+    )
+    .await?;
+    if !output.status.success() {
+        return Err(error::docker_failure(&output.stderr, output.status.code()).into());
+    }
+    let bytes = output.stdout;
     if !bytes.starts_with(&[0xff, 0xd8]) {
         return Err(anyhow::anyhow!("Screenshot not ready").into());
     }
     let (width, height) =
         jpeg_dimensions(&bytes).context("Screenshot dimensions could not be read")?;
+    let rects = rectangles(&String::from_utf8_lossy(&output.stderr));
     Ok(Screenshot {
         jpeg: bytes,
         width,
         height,
         captured_at: now_ms(),
+        placement: place(options, &rects, width),
     })
 }
 /// A screenshot saved inside the desktop, so the user can collect it through the dashboard.

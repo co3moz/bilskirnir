@@ -9,7 +9,9 @@ use super::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
         loopback_url, substitute,
     },
-    scopes::{Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed},
+    scopes::{
+        ENDPOINT_WORDING, Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed,
+    },
     *,
 };
 use crate::{
@@ -432,6 +434,47 @@ fn a_bound_tool_takes_no_container_id_and_never_root() {
     );
 }
 
+/// exec_container on an endpoint said to set root=true, which the endpoint then refused as an
+/// unknown argument, and download_file pointed at create_transfer and a dashboard route that no
+/// endpoint offers. A bound tool's description names nothing the endpoint lacks.
+#[test]
+fn a_bound_tool_describes_only_what_the_endpoint_offers() {
+    for (name, sentence, _) in ENDPOINT_WORDING {
+        let tool = crate::mcp::listed_tool(name).unwrap();
+        assert!(
+            tool.description.as_deref().unwrap().contains(sentence),
+            "{name} no longer says {sentence:?}"
+        );
+    }
+    let aliases = ["a".to_owned(), "b".to_owned()];
+    for name in Scope::ALL.iter().flat_map(|scope| scope.tools()) {
+        let tool = crate::mcp::listed_tool(name).unwrap();
+        for bound in [bound_tool(&tool, None), bound_tool(&tool, Some(&aliases))] {
+            let description = bound.description.as_deref().unwrap();
+            for word in ["root=true", "container_id", "create_transfer", "/api/"] {
+                assert!(!description.contains(word), "{name} says {word}");
+            }
+        }
+    }
+    let exec = bound_tool(&crate::mcp::listed_tool("exec_container").unwrap(), None);
+    assert!(exec.description.unwrap().contains("never as root"));
+}
+
+/// view held save_screenshot, which with replace=true overwrites any file the desktop user may
+/// write, so a grant meant to watch a desktop could change its files. The scopes that read hold
+/// only tools that say they are read-only.
+#[test]
+fn the_reading_scopes_change_nothing() {
+    for scope in [Scope::View, Scope::FilesRead] {
+        for name in scope.tools() {
+            let tool = crate::mcp::listed_tool(name).unwrap();
+            let read_only = tool.annotations.and_then(|a| a.read_only_hint);
+            assert_eq!(read_only, Some(true), "{} offers {name}", scope.id());
+        }
+    }
+    assert!(Scope::FilesWrite.offers("save_screenshot"));
+}
+
 #[test]
 fn an_endpoint_offers_its_scopes_tools_and_never_the_administrators() {
     let app = app(false);
@@ -474,6 +517,7 @@ fn an_endpoint_offers_its_scopes_tools_and_never_the_administrators() {
         "delete_image",
         "delete_volume",
         "list_mcp_endpoints",
+        "call_mcp_server_tool",
     ] {
         assert!(
             !offered.contains(&administrator.to_owned()),
@@ -1022,7 +1066,8 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         message.contains("Unknown tool") && message.contains("list the tools again"),
         "{body}"
     );
-    // The container is the endpoint's own: an argument naming another is refused.
+    // The container is the endpoint's own: an argument naming another is refused, as a tool
+    // error the agent reads.
     let (_, _, body) = call(
         app.clone(),
         "/mcp/chrome-dev",
@@ -1031,12 +1076,10 @@ async fn an_endpoint_token_opens_its_endpoint_and_nothing_else() {
         json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_container","arguments":{"container_id":"other"}}}),
     )
     .await;
-    assert!(
-        body["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("Unknown argument"),
-        "{body}"
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Unknown argument: container_id"
     );
 
     // The endpoint's token is not the administrator's: not /mcp, not the API, not ports.
@@ -1573,7 +1616,11 @@ async fn request_human_comes_with_input_and_asks_only_for_the_endpoints_containe
     let (_, _, body) = ask(json!({"request_id": other.id, "wait_seconds": 0})).await;
     assert_eq!(body["result"]["isError"], true, "{body}");
     let (_, _, body) = ask(json!({"container_id": "c2", "message": "Elsewhere"})).await;
-    assert!(body["error"].is_object(), "{body}");
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    assert_eq!(
+        body["result"]["content"][0]["text"],
+        "Unknown argument: container_id"
+    );
 }
 
 #[test]
@@ -1686,4 +1733,61 @@ async fn an_endpoints_calls_are_recorded_with_the_endpoint_and_a_servers_argumen
     );
 
     assert_eq!(row("list_windows").credential, "mcp_token");
+}
+
+/// /mcp could not call a desktop server's tool, so an administrator's agent had to create an
+/// endpoint first. call_mcp_server_tool reaches it by its own name; a server or a tool that is not
+/// known is refused with where to look, and the log keeps the tool's arguments by name and size.
+#[tokio::test]
+async fn the_administrator_calls_a_desktop_servers_tool_by_its_own_name() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "chrome", &["browser_navigate"]);
+    let call = |arguments: Value| {
+        crate::test_support::mcp_request(
+            app.clone(),
+            "tools/call",
+            json!({"name": "call_mcp_server_tool", "arguments": arguments}),
+        )
+    };
+    for (arguments, refusal) in [
+        (
+            json!({"container_id": "c1", "server": "notes", "tool": "read"}),
+            "Chrome dev has no MCP server called notes",
+        ),
+        (
+            json!({"container_id": "c1", "server": "chrome", "tool": "browser_click"}),
+            "The server chrome has no tool called browser_click",
+        ),
+        (
+            json!({"container_id": "c1", "server": "chrome", "tool": "browser_navigate", "arguments": "https://example.com"}),
+            "arguments must be an object",
+        ),
+    ] {
+        let (_, body) = call(arguments).await;
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        let text = body["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains(refusal), "{body}");
+    }
+    // A known tool is called through docker exec, which this test has no Docker for.
+    let (_, body) = call(json!({"container_id": "c1", "server": "chrome", "tool": "browser_navigate", "arguments": {"url": "https://example.com/?key=secret-value-123"}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    let rows = crate::activity::recorded(&app, 4).await;
+    let called = rows
+        .iter()
+        .find(|row| row.arguments["tool"] == "browser_navigate")
+        .unwrap_or_else(|| panic!("{rows:?}"));
+    assert_eq!(called.tool, "call_mcp_server_tool");
+    assert_eq!(called.container_id.as_deref(), Some("c1"));
+    assert_eq!(
+        called.arguments["arguments"],
+        json!({"url": {"$masked": "string", "length": 41}})
+    );
+    assert!(
+        !serde_json::to_string(&rows)
+            .unwrap()
+            .contains("secret-value-123")
+    );
 }

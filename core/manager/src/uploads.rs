@@ -287,8 +287,10 @@ pub(crate) async fn save_file(
             ));
         }
         written.map_err(anyhow::Error::from)?;
+        let path = format!("{}/{}", request.destination, request.name);
+        let download_url = crate::files::download_url(&id, &path);
         Ok(Json(
-            json!({"name":request.name,"path":format!("{}/{}",request.destination,request.name),"bytes":received}),
+            json!({"name":request.name,"path":path,"bytes":received,"download_url":download_url}),
         ))
     };
     tokio::select! {

@@ -1530,7 +1530,8 @@ export const en = {
   "mcp.scope.files_read": "Read files",
   "mcp.scope.files_read.description": "List, read and download files.",
   "mcp.scope.files_write": "Write files",
-  "mcp.scope.files_write.description": "Write, upload, move and delete files.",
+  "mcp.scope.files_write.description":
+    "Write, upload, move and delete files, and save screenshots.",
   "mcp.scope.commands": "Commands",
   "mcp.scope.commands.description":
     "Scripts and terminals as the desktop user, never as root. With sudo on in the container, that includes root inside it.",

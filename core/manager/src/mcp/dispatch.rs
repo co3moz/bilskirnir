@@ -14,7 +14,7 @@ use axum::{
     http::StatusCode,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use rmcp::model::{CallToolResult, ContentBlock};
+use rmcp::model::{CallToolResult, ContentBlock, ResourceContents};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -34,17 +34,17 @@ fn string(args: &Value, key: &str) -> error::Result<String> {
         .map(str::to_owned)
         .ok_or_else(|| error::Error(StatusCode::BAD_REQUEST, format!("{key} must be a string")))
 }
-fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
+/// A screenshot with its size and its place on the desktop, which the agent needs as text too to
+/// map a point of a scaled or cropped image back to desktop_input's coordinates.
+pub(super) fn image(shot: capture::Screenshot, input: Option<Value>) -> CallToolResult {
     let mut summary = shot.summary();
     if let Some(input) = input {
         summary["input"] = input;
     }
-    let mut result = CallToolResult::success(vec![ContentBlock::image(
-        STANDARD.encode(&shot.jpeg),
-        "image/jpeg",
-    )]);
-    result.structured_content = Some(summary);
-    result
+    with_data(
+        ContentBlock::image(STANDARD.encode(&shot.jpeg), "image/jpeg"),
+        summary,
+    )
 }
 fn sound(mut value: Value) -> CallToolResult {
     let wav = value
@@ -52,9 +52,7 @@ fn sound(mut value: Value) -> CallToolResult {
         .and_then(|object| object.remove("wav_base64"))
         .and_then(|data| data.as_str().map(str::to_owned))
         .unwrap_or_default();
-    let mut result = CallToolResult::success(vec![ContentBlock::audio(wav, "audio/wav")]);
-    result.structured_content = Some(value);
-    result
+    with_data(ContentBlock::audio(wav, "audio/wav"), value)
 }
 fn structured(value: Value) -> CallToolResult {
     // Keep an object result for clients using the 2025 protocol versions.
@@ -63,6 +61,32 @@ fn structured(value: Value) -> CallToolResult {
     } else {
         json!({"items":value})
     })
+}
+/// A result whose data travels once, in a content block of its own, before the JSON that
+/// describes it as text and as structuredContent. Data inside the JSON would travel twice, since
+/// the text block repeats structuredContent for clients that read only text.
+fn with_data(data: ContentBlock, summary: Value) -> CallToolResult {
+    let mut result = CallToolResult::structured(summary);
+    result.content.insert(0, data);
+    result
+}
+/// The pictures a model can look at, which a downloaded file is returned as an image block for.
+const VIEWABLE: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+/// A file `download_file` read: a picture as an image block, anything else as an embedded
+/// resource whose blob is the file.
+pub(super) fn file(summary: Value, bytes: &[u8]) -> CallToolResult {
+    let data = STANDARD.encode(bytes);
+    let mime_type = summary["mime_type"]
+        .as_str()
+        .unwrap_or("application/octet-stream")
+        .to_owned();
+    let block = if VIEWABLE.contains(&mime_type.as_str()) {
+        ContentBlock::image(data, mime_type)
+    } else {
+        let uri = files::file_uri(summary["path"].as_str().unwrap_or_default());
+        ContentBlock::resource(ResourceContents::blob(data, uri).with_mime_type(mime_type))
+    };
+    with_data(block, summary)
 }
 
 impl ThoricMcp {
@@ -210,6 +234,7 @@ impl ThoricMcp {
                 return Box::pin(human::request(&self.app, &id.unwrap(), args, caller)).await;
             }
             "list_mcp_servers"
+            | "call_mcp_server_tool"
             | "register_mcp_server"
             | "remove_mcp_server"
             | "list_mcp_endpoints"
@@ -233,9 +258,30 @@ impl ThoricMcp {
         let state = State(self.app.clone());
         let value = match name {
             "list_mcp_servers" => match id {
-                Some(id) => desktop_mcp::container_servers(state, Path(id)).await?.0,
+                Some(id) => desktop_mcp::servers_of(&self.app, &id, true).await?,
                 None => desktop_mcp::all_servers(state).await?.0,
             },
+            // The server's result is passed on as it is, as an endpoint passes it on.
+            "call_mcp_server_tool" => {
+                let arguments = match args.get_mut("arguments").map(Value::take) {
+                    None | Some(Value::Null) => Default::default(),
+                    Some(Value::Object(arguments)) => arguments,
+                    Some(_) => {
+                        return Err(error::Error(
+                            StatusCode::BAD_REQUEST,
+                            "arguments must be an object".into(),
+                        ));
+                    }
+                };
+                return Box::pin(desktop_mcp::call_server_tool(
+                    &self.app,
+                    &id.unwrap(),
+                    &string(&args, "server")?,
+                    &string(&args, "tool")?,
+                    arguments,
+                ))
+                .await;
+            }
             "register_mcp_server" => {
                 desktop_mcp::register_server(state, Path(id.unwrap()), Json(parse(args)?))
                     .await?
@@ -295,7 +341,11 @@ impl ThoricMcp {
                     .0
             }
             "list_files" => files::list_files(&self.app, &id.unwrap(), &parse(args)?).await?,
-            "download_file" => files::download_file(&self.app, &id.unwrap(), &parse(args)?).await?,
+            "download_file" => {
+                let (summary, bytes) =
+                    files::download_file(&self.app, &id.unwrap(), &parse(args)?).await?;
+                return Ok(file(summary, &bytes));
+            }
             "capture_audio" => {
                 let value = audio::capture_audio(&self.app, &id.unwrap(), &parse(args)?).await?;
                 return Ok(sound(value));

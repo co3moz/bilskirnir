@@ -1498,7 +1498,8 @@ export const tr: Messages = {
   "mcp.scope.files_read": "Dosya okuma",
   "mcp.scope.files_read.description": "Dosyaları listeleme, okuma ve indirme.",
   "mcp.scope.files_write": "Dosya yazma",
-  "mcp.scope.files_write.description": "Dosyaları yazma, yükleme, taşıma ve silme.",
+  "mcp.scope.files_write.description":
+    "Dosyaları yazma, yükleme, taşıma, silme ve ekran görüntüsü kaydetme.",
   "mcp.scope.commands": "Komutlar",
   "mcp.scope.commands.description":
     "Masaüstü kullanıcısı olarak betikler ve terminaller, asla root olarak değil. Konteynerde sudo açıksa bu, içinde root olmayı da kapsar.",
