@@ -40,7 +40,8 @@ pub(crate) use registry::{
     DECLARATION_LIMIT, Declaration, check_declarations, slug, write_declarations,
 };
 pub(crate) use servers::{
-    all_servers, container_servers, refresh_server, register_server, unregister_server,
+    all_servers, call_server_tool, container_servers, refresh_server, register_server, servers_of,
+    unregister_server,
 };
 pub(crate) use watch::spawn;
 

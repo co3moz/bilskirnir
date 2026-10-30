@@ -529,7 +529,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 77
+    assert len(mcp("tools/list")["tools"]) == 78
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1467,6 +1467,13 @@ try:
     assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0 tag=launched", echoed
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"api__echo","arguments":{"text":"over http"}})
     assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
+    # /mcp calls the same server's tool without an endpoint, and lists the arguments it takes.
+    listed = tool("list_mcp_servers", {"container_id":env_id})["structuredContent"]["items"]
+    echo_tools = next(s for s in listed if s["name"] == "echo")["tools"]
+    assert echo_tools[0]["input_schema"]["properties"]["text"]["type"] == "string", echo_tools
+    direct = tool("call_mcp_server_tool", {"container_id":env_id,"server":"echo","tool":"echo","arguments":{"text":"direct"}})
+    assert direct["content"][0]["text"] == "echo: direct uid=1001 display=:0 tag=launched", direct
+    assert "no tool called" in tool("call_mcp_server_tool", {"container_id":env_id,"server":"echo","tool":"missing"}, allow_error=True)["content"][0]["text"]
     shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
     assert shot["content"][0]["type"] == "image" and shot["structuredContent"]["width"] == 320, shot
     # The MCP page's inspector reaches the same servers from the signed-in dashboard: a desktop

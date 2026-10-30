@@ -517,6 +517,7 @@ fn an_endpoint_offers_its_scopes_tools_and_never_the_administrators() {
         "delete_image",
         "delete_volume",
         "list_mcp_endpoints",
+        "call_mcp_server_tool",
     ] {
         assert!(
             !offered.contains(&administrator.to_owned()),
@@ -1732,4 +1733,61 @@ async fn an_endpoints_calls_are_recorded_with_the_endpoint_and_a_servers_argumen
     );
 
     assert_eq!(row("list_windows").credential, "mcp_token");
+}
+
+/// /mcp could not call a desktop server's tool, so an administrator's agent had to create an
+/// endpoint first. call_mcp_server_tool reaches it by its own name; a server or a tool that is not
+/// known is refused with where to look, and the log keeps the tool's arguments by name and size.
+#[tokio::test]
+async fn the_administrator_calls_a_desktop_servers_tool_by_its_own_name() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "chrome", &["browser_navigate"]);
+    let call = |arguments: Value| {
+        crate::test_support::mcp_request(
+            app.clone(),
+            "tools/call",
+            json!({"name": "call_mcp_server_tool", "arguments": arguments}),
+        )
+    };
+    for (arguments, refusal) in [
+        (
+            json!({"container_id": "c1", "server": "notes", "tool": "read"}),
+            "Chrome dev has no MCP server called notes",
+        ),
+        (
+            json!({"container_id": "c1", "server": "chrome", "tool": "browser_click"}),
+            "The server chrome has no tool called browser_click",
+        ),
+        (
+            json!({"container_id": "c1", "server": "chrome", "tool": "browser_navigate", "arguments": "https://example.com"}),
+            "arguments must be an object",
+        ),
+    ] {
+        let (_, body) = call(arguments).await;
+        assert_eq!(body["result"]["isError"], true, "{body}");
+        let text = body["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains(refusal), "{body}");
+    }
+    // A known tool is called through docker exec, which this test has no Docker for.
+    let (_, body) = call(json!({"container_id": "c1", "server": "chrome", "tool": "browser_navigate", "arguments": {"url": "https://example.com/?key=secret-value-123"}})).await;
+    assert_eq!(body["result"]["isError"], true, "{body}");
+    let rows = crate::activity::recorded(&app, 4).await;
+    let called = rows
+        .iter()
+        .find(|row| row.arguments["tool"] == "browser_navigate")
+        .unwrap_or_else(|| panic!("{rows:?}"));
+    assert_eq!(called.tool, "call_mcp_server_tool");
+    assert_eq!(called.container_id.as_deref(), Some("c1"));
+    assert_eq!(
+        called.arguments["arguments"],
+        json!({"url": {"$masked": "string", "length": 41}})
+    );
+    assert!(
+        !serde_json::to_string(&rows)
+            .unwrap()
+            .contains("secret-value-123")
+    );
 }

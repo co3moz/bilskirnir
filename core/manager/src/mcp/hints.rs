@@ -33,7 +33,7 @@ pub(super) const IDEMPOTENT: [&str; 22] = [
 ];
 
 /// Every tool's title.
-pub(super) const TITLES: [(&str, &str); 77] = [
+pub(super) const TITLES: [(&str, &str); 78] = [
     ("get_settings", "Read installation settings"),
     ("get_system", "Check the Docker host"),
     ("pull_image", "Download a catalog image"),
@@ -104,6 +104,7 @@ pub(super) const TITLES: [(&str, &str); 77] = [
     ("create_transfer", "Create a transfer link"),
     ("request_human", "Ask a person for help"),
     ("list_mcp_servers", "List desktop MCP servers"),
+    ("call_mcp_server_tool", "Call a desktop MCP server's tool"),
     ("register_mcp_server", "Register a desktop MCP server"),
     ("remove_mcp_server", "Remove a desktop MCP server"),
     ("list_mcp_endpoints", "List MCP endpoints"),

@@ -84,7 +84,7 @@ An accepted job is not a completed operation. `get_job` reports `queued`, `runni
 
 ## Tools
 
-The server currently exposes 77 tools:
+The server currently exposes 78 tools:
 
 | Work | Tools |
 | --- | --- |
@@ -98,7 +98,7 @@ The server currently exposes 77 tools:
 | Images | `list_images`, `get_image_layers`, `pull_image`, `build_catalog_image`, `import_image`, `build_image`, `get_image_compose`, `set_image_compose`, `snapshot`, `delete_image` |
 | Persistent storage | `list_volumes`, `create_volume`, `copy_volume`, `delete_volume` |
 | Large files and archives | `create_transfer` |
-| MCP servers in desktops and endpoints | `list_mcp_servers`, `register_mcp_server`, `remove_mcp_server`, `list_mcp_endpoints`, `create_mcp_endpoint`, `update_mcp_endpoint`, `delete_mcp_endpoint`, `create_mcp_endpoint_token` |
+| MCP servers in desktops and endpoints | `list_mcp_servers`, `call_mcp_server_tool`, `register_mcp_server`, `remove_mcp_server`, `list_mcp_endpoints`, `create_mcp_endpoint`, `update_mcp_endpoint`, `delete_mcp_endpoint`, `create_mcp_endpoint_token` |
 | Operation results | `list_jobs`, `get_job` |
 
 Each tool advertises its arguments and description through `tools/list`. Read operations are marked read-only; deletion, script execution, file replacement and desktop interaction carry destructive-operation hints for clients that show approvals. Every tool has a `title` for clients to show a person. `idempotentHint` is true for the read-only tools and for those that change nothing more when called again with the same arguments, such as `set_internet`, `update_container`, `set_window_geometry`, the deletes and the creates refused for a name in use; `container_action` is not, since a second `restart` restarts again.
@@ -335,6 +335,8 @@ The manager watches both folders in every running desktop. A new or changed serv
 The desktop hears what the manager knows of it through the same watch: whenever one of its servers or an endpoint that covers it changes, the manager sends a report on the watcher's stdin, and the watcher keeps the latest in `/run/desktop/thoric/mcp-status.json`, readable by the desktop user alone, until the manager stops watching. A report carries each server's state, tools, error and output, and for each endpoint that covers the container its name, path, scopes, servers, left-out tools and whether it has a token. It never carries a token or its hash, another container's grant or anything about another container, and the desktop never connects to the manager.
 
 A server is never published on a port and never reached over the desktop's network. The manager runs it with `docker exec` as the desktop user, with `DISPLAY`, `HOME` and a `PATH` that includes `~/.local/bin`: a stdio program directly, an HTTP server through a small adapter inside the desktop that connects to its loopback address, so a server that listens on `127.0.0.1` only works, and its own `Authorization` header is sent. Root is never used. A declared variable's value, which may be a resolved compose value, reaches the server through the Docker CLI's environment rather than its command line, so `ps` in the manager does not show it; a declared argument has no such channel and is on the command line. A server whose declaration the image carries cannot be removed from a container, only left out of an endpoint.
+
+An agent on `/mcp` calls a server's tool without an endpoint through `call_mcp_server_tool`, with the `container_id`, the `server`'s name, the `tool`'s own name and its `arguments`. `list_mcp_servers` with a `container_id` gives each tool its `input_schema`, the arguments it takes; the list of every container's servers leaves the schemas out. `/mcp` keeps a connection to each server of its own, apart from every endpoint's, so the pages it opens in a browser are not an endpoint agent's. The server's result is passed on as it is, as an endpoint passes it on, and a server in error or a tool it does not list is refused. The tool is on `/mcp` only, in no endpoint's scope, and the [activity log](#agent-activity) records it with the server and the tool and the tool's arguments by name and size, as it records an endpoint's call of a server's tool.
 
 ## MCP endpoints for one agent
 

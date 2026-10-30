@@ -234,6 +234,7 @@ impl ThoricMcp {
                 return Box::pin(human::request(&self.app, &id.unwrap(), args, caller)).await;
             }
             "list_mcp_servers"
+            | "call_mcp_server_tool"
             | "register_mcp_server"
             | "remove_mcp_server"
             | "list_mcp_endpoints"
@@ -257,9 +258,30 @@ impl ThoricMcp {
         let state = State(self.app.clone());
         let value = match name {
             "list_mcp_servers" => match id {
-                Some(id) => desktop_mcp::container_servers(state, Path(id)).await?.0,
+                Some(id) => desktop_mcp::servers_of(&self.app, &id, true).await?,
                 None => desktop_mcp::all_servers(state).await?.0,
             },
+            // The server's result is passed on as it is, as an endpoint passes it on.
+            "call_mcp_server_tool" => {
+                let arguments = match args.get_mut("arguments").map(Value::take) {
+                    None | Some(Value::Null) => Default::default(),
+                    Some(Value::Object(arguments)) => arguments,
+                    Some(_) => {
+                        return Err(error::Error(
+                            StatusCode::BAD_REQUEST,
+                            "arguments must be an object".into(),
+                        ));
+                    }
+                };
+                return Box::pin(desktop_mcp::call_server_tool(
+                    &self.app,
+                    &id.unwrap(),
+                    &string(&args, "server")?,
+                    &string(&args, "tool")?,
+                    arguments,
+                ))
+                .await;
+            }
             "register_mcp_server" => {
                 desktop_mcp::register_server(state, Path(id.unwrap()), Json(parse(args)?))
                     .await?
