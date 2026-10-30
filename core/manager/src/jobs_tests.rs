@@ -2,6 +2,7 @@
 //! answers that the resource is busy, so no client hangs for the job's length. Also that a job
 //! waiting for a busy container holds up no job of another, and that work that only uses a
 //! container shares it while work that changes or replaces it waits for the sharers and goes first.
+//! A job that fails with a result of its own, such as a script's exit code, keeps it.
 use super::*;
 use crate::test_support::app;
 use axum::http::StatusCode;
@@ -123,4 +124,46 @@ async fn work_that_uses_a_container_shares_it_and_work_that_replaces_it_waits() 
     .unwrap();
     assert_eq!(app.db.job(&script).unwrap().status, "completed");
     drop(app.hold_for("container:one", wait).await.unwrap());
+}
+
+#[tokio::test]
+async fn a_job_that_fails_with_a_result_keeps_it_beside_its_error() {
+    let app = app(false);
+    let (id, outcome) = start(
+        app.clone(),
+        "exec",
+        "container:one".into(),
+        true,
+        |_, _| async {
+            Err(Failed::new(
+                "Script exited with code 2",
+                serde_json::json!({"exit_code": 2}),
+            )
+            .into())
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        outcome.await.unwrap().unwrap_err(),
+        "Script exited with code 2"
+    );
+    let job = app.db.job(&id).unwrap();
+    assert_eq!(job.status, "failed");
+    assert_eq!(job.result, Some(serde_json::json!({"exit_code": 2})));
+    assert!(
+        job.log.contains("ERROR: Script exited with code 2"),
+        "{}",
+        job.log
+    );
+    // Any other failure leaves no result.
+    let (id, outcome) = start(
+        app.clone(),
+        "exec",
+        "container:one".into(),
+        true,
+        |_, _| async { anyhow::bail!("Start the container before executing a script") },
+    )
+    .unwrap();
+    assert!(outcome.await.unwrap().is_err());
+    assert_eq!(app.db.job(&id).unwrap().result, None);
 }

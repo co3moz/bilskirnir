@@ -1047,8 +1047,10 @@ try:
     assert docker("exec",container,"cat","/opt/agent-install") == b"agent-install"
     failure = mcp_job(tool("exec_container", {"container_id":env_id,"script":"echo EXPECTED_EXEC_FAILURE\nexit 17"}), success=False)
     assert "EXPECTED_EXEC_FAILURE" in failure["log"] and "17" in failure["log"]
+    assert failure["result"]["exit_code"] == 17 and not failure["result"]["timed_out"], failure["result"]
+    assert failure["result"]["output_tail"] == "EXPECTED_EXEC_FAILURE\n", failure["result"]
     timeout = mcp_job(tool("exec_container", {"container_id":env_id,"script":"sleep 5\nprintf must-not-exist > /home/desktop/after-timeout","timeout_seconds":1}), success=False)
-    assert "124" in timeout["log"]
+    assert "124" in timeout["log"] and timeout["result"]["timed_out"] is True, timeout["result"]
     time.sleep(1)
     assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
     written = stdio_tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]

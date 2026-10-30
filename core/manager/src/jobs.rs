@@ -262,6 +262,28 @@ where
     Ok((id, outcome))
 }
 
+/// A job's failure that carries a result of its own, such as a script's exit code and the end of
+/// its output, which the failed job keeps as its `result` beside its error.
+#[derive(Debug)]
+pub(crate) struct Failed {
+    message: String,
+    result: Value,
+}
+impl Failed {
+    pub(crate) fn new(message: impl Into<String>, result: Value) -> Self {
+        Self {
+            message: message.into(),
+            result,
+        }
+    }
+}
+impl std::fmt::Display for Failed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for Failed {}
+
 /// Record how a job ended. `job` stands in for the saved record when that cannot be read.
 pub(crate) fn finish(
     app: &App,
@@ -286,6 +308,9 @@ pub(crate) fn finish(
         }
         Err(e) => {
             job.status = "failed".into();
+            job.result = e
+                .downcast_ref::<Failed>()
+                .map(|failed| failed.result.clone());
             Err(format!("{e:#}"))
         }
     };
