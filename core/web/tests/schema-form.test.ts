@@ -200,3 +200,25 @@ test("a schema nested past the depth limit is edited as JSON", () => {
   assert.equal(fieldKind(node, root, depth), "json")
   assert.ok(depth <= 6, String(depth))
 })
+
+test("a type that refers to itself in its own union, as a nullable tree does, stops", () => {
+  // As a desktop server may send it: a field of this type is edited as JSON, not recursed into.
+  const root: JsonSchema = {
+    type: "object",
+    properties: { node: { $ref: "#/$defs/a" } },
+    $defs: { a: { anyOf: [{ $ref: "#/$defs/a" }, { type: "null" }] } },
+  }
+  const schema = normalizeSchema({ $ref: "#/$defs/a" }, root)
+  assert.equal(schema.nullable, true)
+  assert.equal(fieldKind(schema, root, 0), "json")
+  const form = formDraft(root)
+  assert.deepEqual(readForm(root, form).errors, [])
+  // Two definitions that hold each other in their unions stop as well.
+  const pair: JsonSchema = {
+    $defs: {
+      a: { oneOf: [{ $ref: "#/$defs/b" }, { type: "string" }] },
+      b: { oneOf: [{ $ref: "#/$defs/a" }, { type: "integer" }] },
+    },
+  }
+  assert.doesNotThrow(() => normalizeSchema({ $ref: "#/$defs/a" }, pair))
+})
