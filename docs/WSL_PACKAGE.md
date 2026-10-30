@@ -10,7 +10,7 @@ Each package installs the manager release it belongs to. The package from releas
 
 ## Requirements
 
-- Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`.
+- Windows 11 or Windows 10 with WSL 2.4.4 or newer (`wsl --version`), updated with `wsl --update`. The [Windows helper](#option-1-the-windows-helper) installs or updates WSL when it finds none or an older one.
 - For GPU containers, a Windows GPU driver with WSL support. The NVIDIA Windows driver provides CUDA inside WSL; no Linux display driver is installed in the package. See [NVIDIA's WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/index.html).
 - About 2 GB of disk space for the distribution, plus the manager image, each catalog image you use (XFCE about 1.2 GB, GNOME about 2.3 GB, sharing their base layers) and your containers.
 
@@ -26,7 +26,9 @@ Thoric's PowerShell helper, `thoric.ps1`, is published beside the package in eve
 irm https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1 | iex
 ```
 
-`irm` downloads the helper and `iex` runs it, so nothing is saved and no script policy is in the way. While Thoric is not installed, it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. Run the line again later for [everything else it does](#the-windows-helper).
+`irm` downloads the helper and `iex` runs it, so nothing is saved and no script policy is in the way. While Thoric is not installed, it first checks WSL. Without WSL 2.4.4 or newer, or with the Virtual Machine Platform feature WSL 2 runs on turned off, it offers `wsl --install --no-distribution`, or `wsl --update` for an older WSL; both ask for administrator rights themselves. A feature they turn on works only after Windows restarts, and so does a Windows hypervisor that is not running yet, so the helper then stops and asks for a restart: run the line again afterwards. When the hypervisor still does not run, virtualization (Intel VT-x or AMD-V) is off in the computer's firmware settings.
+
+Next it shows the memory, processors and swap of WSL's virtual machine and offers values for those `%UserProfile%\.wslconfig` does not set, see [Memory and processors](#memory-and-processors). Then it asks for a folder for the distribution's disk, which holds every image, container and volume (Enter keeps it under `%LOCALAPPDATA%\wsl`), and for the disk's maximum size (Enter for 1 TB, see [Disk](#disk)). It then downloads `thoric.wsl` from the latest release, registers the **Thoric** distribution and runs its first start in the same window. Run the line again later for [everything else it does](#the-windows-helper).
 
 ### Option 2: the package by hand
 
@@ -77,6 +79,7 @@ The helper handles what has to happen outside the distribution. Run it with the 
 | Change its disk's maximum size | `resize <size>` | Changes the disk's maximum size, see [Disk](#disk). |
 | Start it at every Windows sign-in | `autostart enable` | Registers the auto-start task; with the task registered, the entry removes it instead (`autostart disable`). |
 | Let other devices reach the dashboard | `lan enable` | Sets up Windows for [access from other devices](#access-from-other-devices); once that is set up, the entry removes it instead (`lan disable`). `lan status` shows what is set up. |
+| Set WSL's memory, processors and swap | `wslconfig` | Shows what `.wslconfig` sets for WSL's virtual machine and offers values for the rest, see [Memory and processors](#memory-and-processors). |
 | Remove it with its images, containers and volumes | `uninstall` | Removes the auto-start task and, after confirmation, the distribution and what `lan enable` set up, see [Remove](#remove). |
 
 `irm | iex` cannot pass a command. To run one without the list, for example from a script, make the helper a script block and pass the command after it:
@@ -242,14 +245,16 @@ Every WSL distribution runs in one shared virtual machine. Its memory and proces
 
 ### Memory and processors
 
-Unless configured otherwise, WSL gives the virtual machine half of the Windows memory and all of its processors, and Thoric shares them with every other running distribution. Change them in `%UserProfile%\.wslconfig` or in the **WSL Settings** app:
+Unless configured otherwise, WSL gives the virtual machine half of the Windows memory, all of its processors and a quarter of that memory as swap, and Thoric shares them with every other running distribution. Change them in `%UserProfile%\.wslconfig` or in the **WSL Settings** app:
 
 ```ini
 [wsl2]
 memory=24GB
 processors=12
-swap=8GB
+swap=6GB
 ```
+
+The [helper](#the-windows-helper) offers values for the ones the file leaves out when it installs Thoric, and later with **Set WSL's memory, processors and swap** (`wslconfig`). They leave Windows a quarter of the memory, at least 4 GB, and a quarter of the processors, at least two, when there are more than four; swap is a quarter of the memory, at most 8 GB, since the swap file sits on the Windows drive. A computer with 32 GB and 16 processors gets the values above. They go first under the file's `[wsl2]` header, which the helper adds when there is none, and every other line of the file stays as it was, so an existing `networkingMode` or a value you set yourself is kept; an answer of `no` leaves the file alone.
 
 WSL reads these settings only when the virtual machine starts, and the helper's `stop` stops only this distribution. Apply them with `wsl --shutdown`, which stops every WSL distribution, then start Thoric again with the helper's `start`:
 

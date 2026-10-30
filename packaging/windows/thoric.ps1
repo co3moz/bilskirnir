@@ -33,12 +33,17 @@ function Invoke-Thoric {
     $addressFile = Join-Path $env:LOCALAPPDATA "Thoric\wsl-address"
     $helperUrl = "https://github.com/co3moz/thoric/releases/latest/download/thoric.ps1"
     $packageUrl = "https://github.com/co3moz/thoric/releases/latest/download/thoric.wsl"
+    # The first WSL that installs a .wsl package.
+    $minimumWsl = [version]"2.4.4"
+    # WSL's settings for its virtual machine, which every distribution shares.
+    $wslConfigFile = Join-Path $env:USERPROFILE ".wslconfig"
     $usage = @"
 Usage: thoric.ps1 [command] [options]
 
 Without a command it offers to install Thoric, or lists what it can do with an installed one.
 
-  install                             Download the latest package, register it and run its first-start setup
+  install                             Install or update WSL when needed, then download the latest package,
+                                      register it and run its first-start setup
       -Location D:\WSL\Thoric     Keep the distribution's disk in this folder
       -VhdSize 200GB                  Set the disk's maximum size (1 TB unless given)
       -Package .\thoric.wsl       Install this package file instead of downloading one
@@ -51,6 +56,8 @@ Without a command it offers to install Thoric, or lists what it can do with an i
   resize 200GB                        Change the disk's maximum size
   autostart enable|disable            Start Thoric at Windows sign-in through a scheduled task
   lan enable|disable|status           Let other devices reach the dashboard through Windows
+  wslconfig                           Show the memory, processors and swap of WSL's virtual machine, and offer
+                                      values for those .wslconfig leaves to WSL
   uninstall                           Remove the auto-start task and unregister the distribution
 
   -Distro <name>                      Work on a distribution installed under another name
@@ -58,6 +65,11 @@ Without a command it offers to install Thoric, or lists what it can do with an i
 
 A command runs without saving the helper too:
   & ([scriptblock]::Create((irm $helperUrl))) move D:\WSL\Thoric
+
+'install' needs WSL $minimumWsl or newer on the Virtual Machine Platform. It offers 'wsl --install
+--no-distribution' where WSL or that feature is missing and 'wsl --update' for an older WSL, then
+values for .wslconfig, which WSL reads when its virtual machine starts. A newly enabled feature
+needs a restart of Windows before the package installs.
 
 WSL stops a distribution shortly after its last Windows-started process ends, so 'start' and the
 auto-start task keep a hidden keep-alive process open while Docker and the manager run inside.
@@ -74,7 +86,152 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
 "@
 
     function Invoke-Wsl { param([string[]]$Arguments) & wsl.exe @Arguments; if ($LASTEXITCODE -ne 0) { throw "wsl.exe exited with code $LASTEXITCODE" } }
-    function Test-Registered { $list = (& wsl.exe --list --quiet) -join "`n"; return ($list -replace "`0", "") -match "(?m)^$Distro\s*$" }
+    # The version of the WSL package, from the wsl.exe it installs, or nothing without one. Windows' own
+    # wsl.exe is all there is then, and it answers every command with a note on stderr that WSL is not
+    # installed, so nothing here asks wsl.exe about distributions before this finds the package.
+    function Get-WslVersion {
+        $folder = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss\MSI -ErrorAction SilentlyContinue).InstallLocation
+        if (-not $folder) { $folder = Join-Path $env:ProgramFiles "WSL" }
+        $file = Get-Item -LiteralPath (Join-Path $folder "wsl.exe") -ErrorAction SilentlyContinue
+        if ($file -and $file.VersionInfo.FileVersion -match '^[0-9]+(\.[0-9]+){1,3}') { return [version]$Matches[0] }
+    }
+    function Test-Registered {
+        if (-not (Get-WslVersion)) { return $false }
+        $list = (& wsl.exe --list --quiet) -join "`n"
+        return ($list -replace "`0", "") -match "(?m)^$Distro\s*$"
+    }
+    # Whether the Virtual Machine Platform, the Windows feature WSL 2 runs on, is on; nothing when Windows
+    # does not say.
+    function Test-VirtualMachinePlatform {
+        $feature = Get-CimInstance Win32_OptionalFeature -Filter "Name = 'VirtualMachinePlatform'" -ErrorAction SilentlyContinue
+        if ($feature) { return $feature.InstallState -eq 1 }
+    }
+    # Runs wsl.exe in this window without taking its output, so a function can call it and still return a
+    # value, and returns its exit code.
+    function Start-Wsl {
+        param([string[]]$Arguments)
+        return (Start-Process -FilePath "wsl.exe" -ArgumentList $Arguments -NoNewWindow -Wait -PassThru).ExitCode
+    }
+    # Whether WSL can install the package: WSL 2.4.4 or newer on the Virtual Machine Platform, with the
+    # Windows hypervisor running. It offers what is missing, 'wsl --install --no-distribution' for WSL or
+    # the feature and 'wsl --update' for an older WSL; both ask for administrator rights themselves, and a
+    # feature they enable runs only after a restart.
+    function Install-Wsl {
+        $version = Get-WslVersion
+        $arguments = @()
+        if (-not $version) {
+            Write-Host "Thoric runs in WSL 2, which is not installed."
+            $arguments = @("--install", "--no-distribution")
+        } elseif ((Test-VirtualMachinePlatform) -eq $false) {
+            Write-Host "WSL $version is installed, but the Virtual Machine Platform feature it runs on is off."
+            $arguments = @("--install", "--no-distribution")
+        } elseif ($version -lt $minimumWsl) {
+            Write-Host "WSL $version is installed; Thoric's package needs WSL $minimumWsl or newer."
+            $arguments = @("--update")
+        }
+        if ($arguments) {
+            Write-Host "'wsl $($arguments -join ' ')' sets it up. Windows asks for administrator rights, and a feature it turns on needs a restart."
+            if ((Read-Host "Run it now? Enter for yes, 'no' to stop") -notin "", "y", "yes") { Write-Host "Nothing was changed."; return $false }
+            $code = Start-Wsl $arguments
+            # A WSL from the Store, before its MSI package, has no version here; 'wsl --update' replaces it.
+            if (-not (Get-WslVersion) -or (Get-WslVersion) -lt $minimumWsl) { $code = Start-Wsl @("--update") }
+            $version = Get-WslVersion
+            if (-not $version -or $version -lt $minimumWsl) {
+                throw "WSL $minimumWsl or newer is still not installed (wsl.exe exited with code $code). Restart Windows if WSL asked for it and run the helper again, or install WSL as https://aka.ms/wslinstall describes."
+            }
+        }
+        $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+        if ((Test-VirtualMachinePlatform) -eq $false -or ($computer -and -not $computer.HypervisorPresent)) {
+            Write-Host "WSL 2 runs on the Windows hypervisor, which is not running yet. Restart Windows to finish turning on the Virtual Machine Platform, then run the helper again."
+            Write-Host "If it still does not run after a restart, turn on virtualization (Intel VT-x or AMD-V) in the computer's firmware settings."
+            return $false
+        }
+        return $true
+    }
+
+    # The settings of WSL's virtual machine for a computer with this much memory, in GB, and this many
+    # processors. Windows keeps a quarter of the memory, at least 4 GB, and of more than four processors a
+    # quarter, at least two. Swap is a quarter of the memory, as WSL's own, but at most 8 GB, since it is a
+    # file on the Windows drive.
+    function Get-WslSuggestion {
+        param([int]$MemoryGB, [int]$Processors)
+        $memory = [int][math]::Max(2, $MemoryGB - [math]::Max(4, [math]::Floor($MemoryGB / 4)))
+        $cpus = if ($Processors -gt 4) { $Processors - [int][math]::Max(2, [math]::Floor($Processors / 4)) } else { $Processors }
+        $swap = [int][math]::Min(8, [math]::Ceiling($memory / 4))
+        return [ordered]@{ memory = "${memory}GB"; processors = "$cpus"; swap = "${swap}GB" }
+    }
+    # What the [wsl2] section of .wslconfig's lines sets, by key.
+    function Read-WslConfig {
+        param([string[]]$Lines)
+        $settings = @{}
+        $section = ""
+        foreach ($line in $Lines) {
+            if ($line -match '^\s*\[([^\]]*)\]\s*$') { $section = $Matches[1].Trim().ToLower() }
+            elseif ($section -eq "wsl2" -and $line -match '^\s*([A-Za-z0-9_.]+)\s*=\s*(.*?)\s*$') { $settings[$Matches[1].ToLower()] = $Matches[2] }
+        }
+        return $settings
+    }
+    # .wslconfig's lines with these settings first in its [wsl2] section, or in a [wsl2] section added at the
+    # end, and every other line as it was.
+    function Add-WslSettings {
+        param([string[]]$Lines, [Collections.IDictionary]$Settings)
+        $added = [string[]]@($Settings.Keys | ForEach-Object { "$_=$($Settings[$_])" })
+        $result = New-Object Collections.Generic.List[string]
+        $done = $false
+        foreach ($line in $Lines) {
+            $result.Add($line)
+            if (-not $done -and $line -match '^\s*\[\s*wsl2\s*\]\s*$') { $result.AddRange($added); $done = $true }
+        }
+        if (-not $done) {
+            while ($result.Count -and -not $result[$result.Count - 1].Trim()) { $result.RemoveAt($result.Count - 1) }
+            if ($result.Count) { $result.Add("") }
+            $result.Add("[wsl2]")
+            $result.AddRange($added)
+        }
+        return , $result.ToArray()
+    }
+    # The memory, processors and swap of WSL's virtual machine, which Thoric's desktops share with every
+    # other distribution. Shows what .wslconfig sets and offers values for what it leaves to WSL, which
+    # gives the machine half of the memory, every processor and a quarter of its memory as swap. They go
+    # into the file's [wsl2] section, in the file's own encoding and line endings, and nothing else in it
+    # changes.
+    function Confirm-WslConfig {
+        $lines = @()
+        $text = ""
+        $encoding = New-Object Text.UTF8Encoding $false
+        if (Test-Path -LiteralPath $wslConfigFile) {
+            $bytes = [IO.File]::ReadAllBytes($wslConfigFile)
+            if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) { $encoding = [Text.Encoding]::Unicode }
+            elseif ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { $encoding = New-Object Text.UTF8Encoding $true }
+            $text = [IO.File]::ReadAllText($wslConfigFile, $encoding)
+            $lines = @($text.TrimEnd("`r", "`n") -split "\r?\n")
+        }
+        $current = Read-WslConfig $lines
+        $computer = Get-CimInstance Win32_ComputerSystem
+        $memoryGB = [int][math]::Round($computer.TotalPhysicalMemory / 1GB)
+        $suggested = Get-WslSuggestion $memoryGB $computer.NumberOfLogicalProcessors
+        $set = @($suggested.Keys | Where-Object { $current.ContainsKey($_) } | ForEach-Object { "$_=$($current[$_])" })
+        if ($set) { Write-Host "WSL's virtual machine gets $($set -join ', ') from $wslConfigFile." }
+        $missing = [ordered]@{}
+        foreach ($key in $suggested.Keys) { if (-not $current.ContainsKey($key)) { $missing[$key] = $suggested[$key] } }
+        if (-not $missing.Count) { return }
+        $defaults = @{
+            memory = "half of this computer's $memoryGB GB of memory"
+            processors = "all $($computer.NumberOfLogicalProcessors) processors"
+            swap = "a quarter of its memory as swap"
+        }
+        $parts = @($missing.Keys | ForEach-Object { $defaults[$_] })
+        $said = if ($parts.Count -gt 1) { ($parts[0..($parts.Count - 2)] -join ", ") + " and " + $parts[-1] } else { $parts[0] }
+        Write-Host "WSL gives its virtual machine, which Thoric's desktops share with every other distribution, $said unless .wslconfig says otherwise. Suggested:"
+        foreach ($key in $missing.Keys) { Write-Host "  $key=$($missing[$key])" }
+        if ((Read-Host "Add them to ${wslConfigFile}? Enter for yes, 'no' to leave them to WSL") -notin "", "y", "yes") { return }
+        $newline = if ($text -and $text -notmatch "`r`n") { "`n" } else { "`r`n" }
+        [IO.File]::WriteAllText($wslConfigFile, (((Add-WslSettings $lines $missing) -join $newline) + $newline), $encoding)
+        Write-Host "Added them to $wslConfigFile."
+        if ((Get-WslVersion) -and (Get-Running)) {
+            Write-Host "WSL reads it when its virtual machine starts. Run 'wsl --shutdown', which stops every distribution, then 'start'."
+        }
+    }
     # A list that fails counts as nothing running.
     function Get-Running {
         $list = & wsl.exe --list --running --quiet
@@ -417,13 +574,14 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
         }
     }
 
-    # 'irm | iex' cannot pass a command, so without one the helper asks.
+    # 'irm | iex' cannot pass a command, so without one the helper asks. Installing, it asks for the disk
+    # once WSL is ready for the package.
+    $askDisk = $false
     if (-not $Command) {
         if (-not (Test-Registered)) {
-            Write-Host "Thoric is not installed yet. Its disk will hold every image, container and volume."
-            $Location = Read-Host "Folder for the disk, such as D:\WSL\Thoric (Enter for the WSL default)"
-            $VhdSize = Read-Host "Maximum disk size, such as 200GB (Enter for 1 TB)"
+            Write-Host "Thoric is not installed yet."
             $Command = "install"
+            $askDisk = $true
         } else {
             $state = if ((Get-Running) -contains $Distro) { "running" } else { "stopped" }
             $folder = Get-DiskFolder
@@ -442,6 +600,7 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
                 @("resize", "Change its disk's maximum size"),
                 @("autostart", $(if ($autostart) { "Stop starting it at Windows sign-in" } else { "Start it at every Windows sign-in" })),
                 @("lan", $(if ($lan) { "Stop other devices reaching the dashboard" } else { "Let other devices reach the dashboard" })),
+                @("wslconfig", "Set WSL's memory, processors and swap"),
                 @("uninstall", "Remove it with its images, containers and volumes")
             )
             for ($i = 0; $i -lt $choices.Count; $i++) { Write-Host ("  {0,2}  {1}" -f ($i + 1), $choices[$i][1]) }
@@ -459,7 +618,14 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
 
     switch ($Command.ToLower()) {
         "install" {
+            if (-not (Install-Wsl)) { return }
             if (Test-Registered) { throw "The $Distro distribution is already installed; 'update' moves it to the newest release." }
+            Confirm-WslConfig
+            if ($askDisk) {
+                Write-Host "Thoric's disk will hold every image, container and volume."
+                $Location = Read-Host "Folder for the disk, such as D:\WSL\Thoric (Enter for the WSL default)"
+                $VhdSize = Read-Host "Maximum disk size, such as 200GB (Enter for 1 TB)"
+            }
             $file = $Package
             if (-not $file) {
                 $file = Join-Path $env:TEMP "thoric-$PID.wsl"
@@ -524,6 +690,9 @@ whenever WSL restarts, and 'start' and the auto-start task point the port proxy 
                 "status" { Show-Lan }
                 default { throw "Use 'lan enable', 'lan disable' or 'lan status'." }
             }
+        }
+        "wslconfig" {
+            Confirm-WslConfig
         }
         "elevated" {
             # The copy of this script that Invoke-Elevated starts as administrator. An error that leaves a
