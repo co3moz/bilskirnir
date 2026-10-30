@@ -430,6 +430,10 @@ pub struct Terminal {
     pub root: bool,
     pub cwd: String,
     pub created_at: u64,
+    /// The MCP endpoint that opened the terminal, the only one that reaches it besides the
+    /// administrator; `None` for one the administrator opened.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Recording {

@@ -292,6 +292,10 @@ impl Caller {
             cancelled: context.ct.clone(),
         }
     }
+    /// The MCP endpoint the call came through; `None` for the administrator's `/mcp`.
+    pub(crate) fn endpoint(&self) -> Option<&str> {
+        self.endpoint.as_deref()
+    }
     /// Tell a client that asked for progress how long the call has waited, so one that resets
     /// its timeout on progress keeps the call open.
     async fn report(&self, waited: Duration, wait: Duration) {

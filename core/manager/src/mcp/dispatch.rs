@@ -66,21 +66,57 @@ fn structured(value: Value) -> CallToolResult {
 }
 
 impl ThoricMcp {
-    /// [`Self::dispatch`] for a call whose MCP request is known, which `request_human` waits on.
+    /// [`Self::dispatch`] for a call whose MCP request is known, which `request_human` waits on
+    /// and which tells the terminal tools the endpoint that calls.
     pub(crate) async fn dispatch_with(
         &self,
         name: &str,
         mut args: Value,
         caller: human::Caller,
     ) -> error::Result<CallToolResult> {
-        if name != "request_human" {
+        if name != "request_human" && !terminal::TOOLS.contains(&name) {
             return self.dispatch(name, args).await;
         }
         let id = string(&args, "container_id")?;
         if let Some(object) = args.as_object_mut() {
             object.remove("container_id");
         }
-        Box::pin(human::request(&self.app, &id, args, caller)).await
+        if name == "request_human" {
+            return Box::pin(human::request(&self.app, &id, args, caller)).await;
+        }
+        self.dispatch_terminal(name, &id, args, caller.endpoint())
+            .await
+            .map(structured)
+    }
+    /// The terminal tools, which an MCP endpoint calls for the terminals it opened alone.
+    async fn dispatch_terminal(
+        &self,
+        name: &str,
+        id: &str,
+        mut args: Value,
+        endpoint: Option<&str>,
+    ) -> error::Result<Value> {
+        let terminal_id = match name {
+            "open_terminal" => {
+                return terminal::open_terminal(&self.app, id, &parse(args)?, endpoint).await;
+            }
+            "list_terminals" => return terminal::list_terminals(&self.app, id, endpoint).await,
+            _ => string(&args, "terminal_id")?,
+        };
+        args.as_object_mut().unwrap().remove("terminal_id");
+        match name {
+            "terminal_input" => {
+                terminal::terminal_input(&self.app, id, &terminal_id, &parse(args)?, endpoint).await
+            }
+            "terminal_output" => {
+                terminal::terminal_output(&self.app, id, &terminal_id, &parse(args)?, endpoint)
+                    .await
+            }
+            "close_terminal" => {
+                terminal::close_terminal(&self.app, id, &terminal_id, endpoint).await
+            }
+            _ => unreachable!("tool catalog and dispatch must agree"),
+        }
     }
     pub(crate) async fn dispatch(
         &self,
@@ -301,26 +337,6 @@ impl ThoricMcp {
                 return Ok(sound(value));
             }
             "inject_audio" => audio::inject_audio(&self.app, &id.unwrap(), &parse(args)?).await?,
-            "open_terminal" => {
-                terminal::open_terminal(&self.app, &id.unwrap(), &parse(args)?).await?
-            }
-            "list_terminals" => terminal::list_terminals(&self.app, &id.unwrap()).await?,
-            "terminal_input" => {
-                let terminal_id = string(&args, "terminal_id")?;
-                args.as_object_mut().unwrap().remove("terminal_id");
-                terminal::terminal_input(&self.app, &id.unwrap(), &terminal_id, &parse(args)?)
-                    .await?
-            }
-            "terminal_output" => {
-                let terminal_id = string(&args, "terminal_id")?;
-                args.as_object_mut().unwrap().remove("terminal_id");
-                terminal::terminal_output(&self.app, &id.unwrap(), &terminal_id, &parse(args)?)
-                    .await?
-            }
-            "close_terminal" => {
-                terminal::close_terminal(&self.app, &id.unwrap(), &string(&args, "terminal_id")?)
-                    .await?
-            }
             "inspect_ui" => windows::inspect_ui(&self.app, &id.unwrap(), &parse(args)?).await?,
             "gamepad_input" => {
                 gamepad::gamepad_input(&self.app, &id.unwrap(), &parse(args)?).await?

@@ -19,6 +19,14 @@ use std::{sync::Arc, time::Duration};
 const RUNNER: &str = include_str!("../helpers/terminal_runner.py");
 const CONTROL: &str = include_str!("../helpers/terminal_control.py");
 pub const ROOT: &str = "/tmp/thoric-terminals";
+/// The MCP tools of terminals, which `mcp::dispatch` gives the endpoint that calls.
+pub(crate) const TOOLS: [&str; 5] = [
+    "open_terminal",
+    "list_terminals",
+    "terminal_input",
+    "terminal_output",
+    "close_terminal",
+];
 
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -82,12 +90,29 @@ impl TerminalOutput {
         Ok(())
     }
 }
-fn record(app: &App, id: &str, terminal: &str) -> Result<Terminal> {
+/// Whether a caller reaches the terminal. `endpoint` names the MCP endpoint that calls, which
+/// reaches only the terminals it opened, never a root shell; `None` is the administrator, through
+/// the dashboard or `/mcp`, who reaches every terminal.
+fn reaches(record: &Terminal, endpoint: Option<&str>) -> bool {
+    endpoint.is_none_or(|endpoint| !record.root && record.endpoint.as_deref() == Some(endpoint))
+}
+fn record(app: &App, id: &str, terminal: &str, endpoint: Option<&str>) -> Result<Terminal> {
     let record: Terminal = app.db.get("terminal", terminal)?;
-    if record.container_id != id {
+    if record.container_id != id || !reaches(&record, endpoint) {
         return Err(missing());
     }
     Ok(record)
+}
+/// Give the terminals a deleted MCP endpoint opened to the administrator alone, so an endpoint
+/// made later with its name does not reach them.
+pub(crate) fn forget_endpoint(app: &App, endpoint: &str) -> anyhow::Result<()> {
+    for mut record in app.db.list::<Terminal>("terminal")? {
+        if record.endpoint.as_deref() == Some(endpoint) {
+            record.endpoint = None;
+            app.db.put("terminal", &record.id, &record)?;
+        }
+    }
+    Ok(())
 }
 async fn running(app: &App, id: &str) -> Result<Value> {
     let env = app.container(id)?;
@@ -127,6 +152,9 @@ fn describe(record: &Terminal, status: Value) -> Value {
         "cwd": record.cwd,
         "created_at": record.created_at,
     });
+    if let Some(endpoint) = &record.endpoint {
+        value["endpoint"] = json!(endpoint);
+    }
     if let Some(fields) = status.as_object() {
         for (key, field) in fields {
             value[key] = field.clone();
@@ -134,8 +162,18 @@ fn describe(record: &Terminal, status: Value) -> Value {
     }
     value
 }
-pub async fn open_terminal(app: &Arc<App>, id: &str, body: &OpenTerminal) -> Result<Value> {
+pub async fn open_terminal(
+    app: &Arc<App>,
+    id: &str,
+    body: &OpenTerminal,
+    endpoint: Option<&str>,
+) -> Result<Value> {
     body.validate()?;
+    if endpoint.is_some() && body.root {
+        return Err(
+            anyhow::anyhow!("An MCP endpoint opens terminals as the desktop user only").into(),
+        );
+    }
     let _guard = app.hold(&format!("container:{id}")).await?;
     let info = running(app, id).await?;
     let home = if body.root { "/root" } else { "/home/desktop" };
@@ -145,6 +183,7 @@ pub async fn open_terminal(app: &Arc<App>, id: &str, body: &OpenTerminal) -> Res
         root: body.root,
         cwd: body.cwd.clone().unwrap_or_else(|| home.into()),
         created_at: now(),
+        endpoint: endpoint.map(str::to_owned),
     };
     let directory = format!("{ROOT}/{}", record.id);
     let container = info["Id"].as_str().context("Missing container ID")?;
@@ -181,9 +220,10 @@ pub async fn terminal_input(
     id: &str,
     terminal: &str,
     body: &TerminalInput,
+    endpoint: Option<&str>,
 ) -> Result<Value> {
     body.validate()?;
-    let record = record(app, id, terminal)?;
+    let record = record(app, id, terminal, endpoint)?;
     let info = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;
     let mut text = body.text.clone();
@@ -208,9 +248,10 @@ pub async fn terminal_output(
     id: &str,
     terminal: &str,
     body: &TerminalOutput,
+    endpoint: Option<&str>,
 ) -> Result<Value> {
     body.validate()?;
-    let record = record(app, id, terminal)?;
+    let record = record(app, id, terminal, endpoint)?;
     let info = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;
     let status = control(
@@ -228,8 +269,13 @@ pub async fn terminal_output(
     .await?;
     Ok(describe(&record, status))
 }
-pub async fn close_terminal(app: &App, id: &str, terminal: &str) -> Result<Value> {
-    let record = record(app, id, terminal)?;
+pub async fn close_terminal(
+    app: &App,
+    id: &str,
+    terminal: &str,
+    endpoint: Option<&str>,
+) -> Result<Value> {
+    let record = record(app, id, terminal, endpoint)?;
     let info = running(app, id).await?;
     let container = info["Id"].as_str().context("Missing container ID")?;
     let status = control(
@@ -241,14 +287,14 @@ pub async fn close_terminal(app: &App, id: &str, terminal: &str) -> Result<Value
     .await?;
     Ok(describe(&record, status))
 }
-pub async fn list_terminals(app: &App, id: &str) -> Result<Value> {
+pub async fn list_terminals(app: &App, id: &str, endpoint: Option<&str>) -> Result<Value> {
     let env = app.container(id)?;
     let info = app.owned(&env).await?;
     let records = app
         .db
         .list::<Terminal>("terminal")?
         .into_iter()
-        .filter(|record| record.container_id == id)
+        .filter(|record| record.container_id == id && reaches(record, endpoint))
         .take(50)
         .collect::<Vec<_>>();
     let mut items = Vec::new();
@@ -276,28 +322,36 @@ pub async fn open(
     body: Option<Json<OpenTerminal>>,
 ) -> Result<Json<Value>> {
     let body = body.map(|Json(body)| body).unwrap_or_default();
-    Ok(Json(open_terminal(&app, &id, &body).await?))
+    Ok(Json(open_terminal(&app, &id, &body, None).await?))
 }
 pub async fn list(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    Ok(Json(list_terminals(&app, &id).await?))
+    Ok(Json(list_terminals(&app, &id, None).await?))
 }
 pub async fn input(
     State(app): State<Arc<App>>,
     Path((id, terminal)): Path<(String, String)>,
     Json(body): Json<TerminalInput>,
 ) -> Result<Json<Value>> {
-    Ok(Json(terminal_input(&app, &id, &terminal, &body).await?))
+    Ok(Json(
+        terminal_input(&app, &id, &terminal, &body, None).await?,
+    ))
 }
 pub async fn output(
     State(app): State<Arc<App>>,
     Path((id, terminal)): Path<(String, String)>,
     Query(body): Query<TerminalOutput>,
 ) -> Result<Json<Value>> {
-    Ok(Json(terminal_output(&app, &id, &terminal, &body).await?))
+    Ok(Json(
+        terminal_output(&app, &id, &terminal, &body, None).await?,
+    ))
 }
 pub async fn close(
     State(app): State<Arc<App>>,
     Path((id, terminal)): Path<(String, String)>,
 ) -> Result<Json<Value>> {
-    Ok(Json(close_terminal(&app, &id, &terminal).await?))
+    Ok(Json(close_terminal(&app, &id, &terminal, None).await?))
 }
+
+#[cfg(test)]
+#[path = "terminal_tests.rs"]
+mod tests;
