@@ -350,8 +350,8 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result, plus progress while an image downloads or a build or compose setup script runs, the stages of an image build, a snapshot or a settings change that recreates the container, and the parts and named steps of a build's or setup's scripts. Wait for completed, failed or interrupted; a queued job is not finished.",
-            json!({"job_id":text}),
+            "Read a job's status, log and result, plus progress while an image downloads or a build or compose setup script runs, the stages of an image build, a snapshot or a settings change that recreates the container, and the parts and named steps of a build's or setup's scripts. A job is finished once completed, failed or interrupted; a queued job is not. wait_seconds waits up to 300 seconds for it to end and answers as it is then, so call again rather than polling in a loop; a client that does not reset its timeout on progress notifications should keep it below its own limit, often 60 seconds. The log is its last log_tail_bytes bytes, 4096 unless given; log_start and log_end say where that part lies in the whole output, and log_offset=log_end of the last answer reads only what was added since.",
+            json!({"job_id":text,"wait_seconds":{"type":"integer","minimum":0,"maximum":300,"default":0},"log_tail_bytes":{"type":"integer","minimum":0,"maximum":262144,"default":4096},"log_offset":{"type":"integer","minimum":0}}),
             &["job_id"],
             true,
             false,

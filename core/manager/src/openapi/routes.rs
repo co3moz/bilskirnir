@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     activity, api, apps, archives, audio, auth, backup, capture, compose, config, desktop_input,
-    desktop_mcp, exec, files, gamepad, human, icons, model, ocr, recordings, terminal, transfers,
-    uploads, usage, volumes, waits, windows,
+    desktop_mcp, exec, files, gamepad, human, icons, jobs, model, ocr, recordings, terminal,
+    transfers, uploads, usage, volumes, waits, windows,
 };
 
 const GZIP: &str = "application/gzip";
@@ -647,8 +647,9 @@ pub(super) fn all() -> Vec<Route> {
         get(
             "/api/jobs/{id}",
             JOBS,
-            "A job's status, log and result; `retryable` once it can be started again.",
+            "A job's status, log and result; `retryable` once it can be started again. `wait_seconds` waits for it to end, and `log_tail_bytes` and `log_offset` return part of its log with `log_start` and `log_end`.",
         )
+        .query::<jobs::read::Read>()
         .returns::<model::Job>(),
         post(
             "/api/jobs/{id}/retry",

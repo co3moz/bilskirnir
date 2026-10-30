@@ -16,9 +16,17 @@ use rusqlite::{Connection, OptionalExtension, params};
 pub(super) const JOB: &str = "job";
 
 impl Db {
-    /// A job with its whole log, as the API shows it. A record read here is never saved again,
-    /// or its log would land in the record: read the one to change with [`Db::get`].
+    /// [`Db::job_and_end`] without where the log ends, as the tests read a job.
+    #[cfg(test)]
     pub fn job(&self, id: &str) -> Result<Job> {
+        Ok(self.job_and_end(id)?.0)
+    }
+
+    /// A job with its whole log, as the API shows it, and where that log ends in the job's whole
+    /// output: every byte ever added to it, of which the log keeps the last [`LOG_LIMIT`], so a
+    /// reader can ask for what follows. A record read here is never saved again, or its log would
+    /// land in the record: read the one to change with [`Db::get`].
+    pub fn job_and_end(&self, id: &str) -> Result<(Job, u64)> {
         let conn = self.connection();
         let data: String = conn.query_row(
             "SELECT data FROM records WHERE kind=?1 AND id=?2",
@@ -26,15 +34,23 @@ impl Db {
             |row| row.get(0),
         )?;
         let mut job: Job = serde_json::from_str(&data)?;
+        // The record's own log, of a manager before the table, comes before every chunk.
+        let mut end = job.log.len() as u64;
         let mut chunks =
-            conn.prepare_cached("SELECT text FROM job_log WHERE job=?1 ORDER BY ends_at")?;
-        for text in chunks.query_map([id], |row| row.get::<_, String>(0))? {
-            job.log.push_str(&text?);
+            conn.prepare_cached("SELECT text, ends_at FROM job_log WHERE job=?1 ORDER BY ends_at")?;
+        let mut last = 0;
+        for chunk in chunks.query_map([id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })? {
+            let (text, ends_at) = chunk?;
+            job.log.push_str(&text);
+            last = ends_at;
         }
+        end += u64::try_from(last).unwrap_or_default();
         drop(chunks);
         drop(conn);
         job.trim_log();
-        Ok(job)
+        Ok((job, end))
     }
 
     /// Add `text` to a job's log as it is. A job that is not there fails it, as reading it does.

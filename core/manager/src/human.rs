@@ -295,12 +295,25 @@ impl Caller {
     /// Tell a client that asked for progress how long the call has waited, so one that resets
     /// its timeout on progress keeps the call open.
     async fn report(&self, waited: Duration, wait: Duration) {
+        self.report_waiting(
+            waited,
+            wait,
+            "Waiting for a person to answer in the Thoric dashboard",
+        )
+        .await;
+    }
+    /// [`Caller::report`] for another wait, such as `get_job`'s for a job to end.
+    pub(crate) async fn report_waiting(&self, waited: Duration, wait: Duration, message: &str) {
         if let Some((token, peer)) = &self.progress {
             let progress = ProgressNotificationParam::new(token.clone(), waited.as_secs_f64())
                 .with_total(wait.as_secs_f64())
-                .with_message("Waiting for a person to answer in the Thoric dashboard");
+                .with_message(message);
             let _ = peer.notify_progress(progress).await;
         }
+    }
+    /// Resolves once the client gives the call up.
+    pub(crate) async fn given_up(&self) {
+        self.cancelled.cancelled().await;
     }
 }
 

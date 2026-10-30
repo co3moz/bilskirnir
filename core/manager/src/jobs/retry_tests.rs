@@ -104,9 +104,13 @@ async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
         Request::Build(build())
     );
     assert_eq!(ended(&app, &first).await.status, "failed");
-    let Json(shown) = crate::api::job(State(app.clone()), Path(first.clone()))
-        .await
-        .unwrap();
+    let Json(shown) = crate::api::job(
+        State(app.clone()),
+        Path(first.clone()),
+        axum::extract::Query(Default::default()),
+    )
+    .await
+    .unwrap();
     assert_eq!(shown["retryable"], true);
     let Json(kept) = request(State(app.clone()), Path(first.clone()))
         .await
@@ -193,9 +197,13 @@ async fn only_a_failed_or_interrupted_job_with_its_request_is_retried() {
             StatusCode::CONFLICT,
             "{id}"
         );
-        let Json(shown) = crate::api::job(State(app.clone()), Path(id.into()))
-            .await
-            .unwrap();
+        let Json(shown) = crate::api::job(
+            State(app.clone()),
+            Path(id.into()),
+            axum::extract::Query(Default::default()),
+        )
+        .await
+        .unwrap();
         assert!(shown.get("retryable").is_none(), "{id}");
     }
     let refused = retry(State(app.clone()), Path("exec".into()))

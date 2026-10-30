@@ -153,7 +153,7 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | GET | `/api/mcp/inspect` | The [MCP inspector](#the-mcp-inspector)'s WebSocket, which joins the dashboard to one desktop server, endpoint or `/mcp`. |
 | Any | `/mcp/{name}` | An [MCP endpoint](#desktop-mcp-servers-and-endpoints): Streamable HTTP with its own token or the MCP token, not a session. |
 | GET | `/api/jobs` | Latest 100 job summaries. The manager keeps the newest 500 finished jobs and removes older ones; a running job is kept until it ends. |
-| GET | `/api/jobs/{job_id}` | Job status, log and result. |
+| GET | `/api/jobs/{job_id}` | Job status, log and result. Optional `wait_seconds`, `log_tail_bytes` and `log_offset` [wait for it and read part of its log](#follow-a-job). |
 | POST | `/api/jobs/{job_id}/retry` | Start a [failed or interrupted job again](#retry-a-job) with the request it was started with; returns the new `job_id`. |
 | GET | `/api/jobs/{job_id}/request` | The request a failed or interrupted job would be retried with, as `{"kind", "request"}`. |
 | GET | `/api/events` | The session's [event stream](#event-stream), `text/event-stream`: jobs as they are queued, start and end, agents' requests for a person, and the lists Docker changes by itself, while the session lasts. |
@@ -264,6 +264,20 @@ While the scripts run, the job's `progress` is `{"script": {...}}`:
 | `percent` | The share of all parts done, each part weighing the same: a step that began counts the ones before it, a skipped step counts itself and a line counts the lines above it. It never goes back. |
 
 The job also keeps `script`, which stays once the job ends: `{"parts": [...]}`, each part with `name` when there are several, `started_at`, `finished_at` when it ended well, so the part a failed or interrupted job stopped in has none, `cached` when BuildKit reused the layer of an earlier build and the script did not run, `stages`, the count its steps gave, and `steps`, at most 200 of `{"stage", "label", "started_at", "finished_at", "skipped"}`. A skipped step has no times. A number a script jumped over, and the numbers after its last step in a part that ended well, were skipped too and are not listed. Job lists leave `script` out, as they leave the log out; `GET /api/jobs/{job_id}` has it.
+
+## Follow a job
+
+`GET /api/jobs/{job_id}` takes three optional query parameters. Without them it answers with the whole job and its whole log, at most the last 256 KiB.
+
+- `wait_seconds`, at most 300, waits for a queued or running job to end before answering, and answers as soon as it does. Once the time is up, or the manager stops, it answers with the job as it is then, so ask again to wait longer instead of polling in a loop.
+- `log_tail_bytes`, at most 262144, returns only the last that many bytes of the log.
+- `log_offset` returns the log from that byte of the job's whole output, counted from its first byte also after the log dropped its oldest part.
+
+With either log parameter the answer adds `log_start`, where the returned log begins in the whole output, and `log_end`, where it ends. Pass the `log_end` of one answer as the next `log_offset` to read only what was added since; a `log_start` past the `log_offset` asked for means bytes were left out, older than the log keeps or before the tail.
+
+```bash
+curl --cookie thoric.cookies 'http://localhost:8080/api/jobs/JOB_ID?wait_seconds=60&log_tail_bytes=4096'
+```
 
 ## Retry a job
 

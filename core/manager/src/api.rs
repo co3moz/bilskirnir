@@ -16,10 +16,10 @@ pub(crate) use images::{
     image_summary, images, pull_catalog, register_image, snapshot,
 };
 
-use crate::{App, error::Result, jobs::retry, model::*};
+use crate::{App, error::Result, jobs, model::*};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -73,13 +73,13 @@ pub async fn jobs(State(app): State<Arc<App>>) -> Result<Json<Value>> {
     let jobs = app.db.jobs_summary()?;
     Ok(Json(json!(jobs)))
 }
-pub async fn job(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
-    let job: Job = app.db.job(&id)?;
-    let mut value = json!(job);
-    if retry::retryable(&app, &job) {
-        value["retryable"] = json!(true);
-    }
-    Ok(Json(value))
+/// `GET /api/jobs/{id}`: the job with its whole log, or as [`jobs::read::Read`] asks for it.
+pub async fn job(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    Query(read): Query<jobs::read::Read>,
+) -> Result<Json<Value>> {
+    Ok(Json(jobs::read::answer(&app, &id, &read, None).await?))
 }
 fn default_true() -> bool {
     true

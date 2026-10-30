@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
+pub(crate) mod read;
 pub(crate) mod retry;
 
 /// A job's result for a caller that waits for it: the value it returned, or its error message.

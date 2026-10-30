@@ -403,7 +403,8 @@ ThreadingHTTPServer(("127.0.0.1", 8931), Handler).serve_forever()
 
 def mcp_job(response, success=True):
     jid = response["structuredContent"]["job_id"]
-    result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
+    # A wait answers as soon as the job ends, and the whole log is what the checks read.
+    result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid,"wait_seconds":10,"log_tail_bytes":262144})["structuredContent"])["status"] not in ("queued","running") else None), 180)
     assert result["status"] == ("completed" if success else "failed"), result
     if success and result["result"] and result["result"].get("reference") and result["result"].get("kind") != "catalog":
         image_refs.append(result["result"]["reference"])
