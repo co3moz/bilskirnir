@@ -9,7 +9,9 @@ use super::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
         loopback_url, substitute,
     },
-    scopes::{Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed},
+    scopes::{
+        ENDPOINT_WORDING, Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed,
+    },
     *,
 };
 use crate::{
@@ -430,6 +432,32 @@ fn a_bound_tool_takes_no_container_id_and_never_root() {
             .unwrap()
             .contains(&json!("container"))
     );
+}
+
+/// exec_container on an endpoint said to set root=true, which the endpoint then refused as an
+/// unknown argument, and download_file pointed at create_transfer and a dashboard route that no
+/// endpoint offers. A bound tool's description names nothing the endpoint lacks.
+#[test]
+fn a_bound_tool_describes_only_what_the_endpoint_offers() {
+    for (name, sentence, _) in ENDPOINT_WORDING {
+        let tool = crate::mcp::listed_tool(name).unwrap();
+        assert!(
+            tool.description.as_deref().unwrap().contains(sentence),
+            "{name} no longer says {sentence:?}"
+        );
+    }
+    let aliases = ["a".to_owned(), "b".to_owned()];
+    for name in Scope::ALL.iter().flat_map(|scope| scope.tools()) {
+        let tool = crate::mcp::listed_tool(name).unwrap();
+        for bound in [bound_tool(&tool, None), bound_tool(&tool, Some(&aliases))] {
+            let description = bound.description.as_deref().unwrap();
+            for word in ["root=true", "container_id", "create_transfer", "/api/"] {
+                assert!(!description.contains(word), "{name} says {word}");
+            }
+        }
+    }
+    let exec = bound_tool(&crate::mcp::listed_tool("exec_container").unwrap(), None);
+    assert!(exec.description.unwrap().contains("never as root"));
 }
 
 #[test]
