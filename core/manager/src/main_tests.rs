@@ -1,6 +1,7 @@
 //! Pins down what the router puts in front of the routes: the content security policy, the
 //! caching of the interface's page and its hashed assets, and that the routes which reach Docker,
 //! a desktop or a container's files answer only a signed-in dashboard and only its own requests.
+//! Also that a stop ends the server once its requests end, or after a bounded drain.
 use super::*;
 use crate::test_support::app;
 use axum::{
@@ -169,4 +170,65 @@ async fn the_interface_page_is_revalidated_while_its_hashed_assets_are_kept() {
         assert_eq!(response.headers()["cache-control"], cache, "{path}");
     }
     std::fs::remove_dir_all(web).unwrap();
+}
+
+#[tokio::test]
+async fn a_stop_ends_the_server_once_its_requests_end_or_their_time_is_up() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let hanging = Router::new()
+        .route("/quick", get(|| async { "done" }))
+        .route("/hang", get(std::future::pending::<&'static str>));
+    let drain = std::time::Duration::from_millis(300);
+    // Nothing open: the server ends as soon as it is asked to stop.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(serve(
+        listener,
+        hanging.clone(),
+        async move {
+            let _ = stopped.await;
+        },
+        std::time::Duration::from_secs(60),
+    ));
+    let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+    client
+        .write_all(b"GET /quick HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut answer = String::new();
+    client.read_to_string(&mut answer).await.unwrap();
+    assert!(answer.ends_with("done"), "{answer}");
+    stop.send(()).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), server)
+        .await
+        .expect("an idle server stops at once")
+        .unwrap()
+        .unwrap();
+    // A request that never ends is cut off once the drain is over.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(serve(
+        listener,
+        hanging,
+        async move {
+            let _ = stopped.await;
+        },
+        drain,
+    ));
+    let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+    client
+        .write_all(b"GET /hang HTTP/1.1\r\nHost: x\r\n\r\n")
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let asked = std::time::Instant::now();
+    stop.send(()).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), server)
+        .await
+        .expect("the drain is bounded")
+        .unwrap()
+        .unwrap();
+    assert!(asked.elapsed() >= drain, "{:?}", asked.elapsed());
 }

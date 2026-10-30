@@ -550,18 +550,74 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("Thoric listening: {listen}");
     let closing = app.clone();
-    axum::serve(
-        listener,
-        router(app).into_make_service_with_connect_info::<auth::Connection>(),
-    )
-    .with_graceful_shutdown(async move {
-        let _ = tokio::signal::ctrl_c().await;
+    let stop = async move {
+        stop_requested().await;
+        tracing::info!("Stopping: open requests have {} seconds", DRAIN.as_secs());
         // Event streams and waits for a person never end on their own, and shutdown waits for
         // every response.
         closing.events.close();
-    })
-    .await?;
+    };
+    serve(listener, router(app), stop, DRAIN).await?;
     Ok(())
+}
+
+/// How long the open requests may take to finish once the manager is asked to stop. `docker
+/// stop`, which `thoric update` and a settings change run too, kills it ten seconds after its
+/// SIGTERM, and a long upload or an MCP stream would otherwise keep it until then.
+const DRAIN: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Resolves once the manager is asked to stop: Ctrl+C, or the SIGTERM that `docker stop` sends,
+/// which tini passes on.
+async fn stop_requested() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = terminate.recv() => {}
+                }
+                return;
+            }
+            Err(error) => tracing::warn!("SIGTERM cannot stop the manager gracefully: {error}"),
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// Serve `router` until `stop` resolves, then let the open requests finish for at most `drain`.
+/// WebSocket and proxied connections, which the server does not wait for, end with the process.
+async fn serve(
+    listener: tokio::net::TcpListener,
+    router: Router,
+    stop: impl std::future::Future<Output = ()> + Send + 'static,
+    drain: std::time::Duration,
+) -> std::io::Result<()> {
+    let (stopped, stopping) = tokio::sync::oneshot::channel();
+    let server = axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<auth::Connection>(),
+    )
+    .with_graceful_shutdown(async move {
+        stop.await;
+        let _ = stopped.send(());
+    });
+    tokio::select! {
+        served = std::future::IntoFuture::into_future(server) => served,
+        () = async {
+            match stopping.await {
+                Ok(()) => tokio::time::sleep(drain).await,
+                Err(_) => std::future::pending().await,
+            }
+        } => {
+            tracing::warn!(
+                "Requests still open {} seconds after the stop were cut off",
+                drain.as_secs()
+            );
+            Ok(())
+        }
+    }
 }
 /// What the network reconciliation as a whole reports its failures as.
 const RECONCILIATION: &str = "Docker reconciliation";
