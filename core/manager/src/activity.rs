@@ -264,6 +264,8 @@ pub(crate) struct Call {
     container_name: Option<String>,
     kind: Kind,
     arguments: Map<String, Value>,
+    /// Refused before its tool ran, although the answer is a tool error the agent can correct.
+    refused: bool,
 }
 
 impl Call {
@@ -289,6 +291,7 @@ impl Call {
             kind: crate::mcp::listed_tool(&request.name)
                 .map_or(Kind::Change, |tool| Kind::of(tool.annotations.as_ref())),
             arguments,
+            refused: false,
         };
         call.on_container(app, container);
         call
@@ -325,6 +328,7 @@ impl Call {
             container_name: None,
             kind,
             arguments,
+            refused: false,
         };
         call.on_container(app, container);
         call
@@ -352,6 +356,13 @@ impl Call {
         self.kind = Kind::of_server(annotations);
     }
 
+    /// The call is answered without running its tool, such as for an argument its schema does not
+    /// take. The answer is a tool error, which the agent reads and can correct, and the log still
+    /// records a refusal.
+    pub(crate) fn refused(&mut self) {
+        self.refused = true;
+    }
+
     /// Record how a tool call ended.
     pub(crate) fn finish(
         self,
@@ -361,7 +372,12 @@ impl Call {
         let (outcome, error, job) = match response {
             Err(error) => (Outcome::Refused, Some(error.message.to_string()), None),
             Ok(CallToolResponse::Complete(result)) if result.is_error == Some(true) => {
-                (Outcome::Error, Some(error_text(result)), None)
+                let outcome = if self.refused {
+                    Outcome::Refused
+                } else {
+                    Outcome::Error
+                };
+                (outcome, Some(error_text(result)), None)
             }
             Ok(CallToolResponse::Complete(result)) => (Outcome::Ok, None, job_of(result)),
             Ok(_) => (Outcome::Ok, None, None),

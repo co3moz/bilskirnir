@@ -1,4 +1,5 @@
 import { formatNumber, t } from "./i18n"
+import { holdUnload } from "./unload"
 
 const oneDecimal = { minimumFractionDigits: 1, maximumFractionDigits: 1 }
 
@@ -103,6 +104,7 @@ export class FileUploads {
     this.running = true
     this.cancelled = false
     this.onChange()
+    const release = holdUnload()
     try {
       for (const item of this.items.filter((item) => item.status !== "completed")) {
         if (this.cancelled) break
@@ -122,6 +124,7 @@ export class FileUploads {
         this.onChange()
       }
     } finally {
+      release()
       this.request = null
       this.running = false
       this.onChange()

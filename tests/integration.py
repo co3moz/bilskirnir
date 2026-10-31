@@ -530,7 +530,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 78
+    assert len(mcp("tools/list")["tools"]) == 79
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1065,7 +1065,7 @@ try:
     assert docker("exec",container,"test","!","-e","/home/desktop/after-cancel") == b""
     print("PASS a cancelled script stops in its desktop, which took input while it ran", flush=True)
     written = stdio_tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
-    assert written["bytes"] == 15
+    assert written["bytes"] == 15 and written["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/agent-files/hello.txt", written
     read = api(f"containers/{env_id}/files/read", {"path":written["path"]})
     assert read["data"] == "Hello from MCP\n" and read["eof"]
     assert docker("exec",container,"stat","-c","%u:%g %a",written["path"]).strip() == b"1001:1001 600"
@@ -1081,14 +1081,28 @@ try:
     tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64","data":base64.b64encode(binary).decode()})
     assert base64.b64decode(tool("read_file", {"container_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64"})["structuredContent"]["data"]) == binary
     assert tool("read_file", {"container_id":env_id,"path":"/dev/zero"}, allow_error=True)["isError"]
-    tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})
+    # An argument the schema does not take is a tool error the model can read, not a protocol error.
+    refused = tool("read_file", {"container_id":env_id,"path":"/home/desktop","bogus":1}, allow_error=True)
+    assert refused["isError"] and refused["content"][0]["text"] == "Unknown argument: bogus", refused
+    uploaded = tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})["structuredContent"]
+    assert uploaded["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-upload.bin", uploaded
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
     image = stdio_tool("screenshot", {"container_id":env_id})["content"][0]
     assert image["type"] == "image" and image["mimeType"] == "image/jpeg" and base64.b64decode(image["data"]).startswith(b"\xff\xd8")
+    # A scaled or cropped screenshot says, as text too, how its pixels map back to the desktop.
+    scaled = tool("screenshot", {"container_id":env_id,"max_width":320})
+    placed = scaled["structuredContent"]
+    assert scaled["content"][1]["type"] == "text" and json.loads(scaled["content"][1]["text"]) == placed, scaled["content"][1]
+    assert placed["width"] == 320 and abs(placed["scale"] - 320 / placed["desktop_width"]) < 1e-5 and (placed["origin_x"], placed["origin_y"]) == (0, 0), placed
+    cropped = tool("screenshot", {"container_id":env_id,"region":"40,30,200,100"})["structuredContent"]
+    assert (cropped["width"], cropped["scale"], cropped["origin_x"], cropped["origin_y"]) == (200, 1.0, 40, 30), cropped
     saved = tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg","capture":{"max_width":320}})["structuredContent"]
     assert saved["path"] == "/home/desktop/Downloads/agent-shot.jpg" and saved["bytes"] > 0 and saved["width"] == 320
     assert saved["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-shot.jpg"
     assert docker("exec",container,"cat",saved["path"]).startswith(b"\xff\xd8")
+    picture = tool("download_file", {"container_id":env_id,"path":saved["path"]})["content"][0]
+    assert picture["type"] == "image" and picture["mimeType"] == "image/jpeg" and base64.b64decode(picture["data"]).startswith(b"\xff\xd8")
+    assert "max_bytes" in tool("download_file", {"container_id":env_id,"path":saved["path"],"max_bytes":3*1024*1024}, allow_error=True)["content"][0]["text"]
     assert tool("save_screenshot", {"container_id":env_id,"path":"/home/desktop/Downloads/agent-shot.jpg"}, allow_error=True)["isError"]
     assert tool("save_screenshot", {"container_id":env_id,"path":"/etc/agent-shot.jpg"}, allow_error=True)["isError"]
     assert api(f"containers/{env_id}/screenshots", {"path":"/home/desktop/Downloads/agent-shot.jpg","replace":True,"capture":{"max_width":160}})["width"] == 160
@@ -1254,7 +1268,7 @@ try:
     assert video["path"] == f"{finished['directory']}/recording.mp4" and video["frames"] == finished["frames"] and video["bytes"] > 0, video
     assert video["download_url"] == f"/api/containers/{env_id}/files/download?path={video['path']}" and 500 <= video["duration_ms"] <= 10000, video
     assert video["width"] % 2 == 0 and video["height"] % 2 == 0 and video["width"] <= 320, video
-    mp4 = base64.b64decode(tool("download_file", {"container_id":env_id,"path":video["path"]})["structuredContent"]["data_base64"])
+    mp4 = base64.b64decode(tool("download_file", {"container_id":env_id,"path":video["path"]})["content"][0]["resource"]["blob"])
     assert mp4[4:8] == b"ftyp" and b"avc1" in mp4 and b"avcC" in mp4 and 0 < mp4.find(b"moov") < mp4.find(b"mdat"), mp4[:64]
     assert any(r["recording_id"] == recording["recording_id"] and r["frames"] == finished["frames"] and r["video"]["path"] == video["path"] for r in tool("list_recordings", {"container_id":env_id})["structuredContent"]["items"])
     frames = tool("list_files", {"container_id":env_id,"path":finished["directory"]})["structuredContent"]
@@ -1275,10 +1289,13 @@ try:
     assert docker("exec",container,"test","!","-e","/home/desktop/agent-files") == b""
     tool("stop_application", {"container_id":env_id,"application_id":second})
     print("PASS waits, diagnostics, metrics, frame recordings with their H.264 video, artifact export and file tools", flush=True)
-    downloaded = tool("download_file", {"container_id":env_id,"path":exported["path"]})["structuredContent"]
+    # The bytes travel once, as an embedded resource beside the JSON that describes them.
+    result = tool("download_file", {"container_id":env_id,"path":exported["path"]})
+    downloaded, resource = result["structuredContent"], result["content"][0]["resource"]
     assert downloaded["download_url"] == exported["download_url"] == f"/api/containers/{env_id}/files/download?path={exported['path']}"
     assert downloaded["bytes"] == exported["bytes"] and downloaded["mime_type"] == "application/gzip", downloaded["bytes"]
-    assert base64.b64decode(downloaded["data_base64"])[:2] == b"\x1f\x8b"
+    assert "data_base64" not in downloaded and resource["mimeType"] == "application/gzip" and resource["uri"] == "file://" + exported["path"], resource["uri"]
+    assert base64.b64decode(resource["blob"])[:2] == b"\x1f\x8b" and json.dumps(result).count(resource["blob"]) == 1
     request = urllib.request.Request(f"http://127.0.0.1:{port}/api/containers/{env_id}/files/download?" + urllib.parse.urlencode({"path":exported["path"]}))
     with client.open(request, timeout=60) as response:
         assert response.headers["Content-Length"] == str(exported["bytes"]) and "evidence.tar.gz" in response.headers["Content-Disposition"], dict(response.headers)
@@ -1459,11 +1476,18 @@ try:
     print("PASS the desktop reads its servers' states and endpoints, and the MCP tray runs", flush=True)
     session = endpoint_session("acceptance-mcp", scoped)
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
-    assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container"}, offered
+    assert {"screenshot","echo__echo","api__echo"} <= offered and not offered & {"exec_container","desktop_input","delete_container","create_container","save_screenshot"}, offered
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"echo__echo","arguments":{"text":"hi"}})
     assert echoed["content"][0]["text"] == "echo: hi uid=1001 display=:0 tag=launched", echoed
     echoed = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"api__echo","arguments":{"text":"over http"}})
     assert echoed["content"][0]["text"] == "echo: over http header=yes", echoed
+    # /mcp calls the same server's tool without an endpoint, and lists the arguments it takes.
+    listed = tool("list_mcp_servers", {"container_id":env_id})["structuredContent"]["items"]
+    echo_tools = next(s for s in listed if s["name"] == "echo")["tools"]
+    assert echo_tools[0]["input_schema"]["properties"]["text"]["type"] == "string", echo_tools
+    direct = tool("call_mcp_server_tool", {"container_id":env_id,"server":"echo","tool":"echo","arguments":{"text":"direct"}})
+    assert direct["content"][0]["text"] == "echo: direct uid=1001 display=:0 tag=launched", direct
+    assert "no tool called" in tool("call_mcp_server_tool", {"container_id":env_id,"server":"echo","tool":"missing"}, allow_error=True)["content"][0]["text"]
     shot = endpoint_call("acceptance-mcp", scoped, session, "tools/call", {"name":"screenshot","arguments":{"max_width":320}})
     assert shot["content"][0]["type"] == "image" and shot["structuredContent"]["width"] == 320, shot
     # The MCP page's inspector reaches the same servers from the signed-in dashboard: a desktop
@@ -1526,11 +1550,11 @@ try:
     # Single tools are left out by the names the endpoint gives them, a container tool's and a
     # server's alike; the list above, without one, was everything the scope and the servers give.
     assert registered["tools"][0]["exposed"] == "echo__echo", registered
-    narrowed = tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["save_screenshot","echo__echo"]}]})["structuredContent"]
-    assert narrowed["grants"][0]["excluded_tools"] == ["save_screenshot","echo__echo"], narrowed
+    narrowed = tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["container_diagnostics","echo__echo"]}]})["structuredContent"]
+    assert narrowed["grants"][0]["excluded_tools"] == ["container_diagnostics","echo__echo"], narrowed
     offered = {t["name"] for t in endpoint_call("acceptance-mcp", scoped, session, "tools/list")["tools"]}
-    assert {"screenshot","api__echo"} <= offered and not offered & {"save_screenshot","echo__echo"}, offered
-    for name in ["save_screenshot","echo__echo"]:
+    assert {"screenshot","api__echo"} <= offered and not offered & {"container_diagnostics","echo__echo"}, offered
+    for name in ["container_diagnostics","echo__echo"]:
         _, reply = endpoint_post("acceptance-mcp", scoped, {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":name,"arguments":{"text":"hi"}}}, session)
         assert "Unknown tool" in reply["error"]["message"], reply
     assert tool("update_mcp_endpoint",{"name":"acceptance-mcp","grants":[{"container_id":env_id,"scopes":["view"],"servers":"all","excluded_tools":["desktop_input"]}]}, allow_error=True)["isError"]
@@ -1545,7 +1569,7 @@ try:
     assert served and all(c["credential"] == "endpoint_token" and c["container_id"] == env_id for c in served), calls
     assert all(c["arguments"]["text"].get("$masked") == "string" for c in served) and '"over http"' not in json.dumps(calls), served
     assert any(c["tool"] == "screenshot" and c["kind"] == "read" and c["outcome"] == "ok" for c in calls), calls
-    assert any(c["tool"] == "save_screenshot" and c["outcome"] == "refused" for c in calls), calls
+    assert any(c["tool"] == "container_diagnostics" and c["outcome"] == "refused" for c in calls), calls
     assert all(c["endpoint"] == "acceptance-mcp" for c in api("activity?container=" + env_id + "&caller=endpoint")["items"])
     print("PASS the agent activity log records an endpoint's calls with masked server arguments", flush=True)
     try:

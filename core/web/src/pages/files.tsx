@@ -3,7 +3,7 @@ import { RiFolderOpenLine, RiPlayLine } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
 import { FileExplorer } from "@/components/file-explorer"
-import { DockerAlert, PageBody, SectionHeading } from "@/components/page"
+import { DockerAlert, ListFailed, listFailed, PageBody, SectionHeading } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -100,6 +100,8 @@ export function FilesPage() {
       <div className="px-4 lg:px-6">
         {containers.isPending ? (
           <Skeleton className="h-96 rounded-2xl" />
+        ) : listFailed(containers) ? (
+          <ListFailed query={containers} className="border" />
         ) : chosen && chosen.state === "running" ? (
           <Card>
             <CardContent>

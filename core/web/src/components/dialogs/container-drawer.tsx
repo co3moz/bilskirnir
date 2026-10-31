@@ -16,6 +16,7 @@ import { ConceptIcon } from "@/components/concept"
 import { ContainerActivity } from "@/components/container-activity"
 import { GroupExposure, PrimaryAction, SpecBadges } from "@/components/container-card"
 import { ContainerPreview } from "@/components/container-preview"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -170,9 +171,11 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
         <SpecBadges spec={spec} />
         <GroupExposure item={item} />
         <Separator />
-        <React.Suspense fallback={<Skeleton className="h-[140px] rounded-xl" />}>
-          <ContainerUsage item={item} />
-        </React.Suspense>
+        <ErrorBoundary variant="section">
+          <React.Suspense fallback={<Skeleton className="h-[140px] rounded-xl" />}>
+            <ContainerUsage item={item} />
+          </React.Suspense>
+        </ErrorBoundary>
         <Separator />
         <ContainerActivity id={id} />
         <Separator />

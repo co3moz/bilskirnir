@@ -4,7 +4,8 @@
 //! registered from the Docker host (kind `import`) was there before Thoric, so only its record
 //! goes. Never while a container record starts from it, unless another saved image's tag keeps
 //! the same Docker image: a reset, a retry and a recreation create the container from its source
-//! image again. Nothing is forced and nothing is pruned.
+//! image again. The same rules decide whether the image a catalog download replaced goes. Nothing
+//! is forced and nothing is pruned.
 use crate::{
     App,
     catalog::CatalogImage,
@@ -131,6 +132,62 @@ impl App {
             }
         }
         Ok(dropped)
+    }
+
+    /// Remove the Docker image `replaced`, which a catalog reference named until a download moved
+    /// the reference to a newer image, when nothing needs it any more; Docker would otherwise keep
+    /// it without a name, 1 to 2 GB for each release. It stays while a container record starts from
+    /// it, since a reset creates the container from it again, while a saved image's record names
+    /// it, while any record does not read, since it may, and while a tag still names it, such as a
+    /// release tag that was here before. Docker itself refuses it while a container uses it, since
+    /// nothing is forced. Answers what happened, for the download's log; it never fails the download.
+    pub(crate) async fn remove_replaced(&self, replaced: &str, reference: &str) -> String {
+        let short = replaced.trim_start_matches("sha256:");
+        let short = &short[..short.len().min(12)];
+        let info = match self.inspect("image", replaced).await {
+            Ok(info) => info,
+            Err(error) if format!("{error:#}").contains("No such image") => {
+                return format!("The image {reference} named before, {short}, is gone already.");
+            }
+            Err(error) => {
+                tracing::debug!("Kept the replaced image {replaced}: {error:#}");
+                return format!(
+                    "The image {reference} named before, {short}, stays, since Docker did not describe it."
+                );
+            }
+        };
+        if let Some(tag) = info["RepoTags"].as_array().and_then(|tags| tags.first()) {
+            return format!(
+                "The image {reference} named before, {short}, stays, since {} names it too.",
+                tag.as_str().unwrap_or_default()
+            );
+        }
+        let containers = self.db.list_complete::<Container>(CONTAINERS);
+        let records = self.db.list_complete::<ImageRecord>("image");
+        let needed = match (&containers, &records) {
+            (Ok(containers), Ok(records)) => {
+                !started_from(replaced, containers).is_empty()
+                    || records.iter().any(|record| record.image_id == replaced)
+            }
+            _ => true,
+        };
+        if needed {
+            return format!(
+                "The image {reference} named before, {short}, stays, since a container or a saved image was made from it."
+            );
+        }
+        match self.remove_docker_image(replaced, replaced).await {
+            Ok(true) => format!("Removed the image {reference} named before, {short}."),
+            Ok(false) => format!(
+                "Docker keeps the image {reference} named before, {short}, for the images built on it."
+            ),
+            Err(error) => {
+                tracing::debug!("Kept the replaced image {replaced}: {}", error.1);
+                format!(
+                    "The image {reference} named before, {short}, stays, since a container or an image built on it uses it."
+                )
+            }
+        }
     }
 
     /// Refuse while a container record starts from the Docker image `image_id`, and while one

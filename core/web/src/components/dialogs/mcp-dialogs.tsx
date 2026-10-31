@@ -64,10 +64,11 @@ export function TokenDialog({ token, ...props }: DialogProps & { token: Endpoint
   const url = endpointUrl(location.origin, endpoint.path)
   return (
     <Dialog {...props}>
-      {/* A click beside it must not throw the only copy of the token away. */}
+      {/* A click beside it or Escape must not throw the only copy of the token away. */}
       <DialogContent
         className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl"
         onInteractOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => event.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{t("mcp.token.titleOf", { name: endpoint.name })}</DialogTitle>

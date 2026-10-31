@@ -50,7 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { closeDialog, openDialog } from "@/lib/dialogs"
+import { closeDialog, openDialog, useDraft } from "@/lib/dialogs"
 import { formatNumber, plural, rich, t } from "@/lib/i18n"
 import {
   ALIAS_PATTERN,
@@ -376,6 +376,7 @@ export function EndpointDialog({ name: existing, ...props }: DialogProps & { nam
   const [grants, setGrants] = React.useState<GrantDraft[]>(
     () => endpoint?.grants.map(grantDraft) ?? []
   )
+  useDraft({ name, grants })
   const { busy, error, submit } = useSubmit()
   const id = React.useId()
   const available = containers.filter(

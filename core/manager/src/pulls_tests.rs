@@ -448,6 +448,7 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
             .lines()
             .collect::<Vec<_>>(),
         [
+            format!("image inspect {reference}"),
             format!("image inspect {release}"),
             format!("image ls --format {{{{.Repository}}}}:{{{{.Tag}}}} {release}"),
             format!("manifest inspect --verbose {release}"),
@@ -482,10 +483,73 @@ async fn a_release_tags_the_desktop_published_with_it_as_the_catalog_reference()
             .lines()
             .collect::<Vec<_>>(),
         [
+            format!("image inspect {reference}"),
             format!("manifest inspect --verbose {reference}"),
             format!("pull {reference}"),
             format!("image inspect {reference}"),
         ]
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_download_removes_the_image_it_replaced_when_nothing_needs_it() {
+    let image = crate::catalog::catalog().remove(0);
+    let reference = image.reference.clone();
+    // The reference names sha256:old until a pull moves it to sha256:new; nothing else tags old.
+    let dir =
+        std::env::temp_dir().join(format!("thoric-replaced-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let calls = dir.join("calls");
+    let docker = dir.join("docker");
+    crate::test_support::write_script(
+        &docker,
+        &format!(
+            "#!/bin/sh\ncd '{dir}'\necho \"$*\" >> calls\ncase \"$*\" in\n  'manifest inspect'*) exit 1 ;;\n  'pull '*) touch pulled ;;\n  'image inspect {reference}') if [ -e pulled ]; then echo '[{{\"Id\":\"sha256:new\"}}]'; else echo '[{{\"Id\":\"sha256:old\"}}]'; fi ;;\n  'image inspect sha256:old') [ -e removed ] && exit 1; echo '[{{\"Id\":\"sha256:old\",\"RepoTags\":[]}}]' ;;\n  'image rm sha256:old') touch removed; echo 'Deleted: sha256:old' ;;\n  *) exit 1 ;;\nesac\n",
+            dir = dir.display()
+        ),
+    );
+    let mut app = crate::test_support::app(false);
+    std::sync::Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let job = crate::model::Job {
+        id: "pull".into(),
+        kind: "image-pull".into(),
+        resource: None,
+        status: "running".into(),
+        created_at: crate::model::now(),
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+        script: None,
+        name: None,
+    };
+    app.db.put("job", "pull", &job).unwrap();
+
+    let result = app
+        .pull_catalog_image_from(&image, &reference, "pull")
+        .await
+        .unwrap();
+    assert_eq!(result["image_id"], "sha256:new");
+    let made = std::fs::read_to_string(&calls).unwrap();
+    assert!(
+        made.lines().any(|call| call == "image rm sha256:old"),
+        "{made}"
+    );
+    let log = app.db.job("pull").unwrap().log;
+    assert!(
+        log.contains(&format!("Removed the image {reference} named before, old.")),
+        "{log}"
+    );
+
+    // A download that leaves the reference where it was removes nothing.
+    std::fs::remove_file(&calls).unwrap();
+    app.pull_catalog_image_from(&image, &reference, "pull")
+        .await
+        .unwrap();
+    let made = std::fs::read_to_string(&calls).unwrap();
+    assert!(!made.contains("image rm"), "{made}");
     std::fs::remove_dir_all(&dir).unwrap();
 }

@@ -1,6 +1,25 @@
-import { Fragment } from "react"
+import * as React from "react"
 
-import { closeDialog, useDialogState, type Dialog } from "@/lib/dialogs"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import {
+  confirmDiscard,
+  DialogScope,
+  dismissDialog,
+  keepEditing,
+  useDialogState,
+  type Dialog,
+  type Unsaved,
+} from "@/lib/dialogs"
+import { t } from "@/lib/i18n"
 import { ActivityDrawer } from "./activity-drawer"
 import { ContainerDrawer } from "./container-drawer"
 import { CreateContainerDialog, SettingsDialog } from "./container-dialogs"
@@ -31,16 +50,67 @@ import { DownloadDialog } from "./download-dialog"
 import { VolumeBrowser } from "./volume-browser"
 import { VolumeImportDialog } from "./volume-import-dialog"
 
-/** Renders the one open dialog; see lib/dialogs.ts. */
+/**
+ * Renders the one open dialog, and the question asked before it closes with something unsaved;
+ * see lib/dialogs.ts.
+ */
 export function DialogHost() {
-  const { dialog, open, seq } = useDialogState()
-  if (!dialog) return null
-  // A new `seq` remounts the dialog, so every opening starts with a fresh form.
-  return <Fragment key={seq}>{render(dialog, open)}</Fragment>
+  const { dialog, open, seq, asking } = useDialogState()
+  return (
+    <>
+      {/* A new `seq` remounts the dialog, so every opening starts with a fresh form. */}
+      {dialog && (
+        <DialogScope key={seq} value={seq}>
+          {render(dialog, open)}
+        </DialogScope>
+      )}
+      <DiscardQuestion reason={asking?.reason ?? null} />
+    </>
+  )
+}
+
+const questions = {
+  changes: {
+    title: "unsaved.changes.title",
+    description: "unsaved.changes.description",
+    keep: "unsaved.changes.keep",
+    discard: "unsaved.changes.discard",
+  },
+  upload: {
+    title: "unsaved.upload.title",
+    description: "unsaved.upload.description",
+    keep: "unsaved.upload.keep",
+    discard: "unsaved.upload.discard",
+  },
+} as const
+
+/** Asks before a form's changes or running uploads are lost, over the dialog that holds them. */
+function DiscardQuestion({ reason }: { reason: Unsaved | null }) {
+  // The question keeps its words while it closes.
+  const [shown, setShown] = React.useState<Unsaved>("changes")
+  if (reason && reason !== shown) setShown(reason)
+  const keys = questions[reason ?? shown]
+  return (
+    <AlertDialog open={!!reason} onOpenChange={(next) => !next && keepEditing()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t(keys.title)}</AlertDialogTitle>
+          <AlertDialogDescription>{t(keys.description)}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t(keys.keep)}</AlertDialogCancel>
+          <Button variant="destructive" onClick={confirmDiscard}>
+            {t(keys.discard)}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 function render(dialog: Dialog, open: boolean) {
-  const props = { open, onOpenChange: (next: boolean) => !next && closeDialog() }
+  // Escape, a click outside, a close button and Cancel ask first when the dialog holds something.
+  const props = { open, onOpenChange: (next: boolean) => !next && dismissDialog() }
   switch (dialog.kind) {
     case "create":
       return <CreateContainerDialog {...props} image={dialog.image} />
