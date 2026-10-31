@@ -1967,3 +1967,53 @@ fn the_desktop_users_declarations_name_no_secret_value() {
         .unwrap();
     assert_eq!(resolved.args, ["a@example.com"]);
 }
+
+#[tokio::test]
+async fn a_containers_servers_are_read_by_its_own_ids_alone() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "a", &container("a", "Zeta"))
+        .unwrap();
+    app.db
+        .put(CONTAINERS, "ab", &container("ab", "Alpha"))
+        .unwrap();
+    server(&app, "a", "web", &["open"]);
+    server(&app, "ab", "unity", &["run_tests"]);
+    server(&app, "a", "chrome", &["browser_navigate"]);
+    // A container the manager no longer has, and a record of `a` this release cannot read.
+    server(&app, "gone", "old", &["old_tool"]);
+    app.db
+        .put(
+            SERVERS,
+            &ServerRecord::key("a", "broken"),
+            &json!({"name": 7}),
+        )
+        .unwrap();
+    let names = |records: Vec<ServerRecord>| {
+        records
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>()
+    };
+    // `a` is the start of `ab`, but not of its ids, which go on with the colon.
+    assert_eq!(names(servers::records(&app, "a")), ["chrome", "web"]);
+    assert_eq!(names(servers::records(&app, "ab")), ["unity"]);
+    assert!(servers::records(&app, "b").is_empty());
+    // The dashboard's list reads them all once: by container, then by server, and only those of
+    // the containers the manager has.
+    let Json(all) = all_servers(State(app.clone())).await.unwrap();
+    let listed = all["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| format!("{}/{}", item["container_name"], item["name"]))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        listed,
+        [
+            r#""Alpha"/"unity""#,
+            r#""Zeta"/"chrome""#,
+            r#""Zeta"/"web""#
+        ]
+    );
+}

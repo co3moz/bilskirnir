@@ -98,7 +98,10 @@ impl Default for DesktopMcp {
 pub(crate) fn forget_container(app: &App, container_id: &str) -> anyhow::Result<()> {
     for record in app
         .db
-        .list::<registry::ServerRecord>(registry::SERVERS)?
+        .list_prefixed::<registry::ServerRecord>(
+            registry::SERVERS,
+            &registry::ServerRecord::key(container_id, ""),
+        )?
         .into_iter()
         .filter(|record| record.container_id == container_id)
     {

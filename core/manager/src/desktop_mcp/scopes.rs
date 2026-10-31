@@ -2,7 +2,8 @@
 //! containers, and the tools of their desktop servers, each under the name the agent sees.
 use super::{
     endpoints::{Endpoint, Grant},
-    registry::{SERVERS, ServerRecord},
+    registry::ServerRecord,
+    servers::records,
 };
 use crate::App;
 use blake2::{Blake2s256, Digest};
@@ -367,18 +368,17 @@ pub(crate) fn catalog(app: &App, endpoint: &Endpoint) -> Vec<Entry> {
             target: Target::Job { containers: jobs },
         });
     }
-    let mut records: Vec<ServerRecord> = app.db.list(SERVERS).unwrap_or_default();
-    records.sort_by(|a, b| a.name.cmp(&b.name));
     for grant in &endpoint.grants {
         let container = app
             .container(&grant.container_id)
             .map(|c| c.spec.name)
             .unwrap_or_else(|_| grant.alias.clone());
-        for record in records.iter().filter(|record| {
-            record.container_id == grant.container_id
-                && record.error.is_none()
-                && grant.servers.includes(&record.name)
-        }) {
+        // Only the granted containers' servers are read, each with its whole tool list.
+        let known = records(app, &grant.container_id);
+        for record in known
+            .iter()
+            .filter(|record| record.error.is_none() && grant.servers.includes(&record.name))
+        {
             for Named { name, hashed, tool } in server_tool_names(record) {
                 // The deny list names the tool as this container alone would expose it, so it
                 // holds whatever the alias is and whichever containers the endpoint covers.

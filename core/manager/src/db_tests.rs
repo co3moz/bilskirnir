@@ -65,6 +65,72 @@ fn a_complete_list_names_the_record_that_does_not_read_without_its_data() {
 }
 
 #[test]
+fn a_prefixed_list_reads_the_ids_that_begin_with_it_and_nothing_else() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    for id in [
+        "a:one",
+        "ab:two",
+        "a:two",
+        "b:one",
+        "a_:x",
+        "a%:y",
+        "A:z",
+        "ç:1",
+        "è:2",
+        "\u{10FFFF}:3",
+        "\u{10FFFF}",
+    ] {
+        db.put("named", id, &serde_json::json!({"name": id}))
+            .unwrap();
+    }
+    db.put("other", "a:three", &serde_json::json!({"name": "a:three"}))
+        .unwrap();
+    let named = |prefix: &str| {
+        db.list_prefixed::<Named>("named", prefix)
+            .unwrap()
+            .into_iter()
+            .map(|n| n.name)
+            .collect::<Vec<_>>()
+    };
+    // Newest first, as a list, and never a longer id that only shares the start.
+    assert_eq!(named("a:"), ["a:two", "a:one"]);
+    assert_eq!(named("ab:"), ["ab:two"]);
+    // Case counts, and `_` and `%` are no wildcards.
+    assert_eq!(named("a"), ["a%:y", "a_:x", "a:two", "ab:two", "a:one"]);
+    assert_eq!(named("a_"), ["a_:x"]);
+    assert_eq!(named("a%"), ["a%:y"]);
+    assert_eq!(named("A"), ["A:z"]);
+    // Beyond ASCII, up to the last character there is.
+    assert_eq!(named("ç"), ["ç:1"]);
+    assert_eq!(named("\u{10FFFF}"), ["\u{10FFFF}", "\u{10FFFF}:3"]);
+    assert_eq!(named("\u{10FFFF}:"), ["\u{10FFFF}:3"]);
+    assert_eq!(named("").len(), 11);
+    assert!(named("c").is_empty());
+}
+
+#[test]
+fn a_prefixed_list_leaves_out_a_record_that_does_not_read() {
+    let db = with_unreadable();
+    let names = |list: Vec<Named>| list.into_iter().map(|n| n.name).collect::<Vec<_>>();
+    assert_eq!(names(db.list_prefixed("named", "b").unwrap()), ["second"]);
+    assert_eq!(
+        *db.unreadable.lock().unwrap(),
+        HashSet::from([("named".to_owned(), "broken".to_owned())])
+    );
+}
+
+#[test]
+fn past_a_prefix_is_the_first_text_no_id_with_it_reaches() {
+    assert_eq!(past("a:").as_deref(), Some("a;"));
+    assert_eq!(past("ç").as_deref(), Some("è"));
+    // Surrogates are no characters, so the one after U+D7FF is U+E000.
+    assert_eq!(past("\u{D7FF}").as_deref(), Some("\u{E000}"));
+    assert_eq!(past("a\u{10FFFF}").as_deref(), Some("b"));
+    assert_eq!(past("\u{10FFFF}"), None);
+    assert_eq!(past(""), None);
+}
+
+#[test]
 fn a_job_that_does_not_read_leaves_the_others_listed() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.put("job", "good", &job("good", false)).unwrap();
