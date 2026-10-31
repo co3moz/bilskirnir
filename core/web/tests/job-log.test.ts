@@ -1,5 +1,6 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 
 import {
   followLog,
@@ -67,4 +68,11 @@ test("a log whose end went back is read again from its start", () => {
   assert.equal(logWentBack(before, job("", 9, 9)), true)
   assert.equal(logWentBack(before, job("step 3\n", 14, 21)), false)
   assert.equal(logWentBack(undefined, job("step 1\n", 0, 7)), false)
+})
+
+test("LOG_LIMIT is the manager's", () => {
+  const model = readFileSync(new URL("../../manager/src/model.rs", import.meta.url), "utf8")
+  const limit = /const LOG_LIMIT: usize = ([\d_]+);/.exec(model)?.[1]
+  assert.ok(limit, "core/manager/src/model.rs must declare LOG_LIMIT")
+  assert.equal(Number(limit.replaceAll("_", "")), LOG_LIMIT)
 })

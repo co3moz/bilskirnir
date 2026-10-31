@@ -1,6 +1,6 @@
 //! Pins down what a container's settings may name: resources and mounts that cannot break the
-//! desktop's own folders, image references that cannot pass an option to Docker, and records
-//! saved by older releases that still read.
+//! desktop's own folders, image references that cannot pass an option to Docker, records saved
+//! by older releases that still read, and a log limit the dashboard's copy follows.
 use super::*;
 use crate::test_support::spec;
 
@@ -112,4 +112,23 @@ fn command_option_injection_is_rejected() {
     ] {
         assert!(image_ref(valid).is_ok());
     }
+}
+
+#[test]
+fn the_job_drawer_keeps_as_much_of_a_log_as_the_manager_does() {
+    // core/web/src/lib/job-log.ts joins the parts of a log it reads and trims them to its own
+    // copy of LOG_LIMIT, so a changed limit here must reach it.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("core/web/src/lib/job-log.ts");
+    let source = std::fs::read_to_string(path).unwrap();
+    let copy = source
+        .lines()
+        .find_map(|line| line.strip_prefix("export const LOG_LIMIT = "))
+        .expect("core/web/src/lib/job-log.ts must export LOG_LIMIT");
+    assert_eq!(
+        copy.trim().replace('_', "").parse::<usize>().unwrap(),
+        LOG_LIMIT,
+        "LOG_LIMIT in core/web/src/lib/job-log.ts must equal the manager's"
+    );
 }
