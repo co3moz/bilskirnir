@@ -91,9 +91,27 @@ fn the_manager_runs_in_the_container_whose_folder_its_hostname_comes_from() {
     assert!(!runs_in(&elsewhere, id));
 }
 
+#[test]
+fn a_desktop_listens_in_the_subnet_its_container_was_created_with() {
+    let container = |env: serde_json::Value| json!({"Config": {"Env": env}});
+    let told = container(json!([
+        "PATH=/usr/bin",
+        "DESKTOP_PRIVATE_SUBNET=172.18.0.0/16",
+        "DESKTOP_SUDO=false",
+    ]));
+    assert_eq!(told_subnet(&told).as_deref(), Some("172.18.0.0/16"));
+    // A container created before the manager told it, and values that are no IPv4 subnet.
+    assert_eq!(told_subnet(&container(json!(["PATH=/usr/bin"]))), None);
+    assert_eq!(told_subnet(&json!({})), None);
+    for wrong in ["fd00::/64", "172.18.0.0", "172.18.0.0/33", "--subnet", ""] {
+        let env = json!([format!("DESKTOP_PRIVATE_SUBNET={wrong}")]);
+        assert_eq!(told_subnet(&container(env)), None, "{wrong}");
+    }
+}
+
 /// A Docker CLI that answers what a private network's move asks and logs every call: the old
-/// network until a new one is made, the engine's API version from `api` and the containers on the
-/// network from `users`.
+/// network until a new one is made, which fails while `refuse` exists, the engine's API version
+/// from `api` and the containers on the network from `users`.
 #[cfg(unix)]
 fn fake_docker() -> (std::sync::Arc<App>, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!(
@@ -108,7 +126,7 @@ echo "$*" >> calls
 case "$*" in
   'version --format {{.Server.APIVersion}}') cat api ;;
   'ps --all --no-trunc --filter network='*) cat users 2>/dev/null; true ;;
-  'network create '*) touch made; echo new ;;
+  'network create '*) [ -f refuse ] && exit 1; touch made; echo new ;;
   'network inspect new') echo '[{"Id":"new","Internal":true,"Options":{"com.docker.network.bridge.gateway_mode_ipv4":"isolated"},"Containers":{"manager":{}}}]' ;;
   'container inspect thoric-x') cat container ;;
   'container inspect thoric-manager') echo '[{"Id":"manager","Config":{"Labels":{"thoric.manager":"true"}}}]' ;;
@@ -249,5 +267,65 @@ async fn a_stopped_desktop_left_without_its_private_network_gets_it_before_it_st
     let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
     assert!(calls.ends_with("network connect old desk\n"), "{calls}");
     assert!(!calls.contains("network connect old manager"), "{calls}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_move_that_fails_leaves_the_next_start_the_subnet_the_desktop_was_told() {
+    let (app, dir) = fake_docker();
+    let env = desktop();
+    let old = json!({
+        "Id": "old",
+        "Internal": true,
+        "IPAM": {"Config": [{"Subnet": "172.18.0.0/16", "Gateway": "172.18.0.1"}]},
+        "Containers": {"manager": {}},
+    });
+    let stopped = json!({
+        "Id": "desk",
+        "Config": {
+            "Labels": {"thoric.managed": "true", "thoric.environment": "x"},
+            "Env": ["DESKTOP_PRIVATE_SUBNET=172.18.0.0/16"],
+        },
+        "State": {"Running": false},
+        "NetworkSettings": {"Networks": {"thoric-x-private": {}}},
+    });
+    // Another network took the subnet once the old one was gone: neither way of making it again
+    // in that subnet works, and none is made in another.
+    std::fs::write(dir.join("refuse"), "").unwrap();
+    let manager = json!({"Id": "manager"});
+    let error = app
+        .isolate_again(&env, &old, &manager, Some(&stopped))
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{error:#}")
+            .contains("again in 172.18.0.0/16, the subnet its VNC server listens in"),
+        "{error:#}"
+    );
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    assert_eq!(calls.matches("network create").count(), 2, "{calls}");
+    assert_eq!(
+        calls.matches("--subnet 172.18.0.0/16").count(),
+        2,
+        "{calls}"
+    );
+
+    // The next start finds no private network and makes it in the subnet the container's
+    // variable names, then connects the desktop again.
+    std::fs::remove_file(dir.join("refuse")).unwrap();
+    std::fs::write(dir.join("calls"), "").unwrap();
+    let mut left = stopped.clone();
+    left["NetworkSettings"]["Networks"] = json!({});
+    std::fs::write(dir.join("container"), json!([left]).to_string()).unwrap();
+    app.before_start(&env, &left).await.unwrap();
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    assert!(
+        calls.contains(
+            "network create --internal --label thoric.managed=true --label thoric.environment=x --subnet 172.18.0.0/16 thoric-x-private\n"
+        ),
+        "{calls}"
+    );
+    assert!(calls.ends_with("network connect new desk\n"), "{calls}");
     std::fs::remove_dir_all(&dir).unwrap();
 }

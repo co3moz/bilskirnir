@@ -9,14 +9,16 @@
 //! engine can.
 //!
 //! A manager that does not run in `MANAGER_CONTAINER`, as in some development setups, reaches a
-//! desktop through the host's address on its private network, which then keeps one.
+//! desktop through the host's address on its private network, so the networks it makes keep one.
+//! It cannot reach a desktop whose network a manager in its container made without, which it says.
 //!
 //! A network made with an address on the host is made again without one only while nothing that
 //! runs needs it, since a desktop's VNC server listens on the address its session found when it
 //! started: a desktop's private network when its container is created again, by a reset, a retry
 //! or a restore, and before a stopped desktop starts where Docker connects it again with its MAC
 //! address (API 1.54), which keeps its identity; a group's network when its first member joins it
-//! alone. A private network keeps its subnet, which the desktop was told when it was created.
+//! alone. A private network made again for an existing container keeps the subnet the desktop was
+//! told when it was created, also one that went missing, or is not made at all.
 use super::networks::private_subnet;
 use crate::{App, model::*};
 use anyhow::{Context, Result, bail};
@@ -87,6 +89,23 @@ fn api_at_least(version: &str, least: (u32, u32)) -> bool {
         (Ok(major), Ok(minor)) => (major, minor) >= least,
         _ => false,
     }
+}
+
+/// The IPv4 subnet a container's desktop was told to listen in, `DESKTOP_PRIVATE_SUBNET` in its
+/// `docker inspect`; none for a container created before the manager told it.
+pub(crate) fn told_subnet(container: &Value) -> Option<String> {
+    container["Config"]["Env"]
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .find_map(|variable| variable.strip_prefix("DESKTOP_PRIVATE_SUBNET="))
+        .filter(|subnet| {
+            subnet.split_once('/').is_some_and(|(address, bits)| {
+                address.parse::<std::net::Ipv4Addr>().is_ok()
+                    && bits.parse::<u8>().is_ok_and(|bits| bits <= 32)
+            })
+        })
+        .map(str::to_owned)
 }
 
 /// Whether the process whose `/proc/self/mountinfo` this is runs in the container with the full
@@ -172,6 +191,13 @@ impl App {
             .await?;
         if let Some(network) = existing.as_ref() {
             Self::check_network(env, network, true)?;
+            if isolated(network) && !inside {
+                tracing::warn!(
+                    "The manager does not run in {}, and the private network of \"{}\" has no address on the Docker host, so the manager cannot reach the desktop's screen or ports; run the manager in its container",
+                    self.config.manager.as_deref().unwrap_or_default(),
+                    env.spec.name
+                );
+            }
             if isolated(network) || !inside {
                 return Ok(network.clone());
             }
@@ -195,9 +221,9 @@ impl App {
                     env.spec.name
                 );
             }
-            return self
-                .create_network(env, &env.private_network, reach, None)
-                .await;
+            // Also one removed by hand, or by a move the manager did not finish.
+            let subnet = container.and_then(told_subnet);
+            return self.make_private(env, reach, subnet.as_deref()).await;
         };
         if reach == Reach::Nothing
             && self
@@ -272,21 +298,9 @@ impl App {
                 .await?;
         }
         self.docker(&["network", "rm", network_id]).await?;
-        let made = match self
-            .create_network(env, &env.private_network, Reach::Nothing, subnet.as_deref())
-            .await
-        {
-            Ok(made) => made,
-            Err(error) => {
-                // The subnet stays the one the desktop was told, with or without the address.
-                tracing::warn!(
-                    "Could not make the private network of \"{}\" again without an address on the Docker host: {error:#}",
-                    env.spec.name
-                );
-                self.create_network(env, &env.private_network, Reach::Host, subnet.as_deref())
-                    .await?
-            }
-        };
+        let made = self
+            .make_private(env, Reach::Nothing, subnet.as_deref())
+            .await?;
         let made_id = made["Id"].as_str().context("Missing network ID")?;
         self.docker(&["network", "connect", made_id, manager_id])
             .await?;
@@ -301,6 +315,39 @@ impl App {
         }
         // With the manager on it now.
         self.inspect("network", made_id).await
+    }
+
+    /// Make a desktop's private network in `subnet`, the one its VNC server was told when its
+    /// container was created, or fail: in another subnet the server would find no address of its
+    /// own and listen on every interface, the internet network's included. Without an address on
+    /// the host where `reach` asks for that and it can be, with one otherwise.
+    async fn make_private(
+        &self,
+        env: &Container,
+        reach: Reach,
+        subnet: Option<&str>,
+    ) -> Result<Value> {
+        let name = &env.private_network;
+        let Some(subnet) = subnet else {
+            return self.create_network(env, name, reach, None).await;
+        };
+        let made = match self.create_network(env, name, reach, Some(subnet)).await {
+            Err(error) if reach == Reach::Nothing => {
+                tracing::warn!(
+                    "Could not make the private network of \"{}\" without an address on the Docker host: {error:#}",
+                    env.spec.name
+                );
+                self.create_network(env, name, Reach::Host, Some(subnet))
+                    .await
+            }
+            made => made,
+        };
+        made.with_context(|| {
+            format!(
+                "Could not make the private network of \"{}\" again in {subnet}, the subnet its VNC server listens in; free it, or reset the container, which gives it a new one",
+                env.spec.name
+            )
+        })
     }
 
     /// Before a stopped desktop starts: its private network made again without an address on the
