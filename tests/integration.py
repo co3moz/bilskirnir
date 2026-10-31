@@ -1374,13 +1374,13 @@ try:
     gtk = tool("launch_application", {"container_id":env_id,"command":"xfce4-terminal","args":["--title","Thoric a11y test","--disable-server"],"env":{"GTK_MODULES":"atk-bridge"}})["structuredContent"]
     assert wait_for(lambda: tool("wait_for_condition", {"container_id":env_id,"window_title":"Thoric a11y test","timeout_ms":20000})["structuredContent"]["satisfied"] or None)
     gtk_pid = tool("get_application", {"container_id":env_id,"application_id":gtk["application_id"]})["structuredContent"]["pid"]
-    tree = wait_for(lambda: (t if (t := tool("inspect_ui", {"container_id":env_id,"pid":gtk_pid,"max_depth":8})["structuredContent"])["applications"] else None), 30)
-    assert tree["nodes"] > 1 and tree["applications"][0]["role"] == "application", tree
+    ui_tree = wait_for(lambda: (t if (t := tool("inspect_ui", {"container_id":env_id,"pid":gtk_pid,"max_depth":8})["structuredContent"])["applications"] else None), 30)
+    assert ui_tree["nodes"] > 1 and ui_tree["applications"][0]["role"] == "application", ui_tree
     def roles(node):
         yield node["role"]
         for child in node.get("children", []):
             yield from roles(child)
-    assert "frame" in set(roles(tree["applications"][0])), set(roles(tree["applications"][0]))
+    assert "frame" in set(roles(ui_tree["applications"][0])), set(roles(ui_tree["applications"][0]))
     tool("stop_application", {"container_id":env_id,"application_id":gtk["application_id"]})
     print("PASS accessibility tree inspection of a GTK application", flush=True)
     pad = tool("gamepad_input", {"container_id":env_id,"actions":[{"type":"reset"}]})["structuredContent"]
@@ -1506,8 +1506,8 @@ try:
         ws = WebSocket(port, "/api/mcp/inspect", cookie)
         try:
             ws.send_text(json.dumps(target))
-            ready = ws.receive()
-            assert ready["type"] == "ready", ready
+            greeting = ws.receive()
+            assert greeting["type"] == "ready", greeting
             ws.send_text(json.dumps({"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}}}))
             assert inspector_reply(ws, 0)["result"]["serverInfo"]["name"], target
             ws.send_text(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}))
@@ -1516,7 +1516,7 @@ try:
                 ws.send_text(json.dumps({"jsonrpc":"2.0","id":number,"method":method,"params":params}))
                 replies.append(inspector_reply(ws, number)["result"])
             replies.append(echo_processes())
-            return ready["server"], replies
+            return greeting["server"], replies
         finally:
             ws.close()
     def echo_processes():

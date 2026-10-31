@@ -1,10 +1,12 @@
 name: Publish containers
 
 on:
+  # A push publishes only when what the images and the package are built from changes, so a change
+  # to the documentation alone publishes nothing.
   push:
     branches: [master]
     tags: ['v*']
-    paths: &code
+    paths:
       - '.github/workflows/publish.yml'
       - '.dockerignore'
       - 'compose*.yml'
@@ -19,11 +21,28 @@ on:
       - 'tests/**'
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'
-  # A pull request runs only the checks and the audit, on the same paths; every publishing job is
-  # limited to master and the tags.
+  # A pull request runs only the checks and the audit; every publishing job is limited to master and
+  # the tags. It runs them for the push's paths and for docs/ and the README, which the tests hold to
+  # the routes and tools they describe. tests/test_publish_triggers.py keeps the two lists so.
   pull_request:
     branches: [master]
-    paths: *code
+    paths:
+      - '.github/workflows/publish.yml'
+      - '.dockerignore'
+      - 'compose*.yml'
+      - '.env.example'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'core/**'
+      - 'images/**'
+      - 'packaging/**'
+      - 'deploy/**'
+      - 'tests/**'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.md'
+      - 'docs/**'
+      - 'README.md'
   workflow_dispatch:
 
 permissions:
