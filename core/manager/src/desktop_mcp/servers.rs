@@ -18,7 +18,7 @@ use axum::{
     http::StatusCode,
 };
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 /// A server as lists show it: never the values of its variables or headers. Each tool comes with
 /// `exposed`, its name on an endpoint of this container alone, which an endpoint's deny list
@@ -54,11 +54,12 @@ pub(crate) fn summary(app: &App, record: &ServerRecord, container: &str, running
     value
 }
 
-/// The servers the manager knows of a container, by name.
+/// The servers the manager knows of a container, by name. Only that container's records are
+/// read, by the `container:` that begins their ids, since each carries its whole tool list.
 pub(super) fn records(app: &App, container_id: &str) -> Vec<ServerRecord> {
     let mut records: Vec<ServerRecord> = app
         .db
-        .list::<ServerRecord>(SERVERS)
+        .list_prefixed::<ServerRecord>(SERVERS, &ServerRecord::key(container_id, ""))
         .unwrap_or_default()
         .into_iter()
         .filter(|record| record.container_id == container_id)
@@ -67,14 +68,25 @@ pub(super) fn records(app: &App, container_id: &str) -> Vec<ServerRecord> {
     records
 }
 
-/// Every desktop server the manager knows, as it last saw them.
+/// Every desktop server the manager knows, as it last saw them, from one read of them all.
 pub async fn all_servers(State(app): State<Arc<App>>) -> Result<Json<Value>> {
+    let mut by_container: HashMap<String, Vec<ServerRecord>> = HashMap::new();
+    for record in app.db.list::<ServerRecord>(SERVERS)? {
+        by_container
+            .entry(record.container_id.clone())
+            .or_default()
+            .push(record);
+    }
     let mut items = Vec::new();
     let mut containers: Vec<Container> = app.db.list(crate::model::CONTAINERS)?;
     containers.sort_by(|a, b| a.spec.name.cmp(&b.spec.name));
     for container in containers {
+        let Some(mut records) = by_container.remove(&container.id) else {
+            continue;
+        };
+        records.sort_by(|a, b| a.name.cmp(&b.name));
         let running = app.desktop_mcp.watched(&container.id);
-        for record in records(&app, &container.id) {
+        for record in records {
             items.push(summary(&app, &record, &container.spec.name, running));
         }
     }
