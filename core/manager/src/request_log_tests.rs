@@ -1,10 +1,11 @@
 //! Pins down the request log: a line for every request with its method, path, status, latency
 //! and ID, at debug only for a timer's successful reads, an ID the answer returns, a line of its
 //! own in the request's span for a server error, and never a query, a transfer link's token or a
-//! desktop service's own path.
+//! desktop service's own path. The tests' own subscriber also sees a line that another test's
+//! thread reached first.
 use super::*;
 use axum::body::Body;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tower::ServiceExt;
 
 /// What the log wrote while a request was answered.
@@ -33,9 +34,16 @@ async fn logged(uri: &str, id: Option<&str>) -> (String, String) {
     (answered, line)
 }
 
-/// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and all
-/// the log wrote meanwhile.
-async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
+/// Log everything from debug up into the returned buffer on this thread until the guard drops.
+fn capture() -> (Written, tracing::subscriber::DefaultGuard) {
+    // While a single dispatcher is registered, tracing asks only the default of the thread that
+    // reaches a line first whether it is wanted, and remembers the answer. Another test's thread,
+    // which has none, would turn a line off for this subscriber, such as the request's own, which
+    // no test reaches until a subscriber raises the level. A second one kept for the whole run
+    // has every line asked of all of them.
+    static SECOND: LazyLock<tracing::Dispatch> =
+        LazyLock::new(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()));
+    LazyLock::force(&SECOND);
     let written = Written::default();
     let writer = written.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -43,8 +51,14 @@ async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
         .with_max_level(tracing::Level::DEBUG)
         .with_writer(move || writer.clone())
         .finish();
+    (written, tracing::subscriber::set_default(subscriber))
+}
+
+/// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and all
+/// the log wrote meanwhile.
+async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
     // A test runs on one thread, which the request does not leave.
-    let _logging = tracing::subscriber::set_default(subscriber);
+    let (written, _logging) = capture();
     let mut request = axum::http::Request::get(uri).header("host", "localhost:8080");
     if let Some(id) = id {
         request = request.header("x-request-id", id);
@@ -56,6 +70,19 @@ async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
     let answered = response.headers()[&REQUEST_ID].to_str().unwrap().to_owned();
     let log = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
     (answered, log)
+}
+
+#[test]
+fn a_line_first_logged_on_another_thread_still_reaches_the_test() {
+    let (written, _logging) = capture();
+    fn line() {
+        tracing::info!("first logged elsewhere");
+    }
+    // Another test's thread, which has no subscriber, reaches the line first.
+    std::thread::spawn(line).join().unwrap();
+    line();
+    let log = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
+    assert!(log.contains("first logged elsewhere"), "{log:?}");
 }
 
 #[tokio::test]
