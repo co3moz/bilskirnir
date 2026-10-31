@@ -1082,8 +1082,8 @@ try:
     assert base64.b64decode(tool("read_file", {"container_id":env_id,"path":"/home/desktop/agent-files/agent.bin","encoding":"base64"})["structuredContent"]["data"]) == binary
     assert tool("read_file", {"container_id":env_id,"path":"/dev/zero"}, allow_error=True)["isError"]
     # An argument the schema does not take is a tool error the model can read, not a protocol error.
-    refused = tool("read_file", {"container_id":env_id,"path":"/home/desktop","bogus":1}, allow_error=True)
-    assert refused["isError"] and refused["content"][0]["text"] == "Unknown argument: bogus", refused
+    unknown = tool("read_file", {"container_id":env_id,"path":"/home/desktop","bogus":1}, allow_error=True)
+    assert unknown["isError"] and unknown["content"][0]["text"] == "Unknown argument: bogus", unknown
     uploaded = tool("upload_file", {"container_id":env_id,"destination":"/home/desktop/Downloads","name":"agent-upload.bin","data_base64":base64.b64encode(binary).decode()})["structuredContent"]
     assert uploaded["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/Downloads/agent-upload.bin", uploaded
     assert docker("exec",container,"cat","/home/desktop/Downloads/agent-upload.bin") == binary
@@ -1367,8 +1367,10 @@ try:
     for handle in (term, root_term):
         closed = tool("close_terminal", {"container_id":env_id,"terminal_id":handle["terminal_id"]})["structuredContent"]
         assert closed["state"] == "exited", closed
-    assert len(tool("list_terminals", {"container_id":env_id})["structuredContent"]["items"]) == 2
-    print("PASS interactive terminals as the desktop user and root", flush=True)
+    # A closed terminal is forgotten with its output.
+    listed = [item["terminal_id"] for item in tool("list_terminals", {"container_id":env_id})["structuredContent"]["items"]]
+    assert term["terminal_id"] not in listed and root_term["terminal_id"] not in listed, listed
+    print("PASS interactive terminals as the desktop user and root, forgotten once closed", flush=True)
     gtk = tool("launch_application", {"container_id":env_id,"command":"xfce4-terminal","args":["--title","Thoric a11y test","--disable-server"],"env":{"GTK_MODULES":"atk-bridge"}})["structuredContent"]
     assert wait_for(lambda: tool("wait_for_condition", {"container_id":env_id,"window_title":"Thoric a11y test","timeout_ms":20000})["structuredContent"]["satisfied"] or None)
     gtk_pid = tool("get_application", {"container_id":env_id,"application_id":gtk["application_id"]})["structuredContent"]["pid"]
