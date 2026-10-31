@@ -277,6 +277,8 @@ Check the Python code, the bundled stdio bridge, the manager's helpers and depen
 python3 tests/unit.py
 ```
 
+`tests/test_static.py` reads what no other test does, since the unit tests import only the helpers they test and the acceptance suite runs at the end. It compiles every Python file git tracks, with the compiler's warnings, such as an invalid escape or an assert on a tuple, as errors; where git cannot read the checkout, such as a Windows worktree from WSL, it walks the folders outside the generated ones instead. It also refuses a name `tests/integration.py` or `tests/cleanup_acceptance.py` binds again, in any scope, after the script's top level gave it to a function, a class or a module: the suite is one flat script, and a phase that assigned `refused` once hid the suite's `refused()` from every phase after it. Give the variable another name, not the helper.
+
 Check the shell scripts, those of the WSL package and the desktop image and the manager's script trace, with [ShellCheck](https://www.shellcheck.net). The script finds them by their name or their first line and runs the ShellCheck release it names in Docker, as the checks do:
 
 ```bash
