@@ -1,21 +1,23 @@
 use crate::{
     App, apps,
     capture::{self, Capture, Gray},
-    error::Result,
+    error::{Error, Result},
     ocr, windows,
 };
 use anyhow::bail;
 use axum::{
     Json,
     extract::{Path, State},
+    http::StatusCode,
 };
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    sync::Arc,
-    time::{Duration, Instant},
+    sync::{Arc, Mutex},
+    time::Duration,
 };
+use tokio::time::Instant;
 
 /// How much brighter or darker a pixel must turn to count as changed: more than JPEG's own noise
 /// on an edge, less than any change a person would notice.
@@ -153,95 +155,206 @@ impl WaitFor {
         }
     }
 }
+/// The first round of a wait may take this long even when timeout_ms is shorter, so a short
+/// wait still looks once: a screenshot and its reading take a second or two, longer while the
+/// installation's two screenshot slots are taken.
+const FIRST_LOOK: Duration = Duration::from_secs(5);
+
+/// What one round saw, and whether every condition held.
+struct Observation {
+    result: Value,
+    satisfied: bool,
+}
+
+/// What the screen conditions keep between rounds.
+#[derive(Default)]
+struct Seen {
+    /// How the screen looked when the wait began, which screen_changed compares with: the first
+    /// screen a round saw.
+    baseline: Option<Gray>,
+    /// The last screen and since when it has looked so, which screen_stable_ms measures.
+    screen: Option<(Vec<u8>, Instant)>,
+}
+
 pub async fn wait_for_condition(app: &Arc<App>, id: &str, body: &WaitFor) -> Result<Value> {
     body.validate()?;
     app.container(id)?;
+    let seen = Mutex::new(Seen::default());
+    poll(
+        Duration::from_millis(body.timeout_ms),
+        Duration::from_millis(body.interval_ms),
+        |until| observe(app, id, body, &seen, until),
+    )
+    .await
+}
+
+/// Run `round` every `interval` until it is satisfied or `timeout` has passed, each round given
+/// the moment it must end by: the deadline, or for the first one at least [`FIRST_LOOK`] after
+/// the start. A round that could not look, because both screenshot slots stayed taken (429) or a
+/// step ran out of time (504), is an observation that did not happen, so the wait goes on; once
+/// the time is up it answers `satisfied: false` with the last observation and, when the last
+/// round could not look, why in `last_error`. Any other error ends the wait.
+async fn poll<F, R>(timeout: Duration, interval: Duration, mut round: F) -> Result<Value>
+where
+    F: FnMut(Instant) -> R,
+    R: Future<Output = Result<Observation>>,
+{
     let started = Instant::now();
-    let deadline = started + Duration::from_millis(body.timeout_ms);
-    let interval = Duration::from_millis(body.interval_ms);
-    let mut last_screen: Option<(Vec<u8>, Instant)> = None;
-    // How the screen looked when the wait began, which screen_changed compares with.
-    let baseline = if body.screen_changed {
-        let shot = capture::capture(app, id, &body.screen()).await?;
-        Some(Gray::from_jpeg(&shot.jpeg)?)
-    } else {
-        None
-    };
+    let deadline = started + timeout;
+    let mut until = started + timeout.max(FIRST_LOOK);
+    let mut last = json!({});
     loop {
-        let mut result = json!({});
-        let mut satisfied = true;
-        if let Some(title) = &body.window_title {
-            let windows = windows::list_windows(app, id).await?;
-            let found = windows["items"]
-                .as_array()
-                .and_then(|items| {
-                    items
-                        .iter()
-                        .find(|w| w["title"].as_str().is_some_and(|t| t.contains(title)))
-                })
-                .cloned();
-            satisfied &= found.is_some();
-            result["window"] = found.unwrap_or(Value::Null);
-        }
-        if let Some(application) = &body.application_id {
-            let status = apps::get_application(app, id, application).await?;
-            let state = status["state"].as_str().unwrap_or("unknown");
-            let target = body.application_state.as_deref().unwrap_or("exited");
-            let reached = match target {
-                "running" => state == "running",
-                _ => state == "exited" || state == "failed",
-            };
-            satisfied &= reached;
-            result["application"] = json!({
-                "application_id": application,
-                "state": state,
-                "exit_code": status["exit_code"],
-                "signal": status["signal"],
-            });
-            if let Some(text) = &body.log_contains {
-                let logs = apps::application_logs(app, id, application, apps::LOG_LIMIT).await?;
-                let found = logs["log"].as_str().is_some_and(|log| log.contains(text));
-                satisfied &= found;
-                result["log_found"] = json!(found);
+        let missed = match round(until).await {
+            Ok(Observation {
+                mut result,
+                satisfied: true,
+            }) => {
+                result["satisfied"] = json!(true);
+                result["elapsed_ms"] = json!(started.elapsed().as_millis() as u64);
+                return Ok(result);
             }
-        }
-        if body.screen_stable_ms.is_some() || baseline.is_some() {
-            let shot = capture::capture(app, id, &body.screen()).await?;
-            if let Some(baseline) = &baseline {
-                let changed = Gray::from_jpeg(&shot.jpeg)?.changed_percent(baseline, PIXEL_CHANGE);
-                satisfied &= changed >= body.screen_change_percent.unwrap_or(0.5);
-                result["screen_changed_percent"] = json!((changed * 100.0).round() / 100.0);
+            Ok(observation) => {
+                last = observation.result;
+                None
             }
-            if let Some(stable) = body.screen_stable_ms {
-                let stable_for = match &last_screen {
-                    Some((bytes, since)) if *bytes == shot.jpeg => since.elapsed(),
-                    _ => {
-                        last_screen = Some((shot.jpeg, Instant::now()));
-                        Duration::ZERO
-                    }
-                };
-                satisfied &= stable_for >= Duration::from_millis(stable);
-                result["screen_stable_for_ms"] = json!(stable_for.as_millis() as u64);
+            Err(Error(status, message))
+                if status == StatusCode::TOO_MANY_REQUESTS
+                    || status == StatusCode::GATEWAY_TIMEOUT =>
+            {
+                Some(message)
             }
-        }
-        if let Some(text) = &body.text {
-            let matches = ocr::locate(app, id, body.region.as_deref(), text).await?;
-            let gone = body.text_state.as_deref() == Some("gone");
-            satisfied &= matches.is_empty() == gone;
-            result["text_found"] = json!(!matches.is_empty());
-            result["text_match"] = json!(matches.first().map(ocr::Match::text_match));
-        }
-        result["elapsed_ms"] = json!(started.elapsed().as_millis() as u64);
-        if satisfied {
-            result["satisfied"] = json!(true);
-            return Ok(result);
-        }
-        if Instant::now() + interval > deadline {
-            result["satisfied"] = json!(false);
-            return Ok(result);
+            Err(error) => return Err(error),
+        };
+        // Another round starts only with time left before the deadline.
+        if Instant::now() + interval >= deadline {
+            last["satisfied"] = json!(false);
+            last["elapsed_ms"] = json!(started.elapsed().as_millis() as u64);
+            if let Some(message) = missed {
+                last["last_error"] = json!(message);
+            }
+            return Ok(last);
         }
         tokio::time::sleep(interval).await;
+        until = deadline;
     }
+}
+
+/// `step` of a round, ended at `until` as a step that ran out of time.
+async fn by<T>(until: Instant, doing: &str, step: impl Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout_at(until, step)
+        .await
+        .unwrap_or_else(|_| {
+            Err(Error(
+                StatusCode::GATEWAY_TIMEOUT,
+                format!("The wait ran out of time while {doing}"),
+            ))
+        })
+}
+
+/// One look at every condition the wait names, each step ended at `until`.
+async fn observe(
+    app: &App,
+    id: &str,
+    body: &WaitFor,
+    seen: &Mutex<Seen>,
+    until: Instant,
+) -> Result<Observation> {
+    let mut result = json!({});
+    let mut satisfied = true;
+    if let Some(title) = &body.window_title {
+        let windows = by(until, "listing windows", windows::list_windows(app, id)).await?;
+        let found = windows["items"]
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|w| w["title"].as_str().is_some_and(|t| t.contains(title)))
+            })
+            .cloned();
+        satisfied &= found.is_some();
+        result["window"] = found.unwrap_or(Value::Null);
+    }
+    if let Some(application) = &body.application_id {
+        let status = by(
+            until,
+            "reading the application's state",
+            apps::get_application(app, id, application),
+        )
+        .await?;
+        let state = status["state"].as_str().unwrap_or("unknown");
+        let target = body.application_state.as_deref().unwrap_or("exited");
+        let reached = match target {
+            "running" => state == "running",
+            _ => state == "exited" || state == "failed",
+        };
+        satisfied &= reached;
+        result["application"] = json!({
+            "application_id": application,
+            "state": state,
+            "exit_code": status["exit_code"],
+            "signal": status["signal"],
+        });
+        if let Some(text) = &body.log_contains {
+            let logs = by(
+                until,
+                "reading the application's log",
+                apps::application_logs(app, id, application, apps::LOG_LIMIT),
+            )
+            .await?;
+            let found = logs["log"].as_str().is_some_and(|log| log.contains(text));
+            satisfied &= found;
+            result["log_found"] = json!(found);
+        }
+    }
+    if body.screen_stable_ms.is_some() || body.screen_changed {
+        let shot = by(
+            until,
+            "taking a screenshot",
+            capture::capture(app, id, &body.screen()),
+        )
+        .await?;
+        let gray = if body.screen_changed {
+            Some(Gray::from_jpeg(&shot.jpeg)?)
+        } else {
+            None
+        };
+        let mut seen = seen.lock().unwrap();
+        if let Some(gray) = gray {
+            let changed = match &seen.baseline {
+                Some(baseline) => gray.changed_percent(baseline, PIXEL_CHANGE),
+                None => {
+                    seen.baseline = Some(gray);
+                    0.0
+                }
+            };
+            satisfied &= changed >= body.screen_change_percent.unwrap_or(0.5);
+            result["screen_changed_percent"] = json!((changed * 100.0).round() / 100.0);
+        }
+        if let Some(stable) = body.screen_stable_ms {
+            let stable_for = match &seen.screen {
+                Some((bytes, since)) if *bytes == shot.jpeg => since.elapsed(),
+                _ => {
+                    seen.screen = Some((shot.jpeg, Instant::now()));
+                    Duration::ZERO
+                }
+            };
+            satisfied &= stable_for >= Duration::from_millis(stable);
+            result["screen_stable_for_ms"] = json!(stable_for.as_millis() as u64);
+        }
+    }
+    if let Some(text) = &body.text {
+        let matches = by(
+            until,
+            "reading text on the screen",
+            ocr::locate(app, id, body.region.as_deref(), text),
+        )
+        .await?;
+        let gone = body.text_state.as_deref() == Some("gone");
+        satisfied &= matches.is_empty() == gone;
+        result["text_found"] = json!(!matches.is_empty());
+        result["text_match"] = json!(matches.first().map(ocr::Match::text_match));
+    }
+    Ok(Observation { result, satisfied })
 }
 pub async fn wait(
     State(app): State<Arc<App>>,
