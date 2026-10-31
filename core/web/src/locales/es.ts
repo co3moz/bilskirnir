@@ -1346,6 +1346,9 @@ export const es: Messages = {
   "desktop.micOff": "Desactivar micrófono",
   "desktop.micPermission": "Esperando permiso…",
   "desktop.reconnect": "Reconectar",
+  "desktop.resize": "Ajustar a la ventana",
+  "desktop.resizeHint":
+    "Desactivado, la vista escala el escritorio y su resolución no cambia. Activado, la resolución del escritorio se ajusta a esta ventana, también para los agentes y otros espectadores, y se mantiene hasta que el escritorio se reinicie.",
   "desktop.lost.failed":
     "Se perdió la conexión con el escritorio. Vuelve a conectarte para continuar.",
   "desktop.lost.disconnected": "El escritorio cerró la conexión.",

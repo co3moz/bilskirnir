@@ -1331,6 +1331,9 @@ export const tr: Messages = {
   "desktop.micOff": "Mikrofonu kapat",
   "desktop.micPermission": "İzin bekleniyor…",
   "desktop.reconnect": "Yeniden bağlan",
+  "desktop.resize": "Pencereye uyarla",
+  "desktop.resizeHint":
+    "Kapalıyken görünüm masaüstünü ölçekler, çözünürlüğü değişmez. Açıkken masaüstünün çözünürlüğü bu pencereye uyar; bu, ajanlar ve diğer izleyiciler için de geçerlidir ve masaüstü yeniden başlayana kadar öyle kalır.",
   "desktop.lost.failed": "Masaüstüyle bağlantı koptu. Devam etmek için yeniden bağlanın.",
   "desktop.lost.disconnected": "Masaüstü bağlantıyı kapattı.",
   "desktop.exitFullscreen": "Tam ekrandan çık",

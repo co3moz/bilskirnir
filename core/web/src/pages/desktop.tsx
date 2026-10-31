@@ -2,6 +2,7 @@ import * as React from "react"
 import RFB from "@novnc/novnc"
 import {
   RiArrowLeftLine,
+  RiAspectRatioLine,
   RiPlayCircleLine,
   RiClipboardLine,
   RiFullscreenLine,
@@ -87,24 +88,68 @@ function ConnectionOverlay({
   )
 }
 
-/** A compact toolbar button: an icon with its label on wide screens and a tooltip on narrow ones. */
+/**
+ * A compact toolbar button: an icon with its label on wide screens and a tooltip on narrow ones,
+ * narrower still on a phone so every tool fits beside the name. A `hint` says more in the
+ * tooltip at every width; such a button shows its label from 1536 px, since the tooltip names
+ * it anyway and every tool's word would not fit at 1280.
+ */
 function ToolButton({
   label,
+  hint,
   icon,
   className,
   ...props
-}: React.ComponentProps<typeof Button> & { label: string; icon: React.ReactNode }) {
+}: React.ComponentProps<typeof Button> & { label: string; hint?: string; icon: React.ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={label} className={className} {...props}>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={label}
+          className={cn("max-sm:px-1", className)}
+          {...props}
+        >
           {icon}
-          <span className="hidden xl:inline">{label}</span>
+          <span className={hint ? "hidden 2xl:inline" : "hidden xl:inline"}>{label}</span>
         </Button>
       </TooltipTrigger>
-      <TooltipContent className="xl:hidden">{label}</TooltipContent>
+      {hint ? (
+        <TooltipContent>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium 2xl:hidden">{label}</span>
+            <span>{hint}</span>
+          </div>
+        </TooltipContent>
+      ) : (
+        <TooltipContent className="xl:hidden">{label}</TooltipContent>
+      )}
     </Tooltip>
   )
+}
+
+const RESIZE_KEY = "thoric.desktop.resize"
+
+/**
+ * Whether the desktop takes this window's size, a choice kept in this browser only. It is off
+ * unless chosen: a new size reaches the agents and the other viewers of the desktop too.
+ */
+function storedResize() {
+  try {
+    return localStorage.getItem(RESIZE_KEY) === "true"
+  } catch {
+    return false
+  }
+}
+
+function storeResize(on: boolean) {
+  try {
+    if (on) localStorage.setItem(RESIZE_KEY, "true")
+    else localStorage.removeItem(RESIZE_KEY)
+  } catch {
+    // The choice is a convenience; without storage the view scales the desktop next time.
+  }
 }
 
 function useMedia() {
@@ -150,6 +195,7 @@ export function DesktopPage({ id }: { id: string }) {
   const [remoteClipboard, setRemoteClipboard] = React.useState("")
   const [clipboard, setClipboard] = React.useState<string | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
+  const [resize, setResize] = React.useState(storedResize)
   const { media, state: audio } = useMedia()
   const drop = useFileDrop((files) => openDialog({ kind: "upload", id, files }))
 
@@ -167,8 +213,8 @@ export function DesktopPage({ id }: { id: string }) {
       return
     }
     rfb.current = current
+    // The view scales the desktop to fit; its resolution changes only when the toggle asks.
     current.scaleViewport = true
-    current.resizeSession = true
     current.showDotCursor = true
     current.focusOnClick = true
     // Events from a connection that was replaced or closed must not touch the current one.
@@ -191,6 +237,11 @@ export function DesktopPage({ id }: { id: string }) {
       media.close()
     }
   }, [id, running, attemptKey, media])
+
+  // Applied to every new connection too. Turned off, the desktop keeps the size it was given.
+  React.useEffect(() => {
+    if (rfb.current) rfb.current.resizeSession = resize
+  }, [resize, attemptKey])
 
   React.useEffect(() => {
     const update = () => setFullscreen(!!document.fullscreenElement)
@@ -288,6 +339,17 @@ export function DesktopPage({ id }: { id: string }) {
                   onClick={() => attempt(() => media.toggleMic())}
                 />
               )}
+              <ToolButton
+                label={t("desktop.resize")}
+                hint={t("desktop.resizeHint")}
+                icon={<RiAspectRatioLine className={cn(resize && "text-primary")} />}
+                aria-pressed={resize}
+                className={cn(resize && "bg-muted")}
+                onClick={() => {
+                  storeResize(!resize)
+                  setResize(!resize)
+                }}
+              />
               <ToolButton
                 label={t("desktop.reconnect")}
                 icon={<RiRestartLine />}

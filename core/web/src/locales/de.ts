@@ -1359,6 +1359,9 @@ export const de: Messages = {
   "desktop.micOff": "Mikrofon deaktivieren",
   "desktop.micPermission": "Warten auf Berechtigung…",
   "desktop.reconnect": "Neu verbinden",
+  "desktop.resize": "An Fenster anpassen",
+  "desktop.resizeHint":
+    "Aus: Die Ansicht skaliert den Desktop, seine Auflösung bleibt. An: Die Auflösung des Desktops passt sich diesem Fenster an, auch für Agenten und andere Betrachter, und bleibt so, bis der Desktop neu startet.",
   "desktop.lost.failed":
     "Die Verbindung zum Desktop ist abgebrochen. Verbinden Sie sich neu, um fortzufahren.",
   "desktop.lost.disconnected": "Der Desktop hat die Verbindung beendet.",

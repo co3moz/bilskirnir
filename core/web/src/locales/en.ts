@@ -1359,6 +1359,9 @@ export const en = {
   "desktop.micOff": "Disable mic",
   "desktop.micPermission": "Waiting for permission…",
   "desktop.reconnect": "Reconnect",
+  "desktop.resize": "Resize to window",
+  "desktop.resizeHint":
+    "Off, the view scales the desktop and its resolution stays. On, the desktop's resolution changes to fit this window, for agents and other viewers too, and keeps that size until the desktop restarts.",
   "desktop.lost.failed": "The connection to the desktop was lost. Reconnect to continue.",
   "desktop.lost.disconnected": "The desktop closed the connection.",
   "desktop.exitFullscreen": "Exit fullscreen",

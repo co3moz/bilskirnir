@@ -1352,6 +1352,9 @@ export const fr: Messages = {
   "desktop.micOff": "Désactiver le micro",
   "desktop.micPermission": "En attente de l'autorisation…",
   "desktop.reconnect": "Se reconnecter",
+  "desktop.resize": "Adapter à la fenêtre",
+  "desktop.resizeHint":
+    "Désactivé, la vue met le bureau à l'échelle et sa résolution reste la même. Activé, la résolution du bureau s'adapte à cette fenêtre, aussi pour les agents et les autres spectateurs, et reste ainsi jusqu'au redémarrage du bureau.",
   "desktop.lost.failed": "La connexion au bureau a été perdue. Reconnectez-vous pour continuer.",
   "desktop.lost.disconnected": "Le bureau a fermé la connexion.",
   "desktop.exitFullscreen": "Quitter le plein écran",
