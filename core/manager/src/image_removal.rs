@@ -94,41 +94,58 @@ impl App {
         Ok(json!({"id": record.id, "name": record.name, "deleted": true, "image_removed": removed}))
     }
 
-    /// Drop the tags of snapshots and imports that got no record, which a manager stopped
-    /// between tagging the image and saving the record leaves behind. Run at startup, before
-    /// any job runs, so a tag whose record is still to come is never seen. Only Thoric's
-    /// own repositories are looked at, and the image goes with its last tag, which is this
-    /// orphan's own.
+    /// Drop the tags of builds, snapshots and imports that got no record. Each tags its image
+    /// with its job's ID before it saves the record of that ID, so a manager stopped in between
+    /// leaves a tag that no record names. A build removes its own tag when it fails or is
+    /// cancelled; its repository is looked at too, for a tag whose removal failed or that a
+    /// build left before builds removed them. Run at startup. The tags are listed before the
+    /// records are read, and one stays while a record names it, while the job it is named after
+    /// is queued or running, since that job's record is still to come, and while a container
+    /// record starts from it, by name or by image, since a reset creates the container from it
+    /// again. Only Thoric's own repositories are looked at, and the image goes with its last
+    /// tag, which is this orphan's own.
     pub(crate) async fn drop_orphan_tags(&self) -> anyhow::Result<Vec<String>> {
-        // A record that does not read may name a tag; nothing is dropped until all of them do.
-        let records = self.db.list_complete::<ImageRecord>("image")?;
-        let named: std::collections::HashSet<&str> = records
-            .iter()
-            .map(|record| record.reference.as_str())
-            .collect();
-        let mut dropped = Vec::new();
-        for repository in ["thoric/snapshot", "thoric/imported"] {
+        let mut tags = Vec::new();
+        for repository in ["thoric/custom", "thoric/snapshot", "thoric/imported"] {
             let listed = self
                 .docker(&[
                     "image",
                     "ls",
+                    "--no-trunc",
                     "--format",
-                    "{{.Repository}}:{{.Tag}}",
+                    "{{.Repository}}:{{.Tag}} {{.ID}}",
                     repository,
                 ])
                 .await?;
-            for tag in String::from_utf8_lossy(&listed)
-                .lines()
-                .map(str::trim)
-                .filter(|tag| tag.starts_with(repository) && !tag.ends_with(":<none>"))
+            tags.extend(String::from_utf8_lossy(&listed).lines().filter_map(|line| {
+                let (tag, image) = line.trim().split_once(' ')?;
+                (tag.starts_with(repository) && !tag.ends_with(":<none>"))
+                    .then(|| (tag.to_owned(), image.to_owned()))
+            }));
+        }
+        // A record that does not read may name a tag; nothing is dropped until all of them do.
+        let records = self.db.list_complete::<ImageRecord>("image")?;
+        let containers = self.db.list_complete::<Container>(CONTAINERS)?;
+        let running: std::collections::HashSet<String> = self
+            .db
+            .active_jobs()?
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        let mut dropped = Vec::new();
+        for (tag, image) in tags {
+            let job = tag.rsplit_once(':').map_or("", |(_, job)| job);
+            if records.iter().any(|record| record.reference == tag)
+                || running.contains(job)
+                || containers.iter().any(|container| {
+                    container.spec.image == tag || container.source_image_id == image
+                })
             {
-                if named.contains(tag) {
-                    continue;
-                }
-                match self.docker(&["image", "rm", tag]).await {
-                    Ok(_) => dropped.push(tag.to_owned()),
-                    Err(error) => tracing::debug!("Orphan tag {tag}: {error:#}"),
-                }
+                continue;
+            }
+            match self.docker(&["image", "rm", &tag]).await {
+                Ok(_) => dropped.push(tag),
+                Err(error) => tracing::debug!("Orphan tag {tag}: {error:#}"),
             }
         }
         Ok(dropped)

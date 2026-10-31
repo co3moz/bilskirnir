@@ -383,32 +383,61 @@ async fn a_catalog_image_loses_only_its_download() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-/// A snapshot or import tagged before its record was saved is removed at startup; every tag a
-/// record names, and every other repository, stays.
+/// A build, snapshot or import tagged before its record was saved is removed at startup; a tag a
+/// record names, one whose job is still on its way to its record, one a container record starts
+/// from by name or by image, and every other repository, stay.
 #[cfg(unix)]
 #[tokio::test]
 async fn tags_without_a_record_are_dropped_at_startup() {
     let dir =
         std::env::temp_dir().join(format!("thoric-orphans-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
-    let script = "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/snapshot') printf 'thoric/snapshot:kept\nthoric/snapshot:lost\nthoric/snapshot:<none>\n' ;;\n  'image ls --format {{.Repository}}:{{.Tag}} thoric/imported') printf 'thoric/imported:orphan\n' ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n"
-        .replace("@DIR@", &dir.display().to_string());
+    let script = concat!(
+        "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n",
+        "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/custom') printf 'thoric/custom:built sha256:built\nthoric/custom:cancelled sha256:cancelled\nthoric/custom:running sha256:running\nthoric/custom:named sha256:named\n' ;;\n",
+        "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/snapshot') printf 'thoric/snapshot:kept sha256:kept\nthoric/snapshot:lost sha256:lost\nthoric/snapshot:shared sha256:shared\nthoric/snapshot:<none> sha256:untagged\n' ;;\n",
+        "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/imported') printf 'thoric/imported:orphan sha256:orphan\n' ;;\n",
+        "  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n",
+    )
+    .replace("@DIR@", &dir.display().to_string());
     let docker = dir.join("docker");
     crate::test_support::write_script(&docker, &script);
     let mut app = crate::test_support::app(false);
     Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
-    app.db
-        .put(
-            "image",
-            "kept",
-            &record("kept", "snapshot", "sha256:kept", "thoric/snapshot:kept"),
-        )
-        .unwrap();
+    for (id, kind, reference) in [
+        ("kept", "snapshot", "thoric/snapshot:kept"),
+        ("built", "build", "thoric/custom:built"),
+    ] {
+        let image = format!("sha256:{id}");
+        app.db
+            .put("image", id, &record(id, kind, &image, reference))
+            .unwrap();
+    }
+    let build: crate::model::Job = serde_json::from_value(json!({
+        "id": "running", "kind": "build", "status": "running", "created_at": 1,
+        "finished_at": null, "log": "", "result": null,
+    }))
+    .unwrap();
+    app.db.put("job", "running", &build).unwrap();
+    for (id, image) in [
+        ("by-name", "thoric/custom:named"),
+        ("by-image", "sha256:shared"),
+    ] {
+        app.db.put(CONTAINERS, id, &container(id, image)).unwrap();
+    }
     let dropped = app.drop_orphan_tags().await.unwrap();
-    assert_eq!(dropped, ["thoric/snapshot:lost", "thoric/imported:orphan"]);
+    assert_eq!(
+        dropped,
+        [
+            "thoric/custom:cancelled",
+            "thoric/snapshot:lost",
+            "thoric/imported:orphan"
+        ]
+    );
     assert_eq!(
         removals(&dir),
         [
+            "image rm thoric/custom:cancelled",
             "image rm thoric/snapshot:lost",
             "image rm thoric/imported:orphan"
         ]
