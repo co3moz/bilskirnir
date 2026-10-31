@@ -1,7 +1,8 @@
 //! Pins down which wait conditions are taken and which are refused before any polling, and that a
 //! round that could not look, for a busy screenshot slot or a step that ran out of time, keeps the
 //! wait going until its deadline, which no round outlasts but a short wait's first look, and then
-//! answers with the last observation and why the last round failed.
+//! answers with the last observation and why the last round failed; and that a round looks at the
+//! screen before anything else, so the first screen screen_changed compares with comes first.
 use super::*;
 use crate::model::{CONTAINERS, Container};
 
@@ -136,7 +137,9 @@ async fn no_round_outlasts_the_deadline_but_a_short_waits_first_look() {
 
 #[tokio::test(start_paused = true)]
 async fn a_wait_whose_screenshots_stay_busy_answers_on_time_with_why() {
-    let app = crate::test_support::app(false);
+    let mut app = crate::test_support::app(false);
+    // Nothing but the screenshot slots answers: any step that reached Docker would fail.
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = "/nonexistent/docker".into();
     let record = Container {
         id: "busy".into(),
         container: "thoric-busy".into(),
@@ -169,6 +172,14 @@ async fn a_wait_whose_screenshots_stay_busy_answers_on_time_with_why() {
     // A wait that ends between two rounds names the slots the last one waited for.
     let body: WaitFor =
         serde_json::from_value(json!({"screen_changed": true, "timeout_ms": 5_400})).unwrap();
+    let answer = wait_for_condition(&app, "busy", &body).await.unwrap();
+    assert_eq!(answer["last_error"], BUSY);
+    // The screen comes first in a round, so its first screen is not held up by the window
+    // check, which this round never reaches.
+    let body: WaitFor = serde_json::from_value(
+        json!({"window_title": "Game", "screen_changed": true, "timeout_ms": 5_400}),
+    )
+    .unwrap();
     let answer = wait_for_condition(&app, "busy", &body).await.unwrap();
     assert_eq!(answer["last_error"], BUSY);
 }

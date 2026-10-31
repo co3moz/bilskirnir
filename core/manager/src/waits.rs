@@ -251,7 +251,9 @@ async fn by<T>(until: Instant, doing: &str, step: impl Future<Output = Result<T>
         })
 }
 
-/// One look at every condition the wait names, each step ended at `until`.
+/// One look at every condition the wait names, each step ended at `until`. The screen comes
+/// first, so the first screen screen_changed compares with is taken as soon as the wait can,
+/// before the window and application checks of the same round.
 async fn observe(
     app: &App,
     id: &str,
@@ -261,6 +263,42 @@ async fn observe(
 ) -> Result<Observation> {
     let mut result = json!({});
     let mut satisfied = true;
+    if body.screen_stable_ms.is_some() || body.screen_changed {
+        let shot = by(
+            until,
+            "taking a screenshot",
+            capture::capture(app, id, &body.screen()),
+        )
+        .await?;
+        let gray = if body.screen_changed {
+            Some(Gray::from_jpeg(&shot.jpeg)?)
+        } else {
+            None
+        };
+        let mut seen = seen.lock().unwrap();
+        if let Some(gray) = gray {
+            let changed = match &seen.baseline {
+                Some(baseline) => gray.changed_percent(baseline, PIXEL_CHANGE),
+                None => {
+                    seen.baseline = Some(gray);
+                    0.0
+                }
+            };
+            satisfied &= changed >= body.screen_change_percent.unwrap_or(0.5);
+            result["screen_changed_percent"] = json!((changed * 100.0).round() / 100.0);
+        }
+        if let Some(stable) = body.screen_stable_ms {
+            let stable_for = match &seen.screen {
+                Some((bytes, since)) if *bytes == shot.jpeg => since.elapsed(),
+                _ => {
+                    seen.screen = Some((shot.jpeg, Instant::now()));
+                    Duration::ZERO
+                }
+            };
+            satisfied &= stable_for >= Duration::from_millis(stable);
+            result["screen_stable_for_ms"] = json!(stable_for.as_millis() as u64);
+        }
+    }
     if let Some(title) = &body.window_title {
         let windows = by(until, "listing windows", windows::list_windows(app, id)).await?;
         let found = windows["items"]
@@ -304,42 +342,6 @@ async fn observe(
             let found = logs["log"].as_str().is_some_and(|log| log.contains(text));
             satisfied &= found;
             result["log_found"] = json!(found);
-        }
-    }
-    if body.screen_stable_ms.is_some() || body.screen_changed {
-        let shot = by(
-            until,
-            "taking a screenshot",
-            capture::capture(app, id, &body.screen()),
-        )
-        .await?;
-        let gray = if body.screen_changed {
-            Some(Gray::from_jpeg(&shot.jpeg)?)
-        } else {
-            None
-        };
-        let mut seen = seen.lock().unwrap();
-        if let Some(gray) = gray {
-            let changed = match &seen.baseline {
-                Some(baseline) => gray.changed_percent(baseline, PIXEL_CHANGE),
-                None => {
-                    seen.baseline = Some(gray);
-                    0.0
-                }
-            };
-            satisfied &= changed >= body.screen_change_percent.unwrap_or(0.5);
-            result["screen_changed_percent"] = json!((changed * 100.0).round() / 100.0);
-        }
-        if let Some(stable) = body.screen_stable_ms {
-            let stable_for = match &seen.screen {
-                Some((bytes, since)) if *bytes == shot.jpeg => since.elapsed(),
-                _ => {
-                    seen.screen = Some((shot.jpeg, Instant::now()));
-                    Duration::ZERO
-                }
-            };
-            satisfied &= stable_for >= Duration::from_millis(stable);
-            result["screen_stable_for_ms"] = json!(stable_for.as_millis() as u64);
         }
     }
     if let Some(text) = &body.text {
