@@ -211,6 +211,7 @@ export const de: Messages = {
   "containers.stop": "Stoppen",
   "containers.start": "Starten",
   "containers.restart": "Neu starten",
+  "containers.reset": "Container zurücksetzen",
   "containers.settings": "Einstellungen",
   "containers.snapshot": "Snapshot",
   "containers.logs": "Protokolle",
@@ -1390,6 +1391,16 @@ export const de: Messages = {
   "delete.descriptionVolumes":
     "Der Container, seine ungespeicherten Änderungen und die dafür erstellten Volumes werden gelöscht. Andere Volumes und Snapshots bleiben erhalten.",
   "delete.volumes": "Auch die für diesen Container erstellten Volumes löschen",
+  "reset.titleOf": "{name} zurücksetzen?",
+  "reset.title": "Diesen Container zurücksetzen?",
+  "reset.description":
+    "Der Container wird aus dem Image, mit dem er gestartet wurde, neu erstellt. Was außerhalb seiner Volumes in ihm gespeichert wurde, etwa installierte Programme und geänderte Dateien, wird verworfen, und seine offenen Programme werden beendet. Seine Volumes, Einstellungen und Maschinenidentität bleiben erhalten.",
+  "reset.setup": "Seine Compose-Einrichtung läuft erneut.",
+  "reset.snapshot":
+    "Um eine Kopie seiner Dateien zu behalten, erstellen Sie zuerst einen Snapshot.",
+  "reset.volumes": "Volumes, die erhalten bleiben",
+  "reset.noVolumes": "Er hat keine Volumes, daher bleibt keine seiner Dateien erhalten.",
+  "reset.confirm": "Zurücksetzen",
   "create.description":
     "Ein Container aus einem beliebigen Image. Ein noch nicht heruntergeladenes Katalog-Image wird zuerst heruntergeladen.",
   "create.namePlaceholder": "Unity-Arbeitsbereich",

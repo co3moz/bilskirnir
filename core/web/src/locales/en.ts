@@ -213,6 +213,7 @@ export const en = {
   "containers.stop": "Stop",
   "containers.start": "Start",
   "containers.restart": "Restart",
+  "containers.reset": "Reset container",
   "containers.settings": "Settings",
   "containers.snapshot": "Snapshot",
   "containers.logs": "Logs",
@@ -1390,6 +1391,15 @@ export const en = {
   "delete.descriptionVolumes":
     "The container, its unsaved changes and the volumes created for it are deleted. Other volumes and snapshots are kept.",
   "delete.volumes": "Also delete the volumes created for this container",
+  "reset.titleOf": "Reset {name}?",
+  "reset.title": "Reset this container?",
+  "reset.description":
+    "The container is created again from the image it started from. What was saved in it outside its volumes, such as installed programs and changed files, is discarded, and its open programs end. Its volumes, settings and machine identity stay.",
+  "reset.setup": "Its compose setup runs again.",
+  "reset.snapshot": "To keep a copy of its files, take a snapshot first.",
+  "reset.volumes": "Volumes that stay",
+  "reset.noVolumes": "It has no volumes, so none of its files stay.",
+  "reset.confirm": "Reset",
 
   "create.description":
     "A container from any image. A catalog image that is not downloaded yet downloads first.",

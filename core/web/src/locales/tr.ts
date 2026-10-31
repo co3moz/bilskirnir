@@ -207,6 +207,7 @@ export const tr: Messages = {
   "containers.stop": "Durdur",
   "containers.start": "Başlat",
   "containers.restart": "Yeniden başlat",
+  "containers.reset": "Konteyneri sıfırla",
   "containers.settings": "Ayarlar",
   "containers.snapshot": "Anlık görüntü al",
   "containers.logs": "Loglar",
@@ -1360,6 +1361,15 @@ export const tr: Messages = {
   "delete.descriptionVolumes":
     "Konteyner, kaydedilmemiş değişiklikleri ve onun için oluşturulan volume'ler silinir. Diğer volume'ler ve anlık görüntüler korunur.",
   "delete.volumes": "Bu konteyner için oluşturulan volume'leri de sil",
+  "reset.titleOf": "{name} sıfırlansın mı?",
+  "reset.title": "Bu konteyner sıfırlansın mı?",
+  "reset.description":
+    "Konteyner, başladığı imajdan yeniden oluşturulur. Volume'leri dışında içine kaydedilenler, örneğin kurulan programlar ve değiştirilen dosyalar silinir ve açık programları kapanır. Volume'leri, ayarları ve makine kimliği korunur.",
+  "reset.setup": "Compose kurulumu yeniden çalışır.",
+  "reset.snapshot": "Dosyalarının bir kopyasını saklamak için önce anlık görüntü alın.",
+  "reset.volumes": "Korunan volume'ler",
+  "reset.noVolumes": "Hiç volume'ü olmadığı için dosyalarının hiçbiri korunmaz.",
+  "reset.confirm": "Sıfırla",
   "create.description":
     "Herhangi bir imajdan bir konteyner. Henüz indirilmemiş bir katalog imajı önce indirilir.",
   "create.namePlaceholder": "Unity çalışma alanı",

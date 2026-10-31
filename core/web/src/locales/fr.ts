@@ -210,6 +210,7 @@ export const fr: Messages = {
   "containers.stop": "Arrêter",
   "containers.start": "Démarrer",
   "containers.restart": "Redémarrer",
+  "containers.reset": "Réinitialiser le conteneur",
   "containers.settings": "Réglages",
   "containers.snapshot": "Instantané",
   "containers.logs": "Journaux",
@@ -1381,6 +1382,15 @@ export const fr: Messages = {
   "delete.descriptionVolumes":
     "Le conteneur, ses modifications non enregistrées et les volumes créés pour lui sont supprimés. Les autres volumes et les instantanés sont conservés.",
   "delete.volumes": "Supprimer aussi les volumes créés pour ce conteneur",
+  "reset.titleOf": "Réinitialiser {name} ?",
+  "reset.title": "Réinitialiser ce conteneur ?",
+  "reset.description":
+    "Le conteneur est recréé à partir de l'image dont il est parti. Ce qui y a été enregistré en dehors de ses volumes, comme les programmes installés et les fichiers modifiés, est perdu, et ses programmes ouverts se ferment. Ses volumes, ses réglages et son identité de machine sont conservés.",
+  "reset.setup": "Sa configuration Compose s'exécute de nouveau.",
+  "reset.snapshot": "Pour garder une copie de ses fichiers, prenez d'abord un instantané.",
+  "reset.volumes": "Volumes conservés",
+  "reset.noVolumes": "Il n'a aucun volume, donc aucun de ses fichiers n'est conservé.",
+  "reset.confirm": "Réinitialiser",
   "create.description":
     "Un conteneur à partir de n'importe quelle image. Une image du catalogue pas encore téléchargée est d'abord téléchargée.",
   "create.namePlaceholder": "Espace de travail Unity",
