@@ -48,6 +48,7 @@ import { t } from "@/lib/i18n"
 import { DesktopMedia, type MediaState } from "@/lib/media"
 import { useContainers } from "@/lib/queries"
 import { href } from "@/lib/route"
+import { holdUnload } from "@/lib/unload"
 
 type Connection = "connecting" | "connected" | "disconnected" | "failed"
 const connectionText = (connection: Connection) => t(`desktop.connection.${connection}`)
@@ -127,6 +128,17 @@ function ToolButton({
       )}
     </Tooltip>
   )
+}
+
+type KeyboardLock = { lock: (codes?: string[]) => Promise<void>; unlock: () => void }
+
+/**
+ * The Keyboard Lock API, which only Chromium has. While it holds in fullscreen, keys the browser
+ * keeps for itself, such as Ctrl+W, reach the desktop, and holding Escape leaves fullscreen.
+ */
+function keyboardLock() {
+  const keyboard = (navigator as Navigator & { keyboard?: Partial<KeyboardLock> }).keyboard
+  return keyboard?.lock && keyboard.unlock ? (keyboard as KeyboardLock) : null
 }
 
 const RESIZE_KEY = "thoric.desktop.resize"
@@ -243,10 +255,23 @@ export function DesktopPage({ id }: { id: string }) {
     if (rfb.current) rfb.current.resizeSession = resize
   }, [resize, attemptKey])
 
+  // Ctrl+W and the like would close the view while the desktop goes on; the browser asks first.
+  React.useEffect(() => (connection === "connected" ? holdUnload() : undefined), [connection])
+
   React.useEffect(() => {
-    const update = () => setFullscreen(!!document.fullscreenElement)
+    const keyboard = keyboardLock()
+    const update = () => {
+      const on = !!document.fullscreenElement
+      setFullscreen(on)
+      if (!keyboard) return
+      if (on) keyboard.lock().catch(() => {})
+      else keyboard.unlock()
+    }
     document.addEventListener("fullscreenchange", update)
-    return () => document.removeEventListener("fullscreenchange", update)
+    return () => {
+      document.removeEventListener("fullscreenchange", update)
+      keyboard?.unlock()
+    }
   }, [])
 
   const name = item?.spec.name ?? t("nav.desktop")
