@@ -34,11 +34,12 @@ pub(crate) const SNAPSHOT_STAGES: [(&str, &str); 3] = [
 ];
 
 /// The stages of a settings change that recreates the container from a commit of its files. A
-/// stopped container skips `stop`.
-pub(crate) const RECREATE_STAGES: [(&str, &str); 4] = [
+/// stopped container skips `stop` and `start`, which waits for the new container's desktop.
+pub(crate) const RECREATE_STAGES: [(&str, &str); 5] = [
     ("stop", "Stopping the container"),
     ("commit", "Committing the container layer"),
     ("create", "Creating the new container"),
+    ("start", "Starting the new container"),
     ("cleanup", "Cleaning up"),
 ];
 

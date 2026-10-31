@@ -170,31 +170,47 @@ pub async fn create(State(app): State<Arc<App>>, Json(body): Json<Value>) -> Res
         Some(name),
         move |app, job_id| async move {
             let created = app.create_container(&id, spec, parameters, &job_id).await;
-            // A creation refused before its record was saved leaves no container to keep it for.
-            if app.container(&id).is_err() {
-                app.forget_proxy_password(&id)?;
-            }
-            let mut result = created?;
-            if mcp_endpoint {
-                let container = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
-                // The container is made either way; an endpoint can still be created later.
-                match crate::desktop_mcp::automatic_endpoint(&app, &container).await {
-                    Ok(name) => {
-                        app.append_log(
-                            &job_id,
-                            &format!("Created the MCP endpoint /mcp/{name} for this container."),
-                        )?;
-                        result["mcp_endpoint"] = json!(name);
-                    }
-                    Err(error) => app.append_log(
-                        &job_id,
-                        &format!("Could not create an MCP endpoint: {error:#}"),
-                    )?,
-                }
-            }
-            Ok(result)
+            creation_finished(&app, &id, created, mcp_endpoint, &job_id).await
         },
     )
+}
+/// What a creation job ends with once the container's creation has returned: its own MCP endpoint
+/// whenever the container's record was saved, also when its desktop was not ready or its setup
+/// failed, so the endpoint works once the container is repaired.
+async fn creation_finished(
+    app: &App,
+    id: &str,
+    created: anyhow::Result<Value>,
+    mcp_endpoint: bool,
+    job_id: &str,
+) -> anyhow::Result<Value> {
+    // A creation refused before its record was saved leaves no container to keep it for.
+    let Ok(container) = app.container(id) else {
+        app.forget_proxy_password(id)?;
+        return created;
+    };
+    let mut endpoint = None;
+    if mcp_endpoint {
+        // The container is made either way; an endpoint can still be created later.
+        match crate::desktop_mcp::automatic_endpoint(app, &container).await {
+            Ok(name) => {
+                app.append_log(
+                    job_id,
+                    &format!("Created the MCP endpoint /mcp/{name} for this container."),
+                )?;
+                endpoint = Some(name);
+            }
+            Err(error) => app.append_log(
+                job_id,
+                &format!("Could not create an MCP endpoint: {error:#}"),
+            )?,
+        }
+    }
+    let mut result = created?;
+    if let Some(name) = endpoint {
+        result["mcp_endpoint"] = json!(name);
+    }
+    Ok(result)
 }
 #[derive(Deserialize, schemars::JsonSchema)]
 #[schemars(rename = "ContainerAction")]
@@ -214,7 +230,7 @@ pub async fn action(
         app,
         &body.action.clone(),
         format!("container:{id}"),
-        move |app, _| async move {
+        move |app, job_id| async move {
             let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
             app.docker(&[
@@ -223,6 +239,11 @@ pub async fn action(
             ])
             .await
             .map_err(|error| app.device_error(&env, error))?;
+            // A started desktop is waited for beside the work that only uses it.
+            if body.action != "stop" {
+                crate::jobs::share_from_here();
+                app.desktop_ready(&env, &job_id).await?;
+            }
             Ok(json!({"container_id":id}))
         },
     )

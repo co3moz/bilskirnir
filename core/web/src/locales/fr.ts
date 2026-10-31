@@ -350,6 +350,7 @@ export const fr: Messages = {
   "stage.record": "Enregistrement de la fiche de l'image",
   "stage.stop": "Arrêt du conteneur",
   "stage.create": "Création du nouveau conteneur",
+  "stage.start": "Démarrage du nouveau conteneur",
   "stage.plan": "Lecture de l'installation",
   "stage.images": "Transfert des images enregistrées",
   "stage.files": "Transfert des fichiers des conteneurs",

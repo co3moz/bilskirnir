@@ -355,6 +355,7 @@ export const en = {
   "stage.record": "Saving the image record",
   "stage.stop": "Stopping the container",
   "stage.create": "Creating the new container",
+  "stage.start": "Starting the new container",
   "stage.plan": "Reading the installation",
   "stage.images": "Transferring the saved images",
   "stage.files": "Transferring the containers' files",

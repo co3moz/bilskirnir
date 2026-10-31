@@ -2,7 +2,8 @@
 //! answers that the resource is busy, so no client hangs for the job's length. Also that a job
 //! waiting for a busy container holds up no job of another, and that work that only uses a
 //! container shares it while work that changes or replaces it waits for the sharers and goes first.
-//! A job that fails with a result of its own, such as a script's exit code, keeps it.
+//! A job that fails with a result of its own, such as a script's exit code, keeps it, and a job
+//! that holds its resource alone shares it from where its work says so.
 use super::*;
 use crate::test_support::app;
 use axum::http::StatusCode;
@@ -166,4 +167,43 @@ async fn a_job_that_fails_with_a_result_keeps_it_beside_its_error() {
     .unwrap();
     assert!(outcome.await.unwrap().is_err());
     assert_eq!(app.db.job(&id).unwrap().result, None);
+}
+
+#[tokio::test]
+async fn a_job_shares_what_it_held_alone_from_where_it_says_so() {
+    let app = app(false);
+    let wait = Duration::from_millis(100);
+    let (go, gone) = tokio::sync::oneshot::channel::<()>();
+    let (shared, sharing) = tokio::sync::oneshot::channel::<()>();
+    let (end, ended) = tokio::sync::oneshot::channel::<()>();
+    let (_, outcome) = start(
+        app.clone(),
+        "start",
+        "container:one".into(),
+        true,
+        |_, _| async move {
+            gone.await.unwrap();
+            share_from_here();
+            // Once more changes nothing.
+            share_from_here();
+            shared.send(()).unwrap();
+            ended.await.unwrap();
+            Ok(serde_json::json!({}))
+        },
+    )
+    .unwrap();
+    // Until then the job holds the container alone, as the job that started it does.
+    tokio::time::sleep(wait).await;
+    assert!(app.share_for("container:one", wait).await.is_err());
+    go.send(()).unwrap();
+    sharing.await.unwrap();
+    // Work that only uses the container goes on beside it, and a change still waits for it.
+    drop(app.share_for("container:one", wait).await.unwrap());
+    let error = app.hold_for("container:one", wait).await.unwrap_err();
+    assert_eq!(error.0, StatusCode::CONFLICT);
+    end.send(()).unwrap();
+    outcome.await.unwrap().unwrap();
+    assert!(app.hold_for("container:one", wait).await.is_ok());
+    // Outside a job there is nothing to share.
+    share_from_here();
 }

@@ -1,6 +1,7 @@
 //! A container's life in Docker: what the installation allows it, its creation from a request,
 //! provisioning its networks and its container, a retry that repairs it, a reset to its source
-//! image and its deletion. Each checks what it finds against the records before it changes it.
+//! image and its deletion. Each checks what it finds against the records before it changes it,
+//! and one that starts the desktop ends once the desktop is ready (`desktop_ready`).
 use super::{create_args::TUN_DEVICE, private_subnet};
 use crate::{App, model::*, volumes::RemovedVolumes};
 use anyhow::{Context, Result, bail};
@@ -181,6 +182,7 @@ impl App {
             // Keep intent and any partial resources for explicit retry/removal; never touch unrelated objects.
         }
         result?;
+        self.provisioned_ready(&env, job_id).await?;
         self.run_setup(id, job_id).await?;
         Ok(json!({"container_id":id}))
     }
@@ -230,12 +232,36 @@ impl App {
         if env.working_image.is_some() {
             self.remove_previous(&env, job_id).await?;
         }
+        // Also a desktop that kept restarting before.
+        self.provisioned_ready(&env, job_id).await?;
         // Also a setup that failed or was interrupted earlier.
         self.run_setup(id, job_id).await?;
         Ok(json!({"container_id":id}))
     }
     async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
         self.provision_and(env, manager, true).await
+    }
+    /// Wait for the desktop of a container this job has provisioned. The job shares the container
+    /// while it waits, beside input, files and scripts, unless a compose setup follows, which
+    /// runs with the container alone. A desktop that is not ready fails the job, and the job's
+    /// error says why; the container keeps it only when its compose setup was due, since that did
+    /// not run and a retry runs it. Any other such error would outlive a desktop that comes up
+    /// later.
+    async fn provisioned_ready(&self, env: &Container, job_id: &str) -> Result<()> {
+        if !crate::compose::setup_due(env) {
+            crate::jobs::share_from_here();
+            return self.desktop_ready(env, job_id).await.map(drop);
+        }
+        let ready = self
+            .desktop_ready(env, job_id)
+            .await
+            .context("The compose setup did not run");
+        if let Err(error) = &ready {
+            let mut failed: Container = self.db.get(CONTAINERS, &env.id)?;
+            failed.last_error = Some(format!("{error:#}"));
+            self.db.put(CONTAINERS, &env.id, &failed)?;
+        }
+        ready.map(drop)
     }
     /// Create a container its record describes, with its networks, and leave it stopped, as a
     /// restore does.
@@ -582,6 +608,7 @@ impl App {
             job_id,
             "Recreated the container from its saved source image.",
         )?;
+        self.provisioned_ready(&env, job_id).await?;
         self.run_setup(id, job_id).await?;
         Ok(json!({"container_id": id, "volumes_preserved": true, "images_preserved": true}))
     }

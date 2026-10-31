@@ -64,6 +64,31 @@ pub(crate) enum Hold {
     Nothing,
 }
 
+/// What a running job holds of its resource.
+struct Held {
+    shared: Option<Shared>,
+    alone: Option<Exclusive>,
+}
+
+tokio::task_local! {
+    /// The running job's hold, which [`share_from_here`] reaches from inside its work.
+    static HELD: Arc<std::sync::Mutex<Held>>;
+}
+
+/// Share the resource the running job holds alone for the rest of the job, as work that only
+/// uses it does: what remains, such as the wait for a desktop the job has just started, goes on
+/// beside input, files and scripts, while work that changes the resource still waits for the job.
+/// Nothing else can take the resource alone in between. Outside a job, or in one that does not
+/// hold its resource alone, nothing changes.
+pub(crate) fn share_from_here() {
+    let _ = HELD.try_with(|held| {
+        let mut held = held.lock().unwrap();
+        if let Some(alone) = held.alone.take() {
+            held.shared = Some(alone.downgrade());
+        }
+    });
+}
+
 impl App {
     pub fn resource_lock(&self, resource: &str) -> ResourceLock {
         if resource == "global" {
@@ -232,7 +257,7 @@ where
                 Some(lock) if hold == Hold::Exclusive => Some(lock.lock_owned().await),
                 _ => None,
             };
-            (shared, alone)
+            Held { shared, alone }
         };
         // A job cancelled while it waits for its resource never runs.
         let held = tokio::select! {
@@ -248,7 +273,7 @@ where
                 return;
             }
         };
-        let Some(_held) = held else {
+        let Some(held) = held else {
             app.cancels.forget(&task_id);
             let _ = done.send(finish(
                 &app,
@@ -266,8 +291,12 @@ where
         }
         app.cancels.running(&task_id);
         app.events.job(&job, None);
-        let work = std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
-            .catch_unwind();
+        // Held until the job has ended, while the work may share what it held alone.
+        let held = Arc::new(std::sync::Mutex::new(held));
+        let work = HELD.scope(held.clone(), async {
+            work(app.clone(), task_id.clone()).await
+        });
+        let work = std::panic::AssertUnwindSafe(work).catch_unwind();
         // A cancel drops the work, which kills the commands it runs, and then stops what it
         // started elsewhere.
         let result = tokio::select! {

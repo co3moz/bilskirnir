@@ -34,7 +34,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 const RUNNER: &str = include_str!("../helpers/setup_runner.py");
@@ -46,8 +46,6 @@ const PARAMETER_LIMIT: usize = 32;
 const STEP_LIMIT: usize = 8;
 /// What the scripts of a compose take together.
 const SCRIPT_LIMIT: usize = 1_000_000;
-/// How long a new desktop may take to report ready before its setup is given up.
-const READY_LIMIT: Duration = Duration::from_secs(300);
 /// The longest `timeout_seconds` a step may ask for: two hours, for setups that download large
 /// files such as language models or editors.
 pub(crate) const TIMEOUT_LIMIT: u64 = 7200;
@@ -626,9 +624,8 @@ impl App {
     /// recorded on the container, which keeps running so the outcome can be inspected.
     pub(crate) async fn run_setup(&self, id: &str, job_id: &str) -> anyhow::Result<()> {
         let mut env: Container = self.db.get(CONTAINERS, id)?;
-        match &env.setup {
-            Some(setup) if setup.status != "completed" => {}
-            _ => return Ok(()),
+        if !setup_due(&env) {
+            return Ok(());
         }
         let pinned: Pinned = self
             .db
@@ -659,11 +656,10 @@ impl App {
         pinned: &Pinned,
         job_id: &str,
     ) -> anyhow::Result<()> {
-        self.append_log(
-            job_id,
-            "Waiting for the desktop before running the compose setup.",
-        )?;
-        let container = self.wait_ready(env).await?;
+        let container = self
+            .desktop_ready(env, job_id)
+            .await
+            .context("The compose setup did not run")?;
         let paths = pinned.paths();
         if !paths.is_empty() {
             self.append_log(
@@ -770,46 +766,13 @@ impl App {
         }
         Ok(())
     }
+}
 
-    /// Wait until the desktop session reports ready and return the container ID.
-    async fn wait_ready(&self, env: &Container) -> anyhow::Result<String> {
-        let started = Instant::now();
-        loop {
-            let info = self.owned(env).await?;
-            let id = info["Id"]
-                .as_str()
-                .context("Missing container ID")?
-                .to_owned();
-            let state = &info["State"];
-            let running = state["Running"] == true && state["Restarting"] != true;
-            if running
-                && self
-                    .docker(&[
-                        "exec",
-                        "--user",
-                        "1001:1001",
-                        &id,
-                        "test",
-                        "-e",
-                        "/run/desktop/ready",
-                    ])
-                    .await
-                    .is_ok()
-            {
-                return Ok(id);
-            }
-            if state["Running"] != true && state["Restarting"] != true {
-                bail!("The container stopped before the compose setup could run; check its logs");
-            }
-            if started.elapsed() > READY_LIMIT {
-                bail!(
-                    "The desktop was not ready within {} seconds, so the compose setup did not run; check its logs",
-                    READY_LIMIT.as_secs()
-                );
-            }
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    }
+/// Whether a container's compose setup has yet to run or to finish, as after a retry or a reset.
+pub(crate) fn setup_due(env: &Container) -> bool {
+    env.setup
+        .as_ref()
+        .is_some_and(|setup| setup.status != "completed")
 }
 
 /// Record where the setup stands. A setup that starts or waits to start again runs every

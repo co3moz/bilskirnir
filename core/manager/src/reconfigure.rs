@@ -317,7 +317,8 @@ impl App {
     }
 
     /// Replace the container with one created from a commit of its files and the new settings.
-    /// The old container is renamed aside, not removed, until its replacement has started.
+    /// The old container is renamed aside, not removed, until its replacement has started and its
+    /// desktop is ready.
     async fn recreate(
         &self,
         mut env: Container,
@@ -416,10 +417,14 @@ impl App {
                 let created = self.inspect("container", &env.container).await?;
                 self.join_groups(&env, &created).await?;
             }
+            // Started means that its desktop is ready, so one that keeps restarting is replaced
+            // by the previous container again; the container is held alone until then.
             if running {
+                self.begin_stage(job_id, "start")?;
                 self.docker(&["start", &env.container])
                     .await
                     .map_err(|error| self.device_error(&env, error))?;
+                self.desktop_ready(&env, job_id).await?;
             }
             anyhow::Ok(())
         }
