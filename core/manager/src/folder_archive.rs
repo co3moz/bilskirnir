@@ -4,7 +4,7 @@
 //! progress and any error stay visible after the browser's download has begun.
 use crate::{
     App,
-    archives::{send_archive, transfer_permit},
+    archives::{send_archive, stall, transfer_permit},
     auth,
     error::{Error, Result},
     files::percent_encode,
@@ -12,13 +12,14 @@ use crate::{
 };
 use anyhow::Context;
 use axum::{
-    body::{Body, Bytes},
+    body::Bytes,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde_json::{Value, json};
 use std::{process::Stdio, sync::Arc};
 use tokio::sync::mpsc;
+use tracing::Instrument;
 
 /// Opens the folder without following symlinks on its path and runs tar there.
 const SCRIPT: &str = include_str!("../helpers/archive_folder.py");
@@ -102,20 +103,14 @@ pub(crate) fn respond(
 ) -> Result<Response> {
     let permit = transfer_permit(&app)?;
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
-    let (job_id, _) = jobs::start(app, KIND, resource, false, move |app, job_id| async move {
-        let _permit = permit;
-        let result = app.archive_folder(&job_id, &source, &body, token).await;
-        if let Err(error) = &result {
-            // The download fails instead of ending in a short file that looks complete.
-            let _ = body
-                .send(Err(std::io::Error::other(format!("{error:#}"))))
-                .await;
-        }
-        result
-    })?;
-    let stream = futures_util::stream::unfold(chunks, |mut chunks| async move {
-        chunks.recv().await.map(|chunk| (chunk, chunks))
-    });
+    let span = tracing::Span::current();
+    let (job_id, outcome) =
+        jobs::start(app, KIND, resource, false, move |app, job_id| async move {
+            let _permit = permit;
+            app.archive_folder(&job_id, &source, &body, token)
+                .instrument(span)
+                .await
+        })?;
     Ok((
         [
             (header::CONTENT_TYPE, "application/gzip".to_owned()),
@@ -123,7 +118,7 @@ pub(crate) fn respond(
             (header::CACHE_CONTROL, "no-store".to_owned()),
             (header::HeaderName::from_static("x-job-id"), job_id),
         ],
-        Body::from_stream(stream),
+        stall::download(chunks, outcome),
     )
         .into_response())
 }

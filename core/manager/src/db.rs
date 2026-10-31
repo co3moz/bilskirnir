@@ -60,6 +60,30 @@ impl Db {
             .filter_map(|(id, data)| self.readable(kind, &id, &data))
             .collect())
     }
+    /// The records of `kind` whose id starts with `prefix`, such as one container's in ids of the
+    /// form `container:name`, as [`Db::list`] reads them: newest first, and without one that does
+    /// not read. Only those rows are read, as a range of the primary key, so `prefix` is matched
+    /// as it is: `%` and `_` mean themselves.
+    pub fn list_prefixed<T: DeserializeOwned>(&self, kind: &str, prefix: &str) -> Result<Vec<T>> {
+        let rows: Vec<(String, String)> = {
+            let conn = self.connection();
+            let row = |r: &rusqlite::Row| Ok((r.get(0)?, r.get(1)?));
+            match past(prefix) {
+                Some(end) => conn
+                    .prepare("SELECT id, data FROM records WHERE kind=?1 AND id>=?2 AND id<?3 ORDER BY rowid DESC")?
+                    .query_map(params![kind, prefix, end], row)?
+                    .collect::<rusqlite::Result<_>>()?,
+                None => conn
+                    .prepare("SELECT id, data FROM records WHERE kind=?1 AND id>=?2 ORDER BY rowid DESC")?
+                    .query_map(params![kind, prefix], row)?
+                    .collect::<rusqlite::Result<_>>()?,
+            }
+        };
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, data)| self.readable(kind, &id, &data))
+            .collect())
+    }
     /// Every record of `kind`, newest first, or an error that names the first that does not
     /// read: for a decision that must see them all, such as whether anything still uses an
     /// image or a volume, or a backup.
@@ -138,6 +162,23 @@ impl Db {
         )?;
         transaction.commit()?;
         Ok(())
+    }
+    /// Remove every record of `kind` whose id starts with `prefix`, the range
+    /// [`Db::list_prefixed`] reads, also those that do not read, and return how many went. Not
+    /// for jobs, which [`Db::remove`] takes one at a time with their logs.
+    pub fn remove_prefixed(&self, kind: &str, prefix: &str) -> Result<usize> {
+        anyhow::ensure!(kind != job_log::JOB, "A job is removed with its log");
+        let conn = self.connection();
+        Ok(match past(prefix) {
+            Some(end) => conn.execute(
+                "DELETE FROM records WHERE kind=?1 AND id>=?2 AND id<?3",
+                params![kind, prefix, end],
+            )?,
+            None => conn.execute(
+                "DELETE FROM records WHERE kind=?1 AND id>=?2",
+                params![kind, prefix],
+            )?,
+        })
     }
     /// Remove the finished jobs beyond the newest `keep`, with their logs. A job still running
     /// or queued stays whatever its age; its end is what marks it finished.
@@ -234,6 +275,20 @@ fn unread(error: &serde_json::Error) -> String {
         serde_json::error::Category::Io => "a read error",
     };
     format!("{what} at line {}, column {}", error.line(), error.column())
+}
+
+/// The first text past every id that starts with `prefix`, or `None` when no text is. SQLite
+/// compares text byte by byte, which for UTF-8 is the order of the characters, and no character's
+/// bytes begin another's, so raising the last character that can be raised bounds the prefix.
+fn past(prefix: &str) -> Option<String> {
+    let mut chars: Vec<char> = prefix.chars().collect();
+    while let Some(last) = chars.pop() {
+        if let Some(next) = (u32::from(last) + 1..=u32::from(char::MAX)).find_map(char::from_u32) {
+            chars.push(next);
+            return Some(chars.into_iter().collect());
+        }
+    }
+    None
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
 //! Pins down how an agent reads a job: the whole job as before unless it asks for part of the log,
 //! a part that says where it lies in the job's whole output so the next read gets only what was
-//! added, cut at a character's start, the end of the log by default over MCP, and a wait that
-//! answers as soon as the job ends and no later than it was allowed to.
+//! added, also after a new manager started the log again, cut at a character's start, the end of
+//! the log by default over MCP, and a wait that answers as soon as the job ends and no later than
+//! it was allowed to.
 use super::*;
 use crate::test_support::app;
 use std::sync::Arc;
@@ -44,6 +45,34 @@ fn a_part_of_the_log_says_where_it_lies_in_the_whole_output() {
     let mut job = job("aéb");
     assert_eq!(window(&mut job, 4, None, Some(2)), (3, 4));
     assert_eq!(job.log, "b");
+}
+
+#[test]
+fn a_follower_reads_on_in_order_across_a_log_started_again() {
+    // An update job, whose log a new manager starts again when it takes the job over.
+    let db = crate::db::Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.put("job", "j", &job("from an older manager\n")).unwrap();
+    db.append_job_log("j", "the update's first lines\n")
+        .unwrap();
+    let (_, followed) = db.job_and_end("j").unwrap();
+    db.restart_job_log("j", "The manager restarted; its output follows.\n")
+        .unwrap();
+    db.append_job_log("j", "the update's first lines\nand more\n")
+        .unwrap();
+    let again = "The manager restarted; its output follows.\nthe update's first lines\nand more\n";
+
+    // A follower that read up to the restart gets what came since, from where it stopped.
+    let (mut read, end) = db.job_and_end("j").unwrap();
+    assert_eq!(
+        window(&mut read, end, Some(followed), None),
+        (followed, end)
+    );
+    assert_eq!(read.log, again);
+    assert_eq!(end, followed + again.len() as u64);
+    // A reader from the start gets the log as it is, from where it now begins.
+    let (mut read, end) = db.job_and_end("j").unwrap();
+    assert_eq!(window(&mut read, end, Some(0), None), (followed, end));
+    assert_eq!(read.log, again);
 }
 
 /// A running job whose log holds `log`, which ends when `end` is sent.

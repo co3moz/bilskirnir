@@ -394,3 +394,55 @@ fn an_icon_and_template_travel_with_the_archive_and_unusable_ones_are_dropped() 
     let info = ArchiveInfo::read(Some(&serde_json::to_vec(&older).unwrap())).unwrap();
     assert_eq!(info.template_ids, ["unity"]);
 }
+
+#[cfg(unix)]
+#[tokio::test(start_paused = true)]
+async fn an_import_that_stops_sending_frees_its_slot() {
+    use futures_util::StreamExt;
+    let dir = std::env::temp_dir().join(format!("thoric-stall-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    crate::test_support::write_script(&docker, "#!/bin/sh\nexec cat > /dev/null\n");
+    let mut app = crate::test_support::app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let layer = format!("blobs/sha256/{}", "1".repeat(64));
+    // A client with no session that could end its upload sends this and then nothing more: no
+    // byte at all and Thoric's own first entry may come before a long `docker save`, while the
+    // image's own bytes show that it is under way.
+    for (sent, limit, minutes) in [
+        (Vec::new(), stall::START, 60),
+        (tar::entry(tar::METADATA, b"{}", 0), stall::START, 60),
+        (tar::entry(&layer, b"layer", 0), stall::STALL, 5),
+    ] {
+        let (written, _logging) = crate::test_support::capture();
+        let silent = futures_util::stream::iter([Ok::<_, std::io::Error>(Bytes::from(sent))])
+            .chain(futures_util::stream::pending());
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/images/import")
+            .header("host", "localhost:8080")
+            .header("x-thoric-request", "1")
+            .header("content-type", "application/octet-stream")
+            .body(Body::from_stream(silent))
+            .unwrap();
+        let started = tokio::time::Instant::now();
+        let response = crate::router(app.clone()).oneshot(request).await.unwrap();
+        assert_eq!(started.elapsed(), limit);
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error_message(response).await,
+            format!("The upload stopped: nothing arrived for {minutes} minutes")
+        );
+        assert_eq!(app.archives.available_permits(), 2);
+        // Logged once, in the span of the request whose answer said so.
+        let log = written.text();
+        let stalls = log
+            .lines()
+            .filter(|line| line.contains("nothing arrived"))
+            .collect::<Vec<_>>();
+        assert_eq!(stalls.len(), 1, "{log:?}");
+        assert!(stalls[0].contains(" WARN "), "{log:?}");
+        assert!(stalls[0].contains("path=/api/images/import"), "{log:?}");
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}

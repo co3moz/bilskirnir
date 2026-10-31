@@ -430,3 +430,27 @@ exit 1
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn an_upload_that_stops_sending_ends_after_the_stall() {
+    use futures_util::StreamExt;
+    let archive = archive();
+    // The first pieces arrive, then nothing more.
+    let stream =
+        futures_util::stream::iter(pieces(&archive[..1024])).chain(futures_util::stream::pending());
+    let mut tar = Vec::new();
+    let started = tokio::time::Instant::now();
+    let error = deliver(
+        stream,
+        &mut tar,
+        None,
+        1 << 20,
+        std::future::pending(),
+        |_| Ok(()),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(started.elapsed(), stall::STALL);
+    assert!(error.to_string().contains("nothing arrived"), "{error}");
+    assert_eq!(tar, &archive[..1024]);
+}

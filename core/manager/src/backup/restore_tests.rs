@@ -374,3 +374,20 @@ async fn a_container_starts_only_from_a_desktop_image_this_manager_handles() {
     app.source_image(&mut env, "reset-job").await.unwrap();
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_restore_whose_upload_stops_ends_after_the_stall() {
+    let app = crate::test_support::app(false);
+    let silent = futures_util::stream::pending::<std::io::Result<Bytes>>();
+    let mut input = Input::new(
+        &app,
+        "restore-job",
+        None,
+        Body::from_stream(silent),
+        auth::Session::Link,
+    );
+    let started = tokio::time::Instant::now();
+    let error = input.next().await.unwrap_err();
+    assert_eq!(started.elapsed(), crate::archives::stall::STALL);
+    assert!(error.to_string().contains("nothing arrived"), "{error}");
+}

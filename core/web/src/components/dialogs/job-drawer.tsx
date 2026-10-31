@@ -59,7 +59,7 @@ function JobLog({ text }: { text: string }) {
 }
 
 export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
-  const job = useJob(id)
+  const job = useJob(id, props.open)
   const data = job.data
   const progress = data?.status === "running" ? jobProgress(data.progress) : null
   // A job with stages, such as a script build, shows its progress under the running stage.

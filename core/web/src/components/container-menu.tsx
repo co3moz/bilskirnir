@@ -11,6 +11,7 @@ import {
   RiStethoscopeLine,
   RiDeleteBinLine,
   RiDownloadLine,
+  RiEraserLine,
   RiUploadLine,
 } from "@remixicon/react"
 
@@ -132,6 +133,10 @@ export function ContainerMenu({ item }: { item: ContainerItem }) {
           {t("containers.diagnostics")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => openDialog({ kind: "reset", id })}>
+          <RiEraserLine />
+          {t("containers.reset")}
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => openDialog({ kind: "delete", id })}>
           <RiDeleteBinLine />
           {t("job.delete")}

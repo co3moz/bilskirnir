@@ -10,7 +10,8 @@ use super::{Access, HELPER_LIMIT, MOUNT, Volume, helper_args, helper_error, help
 use crate::{
     App,
     archives::{
-        arriving, check_upload, count, import_progress, interrupted, send_archive, transfer_permit,
+        arriving, check_upload, count, import_progress, interrupted, send_archive, stall,
+        transfer_permit,
     },
     auth,
     error::{Error, Result},
@@ -30,7 +31,7 @@ pub(crate) use copy::CopyVolume;
 pub(crate) use copy::copy;
 use ending::Ending;
 use flate2::write::MultiGzDecoder;
-use futures_util::{Stream, StreamExt};
+use futures_util::Stream;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -45,6 +46,7 @@ use tokio::{
     process::{Child, ChildStdin},
     sync::{mpsc, oneshot},
 };
+use tracing::Instrument;
 
 /// How often a running transfer's byte count is written to its job.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
@@ -71,26 +73,19 @@ pub async fn export(
     let volume = app.open_volume(&name).await?;
     let permit = transfer_permit(&app)?;
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
-    let (job_id, _) = jobs::start(
+    let span = tracing::Span::current();
+    let (job_id, outcome) = jobs::start(
         app,
         "volume-export",
         format!("volume:{name}"),
         false,
         move |app, job_id| async move {
             let _permit = permit;
-            let result = app.export_volume(&job_id, &volume, &body, token).await;
-            if let Err(error) = &result {
-                // The download fails instead of ending in a short file that looks complete.
-                let _ = body
-                    .send(Err(std::io::Error::other(format!("{error:#}"))))
-                    .await;
-            }
-            result
+            app.export_volume(&job_id, &volume, &body, token)
+                .instrument(span)
+                .await
         },
     )?;
-    let stream = futures_util::stream::unfold(chunks, |mut chunks| async move {
-        chunks.recv().await.map(|chunk| (chunk, chunks))
-    });
     Ok((
         [
             (header::CONTENT_TYPE, "application/gzip".to_owned()),
@@ -101,7 +96,7 @@ pub async fn export(
             ),
             (header::HeaderName::from_static("x-job-id"), job_id),
         ],
-        Body::from_stream(stream),
+        stall::download(chunks, outcome),
     )
         .into_response())
 }
@@ -140,6 +135,7 @@ pub async fn import(
     let permit = transfer_permit(&app)?;
     let session = token.clone();
     let (accepted, was_accepted) = oneshot::channel();
+    let span = tracing::Span::current();
     let (job_id, outcome) = jobs::start(
         app.clone(),
         "volume-import",
@@ -148,6 +144,7 @@ pub async fn import(
         move |app, job_id| async move {
             let _permit = permit;
             app.import_volume(&job_id, request, body, token, accepted)
+                .instrument(span)
                 .await
         },
     )?;
@@ -181,6 +178,7 @@ pub async fn extract(
     let permit = transfer_permit(&app)?;
     let token = session.clone();
     let (accepted, was_accepted) = oneshot::channel();
+    let span = tracing::Span::current();
     let (job_id, outcome) = jobs::start(
         app.clone(),
         "volume-extract",
@@ -189,6 +187,7 @@ pub async fn extract(
         move |app, job_id| async move {
             let _permit = permit;
             app.extract_volume(&job_id, &name, request, body, token, accepted)
+                .instrument(span)
                 .await
         },
     )?;
@@ -557,7 +556,8 @@ impl App {
 
 /// Hand an upload to tar as a plain archive, counted against its declared size or, without one,
 /// against the import limit, and report the bytes received now and then. Returns how many
-/// arrived, or `Stopped` once tar no longer reads.
+/// arrived, or `Stopped` once tar no longer reads. An upload that sends nothing for
+/// [`stall::STALL`] fails.
 async fn deliver(
     mut stream: impl Stream<Item = std::result::Result<Bytes, axum::Error>> + Unpin,
     tar: &mut (impl AsyncWrite + Unpin),
@@ -569,12 +569,7 @@ async fn deliver(
     let mut unpacker = Unpacker::new(limit);
     tokio::pin!(revoked);
     let (mut received, mut reported) = (0u64, Instant::now());
-    loop {
-        let chunk = tokio::select! {
-            chunk = stream.next() => chunk,
-            _ = &mut revoked => bail!("Session expired. Sign in again."),
-        };
-        let Some(chunk) = chunk else { break };
+    while let Some(chunk) = stall::receive(&mut stream, &mut revoked).await? {
         let chunk = chunk.map_err(interrupted)?;
         received += chunk.len() as u64;
         count(received, size, limit)?;

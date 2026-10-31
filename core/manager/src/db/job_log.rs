@@ -6,7 +6,8 @@
 //! kept goes; the one that crosses into that part stays whole. The chunks therefore always hold
 //! at least the bytes the log keeps, and reading a job puts the record's own log, which managers
 //! before the table wrote into it, and its chunks together and trims the whole: the same text the
-//! record would hold had every addition trimmed it.
+//! record would hold had every addition trimmed it. A log started again goes on counting where it
+//! ended, so a position a reader holds never comes round again.
 use super::Db;
 use crate::model::{Job, LOG_LIMIT};
 use anyhow::Result;
@@ -88,19 +89,38 @@ impl Db {
         Ok(())
     }
 
-    /// Start a job's log again with `text`: the log its record carries and its chunks go.
+    /// Start a job's log again with `text`: the log its record carries and its chunks go, while
+    /// its positions go on from where it ended, so a reader that asks from its last end, as the
+    /// dashboard and `get_job` do, reads `text` and what follows it instead of a position the
+    /// new log reaches again.
     pub fn restart_job_log(&self, id: &str, text: &str) -> Result<()> {
         let mut conn = self.connection();
         let transaction = conn.transaction()?;
-        let changed = transaction.execute(
+        // Where the log ends, as `job_and_end` counts it: the record's own log, then its chunks.
+        let ended: i64 = transaction.query_row(
+            "SELECT coalesce(length(CAST(json_extract(data, '$.log') AS BLOB)), 0)
+                  + coalesce((SELECT max(ends_at) FROM job_log WHERE job=?2), 0)
+             FROM records WHERE kind=?1 AND id=?2",
+            params![JOB, id],
+            |row| row.get(0),
+        )?;
+        transaction.execute(
             "UPDATE records SET data=json_set(data, '$.log', '') WHERE kind=?1 AND id=?2",
             params![JOB, id],
         )?;
-        if changed == 0 {
-            return Err(rusqlite::Error::QueryReturnedNoRows.into());
-        }
         transaction.execute("DELETE FROM job_log WHERE job=?1", [id])?;
+        // A chunk without text holds that end, which the next chunk counts on from.
+        transaction.execute(
+            "INSERT INTO job_log(job, text, ends_at) VALUES(?1, '', ?2)",
+            params![id, ended],
+        )?;
         append(&transaction, id, text)?;
+        if !text.is_empty() {
+            transaction.execute(
+                "DELETE FROM job_log WHERE job=?1 AND ends_at=?2 AND text=''",
+                params![id, ended],
+            )?;
+        }
         transaction.commit()?;
         Ok(())
     }
@@ -134,11 +154,12 @@ fn append(conn: &Connection, id: &str, text: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Whether the log so far ends inside a line: its last chunk, or else the record's own log.
+/// Whether the log so far ends inside a line: its last chunk with text, or else the record's own
+/// log.
 fn open_line(conn: &Connection, job: &Job) -> rusqlite::Result<bool> {
     let last: Option<String> = conn
         .query_row(
-            "SELECT substr(text, -1) FROM job_log WHERE job=?1 ORDER BY ends_at DESC LIMIT 1",
+            "SELECT substr(text, -1) FROM job_log WHERE job=?1 AND text<>'' ORDER BY ends_at DESC LIMIT 1",
             [&job.id],
             |row| row.get(0),
         )

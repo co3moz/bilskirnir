@@ -2,7 +2,7 @@
 //! through the filter an image import uses, or tar unpacking a new volume.
 use crate::{
     App,
-    archives::{count, import_progress, interrupted, loaded_image, tar::Filter},
+    archives::{count, import_progress, interrupted, loaded_image, stall, tar::Filter},
     auth,
     backup::{
         export::hex,
@@ -15,7 +15,6 @@ use crate::{
 use anyhow::{Context, anyhow, bail};
 use axum::body::{Body, BodyDataStream, Bytes};
 use blake2::{Blake2s256, Digest};
-use futures_util::StreamExt;
 use std::{
     collections::VecDeque,
     pin::Pin,
@@ -87,11 +86,7 @@ impl<'a> Input<'a> {
                 self.items.extend(found);
                 continue;
             }
-            let chunk = tokio::select! {
-                chunk = self.stream.next() => chunk,
-                _ = &mut self.revoked => bail!("Session expired. Sign in again."),
-            };
-            match chunk {
+            match stall::receive(&mut self.stream, &mut self.revoked).await? {
                 Some(chunk) => {
                     let chunk = chunk.map_err(interrupted)?;
                     self.received += chunk.len() as u64;
