@@ -120,6 +120,26 @@ fn a_prefixed_list_leaves_out_a_record_that_does_not_read() {
 }
 
 #[test]
+fn a_prefixed_removal_takes_every_id_of_its_range_whether_or_not_it_reads() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    for id in ["a:one", "ab:two", "a%:y", "b:one"] {
+        db.put("named", id, &serde_json::json!({"name": id}))
+            .unwrap();
+    }
+    db.put("named", "a:broken", &serde_json::json!({"name": SECRET}))
+        .unwrap();
+    db.put("other", "a:three", &serde_json::json!({"name": "a:three"}))
+        .unwrap();
+    assert_eq!(db.remove_prefixed("named", "a:").unwrap(), 2);
+    assert_eq!(db.ids("named").unwrap(), ["ab:two", "a%:y", "b:one"]);
+    assert_eq!(db.remove_prefixed("named", "a%").unwrap(), 1);
+    assert_eq!(db.remove_prefixed("named", "c").unwrap(), 0);
+    assert!(db.contains("other", "a:three").unwrap());
+    // A job goes with its log, which only a removal of the job itself takes.
+    assert!(db.remove_prefixed("job", "").is_err());
+}
+
+#[test]
 fn past_a_prefix_is_the_first_text_no_id_with_it_reaches() {
     assert_eq!(past("a:").as_deref(), Some("a;"));
     assert_eq!(past("ç").as_deref(), Some("è"));

@@ -96,20 +96,11 @@ impl Default for DesktopMcp {
 /// Forget a deleted container: its server records and connections, the endpoint created with
 /// it, and its grants on other endpoints.
 pub(crate) fn forget_container(app: &App, container_id: &str) -> anyhow::Result<()> {
-    for record in app
-        .db
-        .list_prefixed::<registry::ServerRecord>(
-            registry::SERVERS,
-            &registry::ServerRecord::key(container_id, ""),
-        )?
-        .into_iter()
-        .filter(|record| record.container_id == container_id)
-    {
-        app.db.remove(
-            registry::SERVERS,
-            &registry::ServerRecord::key(container_id, &record.name),
-        )?;
-    }
+    // By their ids, so a record this release cannot read goes too.
+    app.db.remove_prefixed(
+        registry::SERVERS,
+        &registry::ServerRecord::key(container_id, ""),
+    )?;
     app.desktop_mcp
         .pool
         .retain(|(_, container, _)| container != container_id);

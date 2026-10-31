@@ -163,6 +163,23 @@ impl Db {
         transaction.commit()?;
         Ok(())
     }
+    /// Remove every record of `kind` whose id starts with `prefix`, the range
+    /// [`Db::list_prefixed`] reads, also those that do not read, and return how many went. Not
+    /// for jobs, which [`Db::remove`] takes one at a time with their logs.
+    pub fn remove_prefixed(&self, kind: &str, prefix: &str) -> Result<usize> {
+        anyhow::ensure!(kind != job_log::JOB, "A job is removed with its log");
+        let conn = self.connection();
+        Ok(match past(prefix) {
+            Some(end) => conn.execute(
+                "DELETE FROM records WHERE kind=?1 AND id>=?2 AND id<?3",
+                params![kind, prefix, end],
+            )?,
+            None => conn.execute(
+                "DELETE FROM records WHERE kind=?1 AND id>=?2",
+                params![kind, prefix],
+            )?,
+        })
+    }
     /// Remove the finished jobs beyond the newest `keep`, with their logs. A job still running
     /// or queued stays whatever its age; its end is what marks it finished.
     pub fn prune_jobs(&self, keep: usize) -> Result<usize> {

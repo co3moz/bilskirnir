@@ -925,7 +925,21 @@ async fn a_new_containers_endpoint_is_named_after_it_and_leaves_with_it() {
         )
         .unwrap();
     server(&app, "c1", "chrome", &["browser_navigate"]);
+    // A record this release cannot read goes with it; one of a container whose id only begins
+    // the same way stays.
+    app.db
+        .put(
+            SERVERS,
+            &ServerRecord::key("c1", "broken"),
+            &json!({"name": 7}),
+        )
+        .unwrap();
+    server(&app, "c10", "unity", &["run_tests"]);
     forget_container(&app, "c1").unwrap();
+    assert_eq!(
+        app.db.ids(SERVERS).unwrap(),
+        [ServerRecord::key("c10", "unity")]
+    );
     assert!(app.db.get::<Endpoint>(ENDPOINTS, "chrome-dev").is_err());
     assert!(app.db.get::<Endpoint>(ENDPOINTS, "chrome-dev-2").is_ok());
     let both: Endpoint = app.db.get(ENDPOINTS, "both").unwrap();
