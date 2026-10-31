@@ -33,6 +33,14 @@ export function trimLog(log: string) {
 }
 
 /**
+ * Whether the log `read` came from ends before `before` did: a log started again by a manager
+ * that counted its positions from zero once more. What `read` holds then cannot follow `before`,
+ * and the log is read again from its start.
+ */
+export const logWentBack = (before: JobRead | undefined, read: JobRead) =>
+  before?.log_end !== undefined && read.log_end !== undefined && read.log_end < before.log_end
+
+/**
  * The job of `read`, which asked for its log from `before`'s end, with what it read joined to
  * `before`'s log and trimmed as the manager trims it. A part that does not start where `before`
  * ended, because there was no `before` or the bytes between were older than the log keeps, is

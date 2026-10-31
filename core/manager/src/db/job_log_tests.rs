@@ -1,8 +1,8 @@
 //! Pins down job logs in chunks: a log reads exactly as the whole-record log trimmed by
 //! `Job::trim_log` after every addition read, with the log an older manager left in the record
 //! before the chunks, while the chunks kept stay close to what the log keeps; a record and the
-//! line saved with it arrive together; a log starts again empty of what it had; and a job that is
-//! pruned, removed or gone takes its chunks with it.
+//! line saved with it arrive together; a log starts again empty of what it had but ends further on
+//! than it did; and a job that is pruned, removed or gone takes its chunks with it.
 use super::*;
 use std::path::Path;
 
@@ -155,12 +155,30 @@ fn a_log_started_again_keeps_nothing_it_had() {
     let db = db();
     db.put("job", "j", &job("j", "from the record\n")).unwrap();
     db.append_job_log("j", "from a chunk\n").unwrap();
+    let (_, ended) = db.job_and_end("j").unwrap();
+    assert_eq!(
+        ended,
+        ("from the record\n".len() + "from a chunk\n".len()) as u64
+    );
     db.restart_job_log("j", "Read again from its start.\n")
         .unwrap();
     db.append_job_log("j", "next\n").unwrap();
-    let read = db.job("j").unwrap();
+    let (read, end) = db.job_and_end("j").unwrap();
     assert_eq!(read.log, "Read again from its start.\nnext\n");
     assert_eq!(read.status, "running");
+    // The positions go on from where the log ended.
+    assert_eq!(end, ended + read.log.len() as u64);
+
+    // Started again with nothing, it ends where it did, and its first line needs no line end.
+    db.restart_job_log("j", "").unwrap();
+    let (read, again) = db.job_and_end("j").unwrap();
+    assert_eq!((read.log.as_str(), again), ("", end));
+    let record: Job = db.get("job", "j").unwrap();
+    db.put_job_logged(&record, "Stage 1/1: Running\n", true)
+        .unwrap();
+    let (read, after) = db.job_and_end("j").unwrap();
+    assert_eq!(read.log, "Stage 1/1: Running\n");
+    assert_eq!(after, end + read.log.len() as u64);
 }
 
 #[test]

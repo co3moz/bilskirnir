@@ -1,7 +1,14 @@
 import { test } from "bun:test"
 import assert from "node:assert/strict"
 
-import { followLog, jobReadPath, LOG_LIMIT, trimLog, type JobRead } from "../src/lib/job-log"
+import {
+  followLog,
+  jobReadPath,
+  LOG_LIMIT,
+  logWentBack,
+  trimLog,
+  type JobRead,
+} from "../src/lib/job-log"
 
 const job = (log: string, start: number, end: number, status = "running"): JobRead => ({
   id: "j1",
@@ -52,4 +59,12 @@ test("the joined log keeps the last LOG_LIMIT bytes from a character's start", (
   const after = followLog(before, job("bc", LOG_LIMIT, LOG_LIMIT + 2))
   assert.equal(after.log.length, LOG_LIMIT)
   assert.ok(after.log.endsWith("abc"))
+})
+
+test("a log whose end went back is read again from its start", () => {
+  const before = job("step 1\nstep 2\n", 0, 14)
+  // A manager that started the log again from zero now ends it before the drawer's end.
+  assert.equal(logWentBack(before, job("", 9, 9)), true)
+  assert.equal(logWentBack(before, job("step 3\n", 14, 21)), false)
+  assert.equal(logWentBack(undefined, job("step 1\n", 0, 7)), false)
 })

@@ -7,7 +7,7 @@ import { closeDialog } from "./dialogs"
 import { dockerEventsLive, streamLive } from "./events"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
-import { followLog, jobReadPath, type JobRead } from "./job-log"
+import { followLog, jobReadPath, logWentBack, type JobRead } from "./job-log"
 import { endpointApi } from "./mcp"
 import { creationEnded } from "./pending"
 import type {
@@ -165,7 +165,9 @@ export const useJob = (id: string | undefined, open = true) =>
     queryKey: ["jobs", id],
     queryFn: async () => {
       const before = queryClient.getQueryData<JobRead>(["jobs", id])
-      return followLog(before, await api<JobRead>(jobReadPath(id!, before)))
+      const read = await api<JobRead>(jobReadPath(id!, before))
+      if (logWentBack(before, read)) return api<JobRead>(jobReadPath(id!, undefined))
+      return followLog(before, read)
     },
     enabled: !!id && open,
     refetchInterval: (query) =>
