@@ -2,7 +2,7 @@
 //! provisioning its networks and its container, a retry that repairs it, a reset to its source
 //! image and its deletion. Each checks what it finds against the records before it changes it,
 //! and one that starts the desktop ends once the desktop is ready (`desktop_ready`).
-use super::{create_args::TUN_DEVICE, private_subnet};
+use super::{create_args::TUN_DEVICE, isolation::Reach, private_subnet};
 use crate::{App, model::*, volumes::RemovedVolumes};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -311,13 +311,14 @@ impl App {
                 Self::check_network(env, &info, internal)?;
             }
         }
-        let private = self.ensure_network(env, &env.private_network, true).await?;
-        self.ensure_network(env, &env.egress_network, false).await?;
+        let private = self
+            .private_network(env, &manager_info, existing.as_ref())
+            .await?;
+        self.ensure_network(env, &env.egress_network, Reach::Internet)
+            .await?;
         let manager_id = manager_info["Id"].as_str().context("Missing manager ID")?;
-        if manager_info["NetworkSettings"]["Networks"]
-            .get(&env.private_network)
-            .is_none()
-        {
+        // The network's own list, since a private network made again has the manager on it.
+        if private["Containers"].get(manager_id).is_none() {
             self.docker(&[
                 "network",
                 "connect",

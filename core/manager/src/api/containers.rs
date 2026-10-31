@@ -233,6 +233,9 @@ pub async fn action(
         move |app, job_id| async move {
             let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
+            if body.action != "stop" {
+                app.before_start(&env, &info).await?;
+            }
             app.docker(&[
                 &body.action,
                 info["Id"].as_str().context("Missing container ID")?,

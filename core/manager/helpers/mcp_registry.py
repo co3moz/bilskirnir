@@ -1,13 +1,19 @@
-"""Read, watch and change the MCP servers a desktop declares, as the desktop user.
+"""Read, watch and change the MCP servers a desktop declares.
 
 The image declares servers in /etc/thoric/mcp.d and the desktop user in
 ~/.config/thoric/mcp, one JSON file per server named after it. Symlinks are never followed.
 stdout carries one JSON document per line and nothing else.
 
+Run as the desktop user, the helper lists, watches and changes the desktop user's folder, and
+while it watches it says when the image's folder changed. That user can make it print anything,
+so the manager reads the image's folder itself, with `image` as root, which trusts only the
+files and folders that root alone can change.
+
 While it watches, the manager sends the state of the servers and the endpoints that reach this
 desktop on stdin, one JSON document per line, and the helper keeps the latest in the desktop's
 runtime folder for thoric-mcp and its tray, until stdin closes.
 """
+import errno
 import json
 import os
 import re
@@ -25,31 +31,51 @@ FILE_LIMIT = 64 * 1024
 SERVER_LIMIT = 64
 # Tool lists of every server with their descriptions, as the manager trims them.
 STATUS_LIMIT = 16 << 20
+# The users whose files the image's reader trusts: root alone.
+TRUSTED = (0,)
 
 
-def open_folder(path, create=False):
-    """Open a folder by walking it from / without following a symlink, creating it when asked."""
+def only_root(info, folder=False):
+    """Whether only root can change a file or folder: root owns it, and neither another group nor
+    anyone else can write it. A folder anyone can write is safe with the sticky bit, which lets
+    others add only files of their own, which are refused in turn."""
+    if info.st_uid not in TRUSTED:
+        return False
+    if folder and info.st_mode & stat.S_ISVTX:
+        return True
+    return not info.st_mode & 0o002 and not (info.st_mode & 0o020 and info.st_gid not in TRUSTED)
+
+
+def open_folder(path, create=False, trusted=False):
+    """Open a folder by walking it from / without following a symlink, creating it when asked.
+    With trusted, every folder on the way must be one only root can change."""
     folder = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        for part in path.strip("/").split("/"):
-            try:
-                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(part, 0o700, dir_fd=folder)
-                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
-            os.close(folder)
-            folder = child
+        walked = "/"
+        for part in [""] + path.strip("/").split("/"):
+            if part:
+                try:
+                    child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    os.mkdir(part, 0o700, dir_fd=folder)
+                    child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
+                os.close(folder)
+                folder = child
+                walked = os.path.join(walked, part)
+            if trusted and not only_root(os.fstat(folder), folder=True):
+                raise PermissionError(errno.EPERM, walked + " can be changed by a user other than root")
         return folder
     except BaseException:
         os.close(folder)
         raise
 
 
-def read_folder(path, source):
+def read_folder(path, source, trusted=False):
+    """The servers a folder declares. With trusted, those whose files only root can change."""
     try:
-        folder = open_folder(path)
+        folder = open_folder(path, trusted=trusted)
     except (FileNotFoundError, NotADirectoryError):
         return []
     except OSError as error:
@@ -78,6 +104,9 @@ def read_folder(path, source):
                 if not stat.S_ISREG(info.st_mode):
                     server["error"] = entry + " is not a regular file"
                     continue
+                if trusted and not only_root(info):
+                    server["error"] = entry + " can be changed by a user other than root"
+                    continue
                 data = file.read(FILE_LIMIT + 1)
             if len(data) > FILE_LIMIT:
                 server["error"] = entry + " is larger than 64 KiB"
@@ -97,7 +126,13 @@ def read_folder(path, source):
 
 
 def listing():
-    return {"servers": read_folder(IMAGE, "image") + read_folder(CONTAINER, "container")}
+    """The desktop user's servers."""
+    return {"servers": read_folder(CONTAINER, "container")}
+
+
+def image_listing():
+    """The image's servers, for the manager's reader as root."""
+    return {"servers": read_folder(IMAGE, "image", trusted=True)}
 
 
 def emit(document):
@@ -174,8 +209,9 @@ def received(line):
 
 
 def watch():
-    """Print the listing now and whenever it changes, and keep the status the manager sends, until
-    stdin closes."""
+    """Print the listing now and whenever it changes, with what the image's folder holds, which
+    the manager reads itself when that changes, and keep the status the manager sends, until stdin
+    closes."""
     last = None
     descriptor = sys.stdin.fileno()
     buffer = bytearray()
@@ -185,7 +221,7 @@ def watch():
         while True:
             current = (signature(IMAGE), signature(CONTAINER))
             if current != last:
-                emit(listing())
+                emit(dict(listing(), image=current[0]))
                 last = current
             readable, _, _ = select.select([descriptor], [], [], 2)
             if not readable:
@@ -264,6 +300,8 @@ def main(arguments):
     command = arguments[0] if arguments else ""
     if command == "list":
         emit(listing())
+    elif command == "image":
+        emit(image_listing())
     elif command == "watch":
         watch()
     elif command == "write" and len(arguments) == 2:
@@ -271,7 +309,7 @@ def main(arguments):
     elif command == "remove" and len(arguments) == 2:
         remove(arguments[1])
     else:
-        raise ValueError("Usage: list | watch | write NAME | remove NAME")
+        raise ValueError("Usage: list | image | watch | write NAME | remove NAME")
 
 
 if __name__ == "__main__":

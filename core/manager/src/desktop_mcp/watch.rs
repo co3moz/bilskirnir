@@ -1,24 +1,81 @@
-//! Following what the desktops declare: one helper per running desktop prints its declarations
-//! whenever they change, and the manager reads the tools of a new or changed server once. The
+//! Following what the desktops declare: one helper per running desktop prints the desktop user's
+//! declarations whenever they change, and says when the image's folder changed, which the manager
+//! then reads itself as root. The manager reads the tools of a new or changed server once. The
 //! same helper hears the desktop's reports.
 use super::{
     client,
     endpoints::announce,
-    registry::{Found, SERVERS, ServerRecord, watch_args},
+    registry::{Found, SERVERS, ServerRecord, Source, found, merged, watch_args},
     report,
     servers::records,
 };
 use crate::{App, model::now};
 use rmcp::{RoleClient, service::Peer};
-use std::{process::Stdio, sync::Arc, time::Duration};
+use serde_json::Value;
+use std::{
+    process::Stdio,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::io::BufReader;
 
 /// How often the manager looks for desktops that started or stopped.
 const SUPERVISE_EVERY: Duration = Duration::from_secs(10);
-/// The longest listing a desktop's helper prints: 64 declarations of at most 64 KiB in each of its
-/// two folders, each at most three times as long once escaped as JSON. The desktop can write a
-/// longer line, which is dropped.
+/// The longest listing a desktop's helper prints: 64 declarations of at most 64 KiB, each at most
+/// three times as long once escaped as JSON, and what the image's folder holds. The desktop can
+/// write a longer line, which is dropped.
 const LISTING_LIMIT: usize = 32 << 20;
+/// The image's folder is read as root at most this often, whatever the desktop's helper says.
+const IMAGE_READ_EVERY: Duration = Duration::from_secs(5);
+
+/// The image's declarations as the manager last read them as root, and what the desktop's helper
+/// said the folder held then.
+#[derive(Default)]
+struct ImageServers {
+    servers: Option<Vec<Found>>,
+    seen: Value,
+    read_at: Option<Instant>,
+    /// Why the last read failed, so a failure is logged when it begins or its reason changes.
+    failed: Option<String>,
+}
+impl ImageServers {
+    /// The image's servers for a listing of the desktop's helper, read again as root when the
+    /// helper says the folder changed, and on every listing until a read succeeds: the last ones
+    /// read when a read fails, and none before the first read.
+    async fn for_listing(
+        &mut self,
+        app: &App,
+        record_id: &str,
+        docker_id: &str,
+        listing: &Value,
+    ) -> Option<Vec<Found>> {
+        if self.servers.is_none() || listing["image"] != self.seen {
+            if let Some(at) = self.read_at {
+                tokio::time::sleep(IMAGE_READ_EVERY.saturating_sub(at.elapsed())).await;
+            }
+            self.read_at = Some(Instant::now());
+            match app.read_image_servers(docker_id).await {
+                Ok(servers) => {
+                    self.servers = Some(servers);
+                    self.seen = listing["image"].clone();
+                    if self.failed.take().is_some() {
+                        tracing::info!("The image's MCP servers of {record_id} were read again");
+                    }
+                }
+                Err(error) => {
+                    let error = format!("{error:#}");
+                    if self.failed.as_ref() != Some(&error) {
+                        tracing::warn!(
+                            "Could not read the image's MCP servers of {record_id} as root; their records stay as they are: {error}"
+                        );
+                    }
+                    self.failed = Some(error);
+                }
+            }
+        }
+        self.servers.clone()
+    }
+}
 
 /// Watch every running desktop and close idle server connections. The MCP endpoints, which
 /// answer whether or not the root `/mcp` is on, and the MCP page need the servers' tool lists.
@@ -89,6 +146,7 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
         if let Some(stdout) = child.stdout.take() {
             let mut stdout = BufReader::new(stdout);
             let mut line = Vec::new();
+            let mut image = ImageServers::default();
             while let Ok(Some(cut)) = client::read_line(&mut stdout, &mut line, LISTING_LIMIT).await
             {
                 if cut {
@@ -98,12 +156,30 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
                     );
                     continue;
                 }
-                let found = serde_json::from_slice(&line)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|listing| super::registry::found(&listing));
-                match found {
-                    Ok(found) => apply(&app, &record_id, found).await,
-                    Err(error) => tracing::debug!("Desktop MCP servers of {record_id}: {error:#}"),
+                // The helper runs as the desktop user, so its servers are that user's whatever it
+                // says.
+                let listing = match serde_json::from_slice::<Value>(&line) {
+                    Ok(listing) => listing,
+                    Err(error) => {
+                        tracing::debug!("Desktop MCP servers of {record_id}: {error}");
+                        continue;
+                    }
+                };
+                let user = match found(&listing, Source::Container) {
+                    Ok(user) => user,
+                    Err(error) => {
+                        tracing::debug!("Desktop MCP servers of {record_id}: {error:#}");
+                        continue;
+                    }
+                };
+                match image
+                    .for_listing(&app, &record_id, &docker_id, &listing)
+                    .await
+                {
+                    Some(servers) => apply(&app, &record_id, merged(servers, user)).await,
+                    // Before the image's folder was ever read, the desktop user's servers still
+                    // count, and the image's records stay as they are.
+                    None => apply_with(&app, &record_id, user, false).await,
                 }
             }
         }
@@ -123,6 +199,17 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
 /// Bring the records of a container in line with what its desktop declares. A new or changed
 /// declaration has its tools read in the background.
 pub(super) async fn apply(app: &Arc<App>, container_id: &str, found: Vec<Found>) {
+    apply_with(app, container_id, found, true).await;
+}
+
+/// [`apply`], where `image_known` says whether `found` holds the image's servers too. Without them
+/// the records of the image's servers stay, unless the desktop user declares the same name.
+pub(super) async fn apply_with(
+    app: &Arc<App>,
+    container_id: &str,
+    found: Vec<Found>,
+    image_known: bool,
+) {
     if app.container(container_id).is_err() {
         return;
     }
@@ -182,10 +269,10 @@ pub(super) async fn apply(app: &Arc<App>, container_id: &str, found: Vec<Found>)
         );
         changed = true;
     }
-    for old in existing
-        .iter()
-        .filter(|old| !found.iter().any(|server| server.name == old.name))
-    {
+    for old in existing.iter().filter(|old| {
+        !found.iter().any(|server| server.name == old.name)
+            && (image_known || old.source != Source::Image)
+    }) {
         let _ = app
             .db
             .remove(SERVERS, &ServerRecord::key(container_id, &old.name));

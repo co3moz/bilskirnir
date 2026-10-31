@@ -65,30 +65,77 @@ class RegistryTest(unittest.TestCase):
             registry.main(list(arguments))
         return [json.loads(line) for line in output.text.getvalue().splitlines()]
 
-    def test_both_folders_are_listed_and_a_bad_file_says_why(self):
+    def trust_the_tests(self):
+        """Files and folders the tests make are theirs, not root's; trust their user as root."""
+        patch = mock.patch.object(registry, "TRUSTED", (0, os.getuid()))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_each_folder_is_listed_by_its_reader_and_a_bad_file_says_why(self):
+        self.trust_the_tests()
         (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
         (self.image / "broken.json").write_text("{not json")
         (self.image / "Bad Name.json").write_text("{}")
         (self.image / "notes.txt").write_text("ignored")
         self.container.mkdir(parents=True)
         (self.container / "x.json").write_text(json.dumps({"url": "http://127.0.0.1:9000/mcp"}))
-        servers = self.run_helper("list")[0]["servers"]
-        by_name = {(s["name"], s["source"]): s for s in servers}
-        self.assertEqual(by_name[("chrome", "image")]["spec"], {"command": "playwright-mcp"})
-        self.assertIn("not valid JSON", by_name[("broken", "image")]["error"])
-        self.assertIn("error", by_name[("Bad Name", "image")])
-        self.assertEqual(by_name[("x", "container")]["spec"]["url"], "http://127.0.0.1:9000/mcp")
-        self.assertNotIn(("notes", "image"), by_name)
+        image = {s["name"]: s for s in self.run_helper("image")[0]["servers"]}
+        self.assertEqual(image["chrome"]["spec"], {"command": "playwright-mcp"})
+        self.assertIn("not valid JSON", image["broken"]["error"])
+        self.assertIn("error", image["Bad Name"])
+        self.assertNotIn("notes", image)
+        self.assertNotIn("x", image)
+        # The desktop user's helper lists that user's folder alone.
+        self.assertEqual(self.run_helper("list")[0],
+                         {"servers": [{"name": "x", "source": "container",
+                                       "spec": {"url": "http://127.0.0.1:9000/mcp"}}]})
 
     def test_a_missing_folder_lists_nothing(self):
+        self.trust_the_tests()
         shutil.rmtree(self.image)
+        self.assertEqual(self.run_helper("image")[0], {"servers": []})
         self.assertEqual(self.run_helper("list")[0], {"servers": []})
 
+    def test_the_image_reader_trusts_only_what_root_alone_can_change(self):
+        (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
+        # A reader that trusts only a user who owns none of these files refuses them, as root's
+        # refuses the desktop user's. The tests may run as root, which owns them all.
+        with mock.patch.object(registry, "TRUSTED", (2**31 - 2,)):
+            servers = self.run_helper("image")[0]["servers"]
+        self.assertEqual(len(servers), 1)
+        self.assertNotIn("spec", servers[0])
+        self.assertIn("can be changed by a user other than root", servers[0]["error"])
+        self.trust_the_tests()
+        self.assertEqual(self.run_helper("image")[0]["servers"][0]["spec"], {"command": "playwright-mcp"})
+        # A file anyone can write.
+        (self.image / "open.json").write_text("{}")
+        (self.image / "open.json").chmod(0o666)
+        servers = {s["name"]: s for s in self.run_helper("image")[0]["servers"]}
+        self.assertEqual(servers["open"]["error"], "open.json can be changed by a user other than root")
+        self.assertNotIn("spec", servers["open"])
+        self.assertIn("spec", servers["chrome"])
+        # A folder on the way that anyone can write, where a file could be swapped for another;
+        # with the sticky bit others can add only files of their own.
+        thoric = self.image.parent
+        thoric.chmod(0o777)
+        servers = self.run_helper("image")[0]["servers"]
+        self.assertEqual([s["name"] for s in servers], [""])
+        self.assertIn(str(thoric) + " can be changed by a user other than root", servers[0]["error"])
+        thoric.chmod(0o1777)
+        self.assertIn("spec", {s["name"]: s for s in self.run_helper("image")[0]["servers"]}["chrome"])
+        thoric.chmod(0o755)
+        # A folder that is a link is not followed, and declares nothing.
+        elsewhere = self.root / "elsewhere"
+        self.image.rename(elsewhere)
+        self.image.symlink_to(elsewhere)
+        self.assertEqual(self.run_helper("image")[0], {"servers": []})
+
     def test_a_symlinked_declaration_or_folder_is_not_followed(self):
+        self.trust_the_tests()
         secret = self.root / "secret.json"
         secret.write_text(json.dumps({"command": "leak"}))
         (self.image / "link.json").symlink_to(secret)
-        servers = self.run_helper("list")[0]["servers"]
+        servers = self.run_helper("image")[0]["servers"]
         self.assertEqual(len(servers), 1)
         self.assertIn("error", servers[0])
         self.assertNotIn("spec", servers[0])
@@ -201,9 +248,23 @@ class WatchTest(unittest.TestCase):
         self.stop()
         self.assertFalse(self.status.exists())
         self.assertEqual([p.name for p in self.status.parent.iterdir()], [])
-        # stdout carried the listing alone.
+        # stdout carried the listing alone, with what the image's folder holds.
         self.assertEqual([json.loads(line) for line in self.output.text.getvalue().splitlines()],
-                         [{"servers": []}])
+                         [{"servers": [], "image": None}])
+
+    def test_a_change_of_the_images_folder_is_said_without_its_servers(self):
+        image = self.root / "image"
+        lines = lambda: self.output.text.getvalue().splitlines()
+        self.start()
+        self.wait_for(lambda: len(lines()) == 1)
+        image.mkdir()
+        (image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
+        self.wait_for(lambda: len(lines()) == 2)
+        self.stop()
+        second = json.loads(lines()[1])
+        # The manager reads the image's servers itself, as root.
+        self.assertEqual(second["servers"], [])
+        self.assertEqual([entry[0] for entry in second["image"]], ["chrome.json"])
 
     def test_a_line_over_the_limit_is_dropped_and_the_next_one_kept(self):
         with mock.patch.object(registry, "STATUS_LIMIT", 64):

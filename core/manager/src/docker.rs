@@ -1,13 +1,16 @@
 //! The Docker CLI the manager runs for every Docker operation, and the check that a container it
 //! finds is the one its record names. `lifecycle` creates, provisions, retries, resets and
 //! deletes a container, `create_args` holds every setting Docker fixes when it creates one,
-//! `networks` a container's private and internet networks, and `logged` runs a command whose
-//! output goes into a job's log.
+//! `networks` a container's private and internet networks, `isolation` keeps internal networks
+//! without an address on the Docker host, and `logged` runs a command whose output goes into a
+//! job's log.
 mod create_args;
+mod isolation;
 mod lifecycle;
 pub(crate) mod logged;
 mod networks;
 
+pub(crate) use isolation::{Reach, create_args, isolated};
 pub(crate) use lifecycle::image_volumes_mounted;
 pub(crate) use logged::LOGGED_LIMIT;
 pub(crate) use networks::{private_ip, private_subnet};

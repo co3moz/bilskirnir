@@ -7,7 +7,7 @@ use super::{
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of, summary},
     registry::{
         Declaration, SERVERS, ServerRecord, ServerSpec, Source, check_declarations, found,
-        loopback_url, substitute,
+        loopback_url, merged, substitute,
     },
     scopes::{
         ENDPOINT_WORDING, Scope, Target, bound_tool, catalog, exposed_name, exposed_name_hashed,
@@ -269,15 +269,25 @@ fn a_declaration_has_a_name_and_only_known_fields() {
 
 #[test]
 fn the_desktop_users_declaration_replaces_the_images_and_bad_files_become_errors() {
-    let listing = json!({"servers":[
+    let image = json!({"servers":[
         {"name":"chrome","source":"image","spec":{"command":"playwright-mcp"}},
         {"name":"x","source":"image","error":"x.json is not valid JSON"},
+        {"name":"","source":"image","error":"Cannot open /etc/thoric/mcp.d: /etc/thoric can be changed by a user other than root"}
+    ]});
+    let user = json!({"servers":[
         {"name":"chrome","source":"container","spec":{"command":"my-chrome-mcp"}},
         {"name":"bad","source":"container","spec":{"command":"a","url":"http://127.0.0.1:1/"}},
         {"name":"Not-A-Name","source":"container","spec":{"command":"a"}}
     ]});
-    let servers = found(&listing).unwrap();
+    let servers = merged(
+        found(&image, Source::Image).unwrap(),
+        found(&user, Source::Container).unwrap(),
+    );
     assert_eq!(servers.len(), 3);
+    assert_eq!(
+        servers.iter().find(|s| s.name == "x").unwrap().source,
+        Source::Image
+    );
     let chrome = servers.iter().find(|s| s.name == "chrome").unwrap();
     assert_eq!(chrome.source, Source::Container);
     assert_eq!(
@@ -300,6 +310,74 @@ fn the_desktop_users_declaration_replaces_the_images_and_bad_files_become_errors
             .spec
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn the_desktop_users_servers_apply_while_the_images_folder_could_not_be_read() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "chrome", &["navigate"]);
+    let mine = ServerRecord {
+        name: "x".into(),
+        source: Source::Container,
+        ..app.db.get(SERVERS, "c1:chrome").unwrap()
+    };
+    app.db.put(SERVERS, "c1:x", &mine).unwrap();
+    let user = || {
+        vec![super::registry::Found {
+            name: "y".into(),
+            source: Source::Container,
+            spec: Ok(stdio("node")),
+        }]
+    };
+    let kept = |key: &str| app.db.get::<ServerRecord>(SERVERS, key).is_ok();
+    // The desktop user's listing replaces that user's servers, and the image's stay unknown.
+    super::watch::apply_with(&app, "c1", user(), false).await;
+    assert!(kept("c1:chrome") && kept("c1:y") && !kept("c1:x"));
+    // Once the image's folder is read, a server it no longer declares goes.
+    super::watch::apply_with(&app, "c1", user(), true).await;
+    assert!(!kept("c1:chrome") && kept("c1:y"));
+}
+
+#[test]
+fn the_desktop_users_helper_cannot_claim_the_images_folder_for_a_server() {
+    // The watcher runs as the desktop user, who can make it print anything.
+    let forged = json!({"servers":[
+        {"name":"leak","source":"image","spec":{"command":"env"}},
+        {"name":"other","spec":{"command":"env"}}
+    ], "image": [["leak.json", 1, 2, 3]]});
+    let servers = found(&forged, Source::Container).unwrap();
+    assert!(
+        servers.iter().all(|s| s.source == Source::Container),
+        "{servers:?}"
+    );
+    // So its servers are handed no secret value.
+    let app = app(false);
+    let pinned: crate::compose::Pinned = serde_json::from_value(json!({
+        "compose": {"parameters": [{"name": "API_TOKEN", "secret": true}], "script": "true"},
+        "values": {"API_TOKEN": "s3cret"},
+    }))
+    .unwrap();
+    app.save_pinned("c1", &pinned).unwrap();
+    let handed = servers[0].source.values(&app, "c1");
+    assert!(!handed.contains_key("API_TOKEN"), "{handed:?}");
+    assert_eq!(Source::Image.values(&app, "c1")["API_TOKEN"], "s3cret");
+    // A record that names no source, or one the manager does not know, gets no secret either.
+    for source in [json!("container"), json!("Image"), json!("root"), json!("")] {
+        let record: ServerRecord = serde_json::from_value(json!({
+            "container_id": "c1", "name": "leak", "source": source, "spec": null,
+        }))
+        .unwrap();
+        assert_eq!(record.source, Source::Container, "{source}");
+    }
+    let record: ServerRecord = serde_json::from_value(
+        json!({"container_id": "c1", "name": "chrome", "source": "image", "spec": null}),
+    )
+    .unwrap();
+    assert_eq!(record.source, Source::Image);
+    assert_eq!(serde_json::to_value(record.source).unwrap(), "image");
 }
 
 #[test]

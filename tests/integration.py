@@ -496,6 +496,16 @@ def recorded(spec, interfaces=1):
     return {"hostname": spec["hostname"], "machine_ids": [spec["machine_id"]] * 2, "macs": [spec["mac_address"]] * interfaces}
 
 
+def isolated_network(name):
+    """Whether Docker made an internal network without an address on the host, asserting that it
+    did where the engine can: Docker Engine 28.0, API 1.48."""
+    version = docker("version", "--format", "{{.Server.APIVersion}}").decode().strip()
+    options = json.loads(docker("network", "inspect", name))[0]["Options"] or {}
+    isolated = options.get("com.docker.network.bridge.gateway_mode_ipv4") == "isolated"
+    assert isolated == (tuple(map(int, version.split("."))) >= (1, 48)), (name, version, options)
+    return isolated
+
+
 gpu_routes = []
 
 
@@ -1801,6 +1811,12 @@ try:
         address = networks[network]["IPAddress"]
         reached = subprocess.run(["docker", "exec", container, "python3", "-c", vnc_script, address], capture_output=True)
         assert (reached.returncode == 0) == listening, (network, address, reached.stderr)
+    # Nor from the Docker host, where every program, in WSL any distribution's, would reach it: the
+    # private network has no address there.
+    private_address = networks[f"thoric-{env_id}-private"]["IPAddress"]
+    if isolated_network(f"thoric-{env_id}-private"):
+        reached = subprocess.run(["python3", "-c", vnc_script, private_address], capture_output=True)
+        assert reached.returncode != 0, (private_address, reached.stdout)
     # The manager shares the private network to reach the desktop, never to be reached from it.
     manager_address = json.loads(docker("inspect", manager))[0]["NetworkSettings"]["Networks"][f"thoric-{env_id}-private"]["IPAddress"]
     manager_script = ("import sys, urllib.error, urllib.request\nopener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\n"
@@ -1812,7 +1828,7 @@ try:
     job(api(f"containers/{env_id}/internet", {"enabled": False}))
     assert api(f"containers/{env_id}/screenshot", raw=True).startswith(b"\xff\xd8")
     assert subprocess.run(["docker", "exec", container, "python3", "-c", offline_script], capture_output=True).returncode != 0
-    print("PASS live internet on/off with VNC still reachable, only on the private network, which never reaches the manager", flush=True)
+    print("PASS live internet on/off with VNC still reachable, only on the private network, which never reaches the manager and the host does not reach", flush=True)
     docker("exec", "--user", "desktop", container, "bash", "-c", "printf snapshot-home > /home/desktop/snapshot-marker; printf volume-data > /shared/volume-marker")
     snap_job = api(f"containers/{env_id}/snapshot", {"name": "snapshot-test"})
     snap = job(snap_job)
@@ -2426,6 +2442,7 @@ try:
     ready(peer_container)
     made = json.loads(docker("network", "inspect", group_network))[0]
     assert made["Internal"] and made["Labels"]["thoric.group"] == group, made
+    isolated_network(group_network)
     # The peer answers to peer-api in the group already.
     assert refused(f"containers/{edit}/settings", {"groups": [group], "aliases": ["peer-api"]}) == 400
     preview = api(f"containers/{edit}/settings", {"groups": [group], "aliases": ["builder"], "dry_run": True})

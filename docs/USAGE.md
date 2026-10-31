@@ -230,7 +230,7 @@ docker cp thoric-CONTAINER_ID:/home/desktop/Downloads/result ./result
 
 ## Change a container's settings
 
-Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, VPN access, proxy, [groups](#container-groups), volumes or machine identity. The image cannot change; take a snapshot or reset the container instead.
+Open a container's actions menu and select **Settings** to change its name, resolution, limits, GPU, internet, sudo, sound, microphone, gamepad, VPN access, proxy, [groups](#container-groups), volumes or machine identity. The image cannot change; take a snapshot or reset the container instead. A change that recreates the container keeps its files, so turning sudo off takes the desktop user's sudo away but not what root changed while it was on, such as a program that runs as root for anyone; reset the container to start clean.
 
 **Machine identity** shows the hostname, MAC address and machine ID that software inside the desktop sees, such as a license bound to one machine. A container keeps them through resets, retries and settings changes, while a new container, also one from a snapshot, gets its own. Change them only to let this container take over the identity of one it replaces; they can be changed but not cleared. A container created before Thoric kept identities shows them empty until it is next recreated, and keeps the machine ID of its image until one is set here. The details, including which Docker releases keep the internet interface's MAC address, are in [the API guide](API.md#machine-identity).
 
@@ -246,7 +246,7 @@ Containers cannot reach each other unless they share a group. **Groups** under *
 
 **Network groups** under **Containers** lists every group as a card: its network, how many of its members are running, and each member with its aliases. **New group** asks for a name and the containers to connect, and **Connect** adds the group to each of them. A container that is in eight groups already, or that answers to a name another member answers to, cannot be chosen, and the dialog says why. Opening a group shows its members as container cards with their aliases beside their names, **Connect containers** to add more, and a button on each card that disconnects it from the group. A group lasts while a container lists it, so disconnecting its last member removes it.
 
-Members reach every program the others serve on their network, so put only containers that trust each other in a group. Their screens stay private: a desktop listens for its screen connection only on its private network to Thoric. A desktop whose image is older than that shows a warning when it is in a group, because the other members could see and control its screen; build its image again from a current catalog image, or create the container again from one.
+Members reach every program the others serve on their network, so put only containers that trust each other in a group. Their screens stay private: a desktop listens for its screen connection only on its private network to Thoric, which programs on the Docker host do not reach either with Docker Engine 28.0 or later ([installation guide](INSTALLATION.md#settings)). A desktop whose image is older than that shows a warning when it is in a group, because the other members could see and control its screen; build its image again from a current catalog image, or create the container again from one.
 
 ## Proxy
 

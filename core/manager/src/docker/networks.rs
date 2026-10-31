@@ -1,5 +1,7 @@
 //! A container's two networks, the internal private one it shares with the manager alone and the
-//! one that reaches the internet, and its addresses there.
+//! one that reaches the internet, and its addresses there. `isolation` keeps the private one off
+//! the Docker host.
+use super::isolation::{Reach, create_args};
 use crate::{App, model::*};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
@@ -19,26 +21,29 @@ impl App {
         &self,
         env: &Container,
         name: &str,
-        internal: bool,
+        reach: Reach,
     ) -> Result<Value> {
         if let Some(info) = self.optional_inspect("network", name).await? {
-            Self::check_network(env, &info, internal)?;
+            Self::check_network(env, &info, reach != Reach::Internet)?;
             return Ok(info);
         }
-        let mut args = vec![
-            "network",
-            "create",
-            "--label",
-            "thoric.managed=true",
-            "--label",
+        self.create_network(env, name, reach, None).await
+    }
+    /// Create one of a container's networks, labeled as its own.
+    pub(super) async fn create_network(
+        &self,
+        env: &Container,
+        name: &str,
+        reach: Reach,
+        subnet: Option<&str>,
+    ) -> Result<Value> {
+        let labels = [
+            format!("{LABEL}=true"),
+            format!("thoric.environment={}", env.id),
         ];
-        let owner = format!("thoric.environment={}", env.id);
-        args.push(&owner);
-        if internal {
-            args.push("--internal");
-        }
-        args.push(name);
-        let id = self.docker(&args).await?;
+        let id = self
+            .docker_args(&create_args(name, &labels, reach, subnet))
+            .await?;
         self.inspect("network", String::from_utf8_lossy(&id).trim())
             .await
     }
