@@ -349,7 +349,7 @@ An agent on `/mcp` calls a server's tool without an endpoint through `call_mcp_s
 | `applications` | `launch_application`, `list_applications`, `get_application`, `application_logs`, `stop_application`, `application_diagnostics`, `sample_metrics` |
 | `files_read` | `list_files`, `read_file`, `download_file` |
 | `files_write` | `write_file`, `upload_file`, `move_file`, `delete_file`, and `save_screenshot`, which writes the image into the desktop |
-| `commands` | `exec_container` and the terminal tools, as the desktop user; with `sudo` enabled for the container that is root inside it |
+| `commands` | `exec_container` and the terminal tools, as the desktop user; with `sudo` enabled for the container that is root inside it, and after `sudo` was turned off it can still be through what root left in the container, until a reset |
 | `media` | `start_recording`, `stop_recording`, `list_recordings`, `export_artifacts`, `capture_audio`, `inject_audio` |
 | `power` | `container_action` |
 
