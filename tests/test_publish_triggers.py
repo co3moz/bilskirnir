@@ -1,22 +1,31 @@
 """Which changes run .github/workflows/publish.yml. A push to master publishes images, so it runs only
 for what they are built from, and a change to the documentation alone publishes nothing. A pull
-request runs the checks, so it also runs for every file a test reads: the Rust and interface tests
+request runs the checks, so it also runs for every file a test names: the Rust and interface tests
 hold docs/API.md, docs/MCP.md and the README to the routes and tools they describe, and a change to
 those alone could break them without any check running.
+
+A test names a file with a string, from the root of the repository, as `read("docs/API.md")` and
+`ROOT / "README.md"` do, or from its own folder when the string starts with ./ or ../, as
+include_str! and `new URL(..., import.meta.url)` do. The scan reads every string of the crate, the
+interface tests and the Python tests that way. A path a test joins from parts, such as a folder and
+a file name, is not seen.
 """
 
+import ast
+import functools
+import importlib.util
 import os
 from pathlib import Path
 import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-# The ways the tests name a file of the repository, relative to the file that names them: Rust's
-# include_str! and include_bytes!, and a URL of an interface test's module.
-READS = (
-    ("core/manager", "*.rs", re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')),
-    ("core/web/tests", "*.ts", re.compile(r'new URL\(\s*"([^"]+)",\s*import\.meta\.url\s*\)')),
-)
+# A quoted run without spaces, found at every quote, so a quote in a char literal such as '"' cannot
+# swallow the string after it.
+QUOTED = re.compile(r"""(?=(["'`])([^"'`\s]+)\1)""")
+spec = importlib.util.spec_from_file_location("unit", ROOT / "tests/unit.py")
+unit = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(unit)
 
 
 def trigger_paths(event):
@@ -42,26 +51,54 @@ def matches(pattern, path):
     return re.fullmatch(regex, path) is not None
 
 
+@functools.lru_cache(maxsize=None)
+def entries(folder):
+    return frozenset(os.listdir(folder)) if folder.is_dir() else frozenset()
+
+
+def named_file(source, value):
+    """The file of the repository a string of a source names, as a path from the root, or None. The
+    name has to match in case too, as on Linux, and git's own files are none."""
+    path = Path(os.path.normpath((source.parent if value.startswith(("./", "../")) else ROOT) / value))
+    try:
+        parts = path.relative_to(ROOT).parts
+    except ValueError:
+        return None
+    folder = ROOT
+    for part in parts:
+        if part not in entries(folder):
+            return None
+        folder = folder / part
+    return "/".join(parts) if folder.is_file() and parts[0] != ".git" else None
+
+
+def files_named(source, text):
+    """Every file of the repository a source's strings name; Python's are read exactly."""
+    if source.suffix == ".py":
+        values = [node.value for node in ast.walk(ast.parse(text)) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    else:
+        values = [match.group(2) for match in QUOTED.finditer(text)]
+    return {name for value in values if (name := named_file(source, value))}
+
+
 def files_tests_read():
-    """Every file of the repository the Rust code and the interface tests read, from the root. An
-    installed package is none."""
-    found = set()
-    for folder, suffix, form in READS:
-        for source in (ROOT / folder).rglob(suffix):
-            for name in form.findall(source.read_text(encoding="utf-8")):
-                if "node_modules" not in Path(name).parts:
-                    found.add(Path(os.path.normpath(source.parent / name)).relative_to(ROOT).as_posix())
-    return found
+    """Every file of the repository the crate, the interface tests and the Python tests name. This
+    file names paths only to match them."""
+    sources = [
+        *(ROOT / "core/manager").rglob("*.rs"),
+        *(ROOT / "core/web/tests").rglob("*.ts"),
+        *(path for folder in unit.FOLDERS for path in folder.glob("test_*.py") if path.name != Path(__file__).name),
+    ]
+    return set().union(*(files_named(source, source.read_text(encoding="utf-8")) for source in sources))
 
 
 class PublishTriggersTest(unittest.TestCase):
     def test_a_pull_request_runs_the_checks_for_every_file_a_test_reads(self):
         patterns = trigger_paths("pull_request")
         read = files_tests_read()
-        self.assertLessEqual({"README.md", "docs/API.md", "docs/MCP.md"}, read)
+        self.assertLessEqual({"README.md", "docs/API.md", "docs/MCP.md", ".github/workflows/publish.yml"}, read)
         for path in sorted(read):
             with self.subTest(path=path):
-                self.assertTrue((ROOT / path).is_file(), f"{path} is read by a test but is no file")
                 self.assertTrue(
                     any(matches(pattern, path) for pattern in patterns),
                     f"a test reads {path}, so a pull request that changes only it must run the checks; "
@@ -77,6 +114,24 @@ class PublishTriggersTest(unittest.TestCase):
         for path in ("README.md", "AGENTS.md", "docs/API.md"):
             with self.subTest(path=path):
                 self.assertFalse(any(matches(pattern, path) for pattern in published), f"a push of {path} publishes")
+
+    def test_the_scan_finds_a_file_however_a_test_names_it(self):
+        rust = ROOT / "core/manager/src/example_tests.rs"
+        self.assertEqual(
+            files_named(rust, """let quote = '"'; include_str!("../../../docs/API.md"); read("README.md");
+                assert!(guide.contains("x"), "docs/MCP.md must list it"); read("license"); "../helpers"; ".git";"""),
+            {"docs/API.md", "README.md"},
+        )
+        script = ROOT / "tests/test_example.py"
+        self.assertEqual(
+            files_named(script, 'for path in ("README.md", "LICENSE"):\n    read(path)\nROOT / "docs/MCP.md"  # "AGENTS.md"\n'),
+            {"README.md", "LICENSE", "docs/MCP.md"},
+        )
+        interface = ROOT / "core/web/tests/example.test.ts"
+        self.assertEqual(
+            files_named(interface, "read('../../../THIRD_PARTY_NOTICES.md'); new URL(`../../../LICENSE`, import.meta.url)"),
+            {"THIRD_PARTY_NOTICES.md", "LICENSE"},
+        )
 
     def test_the_patterns_match_as_github_does(self):
         self.assertTrue(matches("docs/**", "docs/screenshots/thoric.png"))
