@@ -606,7 +606,7 @@ export const fr: Messages = {
     "Conservez toute l'installation dans un fichier, ou apportez une sauvegarde dans celle-ci.",
   "backup.create": "Sauvegarder",
   "backup.always":
-    "Une sauvegarde contient toujours les conteneurs avec leurs réglages et leur identité de machine, les valeurs de leurs composes et les points d'accès MCP avec leurs jetons.",
+    "Une sauvegarde contient toujours les conteneurs avec leurs réglages et leur identité de machine, les valeurs de leurs composes et les points d'accès MCP, qu'une restauration rétablit sans leurs jetons.",
   "backup.images": "Images enregistrées",
   "backup.imagesHint.one":
     "{count} image enregistrée, avec son icône et son compose. Les images du catalogue sont téléchargées à nouveau là où elle est restaurée.",
@@ -1004,6 +1004,15 @@ export const fr: Messages = {
   "settings.configurationHint":
     "Les valeurs du gestionnaire, lues dans son environnement au démarrage. Les mots de passe et les jetons ne sont jamais affichés.",
   "settings.configurationFailed": "Impossible de lire la configuration",
+  "settings.exposure.title": "Quiconque atteint cette adresse est administrateur",
+  "settings.exposure.dashboard":
+    "La connexion est désactivée et le gestionnaire est publié sur {addresses}. Tout appareil qui l'atteint, et tout bureau ayant accès à Internet, utilise le tableau de bord et l'API sans mot de passe.",
+  "settings.exposure.mcp":
+    "/mcp ne demande pas de jeton et le gestionnaire est publié sur {addresses}. Tout appareil qui l'atteint, et tout bureau ayant accès à Internet, contrôle chaque conteneur par MCP.",
+  "settings.exposure.both":
+    "La connexion est désactivée, /mcp ne demande pas de jeton et le gestionnaire est publié sur {addresses}. Tout appareil qui l'atteint, et tout bureau ayant accès à Internet, contrôle chaque conteneur.",
+  "settings.exposure.fix":
+    "Définissez un mot de passe et un jeton MCP, ou publiez le gestionnaire sur cet ordinateur seulement avec BIND_ADDRESS=127.0.0.1.",
   "settings.secretSet": "Défini, masqué",
   "settings.notSet": "Non défini",
   "settings.idle": "Sans effet tant que {name} est désactivé.",

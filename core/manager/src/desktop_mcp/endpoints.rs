@@ -344,6 +344,16 @@ pub(crate) fn announce(app: &App, container_id: &str) {
 }
 
 /// End what an endpoint holds open after it changed or went away.
+/// Forget what a deleted endpoint reached, so an endpoint made later with its name starts with
+/// nothing: the jobs it started, the requests for a person it asked, which are declined, and the
+/// terminals it opened, which only the administrator reaches from now on.
+fn forget(app: &App, name: &str) -> anyhow::Result<()> {
+    app.desktop_mcp.close_service(name);
+    app.desktop_mcp.jobs.lock().unwrap().remove(name);
+    app.human.end_endpoint(name, &app.events);
+    crate::terminal::forget_endpoint(app, name)
+}
+
 fn release(app: &App, name: &str) {
     app.desktop_mcp
         .pool
@@ -415,7 +425,7 @@ pub async fn delete_endpoint(
     load(&app, &name)?;
     app.db.remove(ENDPOINTS, &name)?;
     release(&app, &name);
-    app.desktop_mcp.close_service(&name);
+    forget(&app, &name)?;
     Ok(Json(json!({"deleted": true, "name": name})))
 }
 
@@ -536,7 +546,7 @@ pub(crate) fn forget_container(app: &App, container_id: &str) -> anyhow::Result<
             .retain(|grant| grant.container_id != container_id);
         if endpoint.automatic && endpoint.grants.is_empty() {
             app.db.remove(ENDPOINTS, &endpoint.name)?;
-            app.desktop_mcp.close_service(&endpoint.name);
+            forget(app, &endpoint.name)?;
         } else {
             // An endpoint left without containers keeps its name and token for new grants.
             app.db.put(ENDPOINTS, &endpoint.name, &endpoint)?;

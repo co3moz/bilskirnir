@@ -107,16 +107,18 @@ pub struct App {
     outbound: outbound::Outbound,
 }
 /// The interface's content security policy. The templates page reads its list, the templates
-/// and their icons from another host, which is the one exception to `'self'`.
+/// and their icons from another host, which is the one exception to `'self'`. No page needs a
+/// `<base>`, a plugin or a form that posts elsewhere, so an injected one does nothing.
 fn content_security_policy(templates: Option<&str>) -> HeaderValue {
     let other = templates
         .map(|origin| format!(" {origin}"))
         .unwrap_or_default();
-    HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:{other}; connect-src 'self'{other}; worker-src 'self' blob:; frame-ancestors 'self'"))
+    HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:{other}; connect-src 'self'{other}; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"))
         .unwrap_or_else(|_| content_security_policy(None))
 }
 fn router(app: Arc<App>) -> Router {
     let csp = content_security_policy(app.config.templates_origin());
+    // A GET that starts work, such as a backup, takes `auth::same_origin` too.
     let protected = Router::new()
         .route("/api/logout", post(auth::logout))
         .route("/api/settings", get(api::settings))
@@ -127,7 +129,10 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/system", get(api::system))
         .route("/api/update", get(releases::status).post(releases::start))
         .route("/api/update/check", post(releases::check))
-        .route("/api/backup", get(backup::export))
+        .route(
+            "/api/backup",
+            get(backup::export).layer(middleware::from_fn(auth::same_origin)),
+        )
         .route("/api/backup/check", post(backup::check))
         .route(
             "/api/backup/restore",
@@ -156,7 +161,10 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/containers/{id}/files/move", post(files::move_))
         .route("/api/containers/{id}/files/delete", post(files::delete))
-        .route("/api/containers/{id}/files/download", get(files::download))
+        .route(
+            "/api/containers/{id}/files/download",
+            get(files::download).layer(middleware::from_fn(auth::same_origin)),
+        )
         .route("/api/containers/{id}/audio-capture", post(audio::capture))
         .route("/api/containers/{id}/audio-inject", post(audio::inject))
         .route(
@@ -248,7 +256,10 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/images/{id}", delete(image_removal::remove))
         .route("/api/images/{id}/pull", post(api::pull_catalog))
         .route("/api/images/{id}/build", post(api::build_catalog))
-        .route("/api/images/{id}/archive", get(archives::export))
+        .route(
+            "/api/images/{id}/archive",
+            get(archives::export).layer(middleware::from_fn(auth::same_origin)),
+        )
         .route("/api/images/{id}/config", get(api::image_config))
         .route("/api/images/{id}/layers", get(layers::layers))
         .route(
@@ -274,7 +285,10 @@ fn router(app: Arc<App>) -> Router {
                 // This path wins over `{name}`, and a volume may be called `import` too.
                 .delete(|app| volumes::remove(app, axum::extract::Path("import".into()))),
         )
-        .route("/api/volumes/{name}/archive", get(volumes::export))
+        .route(
+            "/api/volumes/{name}/archive",
+            get(volumes::export).layer(middleware::from_fn(auth::same_origin)),
+        )
         .route("/api/volumes/{name}/copy", post(volumes::copy))
         .route(
             "/api/volumes/{name}/extract",
@@ -291,7 +305,10 @@ fn router(app: Arc<App>) -> Router {
         )
         .route("/api/volumes/{name}/files/move", post(volumes::move_))
         .route("/api/volumes/{name}/files/delete", post(volumes::delete))
-        .route("/api/volumes/{name}/files/download", get(volumes::download))
+        .route(
+            "/api/volumes/{name}/files/download",
+            get(volumes::download).layer(middleware::from_fn(auth::same_origin)),
+        )
         .route(
             "/api/volumes/{name}/files",
             post(volumes::upload).layer(tower_http::limit::RequestBodyLimitLayer::new(
@@ -516,6 +533,7 @@ async fn main() -> anyhow::Result<()> {
     releases::spawn(app.clone());
     outbound::spawn(app.clone());
     auth::follow_https_proxy(app.clone());
+    auth::warn_exposure(app.clone());
     for job in updates {
         releases::resume(app.clone(), job);
     }

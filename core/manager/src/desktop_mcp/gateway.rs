@@ -36,6 +36,10 @@ use subtle::ConstantTimeEq;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
+/// How many jobs each endpoint started are remembered, its oldest forgotten first, so one
+/// endpoint's calls never push out another's.
+const STARTED_JOBS: usize = 256;
+
 /// An endpoint's MCP service, and what ends every session it holds.
 #[derive(Clone)]
 pub(crate) struct Service {
@@ -72,6 +76,23 @@ impl super::DesktopMcp {
                 }
             })
             .clone()
+    }
+    /// Note a job an endpoint's call started, which that endpoint alone then reads.
+    pub(super) fn started(&self, endpoint: &str, job: &str) {
+        let mut jobs = self.jobs.lock().unwrap();
+        let started = jobs.entry(endpoint.to_owned()).or_default();
+        if started.len() >= STARTED_JOBS {
+            started.pop_front();
+        }
+        started.push_back(job.to_owned());
+    }
+    /// Whether the endpoint started the job.
+    pub(super) fn started_by(&self, endpoint: &str, job: &str) -> bool {
+        self.jobs
+            .lock()
+            .unwrap()
+            .get(endpoint)
+            .is_some_and(|started| started.iter().any(|id| id == job))
     }
     /// End an endpoint's sessions, such as after its token changed or it was deleted.
     pub(super) fn close_service(&self, name: &str) {
@@ -207,6 +228,13 @@ impl EndpointMcp {
                     mcp::ThoricMcp::new(self.app.clone()).dispatch_with(tool, args, caller),
                 )
                 .await?;
+                if let Some(job) = result
+                    .structured_content
+                    .as_ref()
+                    .and_then(|body| body["job_id"].as_str())
+                {
+                    self.app.desktop_mcp.started(&self.name, job);
+                }
                 // The host GPU is outside what one container's grant covers.
                 Ok(match result.structured_content {
                     Some(mut body) if scoped && body.get("gpu").is_some() => {
@@ -218,9 +246,14 @@ impl EndpointMcp {
             }
             Target::Job { containers } => {
                 let (id, read) = crate::jobs::read::mcp_arguments(args)?;
+                // Only jobs the endpoint started, so an administrator's script that ran as root
+                // in the same container stays the administrator's.
+                if !self.app.desktop_mcp.started_by(&self.name, &id) {
+                    return Err(error::missing());
+                }
                 let job: crate::model::Job =
                     self.app.db.get("job", &id).map_err(|_| error::missing())?;
-                // Only jobs of the endpoint's own containers, whatever the id guesses.
+                // And of the endpoint's own containers, should a grant have been taken back.
                 if !job.resource.as_deref().is_some_and(|resource| {
                     containers
                         .iter()

@@ -21,7 +21,7 @@ use super::{
     client::{self, Bounded, Started},
     endpoints::{ENDPOINTS, Endpoint},
     gateway::EndpointMcp,
-    registry::{Declaration, SERVERS, ServerRecord, ServerSpec},
+    registry::{Declaration, SERVERS, ServerRecord, ServerSpec, Source},
 };
 use crate::{
     App,
@@ -232,7 +232,7 @@ pub(super) async fn open(app: &Arc<App>, target: Target) -> Result<(Value, Peer)
                 "source": record.source,
                 "transport": spec.transport(),
             });
-            Ok((server, desktop(app, &container, spec).await?))
+            Ok((server, desktop(app, &container, spec, record.source).await?))
         }
         Target::Trial { container, server } => {
             server
@@ -246,7 +246,11 @@ pub(super) async fn open(app: &Arc<App>, target: Target) -> Result<(Value, Peer)
                 "name": server.name,
                 "transport": server.spec.transport(),
             });
-            Ok((described, desktop(app, &container, &server.spec).await?))
+            // Tried before it is added to the desktop user's folder, where it then goes.
+            Ok((
+                described,
+                desktop(app, &container, &server.spec, Source::Container).await?,
+            ))
         }
         // An endpoint answers whether or not the root /mcp is on, here as on its route.
         Target::Endpoint { name } => {
@@ -280,13 +284,18 @@ fn root_enabled(app: &App) -> Result<()> {
 }
 
 /// Start a desktop server in a `docker exec` of the inspector's own.
-async fn desktop(app: &App, container: &Container, spec: &ServerSpec) -> Result<Peer> {
+async fn desktop(
+    app: &App,
+    container: &Container,
+    spec: &ServerSpec,
+    source: Source,
+) -> Result<Peer> {
     let Started {
         child,
         stdin,
         stdout,
         stderr,
-    } = client::start(app, container, spec).await?;
+    } = client::start(app, container, spec, source).await?;
     Ok(Peer {
         output: Box::new(stdout),
         input: Box::new(stdin),

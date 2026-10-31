@@ -1,7 +1,7 @@
 //! Connections to desktop MCP servers: a `docker exec` as the desktop user that speaks MCP on its
 //! stdio, either the server's own program or the adapter of a Streamable HTTP server on the
 //! desktop's loopback. Endpoints keep one connection per server and endpoint, closed once idle.
-use super::registry::{ServerRecord, ServerSpec};
+use super::registry::{ServerRecord, ServerSpec, Source};
 use crate::{App, model::Container};
 use anyhow::{Context, Result, bail};
 use rmcp::{
@@ -209,9 +209,15 @@ pub(super) struct Started {
     pub stderr: ChildStderr,
 }
 
-/// Start a server of a running container as the desktop user, its `${NAME}` values resolved.
-pub(super) async fn start(app: &App, container: &Container, spec: &ServerSpec) -> Result<Started> {
-    let spec = spec.resolve(&app.compose_values(&container.id))?;
+/// Start a server of a running container as the desktop user, its `${NAME}` values resolved as
+/// a declaration from `source` may name them.
+pub(super) async fn start(
+    app: &App,
+    container: &Container,
+    spec: &ServerSpec,
+    source: Source,
+) -> Result<Started> {
+    let spec = spec.resolve(&source.values(app, &container.id))?;
     let info = app.owned(container).await?;
     if info["State"]["Running"] != true {
         bail!("Start the container before using its MCP servers");
@@ -254,7 +260,7 @@ async fn connect(
         stdin,
         stdout,
         stderr,
-    } = start(app, container, spec).await?;
+    } = start(app, container, spec, record.source).await?;
     let key = ServerRecord::key(&container.id, &record.name);
     let logs = Arc::downgrade(app);
     let log_key = key.clone();

@@ -19,9 +19,11 @@ use std::{
 };
 use tokio::net::TcpListener;
 
+mod exposure;
 mod forwarded;
 mod interfaces;
 mod limiter;
+pub(crate) use exposure::{exposure, warn as warn_exposure};
 pub(crate) use forwarded::{HttpsProxy, spawn as follow_https_proxy};
 pub(crate) use interfaces::Interfaces;
 pub(crate) use limiter::Limiter;
@@ -223,6 +225,26 @@ pub async fn protect(State(app): State<Arc<App>>, req: Request, next: Next) -> R
         || (req.headers().contains_key(header::ORIGIN) && !origin_matches(req.headers())))
     {
         return Error(StatusCode::FORBIDDEN, "Request origin rejected".into()).into_response();
+    }
+    next.run(req).await
+}
+/// Refuse a GET that starts work, such as a backup, an export or a folder download, when the
+/// browser says another site sent it, as a page's `<img>` or link would. A GET needs no
+/// `X-Thoric-Request`, and with sign-in off, or from another port of the same host, which is the
+/// same site, no cookie the browser holds back either. The dashboard's own requests and downloads
+/// are `same-origin`, an address opened by hand is `none`, and a client that is no browser, such as
+/// curl with a transfer link, sends no `Sec-Fetch-Site` at all.
+pub async fn same_origin(req: Request, next: Next) -> Response {
+    let site = req
+        .headers()
+        .get("sec-fetch-site")
+        .and_then(|value| value.to_str().ok());
+    if matches!(site, Some("cross-site" | "same-site")) {
+        return Error(
+            StatusCode::FORBIDDEN,
+            "Another site cannot start this; open it from the dashboard".into(),
+        )
+        .into_response();
     }
     next.run(req).await
 }

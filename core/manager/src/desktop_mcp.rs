@@ -47,7 +47,7 @@ pub(crate) use watch::spawn;
 
 use crate::App;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
 
@@ -72,6 +72,9 @@ pub struct DesktopMcp {
     services: Mutex<HashMap<String, gateway::Service>>,
     /// The inspectors that may be open at once.
     inspectors: Arc<tokio::sync::Semaphore>,
+    /// The jobs each endpoint started since the manager started, by the endpoint's name, oldest
+    /// first: `get_job` on an endpoint reads only its own.
+    jobs: Mutex<HashMap<String, VecDeque<String>>>,
 }
 impl Default for DesktopMcp {
     fn default() -> Self {
@@ -85,6 +88,7 @@ impl Default for DesktopMcp {
             reports: tokio::sync::watch::channel(()).0,
             services: Mutex::default(),
             inspectors: Arc::new(tokio::sync::Semaphore::new(inspect::INSPECTORS)),
+            jobs: Mutex::default(),
         }
     }
 }

@@ -228,6 +228,112 @@ async fn a_request_is_read_only_for_its_own_container_and_an_unknown_one_says_wh
 }
 
 #[tokio::test]
+async fn an_endpoint_joins_and_reads_only_the_requests_asked_through_it() {
+    let app = app_with_containers();
+    let c1 = app.container("c1").unwrap();
+    let asked = |endpoint: Option<&str>| {
+        app.human
+            .ask(&c1, "Solve the CAPTCHA", endpoint, &app.events)
+            .unwrap()
+            .id
+    };
+    let dev = asked(Some("dev"));
+    assert_eq!(asked(Some("dev")), dev);
+    let other = asked(Some("other"));
+    let administrators = asked(None);
+    assert_ne!(other, dev);
+    assert_ne!(administrators, dev);
+    assert_ne!(administrators, other);
+    // The administrator's /mcp does not wait on an endpoint's request, nor one endpoint on
+    // another's.
+    let error = call(
+        &app,
+        json!({"container_id": "c1", "request_id": dev, "wait_seconds": 0}),
+    )
+    .await
+    .unwrap_err();
+    assert!(error.contains("No request"), "{error}");
+    let through = |endpoint: &str, id: &str| {
+        let caller = Caller {
+            endpoint: Some(endpoint.into()),
+            ..Caller::default()
+        };
+        request(
+            &app,
+            "c1",
+            json!({"request_id": id, "wait_seconds": 0}),
+            caller,
+        )
+    };
+    assert!(through("dev", &dev).await.is_ok());
+    assert_eq!(
+        through("other", &dev).await.unwrap_err().0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn a_deleted_containers_requests_end_and_free_their_room() {
+    let app = app_with_containers();
+    let c1 = app.container("c1").unwrap();
+    let c2 = app.container("c2").unwrap();
+    let ended = app.human.ask(&c1, "Sign in", None, &app.events).unwrap();
+    let kept = app.human.ask(&c2, "Sign in", None, &app.events).unwrap();
+    let mut events = app.events.subscribe();
+    let waiting = {
+        let app = app.clone();
+        let id = ended.id.clone();
+        tokio::spawn(async move {
+            call(
+                &app,
+                json!({"container_id": "c1", "request_id": id, "wait_seconds": 30}),
+            )
+            .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let started = Instant::now();
+    app.human.end_container("c1", &app.events);
+    let answer = waiting.await.unwrap().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_eq!(answer["status"], "declined", "{answer}");
+    assert_eq!(answer["reply"], CONTAINER_DELETED);
+    assert_eq!(
+        app.human
+            .pending()
+            .iter()
+            .map(|request| &request.id)
+            .collect::<Vec<_>>(),
+        [&kept.id]
+    );
+    let event: Value = serde_json::from_str(&events.try_recv().unwrap()).unwrap();
+    assert_eq!(event["type"], "human-request-answered", "{event}");
+    assert_eq!(event["request"]["id"], json!(ended.id));
+    assert!(events.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn a_deleted_endpoints_requests_end_and_none_is_joined_later() {
+    let app = app_with_containers();
+    let c1 = app.container("c1").unwrap();
+    let asked = app
+        .human
+        .ask(&c1, "Sign in", Some("dev"), &app.events)
+        .unwrap();
+    let administrators = app.human.ask(&c1, "Sign in", None, &app.events).unwrap();
+    app.human.end_endpoint("dev", &app.events);
+    let pending = app.human.pending();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].id, administrators.id);
+    // An endpoint made later with the name asks a request of its own.
+    let again = app
+        .human
+        .ask(&c1, "Sign in", Some("dev"), &app.events)
+        .unwrap();
+    assert_ne!(again.id, asked.id);
+}
+
+#[tokio::test]
 async fn answers_are_checked_and_open_requests_are_bounded() {
     let app = app_with_containers();
     let c1 = app.container("c1").unwrap();

@@ -102,6 +102,7 @@ fn fresh() -> (Arc<App>, std::path::PathBuf) {
         r#"  'ps -a --format {{.Names}}') cat names 2>/dev/null; true ;;
   'network ls --format {{.Name}}') ;;
   'volume ls --format {{.Name}}') for v in vol-*; do [ -e "$v" ] && echo "${v#vol-}"; done; true ;;
+  'volume ls --filter label=thoric.managed=true --format {{json .}}') for v in vol-*; do [ -e "$v" ] && echo "{\"Name\":\"${v#vol-}\"}"; done; true ;;
   'image ls --format {{.Repository}}:{{.Tag}}') cat tags 2>/dev/null; true ;;
   'load --quiet') n=$(( $(cat count 2>/dev/null || echo 0) + 1 )); echo $n > count; cat > load-$n; echo "Loaded image ID: sha256:loaded-$n" ;;
   'image inspect sha256:loaded-'*) echo "[{\"Id\":\"$3\",\"Config\":{\"Labels\":{\"thoric.desktop\":\"true\"}},\"RepoTags\":[]}]" ;;
@@ -166,7 +167,7 @@ fn rewritten(archive: &[u8], edit: impl Fn(&str, Vec<u8>) -> Option<Vec<u8>>) ->
 
 #[cfg(unix)]
 #[tokio::test]
-async fn a_backup_comes_back_with_its_files_identity_and_tokens() {
+async fn a_backup_comes_back_with_its_files_and_identity_but_no_tokens() {
     let archive = backup().await;
     let (app, dir) = fresh();
     let (accepted, outcome) = restore(&app, archive).await;
@@ -175,6 +176,7 @@ async fn a_backup_comes_back_with_its_files_identity_and_tokens() {
     assert_eq!(result["created"], json!(["c1"]));
     assert_eq!(result["volumes"], json!(["projects"]));
     assert_eq!(result["secrets_left_out"], json!(["c1"]));
+    assert_eq!(result["endpoints_without_tokens"], json!(["desk"]));
 
     // The image and the files loaded without the names their archives carried, and took
     // Thoric's own tags.
@@ -220,8 +222,9 @@ async fn a_backup_comes_back_with_its_files_identity_and_tokens() {
         Some("a@example.com")
     );
     assert!(!pinned.values.contains_key("PASSWORD"));
+    // A token of the backup's installation, or one written into the file, opens nothing here.
     let desk_endpoint: Endpoint = app.db.get(ENDPOINTS, "desk").unwrap();
-    assert!(desk_endpoint.token_hash.is_some());
+    assert_eq!(desk_endpoint.token_hash, None);
 
     // Created from its files with its identity, and not started.
     let calls = calls(&dir);
@@ -341,5 +344,33 @@ async fn a_reset_finds_the_catalog_image_a_restored_container_names() {
     let error = app.source_image(&mut other, "reset-job").await.unwrap_err();
     assert_eq!(error.to_string(), "Docker has no image sha256:gone");
     assert_eq!(other.source_image_id, "sha256:gone");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_container_starts_only_from_a_desktop_image_this_manager_handles() {
+    let (app, dir) = fake_docker(
+        r#"  'image inspect sha256:manager') echo '[{"Id":"sha256:manager","Config":{"Labels":{"thoric.manager":"true"}}}]' ;;
+  'image inspect sha256:newer') echo '[{"Id":"sha256:newer","Config":{"Labels":{"thoric.desktop":"true","thoric.desktop-level":"999"}}}]' ;;
+  'image inspect sha256:desktop') echo '[{"Id":"sha256:desktop","Config":{"Labels":{"thoric.desktop":"true"}}}]' ;;"#,
+    );
+    job(&app, "reset-job", "reset");
+    // A backup can name any image of the host as the one a container started from.
+    for (id, refusal) in [
+        ("sha256:manager", "derived from a Thoric desktop image"),
+        ("sha256:newer", "newer Thoric"),
+    ] {
+        let mut env = container("c1", "Desk", "thoric/custom:gone", &[]);
+        env.source_image_id = id.into();
+        let error = format!(
+            "{:#}",
+            app.source_image(&mut env, "reset-job").await.unwrap_err()
+        );
+        assert!(error.contains(id) && error.contains(refusal), "{error}");
+    }
+    let mut env = container("c1", "Desk", "thoric/custom:gone", &[]);
+    env.source_image_id = "sha256:desktop".into();
+    app.source_image(&mut env, "reset-job").await.unwrap();
     std::fs::remove_dir_all(dir).unwrap();
 }

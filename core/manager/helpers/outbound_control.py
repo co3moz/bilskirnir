@@ -19,11 +19,20 @@ path = os.path.join(directory, "control")
 
 
 def prepare():
-    os.makedirs(directory, 0o700, exist_ok=True)
-    if os.path.islink(directory) or not os.path.isdir(directory):
-        raise RuntimeError(directory + " is not a folder")
-    os.chown(directory, NOBODY, NOBODY)
-    os.chmod(directory, 0o700)
+    try:
+        os.mkdir(directory, 0o700)
+    except FileExistsError:
+        pass
+    # Changed through a descriptor that refused a link, so nothing the desktop user swapped in
+    # changes owner, and a folder the desktop user made first is refused.
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(descriptor).st_uid not in (0, NOBODY):
+            raise RuntimeError(directory + " belongs to another user")
+        os.fchown(descriptor, NOBODY, NOBODY)
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)
 
 
 def ask(request):
@@ -47,7 +56,7 @@ def ask(request):
 
 def absent():
     try:
-        with open(os.path.join(directory, "error")) as handle:
+        with os.fdopen(os.open(os.path.join(directory, "error"), os.O_RDONLY | os.O_NOFOLLOW)) as handle:
             return {"state": "failed", "error": handle.read(1000)}
     except OSError:
         return {"state": "absent"}

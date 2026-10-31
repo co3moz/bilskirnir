@@ -1,4 +1,7 @@
-"""Run an interactive shell on a pseudo-terminal: input arrives through a FIFO, output goes to a bounded log."""
+"""Run an interactive shell on a pseudo-terminal: input arrives through a FIFO, output goes to a bounded log.
+
+The terminal's folder is new, inside a folder of the terminals of the user it runs as that only
+that user opens, so a root terminal's files are out of the desktop user's reach."""
 import fcntl
 import json
 import os
@@ -12,7 +15,25 @@ import time
 
 directory, cwd = sys.argv[1], sys.argv[2]
 LIMIT = 1024 * 1024
-os.makedirs(directory, 0o700, exist_ok=True)
+
+def private_folder(path):
+    """Make PATH a folder only this user opens, or take the one it made before. One another user
+    made, or a link, is refused: the desktop user can make either in /tmp before a root helper."""
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(descriptor).st_uid != os.geteuid():
+            raise RuntimeError(path + " belongs to another user")
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)
+
+
+private_folder(os.path.dirname(directory))
+os.mkdir(directory, 0o700)
 fifo = os.path.join(directory, "input")
 os.mkfifo(fifo, 0o600)
 state = {"state": "starting", "pid": None, "exit_code": None, "signal": None, "written": 0, "base": 0,
@@ -48,8 +69,10 @@ record()
 output_path = os.path.join(directory, "output")
 output = open(output_path, "ab", buffering=0)
 size = 0
+stopped = False
 while True:
     if os.path.exists(os.path.join(directory, "stop")):
+        stopped = True
         try:
             os.kill(pid, signal.SIGHUP)
         except ProcessLookupError:
@@ -81,6 +104,17 @@ while True:
         if data:
             os.write(master, data)
 output.close()
+if stopped:
+    # A shell that ignores the hangup is killed, so a closed terminal always ends.
+    deadline = time.monotonic() + 3
+    try:
+        while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None:
+            if time.monotonic() > deadline:
+                os.kill(pid, signal.SIGKILL)
+                break
+            time.sleep(0.1)
+    except (ChildProcessError, ProcessLookupError):
+        pass
 try:
     _, status = os.waitpid(pid, 0)
 except ChildProcessError:

@@ -426,6 +426,19 @@ pub(crate) struct Pinned {
     pub values: BTreeMap<String, String>,
 }
 impl Pinned {
+    /// The values of the parameters that are not secret, by the names they go by.
+    pub fn public_values(&self) -> BTreeMap<String, String> {
+        let entries = self.compose.entries().collect::<Vec<_>>();
+        self.values
+            .iter()
+            .filter(|(name, _)| {
+                !entries
+                    .iter()
+                    .any(|(_, parameter, key)| key == *name && parameter.secret)
+            })
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect()
+    }
     /// What the container record shows of it.
     pub fn setup(&self, image: &str) -> Setup {
         let compose = &self.compose;
@@ -438,12 +451,7 @@ impl Pinned {
         Setup {
             status: "pending".into(),
             image: image.into(),
-            parameters: self
-                .values
-                .iter()
-                .filter(|(name, _)| !secret(name))
-                .map(|(name, value)| (name.clone(), value.clone()))
-                .collect(),
+            parameters: self.public_values(),
             secrets: self
                 .values
                 .keys()
@@ -595,6 +603,14 @@ impl App {
         self.db
             .get::<Pinned>(PINNED, container_id)
             .map(|pinned| pinned.values)
+            .unwrap_or_default()
+    }
+
+    /// The values of a container's compose that are not secret, by the names they go by.
+    pub(crate) fn public_compose_values(&self, container_id: &str) -> BTreeMap<String, String> {
+        self.db
+            .get::<Pinned>(PINNED, container_id)
+            .map(|pinned| pinned.public_values())
             .unwrap_or_default()
     }
 

@@ -609,7 +609,7 @@ export const de: Messages = {
     "Die ganze Installation in einer Datei sichern oder eine Sicherung hierher übernehmen.",
   "backup.create": "Sichern",
   "backup.always":
-    "Eine Sicherung enthält immer die Container mit ihren Einstellungen und ihrer Maschinenidentität, ihre Compose-Werte und die MCP-Endpunkte mit ihren Tokens.",
+    "Eine Sicherung enthält immer die Container mit ihren Einstellungen und ihrer Maschinenidentität, ihre Compose-Werte und die MCP-Endpunkte, die eine Wiederherstellung ohne ihre Tokens zurückbringt.",
   "backup.images": "Gespeicherte Images",
   "backup.imagesHint.one":
     "{count} gespeichertes Image mit Symbol und Compose. Katalog-Images werden dort, wo es wiederhergestellt wird, neu heruntergeladen.",
@@ -1005,6 +1005,15 @@ export const de: Messages = {
   "settings.configurationHint":
     "Womit der Manager läuft, beim Start aus seiner Umgebung gelesen. Passwörter und Tokens werden nie angezeigt.",
   "settings.configurationFailed": "Die Konfiguration konnte nicht gelesen werden",
+  "settings.exposure.title": "Wer diese Adresse erreicht, ist Administrator",
+  "settings.exposure.dashboard":
+    "Die Anmeldung ist aus und der Manager ist unter {addresses} veröffentlicht. Jedes Gerät, das ihn erreicht, und jeder Desktop mit Internetzugang nutzt das Dashboard und die API ohne Passwort.",
+  "settings.exposure.mcp":
+    "/mcp verlangt kein Token und der Manager ist unter {addresses} veröffentlicht. Jedes Gerät, das ihn erreicht, und jeder Desktop mit Internetzugang steuert über MCP jeden Container.",
+  "settings.exposure.both":
+    "Die Anmeldung ist aus, /mcp verlangt kein Token und der Manager ist unter {addresses} veröffentlicht. Jedes Gerät, das ihn erreicht, und jeder Desktop mit Internetzugang steuert jeden Container.",
+  "settings.exposure.fix":
+    "Legen Sie ein Passwort und ein MCP-Token fest, oder veröffentlichen Sie den Manager mit BIND_ADDRESS=127.0.0.1 nur auf diesem Computer.",
   "settings.secretSet": "Gesetzt, verborgen",
   "settings.notSet": "Nicht gesetzt",
   "settings.idle": "Ohne Wirkung, solange {name} aus ist.",

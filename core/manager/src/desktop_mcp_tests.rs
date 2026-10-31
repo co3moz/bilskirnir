@@ -1353,12 +1353,16 @@ fn app_with_endpoint_but_root_mcp_off() -> Arc<App> {
 }
 
 #[tokio::test]
-async fn get_job_reads_only_the_jobs_of_the_endpoints_containers() {
+async fn get_job_reads_only_the_jobs_the_endpoint_started_in_its_containers() {
     let app = mcp_app();
     app.db
         .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
         .unwrap();
-    for (id, resource) in [("mine", "container:c1"), ("theirs", "container:c2")] {
+    for (id, resource) in [
+        ("mine", "container:c1"),
+        ("administrators", "container:c1"),
+        ("theirs", "container:c2"),
+    ] {
         app.db
             .put(
                 "job",
@@ -1390,6 +1394,11 @@ async fn get_job_reads_only_the_jobs_of_the_endpoints_containers() {
             ),
         )
         .unwrap();
+    // The endpoint started "mine" and, before its grant on c2 was taken back, "theirs"; the
+    // administrator's root script in c1 is not the endpoint's to read.
+    app.desktop_mcp.started("chrome-dev", "mine");
+    app.desktop_mcp.started("chrome-dev", "theirs");
+    app.desktop_mcp.started("other", "administrators");
     let session = open_session(&app, "/mcp/chrome-dev", ADMIN).await;
     let read = |job: &'static str| {
         call(
@@ -1402,8 +1411,32 @@ async fn get_job_reads_only_the_jobs_of_the_endpoints_containers() {
     };
     let (_, _, body) = read("mine").await;
     assert_eq!(body["result"]["structuredContent"]["id"], "mine", "{body}");
-    let (_, _, body) = read("theirs").await;
-    assert_eq!(body["result"]["isError"], true, "{body}");
+    for job in ["administrators", "theirs"] {
+        let (_, _, body) = read(job).await;
+        assert_eq!(body["result"]["isError"], true, "{job}: {body}");
+    }
+    // A job the endpoint's own call starts is its to read.
+    let (_, _, body) = call(
+        app.clone(),
+        "/mcp/chrome-dev",
+        Some(ADMIN),
+        Some(&session),
+        json!({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"container_action","arguments":{"action":"stop"}}}),
+    )
+    .await;
+    let started = body["result"]["structuredContent"]["job_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{body}"))
+        .to_owned();
+    let (_, _, body) = call(
+        app.clone(),
+        "/mcp/chrome-dev",
+        Some(ADMIN),
+        Some(&session),
+        json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_job","arguments":{"job_id":started}}}),
+    )
+    .await;
+    assert_eq!(body["result"]["structuredContent"]["id"], started, "{body}");
 }
 
 #[test]
@@ -1854,4 +1887,83 @@ async fn the_administrator_calls_a_desktop_servers_tool_by_its_own_name() {
             .unwrap()
             .contains("secret-value-123")
     );
+}
+
+#[test]
+fn one_endpoints_jobs_never_push_out_anothers() {
+    let mcp = DesktopMcp::default();
+    mcp.started("quiet", "theirs");
+    for number in 0..1000 {
+        mcp.started("busy", &format!("job-{number}"));
+    }
+    assert!(mcp.started_by("quiet", "theirs"));
+    assert!(mcp.started_by("busy", "job-999"));
+    assert!(!mcp.started_by("busy", "job-0"));
+    assert!(!mcp.started_by("busy", "theirs"));
+}
+
+#[tokio::test]
+async fn a_deleted_endpoint_leaves_nothing_to_one_made_later_with_its_name() {
+    let app = mcp_app();
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    app.db
+        .put(
+            ENDPOINTS,
+            "dev",
+            &endpoint("dev", vec![grant("c1", "dev", &[Scope::Commands])]),
+        )
+        .unwrap();
+    app.desktop_mcp.started("dev", "job-1");
+    let terminal = crate::model::Terminal {
+        id: "t1".into(),
+        container_id: "c1".into(),
+        root: false,
+        cwd: "/home/desktop".into(),
+        created_at: 1,
+        endpoint: Some("dev".into()),
+    };
+    app.db.put("terminal", "t1", &terminal).unwrap();
+    let Json(deleted) = super::endpoints::delete_endpoint(State(app.clone()), Path("dev".into()))
+        .await
+        .unwrap();
+    assert_eq!(deleted["deleted"], true);
+    assert!(!app.desktop_mcp.started_by("dev", "job-1"));
+    // The terminal is the administrator's alone now.
+    let kept: crate::model::Terminal = app.db.get("terminal", "t1").unwrap();
+    assert_eq!(kept.endpoint, None);
+}
+
+#[test]
+fn the_desktop_users_declarations_name_no_secret_value() {
+    let app = app(false);
+    let pinned: crate::compose::Pinned = serde_json::from_value(json!({
+        "compose": {
+            "parameters": [{"name": "EMAIL"}, {"name": "API_TOKEN", "secret": true}],
+            "script": "echo set up",
+        },
+        "values": {"EMAIL": "a@example.com", "API_TOKEN": "s3cret"},
+    }))
+    .unwrap();
+    app.save_pinned("c1", &pinned).unwrap();
+    let spec: ServerSpec = serde_json::from_value(json!({
+        "command": "server",
+        "args": ["--user", "${EMAIL}", "--token", "${API_TOKEN}"],
+    }))
+    .unwrap();
+    // The image's folder, which only a build writes, gets every value.
+    let image = spec.resolve(&Source::Image.values(&app, "c1")).unwrap();
+    assert_eq!(image.args[3], "s3cret");
+    // The desktop user writes their own folder, and their servers run as them.
+    let error = spec
+        .resolve(&Source::Container.values(&app, "c1"))
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("API_TOKEN"), "{error:#}");
+    let public: ServerSpec =
+        serde_json::from_value(json!({"command": "server", "args": ["${EMAIL}"]})).unwrap();
+    let resolved = public
+        .resolve(&Source::Container.values(&app, "c1"))
+        .unwrap();
+    assert_eq!(resolved.args, ["a@example.com"]);
 }
