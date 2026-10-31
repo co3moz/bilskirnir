@@ -115,7 +115,8 @@ fn the_list_says_whether_vnc_stays_in_the_private_network() {
     assert!(!vnc_private(&ps("thoric.vnc=all,thoric.managed=true")));
 }
 
-/// A Docker CLI that keeps networks as files and logs every call.
+/// A Docker CLI that keeps networks as files and logs every call. It answers the engine's API
+/// version from `api` and the containers on a network from `users`, and nothing without them.
 #[cfg(unix)]
 fn fake_docker() -> (std::sync::Arc<App>, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("thoric-groups-{}", uuid::Uuid::new_v4().simple()));
@@ -125,12 +126,18 @@ fn fake_docker() -> (std::sync::Arc<App>, std::path::PathBuf) {
 cd 'DIR'
 echo "$*" >> calls
 case "$1 $2" in
+  'version --format') cat api 2>/dev/null; true ;;
+  'ps --all') cat users 2>/dev/null; true ;;
   'network inspect') [ -f "net-$3" ] || exit 1; printf '[%s]' "$(cat "net-$3")" ;;
   'network ls') for file in net-*; do [ -f "$file" ] && echo "${file#net-}"; done; true ;;
   'network create')
     eval "name=\${$#}"
-    printf '{"Id":"%s","Internal":true,"Driver":"bridge","Labels":{"thoric.managed":"true","thoric.group":"%s"}}' \
-      "$name" "${name#thoric-group-}" > "net-$name"
+    case "$*" in
+      *gateway_mode_ipv4=isolated*) options='{"com.docker.network.bridge.gateway_mode_ipv4":"isolated"}' ;;
+      *) options='{}' ;;
+    esac
+    printf '{"Id":"%s","Internal":true,"Driver":"bridge","Options":%s,"Labels":{"thoric.managed":"true","thoric.group":"%s"}}' \
+      "$name" "$options" "${name#thoric-group-}" > "net-$name"
     echo "$name" ;;
   'network rm') rm "net-$3" ;;
 esac
@@ -236,6 +243,75 @@ async fn a_group_network_comes_with_its_first_member_and_goes_with_its_last() {
     assert_eq!(
         error.to_string(),
         "The network thoric-group-build exists, but Thoric did not create it for the group build"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_group_network_has_no_address_on_the_host_where_docker_can_leave_it_without() {
+    let (app, dir) = fake_docker();
+    let calls = || {
+        let calls = std::fs::read_to_string(dir.join("calls")).unwrap_or_default();
+        std::fs::write(dir.join("calls"), "").unwrap();
+        calls
+    };
+    let inspect = |id: &str| json!({"Id": id, "NetworkSettings": {"Networks": {}}});
+    let web = record("a", spec("Web", &["build"], &[]));
+    let tests = record("b", spec("Tests", &["build"], &[]));
+    app.db.put(CONTAINERS, "a", &web).unwrap();
+    app.db.put(CONTAINERS, "b", &tests).unwrap();
+    std::fs::write(dir.join("api"), "1.49").unwrap();
+
+    app.join_groups(&web, &inspect("c0ffee000000aaaa"))
+        .await
+        .unwrap();
+    let made = calls();
+    assert!(
+        made.contains(
+            "network create --internal --opt com.docker.network.bridge.gateway_mode_ipv4=isolated --label thoric.managed=true --label thoric.group=build thoric-group-build\n"
+        ),
+        "{made}"
+    );
+
+    // One made with an address on the host stays while a container is on it, running or not.
+    let older = r#"{"Id":"thoric-group-build","Internal":true,"Driver":"bridge","Labels":{"thoric.managed":"true","thoric.group":"build"}}"#;
+    std::fs::write(dir.join("net-thoric-group-build"), older).unwrap();
+    std::fs::write(dir.join("users"), "c0ffee000000aaaa\n").unwrap();
+    app.join_groups(&tests, &inspect("c0ffee000000bbbb"))
+        .await
+        .unwrap();
+    let kept = calls();
+    assert!(!kept.contains("network rm"), "{kept}");
+    assert!(!kept.contains("network create"), "{kept}");
+
+    // And is made again without one when its first member joins it alone.
+    std::fs::write(dir.join("users"), "").unwrap();
+    app.join_groups(&tests, &inspect("c0ffee000000bbbb"))
+        .await
+        .unwrap();
+    let again = calls();
+    let removed = again.find("network rm thoric-group-build\n").unwrap();
+    let created = again
+        .find(
+            "network create --internal --opt com.docker.network.bridge.gateway_mode_ipv4=isolated",
+        )
+        .unwrap();
+    let connected = again
+        .find("network connect --alias thoric-tests --alias tests thoric-group-build c0ffee000000bbbb\n")
+        .unwrap();
+    assert!(removed < created && created < connected, "{again}");
+
+    // An engine before Docker 28 refuses the option and keeps the address.
+    std::fs::remove_file(dir.join("net-thoric-group-build")).unwrap();
+    std::fs::write(dir.join("api"), "1.47").unwrap();
+    app.join_groups(&web, &inspect("c0ffee000000aaaa"))
+        .await
+        .unwrap();
+    assert!(
+        calls().contains(
+            "network create --internal --label thoric.managed=true --label thoric.group=build thoric-group-build\n"
+        )
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }

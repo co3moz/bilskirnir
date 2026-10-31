@@ -4,12 +4,16 @@
 //! settings list. A group is only a name in its members' settings: its network is created when
 //! the first member joins and removed once no container record lists the group.
 //!
+//! A group's network has no address on the Docker host where the engine can leave it without one
+//! (see `docker::isolation`).
+//!
 //! A desktop serves VNC without a password, so its VNC server listens only in its private network
 //! (`desktop-private-address`). An image older than that carries no `thoric.vnc=private` label,
 //! and a desktop from it shows its screen to the members of its groups; the container list says
 //! so with `vnc_private`.
 use crate::{
     App,
+    docker::{Reach, create_args, isolated},
     model::{CONTAINERS, Container, ContainerSpec, LABEL},
 };
 use anyhow::{Context, Result, bail};
@@ -231,29 +235,15 @@ impl App {
         Ok(())
     }
 
-    /// The ID of a group's network, created when it is missing. A network of that name Thoric did
-    /// not create for the group is refused.
+    /// The ID of a group's network, created when it is missing, without an address on the Docker
+    /// host where the engine can leave it without one. One made with an address is made again
+    /// without while no container is on it. A network of that name Thoric did not create for the
+    /// group is refused.
     async fn group_network(&self, group: &str) -> Result<String> {
         let name = network(group);
         let info = match self.optional_inspect("network", &name).await? {
             Some(info) => info,
-            None => {
-                let owner = format!("{GROUP_LABEL}={group}");
-                let managed = format!("{LABEL}=true");
-                let args = [
-                    "network",
-                    "create",
-                    "--internal",
-                    "--label",
-                    &managed,
-                    "--label",
-                    &owner,
-                    &name,
-                ];
-                let id = self.docker(&args).await?;
-                self.inspect("network", String::from_utf8_lossy(&id).trim())
-                    .await?
-            }
+            None => self.create_group_network(group).await?,
         };
         if info["Labels"][LABEL] != "true"
             || info["Labels"][GROUP_LABEL] != group
@@ -262,10 +252,29 @@ impl App {
         {
             bail!("The network {name} exists, but Thoric did not create it for the group {group}");
         }
-        Ok(info["Id"]
-            .as_str()
-            .context("Missing network ID")?
-            .to_owned())
+        let id = info["Id"].as_str().context("Missing network ID")?;
+        if !isolated(&info)
+            && self.network_users(id).await?.is_empty()
+            && self.internal_reach().await == Reach::Nothing
+        {
+            self.docker(&["network", "rm", id]).await?;
+            let made = self.create_group_network(group).await?;
+            return Ok(made["Id"]
+                .as_str()
+                .context("Missing network ID")?
+                .to_owned());
+        }
+        Ok(id.to_owned())
+    }
+
+    async fn create_group_network(&self, group: &str) -> Result<Value> {
+        let labels = [format!("{LABEL}=true"), format!("{GROUP_LABEL}={group}")];
+        let reach = self.internal_reach().await;
+        let id = self
+            .docker_args(&create_args(&network(group), &labels, reach, None))
+            .await?;
+        self.inspect("network", String::from_utf8_lossy(&id).trim())
+            .await
     }
 
     /// Remove a group's network once no container record but `leaving` lists the group. A stopped
