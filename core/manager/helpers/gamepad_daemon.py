@@ -37,6 +37,13 @@ def private_folder(path):
 
 
 private_folder(directory)
+# One daemon a desktop: a second one would make a second controller reading the same FIFO. The lock
+# is held until this process ends, and a daemon that finds it taken leaves everything as it is.
+guard = os.open(os.path.join(directory, "lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+try:
+    fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit(0)
 fifo = os.path.join(directory, "input")
 if not os.path.exists(fifo):
     os.mkfifo(fifo, 0o600)

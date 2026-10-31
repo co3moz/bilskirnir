@@ -1,7 +1,9 @@
 """The folders of the helpers that run as root in a desktop, under /tmp and /run where the desktop
 user may make files first: the gamepad's and the desktop proxy's are never a link or a folder
-another user made, and their controls follow no link inside them."""
+another user made, their controls follow no link inside them, and a second gamepad daemon leaves the
+first one's folder alone."""
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -32,6 +34,26 @@ class FolderTest(unittest.TestCase):
         result = run("gamepad_daemon.py", str(folder))
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(list(self.elsewhere.iterdir()), [])
+
+    def test_a_second_gamepad_daemon_leaves_the_first_ones_folder_alone(self):
+        folder = self.root / "gamepad"
+        folder.mkdir(mode=0o700)
+        # The test holds the lock as a running daemon does.
+        with open(folder / "lock", "w") as first:
+            fcntl.flock(first, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = run("gamepad_daemon.py", str(folder))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(path.name for path in folder.iterdir()), ["lock"])
+
+    def test_the_gamepad_daemon_takes_no_lock_through_a_link(self):
+        folder = self.root / "gamepad"
+        folder.mkdir(mode=0o700)
+        victim = self.elsewhere / "victim"
+        victim.write_text("kept")
+        (folder / "lock").symlink_to(victim)
+        self.assertNotEqual(run("gamepad_daemon.py", str(folder)).returncode, 0)
+        self.assertEqual(victim.read_text(), "kept")
+        self.assertFalse((folder / "status").exists())
 
     def test_the_gamepad_control_reads_and_writes_nothing_through_a_link(self):
         (self.elsewhere / "status").write_text(json.dumps({"state": "running", "pid": os.getpid()}))

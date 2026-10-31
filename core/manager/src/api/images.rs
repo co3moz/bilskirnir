@@ -561,15 +561,24 @@ impl App {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        let tag = format!("thoric/build-base:{id}");
+        self.drop_tag(&format!("thoric/build-base:{id}")).await?;
+        // The build tags its image before it saves the record, so one that failed, was cancelled
+        // or was cut short by a restart in between leaves a tag that no record knows.
+        if !self.db.contains("image", id)? {
+            self.drop_tag(&format!("thoric/custom:{id}")).await?;
+        }
+        Ok(())
+    }
+    /// Remove the tag `tag` when Docker has it.
+    async fn drop_tag(&self, tag: &str) -> anyhow::Result<()> {
         let names = self
-            .docker(&["image", "ls", "--format", "{{.Repository}}:{{.Tag}}", &tag])
+            .docker(&["image", "ls", "--format", "{{.Repository}}:{{.Tag}}", tag])
             .await?;
         if String::from_utf8_lossy(&names)
             .lines()
             .any(|name| name == tag)
         {
-            self.docker(&["image", "rm", &tag]).await?;
+            self.docker(&["image", "rm", tag]).await?;
         }
         Ok(())
     }
