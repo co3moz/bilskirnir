@@ -14,6 +14,7 @@ mod dependencies;
 mod desktop_input;
 mod desktop_limits;
 mod desktop_mcp;
+mod desktop_ready;
 mod docker;
 mod error;
 mod events;

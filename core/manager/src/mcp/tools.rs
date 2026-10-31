@@ -126,7 +126,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "create_container",
-            "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop.",
+            "Create a desktop container from an image: a catalog image's reference or a saved image's image_id, both from list_images. A catalog image that is not downloaded yet is pulled first, which can take minutes. A saved image with a compose takes values for its parameters (list_images shows them) and runs its setup script once the desktop is ready, before the job completes. Returns job_id; poll get_job for container_id before using the desktop. The job completes once the desktop is ready, and fails with the container's exit code and last log lines when the desktop stops, keeps restarting or is not ready within five minutes.",
             json!({
                 "name":{"type":"string","minLength":1,"maxLength":100},"image":text,
                 "parameters":{"type":"object","default":{},"additionalProperties":{"type":"string","maxLength":16384},"description":"Values for the compose parameters of the image, by name: with a compose of several steps STEP_ID.NAME, or NAME alone when only one step asks for it. Secret values are masked in job logs and never returned. A text parameter with a pattern takes only a value that matches it as a whole, or an empty one when it is not required. A volume parameter takes the name of an existing named volume (list_volumes, create_volume) other than one marked manager=true, or an empty string for none; with new_volume, an empty string or no value has the job create a volume for this container, named thoric-CONTAINER_ID-parameter-name, or thoric-CONTAINER_ID-step-id-parameter-name for a step of several, and \"-\" gives it none unless it is required."},
@@ -156,7 +156,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "container_action",
-            "Start, stop or restart a managed container. Returns job_id. Stop/restart interrupts running applications.",
+            "Start, stop or restart a managed container. Returns job_id. Stop/restart interrupts running applications. A start or restart job completes once the desktop is ready, and fails with the container's exit code and last log lines when the desktop stops, keeps restarting or is not ready within five minutes.",
             json!({"container_id":id,"action":{"type":"string","enum":["start","stop","restart"]}}),
             &["container_id", "action"],
             false,
@@ -174,7 +174,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "update_container",
-            "Change an existing container's settings; pass only the fields to change. name, internet, ports, groups, aliases and a new or changed cpus/memory_mb limit apply in place, as do proxy_password and changes to a proxy the container has. resolution, gpu, audio, microphone, sudo, gamepad, vpn, turning proxy on or off, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
+            "Change an existing container's settings; pass only the fields to change. name, internet, ports, groups, aliases and a new or changed cpus/memory_mb limit apply in place, as do proxy_password and changes to a proxy the container has. resolution, gpu, audio, microphone, sudo, gamepad, vpn, turning proxy on or off, hostname, mac_address, machine_id, shm_mb, mounts and removing a limit (null) recreate the container: the desktop restarts and running applications close, while the files in its container layer are kept, and the previous container is restored when the new desktop is not ready. A feature the installation switched off (get_settings, such as internet_enabled false) can be turned off but not on. dry_run=true returns the live and restart lists without changing anything. Returns job_id otherwise; get_job lists the stages of a change that recreates the container.",
             json!({
                 "container_id":id,"dry_run":{"type":"boolean","default":false},
                 "name":{"type":"string","minLength":1,"maxLength":100},
@@ -194,7 +194,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "retry_container",
-            "Repair partial setup while preserving an existing container. A missing container is recreated from its saved source image, not its unsaved changes. Returns job_id.",
+            "Repair partial setup while preserving an existing container. A missing container is recreated from its saved source image, not its unsaved changes. Returns job_id; the job completes once the desktop is ready.",
             env(),
             &["container_id"],
             false,
@@ -421,7 +421,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
     tools.push(derived::<files::MoveFile>("move_file", "Rename or move a file or directory within the same volume as the desktop user. Existing destinations need replace=true; path symlinks are rejected.", std::slice::from_ref(&container), false, true, false));
     tools.push(derived::<files::DeleteFile>("delete_file", "Delete a file, symlink or directory as the desktop user. Directories need recursive=true to remove their contents; top-level directories, the desktop home and mounted volume roots are refused.", std::slice::from_ref(&container), false, true, false));
     tools.push(derived::<waits::WaitFor>("wait_for_condition", "Wait until conditions hold instead of sleeping: a window title appears, a launched application reaches a state or logs text, the screen stops changing or changes from how it looked when the wait began, or text is read on it or no longer is (OCR, as find_text reads it). region limits the screen and text conditions. Returns satisfied=false after timeout_ms with the last observation.", std::slice::from_ref(&container), true, false, false));
-    tools.push(tool("reset_container", "Recreate a container from its saved source image. Its unsaved changes are discarded; named volumes, networks and the container ID are kept. Returns job_id.", env(), &["container_id"], false, true, false));
+    tools.push(tool("reset_container", "Recreate a container from its saved source image. Its unsaved changes are discarded; named volumes, networks and the container ID are kept. Returns job_id; the job completes once the desktop is ready.", env(), &["container_id"], false, true, false));
     tools.push(tool("application_diagnostics", "Inspect a launched application: state, exit status, process tree with memory, open files, threads and the latest log lines.", json!({"container_id": id, "application_id": application}), &["container_id", "application_id"], true, false, false));
     tools.push(derived::<apps::Metrics>("sample_metrics", "Sample CPU and memory use of a launched application's processes over duration_ms, with container memory figures. Frame rate is not available.", &[container.clone(), ("application_id", application.clone(), true)], true, false, false));
     tools.push(derived::<usage::Summary>("get_usage", "Read CPU, memory, disk and network use of the containers over the last seconds as latest, average and peak values, from the history the manager keeps in memory once a second for 30 minutes. Leave out container_id for every container. A deleted container is still reported, with removed true, until its samples are 30 minutes old. cpu_cores counts host CPU cores in use (1.0 is one full core) and is not relative to cpu_limit; disk and network are bytes per second. gpu is the whole host GPU, sampled with nvidia-smi while a GPU container runs: neither WSL nor the driver tells which container uses it, so it is never a container's share.", &[("container_id", id.clone(), false)], true, false, false));

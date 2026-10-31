@@ -2036,6 +2036,39 @@ try:
     assert json.loads(docker("inspect",repair_container))[0]["Id"]==previous_id
     assert not next(x for x in api("containers") if x["id"]==repair_id)["last_error"]
     print("PASS failed setup retry repairs existing container without discarding its layer",flush=True)
+    # A desktop that never becomes ready fails the job that starts it with its exit code and last
+    # log lines, while Docker keeps restarting it; a settings change puts the previous container back.
+    never_reference=f"thoric/test-never-ready:{tag}"
+    docker("create","--name",fixture_container,"--label",f"thoric.test={tag}",xfce["reference"])
+    docker("commit","--change",'ENTRYPOINT ["/bin/sh","-c","echo acceptance desktop never ready >&2; exit 3"]',fixture_container,never_reference)
+    image_refs.append(never_reference);docker("rm",fixture_container)
+    never_image=json.loads(docker("image","inspect",never_reference))[0]["Id"]
+    def ended(response):
+        return wait_for(lambda: (j if (j := api(f"jobs/{response['job_id']}"))["status"] not in ("queued","running") else None), 360)
+    began=time.monotonic()
+    failed=ended(api("containers",{"name":"never-ready","image":never_image,"internet":False,"gpu":False,"mcp_endpoint":False}))
+    never_id=failed["resource"].split(":",1)[1];container_ids.append(never_id);never_container=f"thoric-{never_id}"
+    assert failed["status"]=="failed" and "restarted 3 times without becoming ready; it last exited with code 3" in failed["log"],failed
+    assert "acceptance desktop never ready" in failed["log"],failed
+    # Docker's restarts end the wait long before its five minutes.
+    assert time.monotonic()-began<120,time.monotonic()-began
+    assert "restarted 3 times" in api(f"containers/{never_id}")["last_error"]
+    original=json.loads(docker("inspect",never_container))[0]
+    assert original["RestartCount"]>=3 and original["State"]["Running"],original["State"]
+    changed=ended(api(f"containers/{never_id}/settings",{"resolution":"1280x720"}))
+    assert changed["status"]=="failed" and "restoring the previous one" in changed["log"],changed
+    assert [s["name"] for s in changed["stages"] if "started_at" in s]==["stop","commit","create","start"],changed["stages"]
+    assert json.loads(docker("inspect",never_container))[0]["Id"]==original["Id"]
+    assert docker("ps","-aq","--filter",f"name=^{never_container}-previous$")==b""
+    assert not docker("image","ls","-q",f"thoric/container:{changed['id']}")
+    assert api(f"containers/{never_id}")["spec"]["resolution"]=="1920x1080"
+    # A start waits the same way; a stop does not.
+    job(api(f"containers/{never_id}/action",{"action":"stop"}))
+    started=ended(api(f"containers/{never_id}/action",{"action":"start"}))
+    assert started["status"]=="failed" and "without becoming ready" in started["log"],started
+    assert job(api(f"containers/{never_id}",method="DELETE"))["deleted"]==never_id
+    container_ids.remove(never_id)
+    print("PASS a desktop that never becomes ready fails its creation, start and settings change, which restores the previous container",flush=True)
     # Binary / very long script output cannot abort or exhaust manager log buffers.
     noisy=api("images/build",{"name":"binary-long-log","base_image":xfce["reference"],"internet":False,"script":"python3 -c \"import sys; sys.stdout.buffer.write(bytes([255])+b'x'*300000)\"\n"})
     job(noisy)

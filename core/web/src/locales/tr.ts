@@ -346,6 +346,7 @@ export const tr: Messages = {
   "stage.record": "İmaj kaydını yazma",
   "stage.stop": "Konteyneri durdurma",
   "stage.create": "Yeni konteyneri oluşturma",
+  "stage.start": "Yeni konteyneri başlatma",
   "stage.plan": "Kurulumu okuma",
   "stage.images": "Kayıtlı imajları aktarma",
   "stage.files": "Konteyner dosyalarını aktarma",

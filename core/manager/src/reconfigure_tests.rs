@@ -2,7 +2,8 @@
 //! request becomes a full set of settings, that a recreated container gets every setting as a
 //! creation flag, from the commit that carries its files, that a change mounting the manager's
 //! own volume is refused before the desktop stops, and that `VOLUME_FILTER` holds only a newly
-//! chosen volume to its label.
+//! chosen volume to its label. The container set aside stays until the new desktop is ready, and
+//! comes back when it is not.
 use super::*;
 
 fn spec() -> ContainerSpec {
@@ -651,4 +652,115 @@ esac
     let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
     assert!(calls.contains("image inspect sha256:work"), "{calls}");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[cfg(unix)]
+const RUNNING: &str = r#"[{"Id":"c0ffee","Config":{"Image":"sha256:desktop","Labels":{"thoric.managed":"true","thoric.environment":"e"}},"State":{"Running":true}}]"#;
+
+/// A settings change of the running container `e` that recreates it, whose new container `new`
+/// reports `state` and whose desktop is ready when `ready` is. Returns the change's outcome, the
+/// Docker commands it ran, the record it left and the stages its job began.
+#[cfg(unix)]
+async fn recreated(state: &str, ready: bool) -> (Result<Value>, String, Container, Vec<String>) {
+    let (app, dir) = fake_docker(
+        r#"case "$*" in
+  'container inspect thoric-e') if [ -e created ]; then cat new.json; else cat running.json; fi; exit ;;
+  'container inspect '*) exit 1 ;;
+  'image inspect '*) echo '[{"Id":"sha256:work","Config":{}}]'; exit ;;
+  'network inspect '*) echo '[{"Id":"private"}]'; exit ;;
+  create*) touch created; exit ;;
+  'rename c0ffee thoric-e') rm created; exit ;;
+  'exec --user 1001:1001 new test -e /run/desktop/ready') exit $(cat ready-status) ;;
+  'logs --tail 20 new') echo 'GPU requested, but OpenGL initialization failed.' >&2; exit ;;
+esac
+"#,
+    );
+    std::fs::write(dir.join("running.json"), RUNNING).unwrap();
+    std::fs::write(
+        dir.join("new.json"),
+        format!(
+            r#"[{{"Id":"new","RestartCount":0,"Config":{{"Image":"thoric/container:change","Labels":{{"thoric.managed":"true","thoric.environment":"e"}}}},"State":{state}}}]"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(dir.join("ready-status"), if ready { "0" } else { "1" }).unwrap();
+    let job = Job {
+        id: "change".into(),
+        kind: "settings".into(),
+        resource: Some("container:e".into()),
+        status: "running".into(),
+        created_at: 1,
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+        script: None,
+        name: None,
+    };
+    app.db.put("job", "change", &job).unwrap();
+    let outcome = app
+        .update_container("e", request(json!({"resolution": "1280x720"})), "change")
+        .await;
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    let record = app.db.get(CONTAINERS, "e").unwrap();
+    let job = app.db.job("change").unwrap();
+    let begun = job
+        .stages
+        .iter()
+        .filter(|stage| stage.started_at.is_some())
+        .map(|stage| stage.name.clone())
+        .collect();
+    std::fs::remove_dir_all(&dir).unwrap();
+    (outcome, calls, record, begun)
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_previous_container_stays_aside_until_the_new_desktop_is_ready() {
+    let (outcome, calls, record, begun) =
+        recreated(r#"{"Running":true,"Restarting":false}"#, true).await;
+    outcome.unwrap();
+    assert_eq!(begun, ["stop", "commit", "create", "start", "cleanup"]);
+    let ready = calls
+        .find("exec --user 1001:1001 new test -e /run/desktop/ready")
+        .expect(&calls);
+    let removed = calls.find("rm --force c0ffee").expect(&calls);
+    assert!(ready < removed, "{calls}");
+    assert!(!calls.contains("rename c0ffee thoric-e\n"), "{calls}");
+    assert_eq!(record.spec.resolution, "1280x720");
+    assert_eq!(
+        record.working_image.map(|image| image.image_id),
+        Some("sha256:work".into())
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_previous_container_comes_back_when_the_new_desktop_is_not_ready() {
+    // The new desktop stops at its GPU check.
+    let (outcome, calls, record, begun) = recreated(
+        r#"{"Running":false,"Restarting":false,"ExitCode":1,"Error":""}"#,
+        false,
+    )
+    .await;
+    let error = format!("{:#}", outcome.unwrap_err());
+    assert_eq!(
+        error,
+        "The desktop stopped before it was ready; it last exited with code 1. Its last log lines:\nGPU requested, but OpenGL initialization failed."
+    );
+    // The job stopped in `start`, and only the container it created went.
+    assert_eq!(begun, ["stop", "commit", "create", "start"]);
+    assert!(calls.contains("rm --force new\n"), "{calls}");
+    assert!(!calls.contains("rm --force c0ffee"), "{calls}");
+    let renamed = calls.find("rename c0ffee thoric-e\n").expect(&calls);
+    let started = calls.find("start c0ffee\n").expect(&calls);
+    assert!(renamed < started, "{calls}");
+    // The record is what it was before the change, without the commit.
+    assert_eq!(record.spec, spec());
+    assert_eq!(record.working_image, None);
+    assert!(
+        calls.contains("image rm thoric/container:change"),
+        "{calls}"
+    );
 }

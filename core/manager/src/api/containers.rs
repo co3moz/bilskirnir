@@ -214,7 +214,7 @@ pub async fn action(
         app,
         &body.action.clone(),
         format!("container:{id}"),
-        move |app, _| async move {
+        move |app, job_id| async move {
             let env = app.container(&id).map_err(|e| anyhow::anyhow!(e.1))?;
             let info = app.owned(&env).await?;
             app.docker(&[
@@ -223,6 +223,11 @@ pub async fn action(
             ])
             .await
             .map_err(|error| app.device_error(&env, error))?;
+            // A started desktop is waited for beside the work that only uses it.
+            if body.action != "stop" {
+                crate::jobs::share_from_here();
+                app.desktop_ready(&env, &job_id).await?;
+            }
             Ok(json!({"container_id":id}))
         },
     )

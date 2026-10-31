@@ -549,6 +549,7 @@ esac
             ("stop", true),
             ("commit", true),
             ("create", true),
+            ("start", true),
             ("cleanup", true)
         ]
     );
@@ -559,21 +560,32 @@ esac
             recreated.stages
         );
     }
-    assert_eq!(recreated.stages[3].finished_at, recreated.finished_at);
+    assert_eq!(recreated.stages[4].finished_at, recreated.finished_at);
     let log = recreated.log.lines().collect::<Vec<_>>();
-    assert_eq!(log[0], "Stage 1/4: Stopping the container");
+    assert_eq!(log[0], "Stage 1/5: Stopping the container");
     assert_eq!(log[1], "Stopping the container. Open applications close.");
     assert!(
         recreated
             .log
-            .contains("Stage 2/4: Committing the container layer\n")
+            .contains("Stage 2/5: Committing the container layer\n")
     );
     assert!(
         recreated
             .log
-            .contains("Stage 3/4: Creating the new container\n")
+            .contains("Stage 3/5: Creating the new container\n")
     );
-    assert!(recreated.log.contains("Stage 4/4: Cleaning up\n"));
+    assert!(
+        recreated
+            .log
+            .contains("Stage 4/5: Starting the new container\n")
+    );
+    assert!(recreated.log.contains("Stage 5/5: Cleaning up\n"));
+    // The new container has started once its desktop is ready.
+    assert!(
+        calls().contains("exec --user 1001:1001 c0ffee test -e /run/desktop/ready\n"),
+        "{}",
+        calls()
+    );
     // The new container is told its private network's subnet, which its VNC server listens in.
     assert!(
         calls().lines().any(|call| call.starts_with("create ")
@@ -582,7 +594,8 @@ esac
         calls()
     );
 
-    // A stopped container has nothing to stop, so that stage is skipped.
+    // A stopped container has nothing to stop, and its replacement is not started, so those
+    // stages are skipped.
     let stopped = run("1600x900", false, 0).await;
     assert_eq!(stopped.status, "completed", "{}", stopped.log);
     assert_eq!(
@@ -591,6 +604,7 @@ esac
             ("stop", false),
             ("commit", true),
             ("create", true),
+            ("start", false),
             ("cleanup", true)
         ]
     );
@@ -602,7 +616,7 @@ esac
     assert!(
         stopped
             .log
-            .starts_with("Stage 2/4: Committing the container layer\n")
+            .starts_with("Stage 2/5: Committing the container layer\n")
     );
 
     // A new container Docker refused is where the change stopped; the previous one is back.
@@ -614,6 +628,7 @@ esac
             ("stop", true),
             ("commit", true),
             ("create", true),
+            ("start", false),
             ("cleanup", false)
         ]
     );

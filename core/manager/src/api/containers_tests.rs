@@ -1,8 +1,9 @@
 //! Pins down what a create request carries and gets: its compose values beside the settings, the
 //! installation's defaults for the features and the proxy it leaves out, a refusal before any job
 //! when a required value is missing, and the name of what a creation job makes, which the job list
-//! shows before the record exists. Also that one container's route answers as the list does, and
-//! that a settings change is checked before any job.
+//! shows before the record exists. Also that one container's route answers as the list does,
+//! that a settings change is checked before any job, and that a start or restart ends once the
+//! desktop is ready while a stop does not wait.
 use super::*;
 use crate::api::build;
 use crate::test_support::{app, spec};
@@ -357,4 +358,105 @@ async fn container_settings_are_checked_before_any_job_or_docker_work() {
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
     let saved: model::Container = app.db.get(model::CONTAINERS, "edit-id").unwrap();
     assert_eq!(saved.spec.name, "Unity");
+}
+
+/// The job `action` starts for the container `e`.
+#[cfg(unix)]
+async fn action_job(app: &Arc<App>, action_name: &str) -> String {
+    let Json(started) = action(
+        State(app.clone()),
+        Path("e".into()),
+        Json(Action {
+            action: action_name.into(),
+        }),
+    )
+    .await
+    .unwrap();
+    started["job_id"].as_str().unwrap().to_owned()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_start_ends_once_the_desktop_is_ready_and_shares_the_container_meanwhile() {
+    let dir = std::env::temp_dir().join(format!("thoric-start-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    crate::test_support::write_script(
+        &docker,
+        &format!(
+            r#"#!/bin/sh
+cd '{}'
+echo "$*" >> calls
+case "$*" in
+  'container inspect thoric-e') echo '[{{"Id":"c0ffee","Config":{{"Labels":{{"thoric.managed":"true","thoric.environment":"e"}}}},"State":{{"Running":true}}}}]' ;;
+  'start c0ffee'|'stop c0ffee') ;;
+  'exec --user 1001:1001 c0ffee test -e /run/desktop/ready') [ -e ready ] ;;
+  *) exit 1 ;;
+esac
+"#,
+            dir.display()
+        ),
+    );
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let env = model::Container {
+        id: "e".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, &env.id, &env).unwrap();
+    let calls = || std::fs::read_to_string(dir.join("calls")).unwrap_or_default();
+    let ended = |job: &str| {
+        let app = app.clone();
+        let job = job.to_owned();
+        async move {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    let job = app.db.job(&job).unwrap();
+                    if job.status != "queued" && job.status != "running" {
+                        return job;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap()
+        }
+    };
+
+    let job = action_job(&app, "start").await;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !calls().contains("exec") {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // Docker has started the container, but the desktop is not ready, so neither is the job.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(app.db.job(&job).unwrap().status, "running");
+    // Work that only uses the desktop goes on meanwhile, while a change still waits.
+    let wait = Duration::from_millis(100);
+    drop(app.share_for("container:e", wait).await.unwrap());
+    assert!(app.resource_lock("container:e").try_lock().is_err());
+    std::fs::write(dir.join("ready"), "").unwrap();
+    let done = ended(&job).await;
+    assert_eq!(done.status, "completed", "{}", done.log);
+    assert_eq!(done.result, Some(json!({"container_id": "e"})));
+    assert!(done.log.contains("The desktop is ready."), "{}", done.log);
+
+    // A stop does not wait for anything.
+    std::fs::write(dir.join("calls"), "").unwrap();
+    let done = ended(&action_job(&app, "stop").await).await;
+    assert_eq!(done.status, "completed", "{}", done.log);
+    assert_eq!(calls(), "container inspect thoric-e\nstop c0ffee\n");
+    std::fs::remove_dir_all(&dir).unwrap();
 }
