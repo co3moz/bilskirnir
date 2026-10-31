@@ -9,7 +9,7 @@ import {
   ViewTabs,
   type DataColumn,
 } from "@/components/data-table"
-import { PageBody } from "@/components/page"
+import { ListFailed, listFailed, PageBody } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -169,7 +169,15 @@ export function JobsPage() {
         >
           <DataTableView
             table={table}
-            empty={jobs.isPending ? t("jobs.loading") : t("jobs.noneInView")}
+            empty={
+              jobs.isPending ? (
+                t("jobs.loading")
+              ) : listFailed(jobs) ? (
+                <ListFailed query={jobs} row />
+              ) : (
+                t("jobs.noneInView")
+              )
+            }
           />
           <DataTablePagination table={table} />
         </TabsContent>

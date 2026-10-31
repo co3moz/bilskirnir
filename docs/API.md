@@ -115,7 +115,7 @@ Routes name the other statuses they use, such as `413` and `429` for transfers. 
 | POST | `/api/images` | Import a desktop-compatible local image using `name` and `reference`. |
 | DELETE | `/api/images/{id}` | [Delete an image](#delete-an-image): a saved image's record with its Docker image, or a catalog image's download. `id` is the list's `id`. Answers at once with `{"id", "name", "deleted": true, "image_removed"}`; `409` while a container was created from it. |
 | POST | `/api/images/build` | Build an image using `name`, `base_image`, `script` or [`parts`](#merged-templates) and optional `description`, `internet`, `compose`, `inherit_compose` ([a base image's compose](#a-base-images-compose)), `icon`, `template_id` or `template_ids` and `mcp`, the [desktop MCP servers](#desktop-mcp-servers-and-endpoints) the image declares; returns a job. |
-| POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. Returns a job. |
+| POST | `/api/images/{id}/pull` | Download a catalog image, or a newer release of it; `id` is its catalog ID. A release manager downloads the one published with it. The image the catalog reference named before is removed once nothing needs it, by the rules of `DELETE /api/images/{id}`. Returns a job. |
 | POST | `/api/images/{id}/build` | Build a catalog image from the bundled Docker context instead; returns a job. |
 | GET | `/api/images/{id}/layers` | What an image's [disk space](#image-sizes-and-layers) is made of: its sizes and the steps of its history, newest first, each with its size, its instruction and the image it came from. `id` is the list's `id`; `404` when Docker does not have the image. |
 | GET | `/api/images/{id}/config` | The `name`, `base_image`, `internet` and `script` or `parts` a script build ran, with the image's `description`, `compose`, `icon` and `template_id`, or `template_ids` for several, when it has them, and `inherit_compose: false` for a build that left its base's compose out, a body `/api/images/build` accepts as it is. `id` is the record's `id`, not its Docker `image_id`. `404` for snapshots, imports and builds from earlier releases. |
@@ -494,7 +494,7 @@ Write request:
 {"path":"/home/desktop/project/config.json","data":"{\"enabled\":true}\n","encoding":"utf8","replace":false}
 ```
 
-Writes are atomic, create missing parent directories and use mode 0600. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
+Writes are atomic, create missing parent directories and use mode 0600, and return the `path`, its `bytes` and its `download_url`. Existing files return 409 unless replacement is explicit. The decoded file limit is 512 KiB. Use `encoding:"base64"` for binary data.
 
 `POST .../files/list` with `{"path":"/home/desktop/project","limit":500}` returns `items` with `name`, `type` (`file`, `directory`, `symlink` or `special`), `size`, `modified_at` and `mode`, plus `total` and `truncated`. `POST .../files/mkdir` with `{"path":"/home/desktop/project/assets"}` creates one folder in an existing parent and returns 409 when the name exists. `POST .../files/move` with `{"source":...,"destination":...,"replace":false}` renames within the same volume and returns 409 when the destination exists. `POST .../files/delete` with `{"path":...,"recursive":false}` removes a file, a symlink itself or a directory; top-level directories, `/home/desktop` and mounted volume roots are refused. `GET .../files/download?path=...` streams a regular file with `Content-Length`, a guessed `Content-Type` and an attachment `Content-Disposition`; it refuses symlinks, files larger than `UPLOAD_MAX_MB` and, with 403, a file the desktop user cannot open, which is tried before any headers are sent so a refused file never arrives as a body cut short. Responses that describe a saved file, such as `download_file`, `export_artifacts` and saved screenshots, include this route as a root-relative `download_url` for the dashboard session.
 
@@ -515,7 +515,7 @@ curl --cookie thoric.cookies \
   'http://localhost:8080/api/containers/CONTAINER_ID/files?destination=/home/desktop/Downloads&name=notes.txt&size=FILE_SIZE_IN_BYTES'
 ```
 
-Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB`. They return the saved path and byte count, and create missing folders of the destination.
+Replace `FILE_SIZE_IN_BYTES` with the exact size. URL-encode filenames and destination paths when necessary. Streaming uploads are limited by `UPLOAD_MAX_MB`. They return the saved `path`, its `bytes` and its `download_url`, and create missing folders of the destination.
 
 Uploads, saved screenshots and exported artifacts follow the same destination rule. The folder may be anywhere in the desktop home, `/home/desktop`, in a volume mounted writable, by the `mounts` setting or a compose's volume parameter, or in one of the `places` in the container's `setup`; nothing under a read-only volume is accepted. The rule keeps writes out of the system folders. What protects the desktop is that files are written as the desktop user, so its permissions apply, and that no symlink in the destination is followed.
 
@@ -684,7 +684,7 @@ An endpoint is created with:
 ```json
 {"name": "chrome-dev",
  "grants": [{"container_id": "...", "alias": "chrome-dev", "scopes": ["view", "input", "files_read"], "servers": "all",
-             "excluded_tools": ["save_screenshot", "chrome__browser_run_code_unsafe"]}]}
+             "excluded_tools": ["container_diagnostics", "chrome__browser_run_code_unsafe"]}]}
 ```
 
 `alias` defaults to the container's name and names it in the tools of an endpoint of several containers; `servers` is `"all"` or a list of server names; scopes are those of [the MCP guide](MCP.md#mcp-endpoints-for-one-agent). `excluded_tools`, optional and empty by default, names tools left out although their scope or server is granted, as the endpoint exposes them for that container alone: a container tool's own name, which must be one of the granted scopes', or `SERVER__TOOL`, the `exposed` name of the server lists, kept whether or not the server is known now. Each grant is returned with its list, empty when nothing is left out. The answer is `{"endpoint": {...}, "token": "bsk_..."}`; the token is not shown again, only `has_token` and `token_created_at`. A container created with `mcp_endpoint` true, the default, gets an endpoint with `automatic: true` and no token, which its deletion removes; an endpoint left without containers keeps its name and token. `/mcp/{name}` answers `404` with MCP disabled or for an unknown name, `401` without the endpoint's or the MCP token and `403` for a foreign `Origin`.
@@ -780,11 +780,11 @@ Whatever a desktop serves would appear on the dashboard's address, and a desktop
 
 ## Screenshots
 
-`GET /api/containers/{id}/screenshot` returns a JPEG at the desktop's resolution, so its pixels match `/input` coordinates. `max_width` (16 to 7680) scales the image down, `region=x,y,width,height` crops in desktop pixels and `window_id` captures one window from the windows route. The response carries `X-Image-Width`, `X-Image-Height` and `X-Captured-At` (Unix milliseconds) headers. The dashboard requests `max_width=640` for previews.
+`GET /api/containers/{id}/screenshot` returns a JPEG at the desktop's resolution, so its pixels match `/input` coordinates. `max_width` (16 to 7680) scales the image down, `region=x,y,width,height` crops in desktop pixels and `window_id` captures one window from the windows route. The response carries `X-Image-Width`, `X-Image-Height` and `X-Captured-At` (Unix milliseconds) headers. The dashboard requests `max_width=640` for previews. Two screenshots are taken at a time across the installation: another request waits up to five seconds for its turn and is then answered 429, and a capture the desktop has not finished in 20 seconds answers 504.
 
 `POST /api/containers/{id}/screenshots` with `{"path":"/home/desktop/Downloads/clock.jpg","replace":false,"capture":{"max_width":960}}` captures with the same options and writes the JPEG inside the desktop as the desktop user, under the upload destination rules. It returns `path`, `bytes`, `width`, `height`, `captured_at` and `download_url`; an existing file returns 409 unless `replace` is set.
 
-`POST /api/containers/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0 to 10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","jpeg_base64"}}`.
+`POST /api/containers/{id}/act-and-observe` takes `{"actions":[...],"settle_ms":500,"capture":{"max_width":960}}`, performs the actions, waits `settle_ms` (0 to 10000) and returns `{"input":{...},"screenshot":{"width","height","captured_at","bytes","scale","origin_x","origin_y","desktop_width","desktop_height","jpeg_base64"}}`. `scale` is image pixels per desktop pixel and `origin_x`, `origin_y` the desktop pixel at the image's top left, so a point of the image is `/input`'s `origin_x + x / scale`, `origin_y + y / scale`; each is `null` when the desktop image cannot tell it.
 
 ## Text on the screen
 

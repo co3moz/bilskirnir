@@ -1,5 +1,6 @@
 //! The dashboard's and the administrator's view of desktop servers: listing them, registering
-//! one in a running desktop, removing it and reading its tools again.
+//! one in a running desktop, removing it and reading its tools again, and calling one of its tools
+//! for the administrator's channel.
 use super::{
     registry::{Declaration, SERVERS, ServerRecord, Source, server_name},
     scopes::server_tool_names,
@@ -100,20 +101,79 @@ pub async fn container_servers(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let container = app.container(&id)?;
+    Ok(Json(servers_of(&app, &id, false).await?))
+}
+
+/// The servers of one container, read again from its desktop while it runs. With `schemas` each
+/// tool also has its `input_schema`, which an agent needs to call it with call_mcp_server_tool
+/// and the dashboard's lists leave out.
+pub(crate) async fn servers_of(app: &Arc<App>, id: &str, schemas: bool) -> Result<Value> {
+    let container = app.container(id)?;
     let info = app.owned(&container).await?;
     let running = info["State"]["Running"] == true;
     if running {
         let docker_id = info["Id"].as_str().context("Missing container ID")?;
         let found = app.read_servers(docker_id).await?;
-        watch::apply(&app, &id, found).await;
+        watch::apply(app, id, found).await;
     }
-    let items = records(&app, &id)
+    let items = records(app, id)
         .iter()
-        .map(|record| summary(&app, record, &container.spec.name, running))
+        .map(|record| {
+            let mut value = summary(app, record, &container.spec.name, running);
+            if schemas {
+                for (listed, named) in value["tools"]
+                    .as_array_mut()
+                    .into_iter()
+                    .flatten()
+                    .zip(server_tool_names(record))
+                {
+                    listed["input_schema"] = json!(named.tool.input_schema);
+                }
+            }
+            value
+        })
         .collect::<Vec<_>>();
-    Ok(Json(json!({"items": items})))
+    Ok(json!({"items": items}))
 }
+
+/// Call a desktop server's tool for the administrator's channel, on a connection of its own that
+/// no endpoint shares. The server must be known and list the tool, so a typo is told as such.
+pub(crate) async fn call_server_tool(
+    app: &Arc<App>,
+    container_id: &str,
+    server: &str,
+    tool: &str,
+    arguments: rmcp::model::JsonObject,
+) -> Result<rmcp::model::CallToolResult> {
+    let container = app.container(container_id)?;
+    let record = find(app, container_id, server).map_err(|_| {
+        Error(
+            StatusCode::NOT_FOUND,
+            format!(
+                "{} has no MCP server called {server}; list_mcp_servers lists them",
+                container.spec.name
+            ),
+        )
+    })?;
+    if let Some(error) = &record.error {
+        return Err(Error(
+            StatusCode::CONFLICT,
+            format!("The server {server} cannot be reached: {error}"),
+        ));
+    }
+    if !record.tools.iter().any(|listed| listed.name == tool) {
+        return Err(Error(
+            StatusCode::NOT_FOUND,
+            format!(
+                "The server {server} has no tool called {tool}; list_mcp_servers with container_id lists its tools by name with their input_schema"
+            ),
+        ));
+    }
+    Ok(super::client::call(app, ROOT_CONNECTIONS, &container, &record, tool, arguments).await?)
+}
+
+/// The pool's name for the connections `/mcp` holds, which no endpoint's name can be.
+const ROOT_CONNECTIONS: &str = "/mcp";
 
 fn find(app: &App, id: &str, name: &str) -> Result<ServerRecord> {
     app.db

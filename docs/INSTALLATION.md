@@ -28,7 +28,7 @@ Edit the exported `.env` before starting the manager. Run these export commands 
 
 The minimal README example keeps settings directly in Compose. The full manifests read them from `.env`. Recreate the manager with `docker compose up -d` after changing its environment; for the full registry manifest, use `docker compose -f compose.ghcr.yml up -d`.
 
-The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself.
+The dashboard's **Management** page lists the settings below with the values the manager runs with, so you can see what a restart picked up. It never shows `ADMIN_PASSWORD` or `MCP_TOKEN`, only whether they are set. Of the Compose settings in the second table it shows `MANAGER_CONTAINER` and `DESKTOP_HOST`, since Compose keeps the others to itself and `RUST_LOG` goes to the logger.
 
 In the [WSL package](WSL_PACKAGE.md#settings-from-the-dashboard) the page also changes `SECURE_COOKIE`, `ALLOWED_HOSTS`, `DESKTOP_IMAGE`, `DESKTOP_USER_NAMESPACES`, `DESKTOP_PIDS_LIMIT`, `WSL_GPU`, `NVIDIA_COMPUTE`, `GPU_ADAPTER`, `AUDIO_ENABLED`, `MICROPHONE_ENABLED`, the other container features' switches and defaults below, `UPLOAD_MAX_MB`, `IMAGE_ARCHIVE_MAX_MB`, `TEMPLATES_URL`, `VOLUME_FILTER`, `PROXY_URL`, `PROXY_USERNAME`, `PROXY_BYPASS` and `UPDATE_CHECK`: it checks the new values as the manager would read them when it starts, writes them to `.env` and recreates the manager. `.env` stays the only place they are kept. The others, sign-in, the root MCP and its token, `PROXY_PASSWORD`, `MANAGER_CONTAINER` and the Compose settings, change only in `.env`, with `thoric settings` in the package, and the page marks them **CLI only**. Elsewhere the page changes nothing.
 
@@ -83,6 +83,7 @@ The full manifests also accept these Compose settings:
 | `MANAGER_IMAGE` | `ghcr.io/co3moz/thoric:latest` | The manager image in `compose.ghcr.yml`; accepts a version or digest. `latest` is the newest release and `edge` follows `master`, see [Edge builds](#edge-builds); the WSL package sets the release it belongs to. |
 | `DESKTOP_HOST` | `localhost` | The hostname for the optional HTTPS service; also added to accepted hosts. |
 | `HTTPS_PORT` | `8443` | The optional HTTPS service's port on the host. |
+| `RUST_LOG` | `thoric=info,tower_http=info` | The manager's log filter, which the manifests pass to its logger: `thoric=debug` adds the reads repeated on a timer, see [If something does not start](#if-something-does-not-start). Empty keeps the default. |
 
 Sessions last 12 hours. Signing out or reaching session expiry closes active desktop and media connections. Desktop containers continue running.
 
@@ -125,20 +126,23 @@ BIND_ADDRESS=0.0.0.0
 DESKTOP_HOST=desktop.lan
 HTTPS_PORT=8443
 SECURE_COOKIE=true
+COMPOSE_PROFILES=https
 ```
+
+`COMPOSE_PROFILES=https` has every Compose command of the installation include Caddy, so `up`, `stop` and `pull` start, stop and update it with the manager, and in the WSL package `thoric start`, `stop` and `update` do too. Without it, Caddy runs only while a command names `--profile https`. `DESKTOP_HOST` has to be a name every client device finds the host under, through your network's DNS or each device's hosts file; the manager accepts it without an entry in `ALLOWED_HOSTS`.
 
 Start the manager and Caddy, then copy the CA certificate:
 
 ```bash
-docker compose -f compose.ghcr.yml --profile https up -d manager https
+docker compose -f compose.ghcr.yml up -d
 docker compose -f compose.ghcr.yml cp https:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
 ```
 
-Trust `caddy-root.crt` on the client device and open [desktop.lan:8443](https://desktop.lan:8443). Once secure cookies are enabled, sign in through HTTPS.
+Trust `caddy-root.crt` on every client device and open [desktop.lan:8443](https://desktop.lan:8443). On Windows, `Import-Certificate -FilePath .\caddy-root.crt -CertStoreLocation Cert:\CurrentUser\Root` in PowerShell trusts it for Edge and Chrome after Windows asks to confirm; Firefox keeps its own list, under **Certificates** in its settings. The WSL package's guide shows [how to bring the file to Windows](WSL_PACKAGE.md#https). Once secure cookies are enabled, sign in through HTTPS.
 
 Every browser reaches the manager from Caddy's address, so the manager counts failed sign-ins by the address Caddy forwards in `X-Forwarded-For`. It believes that header only from the running `https` service of its own Compose project, whose addresses it reads from Docker every 20 seconds and logs when they change; from anyone else, such as a desktop or a LAN client that connects to the manager's port, the connection's own address counts. A proxy of your own in front of the manager is not trusted this way, so all sign-ins through it share one count of 20 failures a minute.
 
-Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest.
+Source installations use the same HTTPS profile in `compose.yml`. Omit `-f compose.ghcr.yml` for that manifest, and in the WSL package, whose `/opt/thoric/compose.yml` is `compose.ghcr.yml` under the name Compose reads by itself.
 
 ## Update the images
 
@@ -153,7 +157,7 @@ For the full registry installation, add `-f compose.ghcr.yml` to both commands.
 
 The sidebar names a newer release when one is out, unless `UPDATE_CHECK=false`. Only the WSL package updates itself from there; on other installations, run the commands above. `compose.ghcr.yml` mounts an `update` folder beside it into the manager for that, which stays empty elsewhere.
 
-This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To bring a catalog image you already have to the one published with the updated manager, select the update button on its row under **Images**. A published manager downloads the catalog image published with it and tags it with the catalog reference (`ubuntu-xfce:24.04`): a release such as `ghcr.io/co3moz/thoric:1.2.0` downloads `ubuntu-xfce:1.2.0`, and an `edge` build of `master` the `ubuntu-xfce:sha-<commit>` of its own commit. A manager therefore never installs a desktop image published after it, however far `master` has gone since. Only a manager built from the source downloads the reference itself, which, like `docker pull` of the reference, gives the newest release. In the [WSL package](WSL_PACKAGE.md#update), `thoric update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `thoric` command.
+This updates the manager. Catalog images are not Compose services: the manager downloads one the first time a container is created from it. To bring a catalog image you already have to the one published with the updated manager, select the update button on its row under **Images**. A published manager downloads the catalog image published with it and tags it with the catalog reference (`ubuntu-xfce:24.04`): a release such as `ghcr.io/co3moz/thoric:1.2.0` downloads `ubuntu-xfce:1.2.0`, and an `edge` build of `master` the `ubuntu-xfce:sha-<commit>` of its own commit. A manager therefore never installs a desktop image published after it, however far `master` has gone since. Only a manager built from the source downloads the reference itself, which, like `docker pull` of the reference, gives the newest release. Docker would keep the image the reference named before without a name, 1 to 2 GB for each release, so the download removes it, without force, once nothing needs it: no other tag names it, no container record starts from it, since a reset creates the container from it again, and no saved image's record names it. Docker itself keeps it while a container, or on its classic image store an image built on it, uses it. The job's log says which. Nothing is pruned. In the [WSL package](WSL_PACKAGE.md#update), `thoric update` does both and moves the manager to the newest release, together with that release's `compose.yml` and `thoric` command.
 
 Compose files from earlier releases list two short-lived `desktop` and `desktop-gnome` services that download both catalog images at every start. They keep working. To download them only when they are used, replace the file with the current `compose.ghcr.yml` (or remove those services and the manager's `depends_on`), then run `docker compose up -d --remove-orphans` to remove their exited containers. Images already downloaded stay in place.
 

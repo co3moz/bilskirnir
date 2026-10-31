@@ -22,9 +22,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { api, sessionExpired } from "@/lib/api"
 import { ArchiveImport, archiveName, readArchiveInfo, type ArchiveInfo } from "@/lib/archives"
-import { closeDialog, openDialog } from "@/lib/dialogs"
+import { closeDialog, openDialog, useUnsaved } from "@/lib/dialogs"
 import { t } from "@/lib/i18n"
-import { refreshAll, useSettings } from "@/lib/queries"
+import { refreshLists, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
 import { useSubmit } from "./container-dialogs"
 import { Footer } from "./simple-dialogs"
@@ -46,6 +46,7 @@ function useArchiveImport() {
       })
   )
   React.useEffect(() => () => upload.cancel(), [upload])
+  useUnsaved(upload.running && "upload")
   return upload
 }
 
@@ -93,7 +94,7 @@ function ArchiveForm({ open }: { open: boolean }) {
     toast.success(t("archives.importing", { name: name.trim() }), {
       description: t("import.archive.arrived"),
     })
-    void refreshAll()
+    void refreshLists("jobs")
     openDialog({ kind: "job", id: job })
   }
 
@@ -213,7 +214,7 @@ function DockerImageForm() {
         await api("images", { name, reference })
         closeDialog()
         toast.success(t("import.docker.imported", { name }))
-        void refreshAll()
+        void refreshLists("images")
       })}
     >
       <FieldGroup>

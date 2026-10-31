@@ -14,7 +14,7 @@ import { api } from "@/lib/api"
 import { closeDialog } from "@/lib/dialogs"
 import { iconUrl } from "@/lib/icons"
 import { t } from "@/lib/i18n"
-import { refreshAll, useImages } from "@/lib/queries"
+import { refreshLists, useImages } from "@/lib/queries"
 import { useSubmit } from "./container-dialogs"
 import type { DialogProps } from "./side-drawer"
 import { Footer } from "./simple-dialogs"
@@ -42,7 +42,7 @@ export function IconDialog({ id, ...props }: DialogProps & { id: string }) {
             toast.success(
               choice === null ? t("icons.removed", { name }) : t("icons.saved", { name })
             )
-            void refreshAll()
+            void refreshLists("images")
           })}
         >
           <DialogHeader>

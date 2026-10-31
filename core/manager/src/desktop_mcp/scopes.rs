@@ -62,13 +62,13 @@ impl Scope {
     /// The Thoric MCP tools of the scope, each of which works on one container.
     pub fn tools(self) -> &'static [&'static str] {
         match self {
+            // Only what reads: save_screenshot writes a file, so it is files_write's.
             Scope::View => &[
                 "get_container",
                 "container_logs",
                 "container_diagnostics",
                 "get_usage",
                 "screenshot",
-                "save_screenshot",
                 "list_windows",
                 "inspect_ui",
                 "find_text",
@@ -94,7 +94,13 @@ impl Scope {
                 "sample_metrics",
             ],
             Scope::FilesRead => &["list_files", "read_file", "download_file"],
-            Scope::FilesWrite => &["write_file", "upload_file", "move_file", "delete_file"],
+            Scope::FilesWrite => &[
+                "write_file",
+                "upload_file",
+                "move_file",
+                "delete_file",
+                "save_screenshot",
+            ],
             Scope::Commands => &[
                 "exec_container",
                 "open_terminal",
@@ -125,6 +131,37 @@ impl Scope {
 }
 /// Arguments an endpoint never passes on: the desktop user is as far as a scope reaches.
 const ROOT_TOOLS: [&str; 2] = ["exec_container", "open_terminal"];
+
+/// Sentences of the administrator's descriptions that do not hold on an endpoint, which takes
+/// neither root nor container_id and offers neither create_transfer nor the dashboard's routes,
+/// with what the endpoint says instead. Each sentence must be in its tool's description.
+pub(super) const ENDPOINT_WORDING: [(&str, &str, &str); 5] = [
+    (
+        "exec_container",
+        "Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages.",
+        "Runs as the desktop user, UID/GID 1001:1001, never as root; with sudo enabled for the container, sudo works in the script.",
+    ),
+    (
+        "open_terminal",
+        " root=true runs the shell as root.",
+        " The shell runs as the desktop user, never as root.",
+    ),
+    (
+        "download_file",
+        " Larger files are available through that route, and a folder downloads there as a .tar.gz (/api/containers/{container_id}/files/download?path=FOLDER); create_transfer moves either to the machine you run on.",
+        " Larger files and folders are not available through this endpoint.",
+    ),
+    (
+        "get_usage",
+        " Leave out container_id for every container. A deleted container is still reported, with removed true, until its samples are 30 minutes old.",
+        "",
+    ),
+    (
+        "get_usage",
+        " gpu is the whole host GPU, sampled with nvidia-smi while a GPU container runs: neither WSL nor the driver tells which container uses it, so it is never a container's share.",
+        " The host GPU is not reported here.",
+    ),
+];
 
 /// What a tool of an endpoint calls.
 #[derive(Clone, Debug, PartialEq)]
@@ -215,7 +252,7 @@ fn exposed(parts: &[&str], hashed: bool) -> String {
 }
 
 /// A Thoric tool as an endpoint offers it: bound to its one container, or taking `container`
-/// among the aliases of those granted it, and never as root.
+/// among the aliases of those granted it, never as root, and described in those terms.
 pub(crate) fn bound_tool(tool: &Tool, aliases: Option<&[String]>) -> Tool {
     let mut schema = Value::Object((*tool.input_schema).clone());
     let mut drop = vec!["container_id"];
@@ -239,6 +276,15 @@ pub(crate) fn bound_tool(tool: &Tool, aliases: Option<&[String]>) -> Tool {
     }
     let mut bound = tool.clone();
     bound.input_schema = Arc::new(schema.as_object().cloned().unwrap_or_default());
+    if let Some(description) = &tool.description {
+        let worded = ENDPOINT_WORDING
+            .iter()
+            .filter(|(name, ..)| *name == tool.name)
+            .fold(description.to_string(), |text, (_, from, to)| {
+                text.replace(from, to)
+            });
+        bound.description = Some(worded.into());
+    }
     bound
 }
 

@@ -72,6 +72,14 @@ describe("reading events", () => {
       "volumes",
     ])
     expect(staleKeys({ kind: "later", resource: "update", status: "completed" })).toEqual(["jobs"])
+    // A restore works on the installation, and creates every kind of thing.
+    expect(staleKeys({ kind: "restore", resource: "installation", status: "completed" })).toEqual([
+      "jobs",
+      "containers",
+      "images",
+      "volumes",
+      "mcp",
+    ])
   })
 
   test("tells failures, what was made and long work, and keeps scripts and downloads quiet", () => {

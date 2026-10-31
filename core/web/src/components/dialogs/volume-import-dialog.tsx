@@ -20,9 +20,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { useFileDrop } from "@/hooks/use-file-drop"
 import { sessionExpired } from "@/lib/api"
 import { ArchiveImport } from "@/lib/archives"
-import { closeDialog, openDialog } from "@/lib/dialogs"
+import { closeDialog, openDialog, useUnsaved } from "@/lib/dialogs"
 import { t } from "@/lib/i18n"
-import { refreshAll, useSettings } from "@/lib/queries"
+import { refreshLists, useSettings } from "@/lib/queries"
 import { fileSize } from "@/lib/uploads"
 import { VOLUME_NAME, volumeArchiveName } from "@/lib/volume-files"
 import type { DialogProps } from "./side-drawer"
@@ -41,6 +41,7 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
       })
   )
   React.useEffect(() => () => upload.cancel(), [upload])
+  useUnsaved(upload.running && "upload")
   // A closing dialog stays mounted for its animation, so stop the upload as soon as it closes.
   React.useEffect(() => {
     if (!open) upload.cancel()
@@ -77,7 +78,7 @@ export function VolumeImportDialog({ open, onOpenChange }: DialogProps) {
     toast.success(t("archives.importing", { name: name.trim() }), {
       description: t("volumes.import.arrived"),
     })
-    void refreshAll()
+    void refreshLists("jobs")
     openDialog({ kind: "job", id: job })
   }
 

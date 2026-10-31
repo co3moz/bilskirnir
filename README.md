@@ -14,7 +14,7 @@ The name is a nod to Thor.
 
 ## What you can do
 
-- **Built-in MCP agent integration** with 77 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, text read off the screen, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
+- **Built-in MCP agent integration** with 78 tools: commands, files, one-time transfer links for large files, mouse and keyboard, screenshots, text read off the screen, windows, applications, recordings, audio, terminals, accessibility trees, a virtual gamepad and a way to ask a person for help with a CAPTCHA or a sign-in.
 - **MCP servers inside a desktop**, declared by a template or registered while it runs from the dashboard, a terminal or the desktop's tray, and **MCP endpoints** at `/mcp/<name>` that give an agent only some containers, some of Thoric's tools and those servers' tools, with a token of their own.
 - **GPU acceleration** for Linux graphics applications, verified in WSL2 with an NVIDIA GPU. On a Linux host, NVIDIA GPUs through the NVIDIA Container Toolkit and AMD and Intel GPUs (experimental) are supported but not verified yet; see [GPU on a Linux host](docs/INSTALLATION.md#gpu-on-a-linux-host).
 - **Separate containers with custom settings**: resolution, CPU, memory, internet, sound and microphone.
@@ -70,7 +70,7 @@ You need Windows 11 or Windows 10 with WSL 2.4.4 or newer, which the Windows hel
 3. Connect your agent. The first start ends with the agent endpoint, its token if it has one and settings to paste into Claude Code, another Streamable HTTP client or the stdio bridge; `thoric mcp` shows them again.
 4. Open [localhost:8080](http://localhost:8080), or the port you chose, sign in with your username and password and select **New container**. The first container from XFCE or GNOME downloads that image, and the job panel shows the progress. Select **Connect** once it is running.
 
-WSL stops a distribution shortly after its last window closes; the helper's **Start** keeps it running and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `thoric` command, updates, also from the dashboard, and removal.
+WSL stops a distribution shortly after its last window closes; the helper starts Thoric and keeps it running once you leave the first start's shell, its **Start** does the same later, and its auto-start starts it at every Windows sign-in, see [Keep it running](docs/WSL_PACKAGE.md#keep-it-running). The [WSL package guide](docs/WSL_PACKAGE.md) covers the helper, the `thoric` command, updates, also from the dashboard, and removal.
 
 ## Custom installation
 

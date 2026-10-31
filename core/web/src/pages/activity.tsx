@@ -99,7 +99,8 @@ function Filters({
   /** Calls already loaded, which name containers no longer listed. */
   seen: ActivityEntry[]
 }) {
-  const endpoints = useMcpEndpoints().data ?? []
+  // Only their names, which the page's own lists do not change.
+  const endpoints = useMcpEndpoints(false).data ?? []
   const containerChoices = [...containerNames].sort((a, b) => a[1].localeCompare(b[1]))
   if (container && !containerNames.has(container)) {
     // A container no longer listed keeps the name its calls recorded.
@@ -258,14 +259,12 @@ export function ActivityPage() {
     [activity.data]
   )
   const kept = activity.data?.pages[0]?.kept
-  // A link may name a call to open; a row opens one too. The last one stays while the panel closes.
-  const [picked, setPicked] = React.useState<number | null>(linked.entry ?? null)
-  const [open, setOpen] = React.useState(!!linked.entry)
+  // The address names the call that is open, whether a link or a row opened it, so a link followed
+  // while this page shows opens its call too. The last one stays while the panel closes.
+  const [picked, setPicked] = React.useState(linked.entry)
+  if (linked.entry && linked.entry !== picked) setPicked(linked.entry)
   const selected = entries.find((entry) => entry.id === picked)
-  const close = () => {
-    setOpen(false)
-    if (linked.entry) replaceRoute({ ...linked, entry: undefined })
-  }
+  const close = () => replaceRoute({ ...linked, entry: undefined })
   const clear = () => {
     setTool("")
     setErrors(false)
@@ -339,10 +338,7 @@ export function ActivityPage() {
               entries={entries}
               containerNames={containerNames}
               showContainer={!linked.container}
-              onSelect={(entry) => {
-                setPicked(entry.id)
-                setOpen(true)
-              }}
+              onSelect={(entry) => replaceRoute({ ...linked, entry: entry.id })}
             />
             <div className="flex flex-col items-center gap-1 pb-2">
               {activity.hasNextPage ? (
@@ -365,7 +361,11 @@ export function ActivityPage() {
           </>
         )}
       </div>
-      <SideDrawer open={open && !!selected} onOpenChange={(next) => !next && close()} wide>
+      <SideDrawer
+        open={!!linked.entry && !!selected}
+        onOpenChange={(next) => !next && close()}
+        wide
+      >
         {selected && (
           <>
             <DrawerHeader className="gap-1">

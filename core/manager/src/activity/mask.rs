@@ -191,6 +191,13 @@ pub(super) fn policy(tool: &str) -> Option<&'static [Rule]> {
             ("env", Keys, false),
             ("headers", Keys, false),
         ],
+        // A desktop server's tool is opaque, so its arguments keep their names and sizes as they
+        // do when an endpoint calls it.
+        "call_mcp_server_tool" => &[
+            ("server", Text, true),
+            ("tool", Text, true),
+            ("arguments", Keys, false),
+        ],
         "remove_mcp_server" | "delete_mcp_endpoint" | "create_mcp_endpoint_token" => {
             &[("name", Text, true)]
         }

@@ -24,7 +24,7 @@ import {
 } from "@/lib/backup"
 import { openDialog } from "@/lib/dialogs"
 import { plural, t, type MessageKey } from "@/lib/i18n"
-import { refreshAll, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
+import { refreshLists, useContainers, useImages, useSettings, useVolumes } from "@/lib/queries"
 import { navigate } from "@/lib/route"
 import { fileSize } from "@/lib/uploads"
 
@@ -93,7 +93,7 @@ function BackUp() {
       description: t("backup.downloadingDetail"),
       action: { label: t("nav.jobs"), onClick: () => navigate({ page: "jobs" }) },
     })
-    setTimeout(() => void refreshAll(), 1000)
+    setTimeout(() => void refreshLists("jobs"), 1000)
   }
 
   return (

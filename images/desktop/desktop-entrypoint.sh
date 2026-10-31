@@ -38,6 +38,7 @@ fi
 # Refresh runtime settings on every start, including starts from committed images.
 printf 'export DISPLAY=:0\nexport PULSE_SERVER=unix:/run/desktop/pulse/native\n' > /etc/profile.d/desktop.sh
 if [[ ${DESKTOP_GPU:-false} == true && -e /dev/dxg ]]; then
+    # shellcheck disable=SC2016 # the profile expands it in each login shell
     printf 'export LD_LIBRARY_PATH=/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}\n' >> /etc/profile.d/desktop.sh
 fi
 exec runuser -u desktop -- /usr/local/bin/desktop-session

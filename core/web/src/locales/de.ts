@@ -927,8 +927,25 @@ export const de: Messages = {
   "nav.sidebar": "Seitenleiste",
   "nav.sidebarHint": "Zeigt die mobile Seitenleiste an.",
   "app.connectionFailed": "Verbindung fehlgeschlagen",
+  "errors.title": "Etwas ist schiefgelaufen",
+  "errors.updated": "Thoric wurde aktualisiert",
+  "errors.updatedHint":
+    "Diese Seite stammt aus der vorherigen Version. Laden Sie sie neu, um die neue zu öffnen.",
+  "errors.reload": "Neu laden",
+  "errors.retry": "Erneut versuchen",
+  "unsaved.changes.title": "Änderungen verwerfen?",
+  "unsaved.changes.description":
+    "Was Sie in dieses Formular eingegeben haben, geht beim Schließen verloren.",
+  "unsaved.changes.keep": "Weiter bearbeiten",
+  "unsaved.changes.discard": "Verwerfen",
+  "unsaved.upload.title": "Upload abbrechen?",
+  "unsaved.upload.description":
+    "Dateien, die noch hochgeladen werden, werden angehalten. Bereits hochgeladene bleiben erhalten.",
+  "unsaved.upload.keep": "Weiter hochladen",
+  "unsaved.upload.discard": "Upload abbrechen",
   "docker.unreachable": "Keine Verbindung zu Docker",
   "docker.checkDaemon": "Prüfen Sie, ob der Docker-Daemon läuft.",
+  "list.failed": "Die Liste konnte nicht gelesen werden",
   "login.title": "Anmelden",
   "login.description": "Verwenden Sie das Administratorkonto dieser Installation.",
   "login.username": "Benutzername",
@@ -1340,6 +1357,9 @@ export const de: Messages = {
   "desktop.micOff": "Mikrofon deaktivieren",
   "desktop.micPermission": "Warten auf Berechtigung…",
   "desktop.reconnect": "Neu verbinden",
+  "desktop.lost.failed":
+    "Die Verbindung zum Desktop ist abgebrochen. Verbinden Sie sich neu, um fortzufahren.",
+  "desktop.lost.disconnected": "Der Desktop hat die Verbindung beendet.",
   "desktop.exitFullscreen": "Vollbild beenden",
   "desktop.fullscreen": "Vollbild",
   "desktop.loading": "Container wird geladen…",
@@ -1520,7 +1540,8 @@ export const de: Messages = {
   "mcp.scope.files_read": "Dateien lesen",
   "mcp.scope.files_read.description": "Dateien auflisten, lesen und herunterladen.",
   "mcp.scope.files_write": "Dateien schreiben",
-  "mcp.scope.files_write.description": "Dateien schreiben, hochladen, verschieben und löschen.",
+  "mcp.scope.files_write.description":
+    "Dateien schreiben, hochladen, verschieben und löschen sowie Bildschirmfotos speichern.",
   "mcp.scope.commands": "Befehle",
   "mcp.scope.commands.description":
     "Skripte und Terminals als Desktop-Benutzer, nie als root. Ist Sudo im Container an, schließt das root darin ein.",
