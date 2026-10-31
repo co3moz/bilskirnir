@@ -208,6 +208,7 @@ export const es: Messages = {
   "containers.stop": "Detener",
   "containers.start": "Iniciar",
   "containers.restart": "Reiniciar",
+  "containers.reset": "Restablecer contenedor",
   "containers.settings": "Ajustes",
   "containers.snapshot": "Instantánea",
   "containers.logs": "Registros",
@@ -1346,6 +1347,9 @@ export const es: Messages = {
   "desktop.micOff": "Desactivar micrófono",
   "desktop.micPermission": "Esperando permiso…",
   "desktop.reconnect": "Reconectar",
+  "desktop.resize": "Ajustar a la ventana",
+  "desktop.resizeHint":
+    "Desactivado, la vista escala el escritorio y su resolución no cambia. Activado, la resolución del escritorio se ajusta a esta ventana, también para los agentes y otros espectadores, y se mantiene hasta que el escritorio se reinicie.",
   "desktop.lost.failed":
     "Se perdió la conexión con el escritorio. Vuelve a conectarte para continuar.",
   "desktop.lost.disconnected": "El escritorio cerró la conexión.",
@@ -1373,6 +1377,15 @@ export const es: Messages = {
   "delete.descriptionVolumes":
     "Se eliminan el contenedor, sus cambios sin guardar y los volúmenes creados para él. Los demás volúmenes y las instantáneas se conservan.",
   "delete.volumes": "Eliminar también los volúmenes creados para este contenedor",
+  "reset.titleOf": "¿Restablecer {name}?",
+  "reset.title": "¿Restablecer este contenedor?",
+  "reset.description":
+    "El contenedor se crea de nuevo a partir de la imagen con la que empezó. Lo que se guardó en él fuera de sus volúmenes, como programas instalados y archivos modificados, se descarta, y sus programas abiertos se cierran. Sus volúmenes, ajustes e identidad de la máquina se conservan.",
+  "reset.setup": "Su configuración de Compose se ejecuta de nuevo.",
+  "reset.snapshot": "Para guardar una copia de sus archivos, crea antes una instantánea.",
+  "reset.volumes": "Volúmenes que se conservan",
+  "reset.noVolumes": "No tiene volúmenes, así que no se conserva ninguno de sus archivos.",
+  "reset.confirm": "Restablecer",
   "create.description":
     "Un contenedor a partir de cualquier imagen. Una imagen del catálogo que aún no está descargada se descarga primero.",
   "create.namePlaceholder": "Espacio de trabajo de Unity",

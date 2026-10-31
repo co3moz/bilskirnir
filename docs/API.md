@@ -272,7 +272,7 @@ The job also keeps `script`, which stays once the job ends: `{"parts": [...]}`, 
 
 - `wait_seconds`, at most 300, waits for a queued or running job to end before answering, and answers as soon as it does. Once the time is up, or the manager stops, it answers with the job as it is then, so ask again to wait longer instead of polling in a loop.
 - `log_tail_bytes`, at most 262144, returns only the last that many bytes of the log.
-- `log_offset` returns the log from that byte of the job's whole output, counted from its first byte also after the log dropped its oldest part.
+- `log_offset` returns the log from that byte of the job's whole output, counted from its first byte also after the log dropped its oldest part. When a new manager takes over an update or a settings change and starts its log again, the count goes on from where the log ended, so a reader that asks from its last `log_end` gets the restart notice and what follows.
 
 With either log parameter the answer adds `log_start`, where the returned log begins in the whole output, and `log_end`, where it ends. Pass the `log_end` of one answer as the next `log_offset` to read only what was added since; a `log_start` past the `log_offset` asked for means bytes were left out, older than the log keeps or before the tail.
 

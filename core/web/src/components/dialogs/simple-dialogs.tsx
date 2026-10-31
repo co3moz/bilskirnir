@@ -2,6 +2,7 @@ import * as React from "react"
 import { RiAlertLine, RiClipboardLine, RiEqualizerLine } from "@remixicon/react"
 import { toast } from "sonner"
 
+import { ConceptIcon } from "@/components/concept"
 import { IconPicker, ImageChoiceItem } from "@/components/image-icon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -197,6 +198,60 @@ export function DeleteDialog({ id, ...props }: DialogProps & { id: string }) {
             <Button type="submit" variant="destructive" disabled={busy}>
               {busy && <Spinner data-icon="inline-start" />}
               {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/**
+ * Asks before a reset, which creates the container again from the image it started from and
+ * keeps its volumes, settings and identity, with the volumes named so it is clear what stays.
+ */
+export function ResetDialog({ id, ...props }: DialogProps & { id: string }) {
+  const item = useContainers().data?.find((entry) => entry.id === id)
+  const volumes = [
+    ...new Set([...(item?.spec.mounts ?? []), ...(item?.setup?.mounts ?? [])].map((m) => m.volume)),
+  ]
+  const { busy, error, submit } = useSubmit()
+  return (
+    <AlertDialog {...props}>
+      <AlertDialogContent>
+        <form className="contents" onSubmit={submit(() => runJob(`containers/${id}/reset`, {}))}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {item ? t("reset.titleOf", { name: item.spec.name }) : t("reset.title")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("reset.description")}
+              {item?.setup && ` ${t("reset.setup")}`} {t("reset.snapshot")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {/* Centered with the header on a phone, as the header is. */}
+          {item &&
+            (volumes.length > 0 ? (
+              <div className="flex flex-col gap-1 text-center sm:text-left">
+                <p className="flex items-center justify-center gap-1.5 text-sm font-medium sm:justify-start">
+                  <ConceptIcon concept="volume" className="size-4 shrink-0" />
+                  {t("reset.volumes")}
+                </p>
+                <p className="font-mono text-xs break-all text-muted-foreground">
+                  {volumes.join(", ")}
+                </p>
+              </div>
+            ) : (
+              <p className="text-center text-sm text-muted-foreground sm:text-left">
+                {t("reset.noVolumes")}
+              </p>
+            ))}
+          <FieldError>{error}</FieldError>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">{t("common.cancel")}</AlertDialogCancel>
+            <Button type="submit" variant="destructive" disabled={busy}>
+              {busy && <Spinner data-icon="inline-start" />}
+              {t("reset.confirm")}
             </Button>
           </AlertDialogFooter>
         </form>
