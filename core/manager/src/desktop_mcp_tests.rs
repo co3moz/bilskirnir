@@ -1,7 +1,7 @@
 //! Desktop MCP servers and MCP endpoints: which declarations are accepted, what an endpoint offers
 //! for its scopes and nothing more, the names its tools get, which single tools a grant leaves
 //! out, and that an endpoint's token opens that endpoint and no other route, also one an earlier
-//! release stored the hash of.
+//! release stored the hash of. Also that a server that hung is not handed to the next call.
 use super::{
     client::{Exec, MAX_TOOLS, check_tool_list, exec_args, read_line, relayed},
     endpoints::{ENDPOINTS, Endpoint, Grant, GrantRequest, Servers, grants, slug_of, summary},
@@ -1766,6 +1766,70 @@ async fn an_endpoints_calls_are_recorded_with_the_endpoint_and_a_servers_argumen
     );
 
     assert_eq!(row("list_windows").credential, "mcp_token");
+}
+
+/// A server that finishes its handshake and never answers a call leaves the pool once a call gave
+/// up on it, so the next call connects anew instead of waiting as long again.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_server_that_hung_is_not_handed_to_the_next_call() {
+    let mut app = app(false);
+    let dir = std::env::temp_dir().join(format!("thoric-hung-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    crate::test_support::write_script(
+        &docker,
+        r#"#!/bin/sh
+case "$1 $2" in
+  'container inspect') echo '[{"Id":"c0ffee","Config":{"Labels":{"thoric.managed":"true","thoric.environment":"e"}},"State":{"Running":true}}]' ;;
+  'exec -i')
+    echo started >> "$(dirname "$0")/connections"
+    while IFS= read -r line; do
+      case "$line" in
+        *'"initialize"'*)
+          id=$(printf '%s' "$line" | sed 's/.*"id":\([0-9]*\).*/\1/')
+          printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"hung","version":"1"}}}\n' "$id" ;;
+      esac
+    done ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let env = container("e", "Work");
+    let record = ServerRecord {
+        container_id: "e".into(),
+        name: "hung".into(),
+        source: Source::Image,
+        spec: Some(stdio("hung")),
+        tools: Vec::new(),
+        tools_at: None,
+        error: None,
+    };
+    for _ in 0..2 {
+        let error = super::client::call_within(
+            &app,
+            "agents",
+            &env,
+            &record,
+            "wait",
+            Default::default(),
+            std::time::Duration::from_secs(1),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("did not answer in 1 seconds"),
+            "{error:#}"
+        );
+    }
+    let started = std::fs::read_to_string(dir.join("connections")).unwrap();
+    assert_eq!(
+        started.lines().count(),
+        2,
+        "each call started its own server"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// /mcp could not call a desktop server's tool, so an administrator's agent had to create an

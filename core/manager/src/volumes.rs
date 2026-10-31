@@ -224,7 +224,7 @@ impl App {
     pub(crate) async fn lock_volumes<'a>(
         &self,
         names: impl IntoIterator<Item = &'a str>,
-    ) -> Vec<tokio::sync::OwnedMutexGuard<()>> {
+    ) -> Vec<crate::jobs::Exclusive> {
         let names = names.into_iter().collect::<std::collections::BTreeSet<_>>();
         let mut guards = Vec::with_capacity(names.len());
         for name in names {

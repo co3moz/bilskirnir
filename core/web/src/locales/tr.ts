@@ -101,6 +101,8 @@ export const tr: Messages = {
   "jobs.copyLog": "Logu kopyala",
   "jobs.retry": "Yeniden dene",
   "jobs.editRetry": "Düzenleyip yeniden dene",
+  "jobs.cancel": "İşi iptal et",
+  "jobs.cancelling": "İş iptal ediliyor.",
   "jobs.archiveProgress": "Arşiv ilerlemesi",
   "jobs.downloadProgress": "İmaj indirme ilerlemesi",
   "jobs.scriptProgress": "Kurulum betiği ilerlemesi",

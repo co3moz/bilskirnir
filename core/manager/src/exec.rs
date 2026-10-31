@@ -1,4 +1,4 @@
-use crate::{App, error::Result, jobs::launch};
+use crate::{App, docker::logged::Ran, error::Result, jobs::launch_shared};
 use anyhow::{Context, bail};
 use axum::{
     Json,
@@ -74,7 +74,7 @@ pub async fn execute(
 ) -> Result<Json<Value>> {
     body.validate()?;
     app.container(&id)?;
-    launch(
+    launch_shared(
         app,
         "exec",
         format!("container:{id}"),
@@ -92,9 +92,12 @@ pub async fn execute(
                     env.spec.name, user, body.timeout_seconds
                 ),
             )?;
+            let container = info["Id"].as_str().context("Missing container ID")?;
+            // The script's name, its $0, marks its `timeout` for a cancel to find.
+            let marker = format!("thoric-exec-{job_id}");
             let mut args = desktop_exec(user, body.root);
             args.extend([
-                info["Id"].as_str().context("Missing container ID")?.into(),
+                container.into(),
                 "timeout".into(),
                 "--signal=TERM".into(),
                 "--kill-after=5s".into(),
@@ -102,11 +105,107 @@ pub async fn execute(
                 "bash".into(),
                 "-c".into(),
                 WRAPPER.into(),
+                marker.clone(),
             ]);
-            app.docker_logged_input(&job_id, &args, Some(body.script.into_bytes()))
+            app.cancels.on_stop(&job_id, {
+                let app = app.clone();
+                let args = stop_args(container, user, &marker);
+                async move {
+                    if let Err(error) = app.docker_args(&args).await {
+                        tracing::debug!("Stopping a cancelled script: {error:#}");
+                    }
+                }
+            });
+            let started = std::time::Instant::now();
+            let ran = app
+                .docker_logged_outcome(&job_id, &args, body.script.into_bytes())
                 .await?;
-            app.append_log(&job_id, "Script completed successfully.")?;
-            Ok(json!({"container_id": id, "user": user, "exit_code": 0}))
+            let limit = std::time::Duration::from_secs(body.timeout_seconds);
+            let outcome = Outcome::of(&ran, started.elapsed() >= limit);
+            let failure = outcome.failure(body.timeout_seconds);
+            let result = json!({
+                "container_id": id,
+                "user": user,
+                "exit_code": outcome.exit_code,
+                "timed_out": outcome.timed_out,
+                "output_tail": outcome.output_tail,
+            });
+            match failure {
+                None => {
+                    app.append_log(&job_id, "Script completed successfully.")?;
+                    Ok(result)
+                }
+                Some(reason) => {
+                    app.append_log(&job_id, &format!("{reason}."))?;
+                    Err(crate::jobs::Failed::new(reason, result).into())
+                }
+            }
         },
     )
 }
+
+/// The `docker exec` that stops a cancelled script in its desktop as its time limit would: `timeout`,
+/// found by the `marker` it was started with, passes the TERM on to the script's processes and
+/// sends KILL five seconds later. It runs as the script's user, so it reaches nothing else.
+pub(crate) fn stop_args(container: &str, user: &str, marker: &str) -> Vec<String> {
+    [
+        "exec",
+        "--user",
+        user,
+        container,
+        "pkill",
+        "--signal",
+        "TERM",
+        "--full",
+        &format!("^timeout .* {marker}$"),
+    ]
+    .map(str::to_owned)
+    .to_vec()
+}
+
+/// How a script ended, which its job's result carries whether it succeeded or failed.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Outcome {
+    /// The script's exit code, `0` when it succeeded; `null` when it ran out of the manager's own
+    /// time or a signal ended it.
+    pub exit_code: Option<i32>,
+    /// Whether it ran out of `timeout_seconds` and was stopped.
+    pub timed_out: bool,
+    /// The end of what it printed, at most [`crate::docker::logged::TAIL_LIMIT`] bytes, without the manager's lines.
+    pub output_tail: String,
+}
+
+impl Outcome {
+    /// `ran` of a script whose time was up when it ended (`over`). `timeout` reports a script it
+    /// stopped as 124, or as 137 when the script outlived the TERM by the five seconds it is
+    /// given; a script that exits with either code before its time is not taken for one.
+    pub(crate) fn of(ran: &Ran, over: bool) -> Self {
+        let exit_code = ran.status.and_then(|status| status.code());
+        Self {
+            exit_code,
+            timed_out: ran.status.is_none() || (over && matches!(exit_code, Some(124 | 137))),
+            output_tail: ran.tail.clone(),
+        }
+    }
+    /// Why the script failed, for its job's error and log, or `None` when it succeeded.
+    fn failure(&self, timeout_seconds: u64) -> Option<String> {
+        if self.timed_out {
+            let code = self
+                .exit_code
+                .map(|code| format!(" (exit code {code})"))
+                .unwrap_or_default();
+            return Some(format!(
+                "Script ran out of its time limit of {timeout_seconds} seconds and was stopped{code}"
+            ));
+        }
+        match self.exit_code {
+            Some(0) => None,
+            Some(code) => Some(format!("Script exited with code {code}")),
+            None => Some("Script was ended by a signal".into()),
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+#[path = "exec_tests.rs"]
+mod tests;

@@ -196,7 +196,7 @@ pub async fn open_terminal(
             anyhow::anyhow!("An MCP endpoint opens terminals as the desktop user only").into(),
         );
     }
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let info = running(app, id).await?;
     let home = if body.root { "/root" } else { "/home/desktop" };
     let record = Terminal {

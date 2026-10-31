@@ -79,8 +79,8 @@ pub struct App {
     https_proxy: auth::HttpsProxy,
     /// The manager's own addresses, of which those on a desktop's network are not answered.
     interfaces: auth::Interfaces,
-    operations: Arc<tokio::sync::Mutex<()>>,
-    resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
+    operations: jobs::ResourceLock,
+    resource_locks: Mutex<HashMap<String, std::sync::Weak<tokio::sync::RwLock<()>>>>,
     session_events: tokio::sync::Notify,
     screenshots: tokio::sync::Semaphore,
     uploads: tokio::sync::Semaphore,
@@ -99,6 +99,8 @@ pub struct App {
     releases: releases::Releases,
     /// What the signed-in dashboards hear as it happens, such as a job that ended.
     events: events::Hub,
+    /// The jobs that have not ended, which a cancel reaches.
+    cancels: jobs::cancel::Cancels,
     /// Agents' requests for a person, in memory only.
     human: human::Requests,
     /// The proxies inside the desktops that use one.
@@ -347,6 +349,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/jobs", get(api::jobs))
         .route("/api/jobs/{id}", get(api::job))
         .route("/api/jobs/{id}/retry", post(jobs::retry::retry))
+        .route("/api/jobs/{id}/cancel", post(jobs::cancel::cancel))
         .route("/api/jobs/{id}/request", get(jobs::retry::request))
         .route("/api/events", get(events::stream))
         .route("/api/human-requests", get(human::list))
@@ -507,7 +510,7 @@ async fn main() -> anyhow::Result<()> {
         login_attempts: Default::default(),
         https_proxy: Default::default(),
         interfaces: Default::default(),
-        operations: Arc::new(tokio::sync::Mutex::new(())),
+        operations: Default::default(),
         resource_locks: Mutex::new(HashMap::new()),
         session_events: tokio::sync::Notify::new(),
         screenshots: tokio::sync::Semaphore::new(2),
@@ -520,6 +523,7 @@ async fn main() -> anyhow::Result<()> {
         desktop_mcp: desktop_mcp::DesktopMcp::default(),
         releases: releases::Releases::default(),
         events: events::Hub::default(),
+        cancels: Default::default(),
         human: human::Requests::default(),
         outbound: outbound::Outbound::default(),
     });
@@ -568,18 +572,74 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("Thoric listening: {listen}");
     let closing = app.clone();
-    axum::serve(
-        listener,
-        router(app).into_make_service_with_connect_info::<auth::Connection>(),
-    )
-    .with_graceful_shutdown(async move {
-        let _ = tokio::signal::ctrl_c().await;
+    let stop = async move {
+        stop_requested().await;
+        tracing::info!("Stopping: open requests have {} seconds", DRAIN.as_secs());
         // Event streams and waits for a person never end on their own, and shutdown waits for
         // every response.
         closing.events.close();
-    })
-    .await?;
+    };
+    serve(listener, router(app), stop, DRAIN).await?;
     Ok(())
+}
+
+/// How long the open requests may take to finish once the manager is asked to stop. `docker
+/// stop`, which `thoric update` and a settings change run too, kills it ten seconds after its
+/// SIGTERM, and a long upload or an MCP stream would otherwise keep it until then.
+const DRAIN: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Resolves once the manager is asked to stop: Ctrl+C, or the SIGTERM that `docker stop` sends,
+/// which tini passes on.
+async fn stop_requested() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = terminate.recv() => {}
+                }
+                return;
+            }
+            Err(error) => tracing::warn!("SIGTERM cannot stop the manager gracefully: {error}"),
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// Serve `router` until `stop` resolves, then let the open requests finish for at most `drain`.
+/// WebSocket and proxied connections, which the server does not wait for, end with the process.
+async fn serve(
+    listener: tokio::net::TcpListener,
+    router: Router,
+    stop: impl std::future::Future<Output = ()> + Send + 'static,
+    drain: std::time::Duration,
+) -> std::io::Result<()> {
+    let (stopped, stopping) = tokio::sync::oneshot::channel();
+    let server = axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<auth::Connection>(),
+    )
+    .with_graceful_shutdown(async move {
+        stop.await;
+        let _ = stopped.send(());
+    });
+    tokio::select! {
+        served = std::future::IntoFuture::into_future(server) => served,
+        () = async {
+            match stopping.await {
+                Ok(()) => tokio::time::sleep(drain).await,
+                Err(_) => std::future::pending().await,
+            }
+        } => {
+            tracing::warn!(
+                "Requests still open {} seconds after the stop were cut off",
+                drain.as_secs()
+            );
+            Ok(())
+        }
+    }
 }
 /// What the network reconciliation as a whole reports its failures as.
 const RECONCILIATION: &str = "Docker reconciliation";

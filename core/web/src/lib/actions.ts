@@ -41,6 +41,13 @@ export const retrySetup = (id: string) => runJob(`containers/${id}/retry`, {})
 /** Starts a failed or interrupted job again with the request it was started with. */
 export const retryJob = (id: string) => runJob(`jobs/${id}/retry`, {})
 
+/** Asks the manager to cancel a job; its log shows it end as failed. */
+export async function cancelJob(id: string) {
+  await api(`jobs/${id}/cancel`, {})
+  toast.success(t("jobs.cancelling"))
+  void refreshLists("jobs")
+}
+
 /** Opens the build form with a failed build's request, to change it before building again. */
 export async function editBuildJob(id: string) {
   const kept = await api<{ kind: string; request: unknown }>(`jobs/${id}/request`)

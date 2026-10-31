@@ -151,7 +151,7 @@ async fn control(
 /// Feed a virtual controller; the device is created on first use and persists until the desktop restarts.
 pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Result<Value> {
     body.validate()?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let env = app.container(id)?;
     // Like the audio channels, the manager carries no input while the installation has it off.
     if !app.config.gamepad {

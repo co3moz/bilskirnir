@@ -382,6 +382,8 @@ export type Job = {
   script?: ScriptReport | null
   /** A failed or interrupted job the manager can start again with its request; lists omit it. */
   retryable?: boolean
+  /** A queued job, or a running script, build or image download, that a cancel stops; lists omit it. */
+  cancellable?: boolean
 }
 
 /** How a GPU desktop reaches the host's GPU: WSL_GPU, NVIDIA_COMPUTE or DRI_GPU. */

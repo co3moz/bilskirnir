@@ -106,6 +106,8 @@ export const en = {
   "jobs.copyLog": "Copy log",
   "jobs.retry": "Retry",
   "jobs.editRetry": "Edit and retry",
+  "jobs.cancel": "Cancel job",
+  "jobs.cancelling": "Cancelling the job.",
   "jobs.archiveProgress": "Archive progress",
   "jobs.downloadProgress": "Image download progress",
   "jobs.scriptProgress": "Setup script progress",

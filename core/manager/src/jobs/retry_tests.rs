@@ -1,6 +1,7 @@
 //! Pins down that a job that can be retried keeps the request its route was given until it
 //! completes, that only a failed or interrupted one is started again, and that starting it again
-//! goes through its route as a new job of the same kind with the same request.
+//! goes through its route as a new job of the same kind with the same request, which the new job
+//! keeps from then on, so a job is retried once even when two retries arrive together.
 use super::*;
 use crate::{api::BuildImage, model::Container};
 
@@ -104,9 +105,13 @@ async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
         Request::Build(build())
     );
     assert_eq!(ended(&app, &first).await.status, "failed");
-    let Json(shown) = crate::api::job(State(app.clone()), Path(first.clone()))
-        .await
-        .unwrap();
+    let Json(shown) = crate::api::job(
+        State(app.clone()),
+        Path(first.clone()),
+        axum::extract::Query(Default::default()),
+    )
+    .await
+    .unwrap();
     assert_eq!(shown["retryable"], true);
     let Json(kept) = request(State(app.clone()), Path(first.clone()))
         .await
@@ -124,8 +129,28 @@ async fn a_failed_build_keeps_its_request_and_is_built_again_with_it() {
         app.db.get::<Request>(REQUESTS, &second).unwrap(),
         Request::Build(build())
     );
-    // The first can still be retried; each retry is a job of its own.
-    assert!(retryable(&app, &app.db.job(&first).unwrap()));
+    // The new job keeps the request from now on: the first is not retried twice.
+    assert!(!retryable(&app, &app.db.job(&first).unwrap()));
+    let again = retry(State(app.clone()), Path(first.clone()))
+        .await
+        .unwrap_err();
+    assert_eq!(again.0, StatusCode::CONFLICT);
+    assert!(retryable(&app, &app.db.job(&second).unwrap()));
+    // Of two retries at once, one starts a job and the other is refused.
+    let (one, other) = tokio::join!(
+        retry(State(app.clone()), Path(second.clone())),
+        retry(State(app.clone()), Path(second.clone())),
+    );
+    assert_eq!(
+        [one.is_ok(), other.is_ok()]
+            .iter()
+            .filter(|ok| **ok)
+            .count(),
+        1,
+        "{:?} {:?}",
+        one.map(|json| json.0),
+        other.map(|json| json.0)
+    );
 }
 
 #[tokio::test]
@@ -193,9 +218,13 @@ async fn only_a_failed_or_interrupted_job_with_its_request_is_retried() {
             StatusCode::CONFLICT,
             "{id}"
         );
-        let Json(shown) = crate::api::job(State(app.clone()), Path(id.into()))
-            .await
-            .unwrap();
+        let Json(shown) = crate::api::job(
+            State(app.clone()),
+            Path(id.into()),
+            axum::extract::Query(Default::default()),
+        )
+        .await
+        .unwrap();
         assert!(shown.get("retryable").is_none(), "{id}");
     }
     let refused = retry(State(app.clone()), Path("exec".into()))

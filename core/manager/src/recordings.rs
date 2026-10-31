@@ -187,7 +187,7 @@ fn describe(record: &Recording, status: Value) -> Value {
 }
 pub async fn start_recording(app: &Arc<App>, id: &str, body: &StartRecording) -> Result<Value> {
     body.validate()?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let (_, info) = running(app, id).await?;
     let record = Recording {
         id: uuid::Uuid::new_v4().simple().to_string(),
@@ -288,7 +288,7 @@ pub async fn list_recordings(app: &App, id: &str) -> Result<Value> {
 }
 pub async fn export_artifacts(app: &Arc<App>, id: &str, body: &Export) -> Result<Value> {
     body.validate()?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let (env, info) = running(app, id).await?;
     uploads::validate_target(&env, &body.destination, &body.name)?;
     let mut recordings = serde_json::Map::new();

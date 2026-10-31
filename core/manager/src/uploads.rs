@@ -107,6 +107,87 @@ impl Drop for TemporaryFile {
     }
 }
 
+/// An upload's body, received whole into a file of the manager's own before anything in a
+/// desktop or a volume is held, so a slow client holds no lock while its bytes arrive. The file
+/// goes when this is dropped.
+pub(crate) struct Staged(TemporaryFile);
+
+impl Staged {
+    /// The staged bytes, from the start.
+    pub(crate) async fn open(&self) -> Result<tokio::fs::File> {
+        Ok(tokio::fs::File::open(&self.0.0)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+}
+
+/// Receive an upload's body of exactly `size` bytes into the manager's upload folder.
+pub(crate) async fn stage(app: &App, size: u64, body: Body) -> Result<Staged> {
+    let temporary = TemporaryFile(
+        app.config
+            .data
+            .join("uploads")
+            .join(format!("{}.part", uuid::Uuid::new_v4().simple())),
+    );
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options
+        .open(&temporary.0)
+        .await
+        .map_err(anyhow::Error::from)?;
+    let mut stream = body.into_data_stream();
+    let mut received = 0u64;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| anyhow::anyhow!("Upload body interrupted: {error}"))?;
+        received += chunk.len() as u64;
+        if received > size {
+            return Err(Error(
+                StatusCode::BAD_REQUEST,
+                "File size does not match the upload".into(),
+            ));
+        }
+        file.write_all(&chunk).await.map_err(anyhow::Error::from)?;
+    }
+    if received != size {
+        return Err(Error(
+            StatusCode::BAD_REQUEST,
+            "File transfer was interrupted".into(),
+        ));
+    }
+    file.flush().await.map_err(anyhow::Error::from)?;
+    Ok(Staged(temporary))
+}
+
+/// The running container an upload of `request` goes into, checked against its record and its
+/// mounts: once before the body arrives, so a wrong destination costs no transfer, and again
+/// under the container's lock before the delivery.
+async fn destination(app: &App, id: &str, request: &Upload) -> Result<Value> {
+    let record = app.container(id)?;
+    validate_target(&record, &request.destination, &request.name)?;
+    let container = app.owned(&record).await?;
+    if container["State"]["Running"] != true {
+        return Err(Error(
+            StatusCode::CONFLICT,
+            "Start the container before uploading files".into(),
+        ));
+    }
+    for mount in container["Mounts"].as_array().into_iter().flatten() {
+        if mount["Destination"]
+            .as_str()
+            .is_some_and(|root| within(&request.destination, root))
+            && mount["RW"] != true
+        {
+            return Err(Error(
+                StatusCode::BAD_REQUEST,
+                "Destination is mounted read-only".into(),
+            ));
+        }
+    }
+    Ok(container)
+}
+
 pub async fn cleanup_temporary_files(data: &FilePath) -> anyhow::Result<()> {
     let directory = data.join("uploads");
     tokio::fs::create_dir_all(&directory).await?;
@@ -172,68 +253,13 @@ pub(crate) async fn save_file(
         )
     })?;
     let transfer = async {
-        let lock = app.resource_lock(&format!("container:{id}"));
-        let _guard = lock.lock().await;
-        let record = app.container(&id)?;
-        validate_target(&record, &request.destination, &request.name)?;
-        let container = app.owned(&record).await?;
-        if container["State"]["Running"] != true {
-            return Err(Error(
-                StatusCode::CONFLICT,
-                "Start the container before uploading files".into(),
-            ));
-        }
-        for mount in container["Mounts"].as_array().into_iter().flatten() {
-            if mount["Destination"]
-                .as_str()
-                .is_some_and(|root| within(&request.destination, root))
-                && mount["RW"] != true
-            {
-                return Err(Error(
-                    StatusCode::BAD_REQUEST,
-                    "Destination is mounted read-only".into(),
-                ));
-            }
-        }
-        let temporary = TemporaryFile(
-            app.config
-                .data
-                .join("uploads")
-                .join(format!("{}.part", uuid::Uuid::new_v4().simple())),
-        );
-        let mut options = tokio::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        let mut file = options
-            .open(&temporary.0)
-            .await
-            .map_err(anyhow::Error::from)?;
-        let mut stream = body.into_data_stream();
-        let mut received = 0u64;
-        while let Some(chunk) = stream.next().await {
-            let chunk =
-                chunk.map_err(|error| anyhow::anyhow!("Upload body interrupted: {error}"))?;
-            received += chunk.len() as u64;
-            if received > request.size {
-                return Err(Error(
-                    StatusCode::BAD_REQUEST,
-                    "File size does not match the upload".into(),
-                ));
-            }
-            file.write_all(&chunk).await.map_err(anyhow::Error::from)?;
-        }
-        if received != request.size {
-            return Err(Error(
-                StatusCode::BAD_REQUEST,
-                "File transfer was interrupted".into(),
-            ));
-        }
-        file.flush().await.map_err(anyhow::Error::from)?;
-        drop(file);
-        let mut input = tokio::fs::File::open(&temporary.0)
-            .await
-            .map_err(anyhow::Error::from)?;
+        destination(app, &id, &request).await?;
+        let staged = stage(app, request.size, body).await?;
+        // The delivery shares the container with a script or input, and waits a bounded time
+        // for work that changes or replaces it.
+        let _guard = app.share(&format!("container:{id}")).await?;
+        let container = destination(app, &id, &request).await?;
+        let mut input = staged.open().await?;
         let args = vec![
             "exec".into(),
             "--interactive".into(),
@@ -290,7 +316,7 @@ pub(crate) async fn save_file(
         let path = format!("{}/{}", request.destination, request.name);
         let download_url = crate::files::download_url(&id, &path);
         Ok(Json(
-            json!({"name":request.name,"path":path,"bytes":received,"download_url":download_url}),
+            json!({"name":request.name,"path":path,"bytes":request.size,"download_url":download_url}),
         ))
     };
     tokio::select! {

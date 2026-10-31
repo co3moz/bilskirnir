@@ -76,7 +76,7 @@ pub async fn read(
         )
         .into());
     }
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -135,7 +135,7 @@ pub async fn write(
         return Err(anyhow::anyhow!("File writes are limited to 512 KiB").into());
     }
     let size = data.len();
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let env = app.container(&id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -244,7 +244,7 @@ impl DeleteFile {
     }
 }
 async fn operate(app: &App, id: &str, arguments: &[&str]) -> Result<Value> {
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let env = app.container(id)?;
     let container = app.owned(&env).await?;
     if container["State"]["Running"] != true {
@@ -447,7 +447,7 @@ pub async fn download_file(app: &App, id: &str, body: &Download) -> Result<(Valu
             format!("max_bytes must be 1 to {DOWNLOAD_LIMIT}"),
         ));
     }
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let container = running_container(app, id).await?;
     let args = [
         "exec",
@@ -489,7 +489,7 @@ pub async fn download(
     token: auth::Session,
 ) -> Result<Response> {
     let (_, name) = split_path(&query.path)?;
-    let _guard = app.hold(&format!("container:{id}")).await?;
+    let _guard = app.share(&format!("container:{id}")).await?;
     let container = running_container(&app, &id).await?;
     let cid = container["Id"].as_str().context("Missing container ID")?;
     let entry = file_ops(&app, cid, &["stat", &query.path]).await?;

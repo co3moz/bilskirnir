@@ -245,13 +245,14 @@ impl EndpointMcp {
                 })
             }
             Target::Job { containers } => {
-                let id = args["job_id"].as_str().unwrap_or_default();
+                let (id, read) = crate::jobs::read::mcp_arguments(args)?;
                 // Only jobs the endpoint started, so an administrator's script that ran as root
                 // in the same container stays the administrator's.
-                if !self.app.desktop_mcp.started_by(&self.name, id) {
+                if !self.app.desktop_mcp.started_by(&self.name, &id) {
                     return Err(error::missing());
                 }
-                let job = self.app.db.job(id).map_err(|_| error::missing())?;
+                let job: crate::model::Job =
+                    self.app.db.get("job", &id).map_err(|_| error::missing())?;
                 // And of the endpoint's own containers, should a grant have been taken back.
                 if !job.resource.as_deref().is_some_and(|resource| {
                     containers
@@ -260,7 +261,8 @@ impl EndpointMcp {
                 }) {
                     return Err(error::missing());
                 }
-                Ok(CallToolResult::structured(json!(job)))
+                let job = crate::jobs::read::answer(&self.app, &id, &read, Some(&caller));
+                Ok(CallToolResult::structured(Box::pin(job).await?))
             }
             Target::Server {
                 container_id,

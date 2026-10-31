@@ -230,7 +230,7 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "exec_container",
-            "Run a bash script in a running container with fail-on-error, a time limit and stdin closed. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; output and failure details are in get_job. The script holds the container lock until it finishes, so start long-running graphical programs with launch_application instead.",
+            "Run a bash script in a running container with fail-on-error, a time limit and stdin closed. Defaults to desktop UID/GID 1001:1001; set root=true explicitly to install packages. Returns job_id; get_job then reports result.exit_code, result.timed_out and result.output_tail, the last 8 KiB of the script's output, also when it failed, and the whole output in its log. Input, screenshots, files and applications keep working while the script runs; a reset, snapshot or settings change waits for it. Start long-running graphical programs with launch_application instead, since the job ends only when they exit.",
             json!({"container_id":id,"script":{"type":"string","minLength":1,"maxLength":1000000},"root":{"type":"boolean","default":false},"timeout_seconds":{"type":"integer","minimum":1,"maximum":3500,"default":300}}),
             &["container_id", "script"],
             false,
@@ -348,11 +348,20 @@ pub(super) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
         ),
         tool(
             "get_job",
-            "Read a job's status, bounded log and result, plus progress while an image downloads or a build or compose setup script runs, the stages of an image build, a snapshot or a settings change that recreates the container, and the parts and named steps of a build's or setup's scripts. Wait for completed, failed or interrupted; a queued job is not finished.",
-            json!({"job_id":text}),
+            "Read a job's status, log and result, plus progress while an image downloads or a build or compose setup script runs, the stages of an image build, a snapshot or a settings change that recreates the container, and the parts and named steps of a build's or setup's scripts. A job is finished once completed, failed or interrupted; a queued job is not. wait_seconds waits up to 300 seconds for it to end and answers as it is then, so call again rather than polling in a loop; a client that does not reset its timeout on progress notifications should keep it below its own limit, often 60 seconds. The log is its last log_tail_bytes bytes, 4096 unless given; log_start and log_end say where that part lies in the whole output, and log_offset=log_end of the last answer reads only what was added since.",
+            json!({"job_id":text,"wait_seconds":{"type":"integer","minimum":0,"maximum":300,"default":0},"log_tail_bytes":{"type":"integer","minimum":0,"maximum":262144,"default":4096},"log_offset":{"type":"integer","minimum":0}}),
             &["job_id"],
             true,
             false,
+            false,
+        ),
+        tool(
+            "cancel_job",
+            "Cancel a job: a queued one of any kind ends before it runs, and a running exec_container script, build_image or build_catalog_image build or pull_image download is stopped, a script as its timeout would stop it. Other running jobs, which change a container, an image or a volume, are refused and finish. The job ends as failed with the error Cancelled by request; get_job with wait_seconds shows when.",
+            json!({"job_id":text}),
+            &["job_id"],
+            false,
+            true,
             false,
         ),
     ];

@@ -415,6 +415,22 @@ pub(super) async fn call(
     tool: &str,
     arguments: JsonObject,
 ) -> Result<CallToolResult> {
+    call_within(
+        app, endpoint, container, record, tool, arguments, CALL_LIMIT,
+    )
+    .await
+}
+
+/// [`call`] that gives the server `limit` to answer.
+pub(super) async fn call_within(
+    app: &Arc<App>,
+    endpoint: &str,
+    container: &Container,
+    record: &ServerRecord,
+    tool: &str,
+    arguments: JsonObject,
+    limit: Duration,
+) -> Result<CallToolResult> {
     let slot = app.desktop_mcp.pool.slot((
         endpoint.to_owned(),
         container.id.clone(),
@@ -433,21 +449,39 @@ pub(super) async fn call(
     };
     connection.touch();
     let request = CallToolRequestParams::new(tool.to_owned()).with_arguments(arguments);
-    let result = tokio::time::timeout(CALL_LIMIT, connection.service.call_tool(request)).await;
+    let result = tokio::time::timeout(limit, connection.service.call_tool(request)).await;
     connection.touch();
+    // A connection that closed, or a server that hung, is not handed to the next call, which
+    // would only wait as long again: it connects anew. A call that still uses it keeps it until
+    // that call ends, and the `docker exec` goes with the last of them.
+    let forget = async {
+        let mut held = slot.lock().await;
+        if held
+            .as_ref()
+            .is_some_and(|held| Arc::ptr_eq(held, &connection))
+        {
+            held.take();
+        }
+    };
     match result {
         Ok(Ok(result)) => Ok(relayed(result)),
         Ok(Err(error)) => {
             if connection.closed() {
-                slot.lock().await.take();
+                forget.await;
             }
             bail!("The server {} failed the call: {error}", record.name)
         }
-        Err(_) => bail!(
-            "The server {} did not answer in {} minutes",
-            record.name,
-            CALL_LIMIT.as_secs() / 60
-        ),
+        Err(_) => {
+            forget.await;
+            bail!(
+                "The server {} did not answer in {}",
+                record.name,
+                match limit.as_secs() {
+                    seconds @ 60.. => format!("{} minutes", seconds / 60),
+                    seconds => format!("{seconds} seconds"),
+                }
+            )
+        }
     }
 }
 

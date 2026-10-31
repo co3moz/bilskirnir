@@ -11,6 +11,8 @@ use std::{
     sync::{Arc, Weak},
 };
 
+pub(crate) mod cancel;
+pub(crate) mod read;
 pub(crate) mod retry;
 
 /// A job's result for a caller that waits for it: the value it returned, or its error message.
@@ -19,18 +21,61 @@ pub(crate) type Outcome = tokio::sync::oneshot::Receiver<std::result::Result<Val
 /// How many jobs are kept once finished, newest first; the dashboard lists the latest 100.
 pub(crate) const KEPT_JOBS: usize = 500;
 
+/// A resource's lock. Work that changes or replaces the resource, such as a container's reset,
+/// its settings or its delete, takes it alone with [`ResourceLock::lock`]; work that only uses
+/// it, such as a script, desktop input or a file in a running desktop, shares it with
+/// [`ResourceLock::share_owned`] with other such work, and waits only for the work that takes it
+/// alone. Waiting is fair: work that takes it alone is not starved by a stream of sharers.
+#[derive(Clone, Default)]
+pub struct ResourceLock(Arc<tokio::sync::RwLock<()>>);
+/// The resource held alone until it is dropped.
+pub(crate) type Exclusive = tokio::sync::OwnedRwLockWriteGuard<()>;
+/// The resource shared until it is dropped.
+pub(crate) type Shared = tokio::sync::OwnedRwLockReadGuard<()>;
+
+impl ResourceLock {
+    pub async fn lock(&self) -> tokio::sync::RwLockWriteGuard<'_, ()> {
+        self.0.write().await
+    }
+    pub async fn lock_owned(self) -> Exclusive {
+        self.0.write_owned().await
+    }
+    pub fn try_lock(
+        &self,
+    ) -> std::result::Result<tokio::sync::RwLockWriteGuard<'_, ()>, tokio::sync::TryLockError> {
+        self.0.try_write()
+    }
+    pub fn try_lock_owned(self) -> std::result::Result<Exclusive, tokio::sync::TryLockError> {
+        self.0.try_write_owned()
+    }
+    pub async fn share_owned(self) -> Shared {
+        self.0.read_owned().await
+    }
+}
+
+/// What a job holds of its resource while it runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Hold {
+    /// The resource alone, as work that changes or replaces it does.
+    Exclusive,
+    /// The resource beside other work that only uses it, such as a script in a desktop.
+    Shared,
+    /// Nothing, as a job that only reads a resource, such as an export, runs alongside.
+    Nothing,
+}
+
 impl App {
-    pub fn resource_lock(&self, resource: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub fn resource_lock(&self, resource: &str) -> ResourceLock {
         if resource == "global" {
             return self.operations.clone();
         }
         let mut locks = self.resource_locks.lock().unwrap();
         locks.retain(|_, lock| lock.strong_count() > 0);
         if let Some(lock) = locks.get(resource).and_then(Weak::upgrade) {
-            return lock;
+            return ResourceLock(lock);
         }
-        let lock = Arc::new(tokio::sync::Mutex::new(()));
-        locks.insert(resource.into(), Arc::downgrade(&lock));
+        let lock = ResourceLock::default();
+        locks.insert(resource.into(), Arc::downgrade(&lock.0));
         lock
     }
 }
@@ -59,6 +104,23 @@ where
     Ok(Json(json!({"job_id":id})))
 }
 
+/// [`launch`] for a job that only uses its resource, such as a script in a running desktop: it
+/// shares the resource's lock, so input, files and other such work go on while it runs, and only
+/// work that changes or replaces the resource waits for it.
+pub fn launch_shared<F, Fut>(
+    app: Arc<App>,
+    kind: &str,
+    resource: String,
+    work: F,
+) -> Result<Json<Value>>
+where
+    F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+{
+    let (id, _) = queue(app, kind, resource, None, Hold::Shared, None, work)?;
+    Ok(Json(json!({"job_id":id})))
+}
+
 /// [`launch_named`] for a job that can be started again once it fails or is interrupted:
 /// `request` is what its route was asked, kept beside the job until it completes.
 pub(crate) fn launch_retryable<F, Fut>(
@@ -73,7 +135,15 @@ where
     F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
-    let (id, _) = queue(app, kind, resource, name, true, Some(request), work)?;
+    let (id, _) = queue(
+        app,
+        kind,
+        resource,
+        name,
+        Hold::Exclusive,
+        Some(request),
+        work,
+    )?;
     Ok(Json(json!({"job_id":id})))
 }
 
@@ -106,7 +176,12 @@ where
     F: FnOnce(Arc<App>, String) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
-    queue(app, kind, resource, name, exclusive, None, work)
+    let hold = if exclusive {
+        Hold::Exclusive
+    } else {
+        Hold::Nothing
+    };
+    queue(app, kind, resource, name, hold, None, work)
 }
 
 /// [`start_named`] that keeps the `request` of a job that can be retried before the job can end.
@@ -115,7 +190,7 @@ fn queue<F, Fut>(
     kind: &str,
     resource: String,
     name: Option<String>,
-    exclusive: bool,
+    hold: Hold,
     request: Option<retry::Request>,
     work: F,
 ) -> Result<(String, Outcome)>
@@ -143,32 +218,66 @@ where
         app.db.put(retry::REQUESTS, &id, request)?;
     }
     app.events.job(&job, None);
-    let lock = exclusive.then(|| app.resource_lock(&resource));
+    let cancelled = app.cancels.queued(&id, kind);
+    let lock = (hold != Hold::Nothing).then(|| app.resource_lock(&resource));
     let (done, outcome) = tokio::sync::oneshot::channel();
     let task_id = id.clone();
     tokio::spawn(async move {
-        let _guard = match &lock {
-            Some(lock) => Some(lock.lock().await),
-            None => None,
+        let held = async {
+            let shared = match &lock {
+                Some(lock) if hold == Hold::Shared => Some(lock.clone().share_owned().await),
+                _ => None,
+            };
+            let alone = match lock {
+                Some(lock) if hold == Hold::Exclusive => Some(lock.lock_owned().await),
+                _ => None,
+            };
+            (shared, alone)
+        };
+        // A job cancelled while it waits for its resource never runs.
+        let held = tokio::select! {
+            biased;
+            () = cancelled.cancelled() => None,
+            held = held => Some(held),
         };
         let mut job: Job = match app.db.get("job", &task_id) {
             Ok(j) => j,
             Err(e) => {
                 tracing::error!("{e}");
+                app.cancels.forget(&task_id);
                 return;
             }
+        };
+        let Some(_held) = held else {
+            app.cancels.forget(&task_id);
+            let _ = done.send(finish(
+                &app,
+                &task_id,
+                job,
+                Err(anyhow::anyhow!(cancel::CANCELLED)),
+            ));
+            return;
         };
         job.status = "running".into();
         if let Err(e) = app.db.put("job", &task_id, &job) {
             tracing::error!("{e}");
+            app.cancels.forget(&task_id);
             return;
         }
+        app.cancels.running(&task_id);
         app.events.job(&job, None);
-        let result =
-            std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
-                .catch_unwind()
-                .await;
-        let result = result.unwrap_or_else(|_| Err(anyhow::anyhow!("Job ended unexpectedly")));
+        let work = std::panic::AssertUnwindSafe(async { work(app.clone(), task_id.clone()).await })
+            .catch_unwind();
+        // A cancel drops the work, which kills the commands it runs, and then stops what it
+        // started elsewhere.
+        let result = tokio::select! {
+            result = work => result.unwrap_or_else(|_| Err(anyhow::anyhow!("Job ended unexpectedly"))),
+            () = cancelled.cancelled() => {
+                app.cancels.stop(&task_id).await;
+                Err(anyhow::anyhow!(cancel::CANCELLED))
+            }
+        };
+        app.cancels.forget(&task_id);
         // Includes failures during context preparation and panics; cleanup cannot depend on the script succeeding.
         if job.kind == "build" {
             // A failed build's last stage stays the one it failed in.
@@ -184,6 +293,28 @@ where
     });
     Ok((id, outcome))
 }
+
+/// A job's failure that carries a result of its own, such as a script's exit code and the end of
+/// its output, which the failed job keeps as its `result` beside its error.
+#[derive(Debug)]
+pub(crate) struct Failed {
+    message: String,
+    result: Value,
+}
+impl Failed {
+    pub(crate) fn new(message: impl Into<String>, result: Value) -> Self {
+        Self {
+            message: message.into(),
+            result,
+        }
+    }
+}
+impl std::fmt::Display for Failed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for Failed {}
 
 /// Record how a job ended. `job` stands in for the saved record when that cannot be read.
 pub(crate) fn finish(
@@ -209,6 +340,9 @@ pub(crate) fn finish(
         }
         Err(e) => {
             job.status = "failed".into();
+            job.result = e
+                .downcast_ref::<Failed>()
+                .map(|failed| failed.result.clone());
             Err(format!("{e:#}"))
         }
     };
@@ -249,35 +383,48 @@ impl App {
 pub(crate) const HOLD_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl App {
-    /// Hold a resource for the length of a request. A job such as a script, an upload or an
-    /// export can hold a container or a volume for an hour; a request waits a few seconds for
-    /// it and then answers 409, instead of hanging its client for the job's length.
-    pub(crate) async fn hold(&self, resource: &str) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+    /// Hold a resource alone for the length of a request. A job such as a snapshot, an upload
+    /// or an export can hold a container or a volume for an hour; a request waits a few seconds
+    /// for it and then answers 409, instead of hanging its client for the job's length.
+    pub(crate) async fn hold(&self, resource: &str) -> Result<Exclusive> {
         self.hold_for(resource, HOLD_WAIT).await
     }
-    async fn hold_for(
-        &self,
-        resource: &str,
-        wait: std::time::Duration,
-    ) -> Result<tokio::sync::OwnedMutexGuard<()>> {
+    /// Share a resource for the length of a request that only uses it, such as a file read or
+    /// an application's launch in a running desktop, beside a script that runs there. It waits
+    /// as [`App::hold`] does for work that holds the resource alone.
+    pub(crate) async fn share(&self, resource: &str) -> Result<Shared> {
+        self.share_for(resource, HOLD_WAIT).await
+    }
+    async fn hold_for(&self, resource: &str, wait: std::time::Duration) -> Result<Exclusive> {
         let lock = self.resource_lock(resource);
         tokio::time::timeout(wait, lock.lock_owned())
             .await
-            .map_err(|_| {
-                let what = match resource.split_once(':') {
-                    Some(("container", _)) => "the container",
-                    Some(("volume", _)) => "the volume",
-                    Some(("image", _)) => "the image",
-                    _ => "this resource",
-                };
-                crate::error::Error(
-                    axum::http::StatusCode::CONFLICT,
-                    format!(
-                        "Another operation on {what} is still running; retry when it has finished"
-                    ),
-                )
-            })
+            .map_err(|_| busy(resource))
     }
+    pub(crate) async fn share_for(
+        &self,
+        resource: &str,
+        wait: std::time::Duration,
+    ) -> Result<Shared> {
+        let lock = self.resource_lock(resource);
+        tokio::time::timeout(wait, lock.share_owned())
+            .await
+            .map_err(|_| busy(resource))
+    }
+}
+
+/// The answer to a request that waited for a resource in vain.
+pub(crate) fn busy(resource: &str) -> crate::error::Error {
+    let what = match resource.split_once(':') {
+        Some(("container", _)) => "the container",
+        Some(("volume", _)) => "the volume",
+        Some(("image", _)) => "the image",
+        _ => "this resource",
+    };
+    crate::error::Error(
+        axum::http::StatusCode::CONFLICT,
+        format!("Another operation on {what} is still running; retry when it has finished"),
+    )
 }
 
 #[cfg(test)]
