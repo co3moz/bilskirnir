@@ -10,7 +10,7 @@ use crate::{
     App,
     catalog::CatalogImage,
     error::{Error, Result},
-    model::{CONTAINERS, Container, ImageRecord},
+    model::{CONTAINERS, Container, ImageRecord, Job},
 };
 use axum::{
     Json,
@@ -18,7 +18,10 @@ use axum::{
     http::StatusCode,
 };
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+
+/// What the tags of script builds start with, which another manager on the same Docker makes too.
+const BUILT: &str = "thoric/custom:";
 
 /// `DELETE /api/images/{id}`, where `id` is a saved image's record id or a catalog id. It answers
 /// at once, like deleting a volume: Docker removes an image in one call, and a refusal reaches the
@@ -96,14 +99,16 @@ impl App {
 
     /// Drop the tags of builds, snapshots and imports that got no record. Each tags its image
     /// with its job's ID before it saves the record of that ID, so a manager stopped in between
-    /// leaves a tag that no record names. A build removes its own tag when it fails or is
-    /// cancelled; its repository is looked at too, for a tag whose removal failed or that a
-    /// build left before builds removed them. Run at startup. The tags are listed before the
-    /// records are read, and one stays while a record names it, while the job it is named after
-    /// is queued or running, since that job's record is still to come, and while a container
-    /// record starts from it, by name or by image, since a reset creates the container from it
-    /// again. Only Thoric's own repositories are looked at, and the image goes with its last
-    /// tag, which is this orphan's own.
+    /// leaves a tag that no record names. Run at startup. A tag stays while a record names it,
+    /// while the job it is named after is queued or running, since that job's record is still to
+    /// come, and while a container record starts from it, by name or by image, since a reset
+    /// creates the container from it again. A build's tag also goes only when this database ran
+    /// that build and saw it end, such as one an older manager left behind when it was cancelled:
+    /// another manager on the same Docker, with a database of its own, builds into the same
+    /// repository. The tags are listed first and the jobs read before the records, so a job that
+    /// saves its record and ends meanwhile is seen running or has its record seen. Only Thoric's
+    /// own repositories are looked at, and the image goes with its last tag, which is this
+    /// orphan's own.
     pub(crate) async fn drop_orphan_tags(&self) -> anyhow::Result<Vec<String>> {
         let mut tags = Vec::new();
         for repository in ["thoric/custom", "thoric/snapshot", "thoric/imported"] {
@@ -123,19 +128,30 @@ impl App {
                     .then(|| (tag.to_owned(), image.to_owned()))
             }));
         }
-        // A record that does not read may name a tag; nothing is dropped until all of them do.
-        let records = self.db.list_complete::<ImageRecord>("image")?;
-        let containers = self.db.list_complete::<Container>(CONTAINERS)?;
-        let running: std::collections::HashSet<String> = self
+        let running: HashSet<String> = self
             .db
             .active_jobs()?
             .into_iter()
             .map(|job| job.id)
             .collect();
+        let ended_builds: HashSet<String> = tags
+            .iter()
+            .filter_map(|(tag, _)| tag.strip_prefix(BUILT))
+            .filter(|id| {
+                self.db.get::<Job>("job", id).is_ok_and(|job| {
+                    job.kind == "build" && !matches!(job.status.as_str(), "queued" | "running")
+                })
+            })
+            .map(str::to_owned)
+            .collect();
+        // A record that does not read may name a tag; nothing is dropped until all of them do.
+        let records = self.db.list_complete::<ImageRecord>("image")?;
+        let containers = self.db.list_complete::<Container>(CONTAINERS)?;
         let mut dropped = Vec::new();
         for (tag, image) in tags {
             let job = tag.rsplit_once(':').map_or("", |(_, job)| job);
-            if records.iter().any(|record| record.reference == tag)
+            if (tag.starts_with(BUILT) && !ended_builds.contains(job))
+                || records.iter().any(|record| record.reference == tag)
                 || running.contains(job)
                 || containers.iter().any(|container| {
                     container.spec.image == tag || container.source_image_id == image

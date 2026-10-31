@@ -385,7 +385,8 @@ async fn a_catalog_image_loses_only_its_download() {
 
 /// A build, snapshot or import tagged before its record was saved is removed at startup; a tag a
 /// record names, one whose job is still on its way to its record, one a container record starts
-/// from by name or by image, and every other repository, stay.
+/// from by name or by image, a build tag of a build this database never ran, which another
+/// manager on the same Docker may have made, and every other repository, stay.
 #[cfg(unix)]
 #[tokio::test]
 async fn tags_without_a_record_are_dropped_at_startup() {
@@ -394,7 +395,7 @@ async fn tags_without_a_record_are_dropped_at_startup() {
     std::fs::create_dir_all(&dir).unwrap();
     let script = concat!(
         "#!/bin/sh\ncd '@DIR@'\necho \"$*\" >> calls\ncase \"$*\" in\n",
-        "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/custom') printf 'thoric/custom:built sha256:built\nthoric/custom:cancelled sha256:cancelled\nthoric/custom:running sha256:running\nthoric/custom:named sha256:named\n' ;;\n",
+        "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/custom') printf 'thoric/custom:built sha256:built\nthoric/custom:cancelled sha256:cancelled\nthoric/custom:interrupted sha256:interrupted\nthoric/custom:running sha256:running\nthoric/custom:named sha256:named\nthoric/custom:foreign sha256:foreign\nthoric/custom:snapshotted sha256:snapshotted\n' ;;\n",
         "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/snapshot') printf 'thoric/snapshot:kept sha256:kept\nthoric/snapshot:lost sha256:lost\nthoric/snapshot:shared sha256:shared\nthoric/snapshot:<none> sha256:untagged\n' ;;\n",
         "  'image ls --no-trunc --format {{.Repository}}:{{.Tag}} {{.ID}} thoric/imported') printf 'thoric/imported:orphan sha256:orphan\n' ;;\n",
         "  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n",
@@ -413,12 +414,22 @@ async fn tags_without_a_record_are_dropped_at_startup() {
             .put("image", id, &record(id, kind, &image, reference))
             .unwrap();
     }
-    let build: crate::model::Job = serde_json::from_value(json!({
-        "id": "running", "kind": "build", "status": "running", "created_at": 1,
-        "finished_at": null, "log": "", "result": null,
-    }))
-    .unwrap();
-    app.db.put("job", "running", &build).unwrap();
+    // No job is named "foreign", and "snapshotted" is no build.
+    for (id, kind, status) in [
+        ("built", "build", "completed"),
+        ("cancelled", "build", "failed"),
+        ("interrupted", "build", "interrupted"),
+        ("running", "build", "running"),
+        ("named", "build", "failed"),
+        ("snapshotted", "snapshot", "failed"),
+    ] {
+        let job: crate::model::Job = serde_json::from_value(json!({
+            "id": id, "kind": kind, "status": status, "created_at": 1,
+            "finished_at": null, "log": "", "result": null,
+        }))
+        .unwrap();
+        app.db.put("job", id, &job).unwrap();
+    }
     for (id, image) in [
         ("by-name", "thoric/custom:named"),
         ("by-image", "sha256:shared"),
@@ -430,6 +441,7 @@ async fn tags_without_a_record_are_dropped_at_startup() {
         dropped,
         [
             "thoric/custom:cancelled",
+            "thoric/custom:interrupted",
             "thoric/snapshot:lost",
             "thoric/imported:orphan"
         ]
@@ -438,6 +450,7 @@ async fn tags_without_a_record_are_dropped_at_startup() {
         removals(&dir),
         [
             "image rm thoric/custom:cancelled",
+            "image rm thoric/custom:interrupted",
             "image rm thoric/snapshot:lost",
             "image rm thoric/imported:orphan"
         ]
