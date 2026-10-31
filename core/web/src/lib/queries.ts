@@ -7,6 +7,7 @@ import { closeDialog } from "./dialogs"
 import { dockerEventsLive, streamLive } from "./events"
 import { jobActive } from "./format"
 import { fetchTemplateList } from "./templates"
+import { followLog, jobReadPath, type JobRead } from "./job-log"
 import { endpointApi } from "./mcp"
 import { creationEnded } from "./pending"
 import type {
@@ -154,12 +155,19 @@ export const useJobs = (poll = true) =>
     refetchInterval: () => streamedInterval(poll),
   })
 
-/** One job with its log, followed until it finishes. */
-export const useJob = (id: string | undefined) =>
+/**
+ * One job with its log, followed until it finishes while `open`: a closed drawer stays mounted
+ * while it animates out, and must not keep reading. After the first read, each one asks only for
+ * what the log gained since; see lib/job-log.ts.
+ */
+export const useJob = (id: string | undefined, open = true) =>
   useQuery({
     queryKey: ["jobs", id],
-    queryFn: () => api<Job>(`jobs/${id}`),
-    enabled: !!id,
+    queryFn: async () => {
+      const before = queryClient.getQueryData<JobRead>(["jobs", id])
+      return followLog(before, await api<JobRead>(jobReadPath(id!, before)))
+    },
+    enabled: !!id && open,
     refetchInterval: (query) =>
       query.state.data && !jobActive(query.state.data) ? false : JOB_INTERVAL,
   })
