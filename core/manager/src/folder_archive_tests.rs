@@ -31,3 +31,56 @@ fn the_archive_is_named_after_its_folder() {
          filename*=UTF-8''Masa%C3%BCst%C3%BC%20%22x%22%3By.tar.gz"
     );
 }
+
+#[cfg(unix)]
+#[tokio::test(start_paused = true)]
+async fn a_download_nobody_reads_stops_and_frees_its_slot() {
+    let mut app = crate::test_support::app(false);
+    // tar's stand-in writes an archive that never ends.
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = "sh".into();
+    let mut events = app.events.subscribe();
+    let source = Source {
+        args: ["-c", "exec cat /dev/zero"].map(str::to_owned).to_vec(),
+        helper: None,
+        lock: None,
+        label: "/home/desktop/project in Unity".into(),
+        path: "/home/desktop/project".into(),
+    };
+    let started = tokio::time::Instant::now();
+    // Held and never read, as by a browser that paused the download; a transfer link has no
+    // session that could end it.
+    let response = respond(
+        app.clone(),
+        "container:c1".into(),
+        "project",
+        source,
+        auth::Session::Link,
+    )
+    .unwrap();
+    let job_id = response.headers()["x-job-id"].to_str().unwrap().to_owned();
+    loop {
+        let event: Value = serde_json::from_str(&events.recv().await.unwrap()).unwrap();
+        if event["type"] == "job"
+            && event["job"]["id"] == job_id
+            && event["job"]["status"] != "running"
+            && event["job"]["status"] != "queued"
+        {
+            break;
+        }
+    }
+    assert!(started.elapsed() >= stall::STALL);
+    assert_eq!(app.archives.available_permits(), 2);
+    let job = app.db.job(&job_id).unwrap();
+    assert_eq!(job.status, "failed");
+    assert!(
+        job.log.contains("the client took nothing for 5 minutes"),
+        "{}",
+        job.log
+    );
+    // What was handed over before still arrives, then the error, never a clean end.
+    assert!(
+        axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .is_err()
+    );
+}

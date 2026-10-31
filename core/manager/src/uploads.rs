@@ -1,5 +1,7 @@
 use crate::{
-    App, auth,
+    App,
+    archives::stall,
+    auth,
     compose::Place,
     error::{Error, Result},
     model::{Container, Mount},
@@ -11,7 +13,6 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
 };
-use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -121,7 +122,9 @@ impl Staged {
     }
 }
 
-/// Receive an upload's body of exactly `size` bytes into the manager's upload folder.
+/// Receive an upload's body of exactly `size` bytes into the manager's upload folder. A client
+/// that sends nothing for [`stall::STALL`] fails the upload, so it frees its upload slot long
+/// before the upload's own time limit.
 pub(crate) async fn stage(app: &App, size: u64, body: Body) -> Result<Staged> {
     let temporary = TemporaryFile(
         app.config
@@ -139,7 +142,8 @@ pub(crate) async fn stage(app: &App, size: u64, body: Body) -> Result<Staged> {
         .map_err(anyhow::Error::from)?;
     let mut stream = body.into_data_stream();
     let mut received = 0u64;
-    while let Some(chunk) = stream.next().await {
+    // The caller ends the upload when its session ends.
+    while let Some(chunk) = stall::receive(&mut stream, &mut std::future::pending()).await? {
         let chunk = chunk.map_err(|error| anyhow::anyhow!("Upload body interrupted: {error}"))?;
         received += chunk.len() as u64;
         if received > size {

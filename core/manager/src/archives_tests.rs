@@ -394,3 +394,44 @@ fn an_icon_and_template_travel_with_the_archive_and_unusable_ones_are_dropped() 
     let info = ArchiveInfo::read(Some(&serde_json::to_vec(&older).unwrap())).unwrap();
     assert_eq!(info.template_ids, ["unity"]);
 }
+
+#[cfg(unix)]
+#[tokio::test(start_paused = true)]
+async fn an_import_that_stops_sending_frees_its_slot() {
+    let dir = std::env::temp_dir().join(format!("thoric-stall-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    crate::test_support::write_script(&docker, "#!/bin/sh\nexec cat > /dev/null\n");
+    let mut app = crate::test_support::app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let (written, _logging) = crate::test_support::capture();
+    // A client that opened the upload and sends nothing more, with no session that could end it.
+    let silent = futures_util::stream::pending::<std::io::Result<Bytes>>();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/images/import")
+        .header("host", "localhost:8080")
+        .header("x-thoric-request", "1")
+        .header("content-type", "application/octet-stream")
+        .body(Body::from_stream(silent))
+        .unwrap();
+    let started = tokio::time::Instant::now();
+    let response = crate::router(app.clone()).oneshot(request).await.unwrap();
+    assert!(started.elapsed() >= stall::STALL);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        error_message(response).await,
+        "The upload stopped: nothing arrived for 5 minutes"
+    );
+    assert_eq!(app.archives.available_permits(), 2);
+    // Logged once, in the span of the request whose answer said so.
+    let log = written.text();
+    let stalls = log
+        .lines()
+        .filter(|line| line.contains("nothing arrived"))
+        .collect::<Vec<_>>();
+    assert_eq!(stalls.len(), 1, "{log:?}");
+    assert!(stalls[0].contains(" WARN "), "{log:?}");
+    assert!(stalls[0].contains("path=/api/images/import"), "{log:?}");
+    std::fs::remove_dir_all(dir).unwrap();
+}

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     App,
-    archives::transfer_permit,
+    archives::{stall, transfer_permit},
     auth,
     compose::{PINNED, Pinned},
     desktop_mcp::{ENDPOINTS, Endpoint},
@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::{Context, anyhow, bail};
 use axum::{
-    body::{Body, Bytes},
+    body::Bytes,
     extract::{Query, State},
     http::header,
     response::{IntoResponse, Response},
@@ -39,11 +39,11 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt},
     sync::mpsc,
 };
+use tracing::Instrument;
 
 /// How often the bytes sent so far are written to the job.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
 const READ_SIZE: usize = 256 * 1024;
-const CANCELLED: &str = "The download was cancelled before it finished";
 
 /// `GET /api/backup`: stream a backup of the installation with the parts `included` names. The
 /// transfer is a job, so its progress and any error stay visible after the download has begun.
@@ -56,7 +56,8 @@ pub async fn export(
     let permit = transfer_permit(&app)?;
     let started = now();
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
-    let (job_id, _) = jobs::start(
+    let span = tracing::Span::current();
+    let (job_id, outcome) = jobs::start(
         app,
         "backup",
         RESOURCE.into(),
@@ -64,19 +65,11 @@ pub async fn export(
         move |app, job_id| async move {
             let _guard = guard;
             let _permit = permit;
-            let result = app.back_up(&job_id, included, started, &body, token).await;
-            if let Err(error) = &result {
-                // The download fails instead of ending in a short file that looks complete.
-                let _ = body
-                    .send(Err(std::io::Error::other(format!("{error:#}"))))
-                    .await;
-            }
-            result
+            app.back_up(&job_id, included, started, &body, token)
+                .instrument(span)
+                .await
         },
     )?;
-    let stream = futures_util::stream::unfold(chunks, |mut chunks| async move {
-        chunks.recv().await.map(|chunk| (chunk, chunks))
-    });
     Ok((
         [
             (header::CONTENT_TYPE, "application/gzip".to_owned()),
@@ -86,7 +79,7 @@ pub async fn export(
             ),
             (header::HeaderName::from_static("x-job-id"), job_id),
         ],
-        Body::from_stream(stream),
+        stall::download(chunks, outcome),
     )
         .into_response())
 }
@@ -130,10 +123,7 @@ impl Out<'_> {
             return Ok(());
         }
         self.sent += chunk.len() as u64;
-        tokio::select! {
-            sent = self.body.send(Ok(Bytes::from(chunk))) => sent.map_err(|_| anyhow!(CANCELLED))?,
-            _ = &mut self.revoked => bail!("Session expired. Sign in again."),
-        }
+        stall::send(self.body, Bytes::from(chunk), &mut self.revoked).await?;
         if self.reported.elapsed() >= PROGRESS_INTERVAL {
             self.app.set_progress(
                 self.job_id,
@@ -159,7 +149,7 @@ impl Out<'_> {
             let read = tokio::select! {
                 read = source.read(&mut read_buffer) => read.context("Could not read the part")?,
                 _ = &mut self.revoked => bail!("Session expired. Sign in again."),
-                _ = self.body.closed() => bail!(CANCELLED),
+                _ = self.body.closed() => bail!(stall::CANCELLED),
             };
             let mut input = &read_buffer[..read];
             while !input.is_empty() {

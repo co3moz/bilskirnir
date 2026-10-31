@@ -5,6 +5,7 @@
 //! its way in (see `tar`): the image arrives under its ID only and is tagged with a name the
 //! manager owns. An export saves by image ID, so its archive names no image either.
 mod gzip;
+pub(crate) mod stall;
 pub(crate) mod tar;
 
 use crate::{
@@ -25,7 +26,6 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -38,6 +38,7 @@ use tokio::{
     process::{Child, ChildStdin},
     sync::{OwnedSemaphorePermit, mpsc, oneshot},
 };
+use tracing::Instrument;
 
 /// How often a running transfer's byte count is written to its job.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
@@ -134,26 +135,19 @@ pub async fn export(
     let permit = transfer_permit(&app)?;
     let (ascii, full) = file_names(&record.name);
     let (body, chunks) = mpsc::channel::<std::io::Result<Bytes>>(4);
-    let (job_id, _) = jobs::start(
+    let span = tracing::Span::current();
+    let (job_id, outcome) = jobs::start(
         app,
         "image-export",
         format!("image:{id}"),
         false,
         move |app, job_id| async move {
             let _permit = permit;
-            let result = app.export_archive(&job_id, &record, &body, token).await;
-            if let Err(error) = &result {
-                // The download fails instead of ending in a short file that looks complete.
-                let _ = body
-                    .send(Err(std::io::Error::other(format!("{error:#}"))))
-                    .await;
-            }
-            result
+            app.export_archive(&job_id, &record, &body, token)
+                .instrument(span)
+                .await
         },
     )?;
-    let stream = futures_util::stream::unfold(chunks, |mut chunks| async move {
-        chunks.recv().await.map(|chunk| (chunk, chunks))
-    });
     Ok((
         [
             (header::CONTENT_TYPE, "application/gzip".to_owned()),
@@ -166,7 +160,7 @@ pub async fn export(
             ),
             (header::HeaderName::from_static("x-job-id"), job_id),
         ],
-        Body::from_stream(stream),
+        stall::download(chunks, outcome),
     )
         .into_response())
 }
@@ -209,6 +203,7 @@ pub async fn import(
     let (accepted, was_accepted) = oneshot::channel();
     let waiting = app.clone();
     let session = token.clone();
+    let span = tracing::Span::current();
     let (job_id, outcome) = jobs::start_named(
         app,
         "image-import",
@@ -218,6 +213,7 @@ pub async fn import(
         move |app, job_id| async move {
             let _permit = permit;
             app.import_archive(&job_id, &id, request, body, token, accepted)
+                .instrument(span)
                 .await
         },
     )?;
@@ -306,11 +302,13 @@ impl App {
                 record.name
             ),
         )?;
+        let revoked = self.session_revoked(token);
+        tokio::pin!(revoked);
         let metadata = serde_json::to_vec_pretty(&ArchiveInfo::of(record))?;
         let (mut compressor, first) =
             gzip::Compressor::new(&tar::entry(tar::METADATA, &metadata, now()))?;
         let mut sent = 0;
-        send(body, first, &mut sent).await?;
+        send(body, first, &mut sent, &mut revoked).await?;
         // Nothing counts until Docker has prepared the image and its first layer arrives.
         self.set_progress(job_id, Some(json!({"transfer": "export", "current": 0})))?;
         let mut child = self
@@ -326,15 +324,13 @@ impl App {
             8192,
             Overflow::Tail,
         ));
-        let revoked = self.session_revoked(token);
-        tokio::pin!(revoked);
         let mut buffer = vec![0; READ_SIZE];
         let mut reported = Instant::now();
         loop {
             let read = tokio::select! {
                 read = stdout.read(&mut buffer) => read.context("Could not read docker save output")?,
                 _ = &mut revoked => bail!("Session expired. Sign in again."),
-                _ = body.closed() => bail!("The download was cancelled before it finished"),
+                _ = body.closed() => bail!(stall::CANCELLED),
             };
             if read == 0 {
                 break;
@@ -346,7 +342,7 @@ impl App {
             })
             .await?;
             compressor = back;
-            send(body, output?, &mut sent).await?;
+            send(body, output?, &mut sent, &mut revoked).await?;
             if reported.elapsed() >= PROGRESS_INTERVAL {
                 self.set_progress(job_id, Some(json!({"transfer": "export", "current": sent})))?;
                 reported = Instant::now();
@@ -358,7 +354,7 @@ impl App {
             bail!("Docker: {}", String::from_utf8_lossy(&errors).trim());
         }
         let last = tokio::task::spawn_blocking(move || compressor.finish()).await??;
-        send(body, last, &mut sent).await?;
+        send(body, last, &mut sent, &mut revoked).await?;
         self.append_log(job_id, &format!("Exported {sent} bytes."))?;
         Ok(json!({"image_id": record.image_id, "name": record.name, "bytes": sent}))
     }
@@ -406,11 +402,9 @@ impl App {
             let mut stream = body.into_data_stream();
             let (mut received, mut reported) = (0u64, Instant::now());
             loop {
-                let chunk = tokio::select! {
-                    chunk = stream.next() => chunk,
-                    _ = &mut revoked => bail!("Session expired. Sign in again."),
+                let Some(chunk) = stall::receive(&mut stream, &mut revoked).await? else {
+                    break;
                 };
-                let Some(chunk) = chunk else { break };
                 let mut pending = chunk.map_err(interrupted)?;
                 received += pending.len() as u64;
                 count(received, request.size, self.config.archive_limit)?;
@@ -590,8 +584,9 @@ pub(crate) fn arriving(size: Option<u64>) -> String {
     }
 }
 
-/// Image, volume and folder archives share two transfer slots: each holds a Docker save, load
-/// or tar.
+/// Image, volume and folder archives, volume copies, backups and restores share two transfer
+/// slots: each holds a Docker save, load or tar. A transfer whose client stops frees its slot
+/// after [`stall::STALL`].
 pub(crate) fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
     app.archives.clone().try_acquire_owned().map_err(|_| {
         Error(
@@ -604,8 +599,9 @@ pub(crate) fn transfer_permit(app: &App) -> Result<OwnedSemaphorePermit> {
 /// Pass on the archive tar writes to `child`'s stdout as a download, with the bytes sent as the
 /// job's progress, and return their count once tar has ended well. tar ends with 1 when a file
 /// changed while it was read, as one in use can; the archive is complete and holds the file as it
-/// was read, so that is only logged. A download that stops early or a session that ends kills
-/// `child`; the caller removes any container it started.
+/// was read, so that is only logged. A download that stops early, a client that takes nothing for
+/// [`stall::STALL`] or a session that ends kills `child`; the caller removes any container it
+/// started.
 pub(crate) async fn send_archive(
     app: &App,
     job_id: &str,
@@ -629,15 +625,13 @@ pub(crate) async fn send_archive(
             let read = tokio::select! {
                 read = stdout.read(&mut buffer) => read.context("Could not read the archive")?,
                 _ = &mut revoked => bail!("Session expired. Sign in again."),
-                _ = body.closed() => bail!("The download was cancelled before it finished"),
+                _ = body.closed() => bail!(stall::CANCELLED),
             };
             if read == 0 {
                 return anyhow::Ok(());
             }
             sent += read as u64;
-            body.send(Ok(Bytes::copy_from_slice(&buffer[..read])))
-                .await
-                .map_err(|_| anyhow!("The download was cancelled before it finished"))?;
+            stall::send(body, Bytes::copy_from_slice(&buffer[..read]), &mut revoked).await?;
             if reported.elapsed() >= PROGRESS_INTERVAL {
                 app.set_progress(job_id, Some(json!({"transfer": "export", "current": sent})))?;
                 reported = Instant::now();
@@ -665,14 +659,13 @@ async fn send(
     body: &mpsc::Sender<std::io::Result<Bytes>>,
     chunk: Vec<u8>,
     sent: &mut u64,
+    revoked: &mut (impl Future<Output = ()> + Unpin),
 ) -> anyhow::Result<()> {
     if chunk.is_empty() {
         return Ok(());
     }
     *sent += chunk.len() as u64;
-    body.send(Ok(Bytes::from(chunk)))
-        .await
-        .map_err(|_| anyhow!("The download was cancelled before it finished"))
+    stall::send(body, Bytes::from(chunk), revoked).await
 }
 
 /// The download's ASCII file name, and the image's own name for clients that read `filename*`.

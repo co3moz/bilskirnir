@@ -42,6 +42,8 @@ An error answers `{"error": "..."}` with a status that says whose failure it is.
 
 Routes name the other statuses they use, such as `413` and `429` for transfers. A route that starts a job answers once the job is queued, and the job's failure is in its log rather than in a status. MCP tools return the same message as a tool error, without a status.
 
+A transfer ends when its client stops. A download of an image, volume or folder archive or of a backup whose client takes nothing for five minutes, as when a browser pauses it, fails its job with `The download stopped: the client took nothing for 5 minutes`, ends with an error instead of a short file and frees its transfer slot. A file upload, an archive import or a restore that receives nothing for five minutes fails the same way and answers 400 with `The upload stopped: nothing arrived for 5 minutes`. The five minutes count from the last piece that moved, so a slow transfer goes on for as long as it keeps moving. A session that ends stops its transfers at once; a [transfer link](#transfer-links) and an installation with sign-in off have no session, so for them a stopped client is what ends a transfer early. The manager logs each such stop once at warn, with the method, path and request ID of the request that began the transfer.
+
 ## Endpoints
 
 | Method | Path | Result or purpose |
@@ -683,7 +685,7 @@ The request runs the route the link stands for, with that route's limits, locks,
 curl --fail-with-body --upload-file unity-projects.tar.gz http://localhost:8080/api/transfers/TOKEN
 ```
 
-The token replaces the cookie and the `X-Thoric-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing. A link that is used is recorded in the [agent activity](#agent-activity) log under the caller whose `create_transfer` issued it.
+The token replaces the cookie and the `X-Thoric-Request` header; an `Origin` header, if present, must still match the host. It is 244 random bits, held in memory for five minutes, and spent by the first request that presents it, whatever the outcome: a method the operation does not take answers 405, and a second use, an expired link or one the manager forgot in a restart answers 404. Signing out does not end a transfer a link began, while a client that stops reading or sending ends it after five minutes, as [errors](#errors) describes. Without MCP the route answers 404. The token is left out of job logs, error messages and request tracing. A link that is used is recorded in the [agent activity](#agent-activity) log under the caller whose `create_transfer` issued it.
 
 ## Desktop MCP servers and endpoints
 
