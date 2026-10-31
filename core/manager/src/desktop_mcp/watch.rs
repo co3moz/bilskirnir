@@ -35,14 +35,17 @@ struct ImageServers {
     servers: Option<Vec<Found>>,
     seen: Value,
     read_at: Option<Instant>,
+    /// Why the last read failed, so a failure is logged when it begins or its reason changes.
+    failed: Option<String>,
 }
 impl ImageServers {
     /// The image's servers for a listing of the desktop's helper, read again as root when the
-    /// helper says the folder changed: the last ones read when a read fails, and none before the
-    /// first read.
+    /// helper says the folder changed, and on every listing until a read succeeds: the last ones
+    /// read when a read fails, and none before the first read.
     async fn for_listing(
         &mut self,
         app: &App,
+        record_id: &str,
         docker_id: &str,
         listing: &Value,
     ) -> Option<Vec<Found>> {
@@ -55,8 +58,19 @@ impl ImageServers {
                 Ok(servers) => {
                     self.servers = Some(servers);
                     self.seen = listing["image"].clone();
+                    if self.failed.take().is_some() {
+                        tracing::info!("The image's MCP servers of {record_id} were read again");
+                    }
                 }
-                Err(error) => tracing::debug!("The image's MCP servers of {docker_id}: {error:#}"),
+                Err(error) => {
+                    let error = format!("{error:#}");
+                    if self.failed.as_ref() != Some(&error) {
+                        tracing::warn!(
+                            "Could not read the image's MCP servers of {record_id} as root; their records stay as they are: {error}"
+                        );
+                    }
+                    self.failed = Some(error);
+                }
             }
         }
         self.servers.clone()
@@ -158,8 +172,14 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
                         continue;
                     }
                 };
-                if let Some(servers) = image.for_listing(&app, &docker_id, &listing).await {
-                    apply(&app, &record_id, merged(servers, user)).await;
+                match image
+                    .for_listing(&app, &record_id, &docker_id, &listing)
+                    .await
+                {
+                    Some(servers) => apply(&app, &record_id, merged(servers, user)).await,
+                    // Before the image's folder was ever read, the desktop user's servers still
+                    // count, and the image's records stay as they are.
+                    None => apply_with(&app, &record_id, user, false).await,
                 }
             }
         }
@@ -179,6 +199,17 @@ async fn watcher(app: Arc<App>, record_id: String, docker_id: String) {
 /// Bring the records of a container in line with what its desktop declares. A new or changed
 /// declaration has its tools read in the background.
 pub(super) async fn apply(app: &Arc<App>, container_id: &str, found: Vec<Found>) {
+    apply_with(app, container_id, found, true).await;
+}
+
+/// [`apply`], where `image_known` says whether `found` holds the image's servers too. Without them
+/// the records of the image's servers stay, unless the desktop user declares the same name.
+pub(super) async fn apply_with(
+    app: &Arc<App>,
+    container_id: &str,
+    found: Vec<Found>,
+    image_known: bool,
+) {
     if app.container(container_id).is_err() {
         return;
     }
@@ -238,10 +269,10 @@ pub(super) async fn apply(app: &Arc<App>, container_id: &str, found: Vec<Found>)
         );
         changed = true;
     }
-    for old in existing
-        .iter()
-        .filter(|old| !found.iter().any(|server| server.name == old.name))
-    {
+    for old in existing.iter().filter(|old| {
+        !found.iter().any(|server| server.name == old.name)
+            && (image_known || old.source != Source::Image)
+    }) {
         let _ = app
             .db
             .remove(SERVERS, &ServerRecord::key(container_id, &old.name));

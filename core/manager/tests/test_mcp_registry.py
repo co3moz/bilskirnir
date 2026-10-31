@@ -98,9 +98,10 @@ class RegistryTest(unittest.TestCase):
 
     def test_the_image_reader_trusts_only_what_root_alone_can_change(self):
         (self.image / "chrome.json").write_text(json.dumps({"command": "playwright-mcp"}))
-        # Every folder below the temporary one is the tests' user's here, which the reader trusts
-        # no more than the desktop user.
-        servers = self.run_helper("image")[0]["servers"]
+        # A reader that trusts only a user who owns none of these files refuses them, as root's
+        # refuses the desktop user's. The tests may run as root, which owns them all.
+        with mock.patch.object(registry, "TRUSTED", (2**31 - 2,)):
+            servers = self.run_helper("image")[0]["servers"]
         self.assertEqual(len(servers), 1)
         self.assertNotIn("spec", servers[0])
         self.assertIn("can be changed by a user other than root", servers[0]["error"])

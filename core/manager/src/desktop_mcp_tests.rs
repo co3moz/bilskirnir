@@ -312,6 +312,35 @@ fn the_desktop_users_declaration_replaces_the_images_and_bad_files_become_errors
     );
 }
 
+#[tokio::test]
+async fn the_desktop_users_servers_apply_while_the_images_folder_could_not_be_read() {
+    let app = app(false);
+    app.db
+        .put(CONTAINERS, "c1", &container("c1", "Chrome dev"))
+        .unwrap();
+    server(&app, "c1", "chrome", &["navigate"]);
+    let mine = ServerRecord {
+        name: "x".into(),
+        source: Source::Container,
+        ..app.db.get(SERVERS, "c1:chrome").unwrap()
+    };
+    app.db.put(SERVERS, "c1:x", &mine).unwrap();
+    let user = || {
+        vec![super::registry::Found {
+            name: "y".into(),
+            source: Source::Container,
+            spec: Ok(stdio("node")),
+        }]
+    };
+    let kept = |key: &str| app.db.get::<ServerRecord>(SERVERS, key).is_ok();
+    // The desktop user's listing replaces that user's servers, and the image's stay unknown.
+    super::watch::apply_with(&app, "c1", user(), false).await;
+    assert!(kept("c1:chrome") && kept("c1:y") && !kept("c1:x"));
+    // Once the image's folder is read, a server it no longer declares goes.
+    super::watch::apply_with(&app, "c1", user(), true).await;
+    assert!(!kept("c1:chrome") && kept("c1:y"));
+}
+
 #[test]
 fn the_desktop_users_helper_cannot_claim_the_images_folder_for_a_server() {
     // The watcher runs as the desktop user, who can make it print anything.
