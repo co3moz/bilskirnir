@@ -342,7 +342,7 @@ pub(crate) fn loopback_url(url: &str, unresolved: bool) -> Result<()> {
 }
 
 /// Where a server's declaration comes from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Source {
     /// The image's folder: a template or a build declared it.
@@ -350,11 +350,21 @@ pub(crate) enum Source {
     /// The desktop user's folder: registered while the container runs.
     Container,
 }
+impl<'de> Deserialize<'de> for Source {
+    // A record that says anything else counts as the desktop user's, which gets no secret.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "image" => Source::Image,
+            _ => Source::Container,
+        })
+    }
+}
 
 impl Source {
     /// The compose values a declaration from here may name as `${NAME}`: every one in the image's
-    /// folder, which only a build writes, and those that are not secret in the desktop user's,
-    /// which that user writes and whose servers run as that user.
+    /// folder, which only root changes and the manager reads itself as root, and those that are
+    /// not secret in the desktop user's, which that user writes and whose servers run as that
+    /// user.
     pub(super) fn values(self, app: &App, container_id: &str) -> BTreeMap<String, String> {
         match self {
             Source::Image => app.compose_values(container_id),
@@ -397,26 +407,27 @@ impl ServerRecord {
 }
 
 /// One server as the desktop's folders hold it.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Found {
     pub name: String,
     pub source: Source,
     pub spec: Result<ServerSpec, String>,
 }
 
-/// The servers the helper listed: the desktop user's declaration of a name replaces the image's.
-pub(crate) fn found(listing: &Value) -> Result<Vec<Found>> {
+/// The servers a helper listed, all from `source`: the folder of the image when the manager read
+/// it as root, the desktop user's otherwise, whatever the listing says, since that user can make
+/// a helper it runs print anything.
+pub(crate) fn found(listing: &Value, source: Source) -> Result<Vec<Found>> {
     let entries = listing["servers"]
         .as_array()
         .context("The desktop's server listing is invalid")?;
     let mut servers: Vec<Found> = Vec::new();
     for entry in entries {
         let name = entry["name"].as_str().unwrap_or_default().to_owned();
-        let source = match entry["source"].as_str() {
-            Some("container") => Source::Container,
-            _ => Source::Image,
-        };
         if server_name(&name).is_err() {
+            if let Some(error) = entry["error"].as_str() {
+                tracing::debug!("Desktop MCP servers: {error}");
+            }
             continue;
         }
         let spec = match (&entry["spec"], entry["error"].as_str()) {
@@ -433,6 +444,36 @@ pub(crate) fn found(listing: &Value) -> Result<Vec<Found>> {
         servers.push(Found { name, source, spec });
     }
     Ok(servers)
+}
+
+/// A desktop's servers: the image's, and the desktop user's, whose declaration of a name replaces
+/// the image's.
+pub(crate) fn merged(mut image: Vec<Found>, user: Vec<Found>) -> Vec<Found> {
+    image.retain(|server| !user.iter().any(|own| own.name == server.name));
+    image.extend(user);
+    image
+}
+
+/// The arguments of a `docker exec` of the helper reading the image's folder as root, which
+/// trusts only what root alone can change. Python is isolated from the environment and the
+/// working folder, and starts in `/`.
+fn image_args(container: &str) -> Vec<String> {
+    [
+        "exec",
+        "--user",
+        "0:0",
+        "--workdir",
+        "/",
+        container,
+        "python3",
+        "-I",
+        "-u",
+        "-c",
+        HELPER,
+        "image",
+    ]
+    .map(str::to_owned)
+    .to_vec()
 }
 
 /// The arguments of a `docker exec` of the helper, as the desktop user.
@@ -463,10 +504,21 @@ pub(crate) fn watch_args(container: &str) -> Vec<String> {
 impl App {
     /// The servers a running desktop declares now.
     pub(crate) async fn read_servers(&self, container: &str) -> Result<Vec<Found>> {
-        // The helper lists up to 64 files of 64 KiB from each of the two folders, escaped as
-        // JSON, which the 4 MiB of an ordinary Docker call cannot hold.
+        let image = self.read_image_servers(container).await?;
+        let user = self
+            .listing(helper_args(container, false, &["list"]), Source::Container)
+            .await?;
+        Ok(merged(image, user))
+    }
+    /// The servers the image of a running desktop declares, read as root.
+    pub(crate) async fn read_image_servers(&self, container: &str) -> Result<Vec<Found>> {
+        self.listing(image_args(container), Source::Image).await
+    }
+    async fn listing(&self, args: Vec<String>, source: Source) -> Result<Vec<Found>> {
+        // The helper lists up to 64 files of 64 KiB, escaped as JSON, which the 4 MiB of an
+        // ordinary Docker call cannot hold.
         let output = process::capture(
-            self.command(&helper_args(container, false, &["list"])),
+            self.command(&args),
             Duration::from_secs(120),
             LISTING_LIMIT,
             process::Overflow::Reject,
@@ -478,6 +530,7 @@ impl App {
         found(
             &serde_json::from_slice(&output.stdout)
                 .context("The desktop's server listing is invalid")?,
+            source,
         )
     }
     /// Write the desktop user's declaration of a server, replacing one of the same name.
