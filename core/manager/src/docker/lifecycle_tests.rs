@@ -1,7 +1,8 @@
 //! Pins down what a container's creation, retry and reset refuse before Docker changes anything:
 //! the manager's own volume, also through a compose, a volume `VOLUME_FILTER` leaves out and a
 //! feature the installation switched off, which a container that has it keeps; and that a missing
-//! tun device is named by the VPN setting.
+//! tun device is named by the VPN setting. Also that a desktop that is not ready leaves its error on
+//! the container only when the compose setup it kept from running was due.
 use super::*;
 #[cfg(unix)]
 use crate::test_support::manager_docker;
@@ -333,4 +334,80 @@ async fn switched_off_features_are_refused_and_a_container_that_has_them_keeps_t
     };
     assert_eq!(internet(true).await, StatusCode::BAD_REQUEST);
     assert!(app.db.list::<Job>("job").unwrap().is_empty());
+}
+
+/// A desktop that is not ready fails the job either way, while the container keeps the error only
+/// when its compose setup was due, which then did not run. No other such error outlives a desktop
+/// that comes up later.
+#[cfg(unix)]
+#[tokio::test]
+async fn only_a_setup_that_did_not_run_keeps_a_readiness_failure_on_the_container() {
+    let dir = std::env::temp_dir().join(format!(
+        "thoric-provisioned-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let docker = dir.join("docker");
+    crate::test_support::write_script(
+        &docker,
+        r#"#!/bin/sh
+case "$*" in
+  'container inspect thoric-e') echo '[{"Id":"c0ffee","Config":{"Labels":{"thoric.managed":"true","thoric.environment":"e"}},"State":{"Running":false,"Restarting":false,"ExitCode":1}}]' ;;
+  'logs --tail 20 c0ffee') echo 'GPU requested, but OpenGL initialization failed.' >&2 ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    let mut app = app(false);
+    Arc::get_mut(&mut app).unwrap().config.docker_bin = docker.display().to_string();
+    let job = Job {
+        id: "create".into(),
+        kind: "create".into(),
+        resource: Some("container:e".into()),
+        status: "running".into(),
+        created_at: 1,
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+        script: None,
+        name: None,
+    };
+    app.db.put("job", "create", &job).unwrap();
+    let pending = serde_json::from_value::<crate::compose::Setup>(
+        json!({"status": "pending", "image": "unity", "parameters": {}, "secrets": []}),
+    )
+    .unwrap();
+    let unready = "The desktop stopped before it was ready; it last exited with code 1. Its last log lines:\nGPU requested, but OpenGL initialization failed.";
+    for (setup, kept) in [
+        (None, None),
+        (
+            Some(pending),
+            Some(format!("The compose setup did not run: {unready}")),
+        ),
+    ] {
+        let env = Container {
+            id: "e".into(),
+            container: "thoric-e".into(),
+            private_network: "thoric-e-private".into(),
+            egress_network: "thoric-e-egress".into(),
+            source_image_id: "sha256:desktop".into(),
+            created_at: 1,
+            spec: spec(),
+            last_error: None,
+            desktop: None,
+            working_image: None,
+            setup,
+        };
+        app.db.put(CONTAINERS, "e", &env).unwrap();
+        let error = app.provisioned_ready(&env, "create").await.unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            kept.clone().unwrap_or_else(|| unready.into())
+        );
+        let saved: Container = app.db.get(CONTAINERS, "e").unwrap();
+        assert_eq!(saved.last_error, kept);
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
 }

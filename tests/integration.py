@@ -2038,6 +2038,8 @@ try:
     print("PASS failed setup retry repairs existing container without discarding its layer",flush=True)
     # A desktop that never becomes ready fails the job that starts it with its exit code and last
     # log lines, while Docker keeps restarting it; a settings change puts the previous container back.
+    # How many restarts the wait saw depends on when it looked, so only the pattern is asserted.
+    unready_restarts=re.compile(r"restarted \d+ times without becoming ready; it last exited with code 3")
     never_reference=f"thoric/test-never-ready:{tag}"
     docker("create","--name",fixture_container,"--label",f"thoric.test={tag}",xfce["reference"])
     docker("commit","--change",'ENTRYPOINT ["/bin/sh","-c","echo acceptance desktop never ready >&2; exit 3"]',fixture_container,never_reference)
@@ -2046,13 +2048,17 @@ try:
     def ended(response):
         return wait_for(lambda: (j if (j := api(f"jobs/{response['job_id']}"))["status"] not in ("queued","running") else None), 360)
     began=time.monotonic()
-    failed=ended(api("containers",{"name":"never-ready","image":never_image,"internet":False,"gpu":False,"mcp_endpoint":False}))
+    failed=ended(api("containers",{"name":"never-ready","image":never_image,"internet":False,"gpu":False}))
     never_id=failed["resource"].split(":",1)[1];container_ids.append(never_id);never_container=f"thoric-{never_id}"
-    assert failed["status"]=="failed" and "restarted 3 times without becoming ready; it last exited with code 3" in failed["log"],failed
+    assert failed["status"]=="failed" and unready_restarts.search(failed["log"]),failed
     assert "acceptance desktop never ready" in failed["log"],failed
     # Docker's restarts end the wait long before its five minutes.
     assert time.monotonic()-began<120,time.monotonic()-began
-    assert "restarted 3 times" in api(f"containers/{never_id}")["last_error"]
+    # Without a compose setup the error stays with the job, so a desktop that comes up later shows
+    # none; the container still gets its own MCP endpoint, which works once it is repaired.
+    assert not api(f"containers/{never_id}")["last_error"]
+    assert "Created the MCP endpoint /mcp/never-ready for this container." in failed["log"],failed
+    assert [e["name"] for e in tool("list_mcp_endpoints")["structuredContent"]["items"] if e["grants"] and e["grants"][0]["container_id"]==never_id]==["never-ready"]
     original=json.loads(docker("inspect",never_container))[0]
     assert original["RestartCount"]>=3 and original["State"]["Running"],original["State"]
     changed=ended(api(f"containers/{never_id}/settings",{"resolution":"1280x720"}))
@@ -2065,9 +2071,10 @@ try:
     # A start waits the same way; a stop does not.
     job(api(f"containers/{never_id}/action",{"action":"stop"}))
     started=ended(api(f"containers/{never_id}/action",{"action":"start"}))
-    assert started["status"]=="failed" and "without becoming ready" in started["log"],started
+    assert started["status"]=="failed" and unready_restarts.search(started["log"]),started
     assert job(api(f"containers/{never_id}",method="DELETE"))["deleted"]==never_id
     container_ids.remove(never_id)
+    assert not [e for e in tool("list_mcp_endpoints")["structuredContent"]["items"] if e["grants"] and e["grants"][0]["container_id"]==never_id]
     print("PASS a desktop that never becomes ready fails its creation, start and settings change, which restores the previous container",flush=True)
     # Binary / very long script output cannot abort or exhaust manager log buffers.
     noisy=api("images/build",{"name":"binary-long-log","base_image":xfce["reference"],"internet":False,"script":"python3 -c \"import sys; sys.stdout.buffer.write(bytes([255])+b'x'*300000)\"\n"})

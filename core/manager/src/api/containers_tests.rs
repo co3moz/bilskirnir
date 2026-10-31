@@ -3,7 +3,8 @@
 //! when a required value is missing, and the name of what a creation job makes, which the job list
 //! shows before the record exists. Also that one container's route answers as the list does,
 //! that a settings change is checked before any job, and that a start or restart ends once the
-//! desktop is ready while a stop does not wait.
+//! desktop is ready while a stop does not wait. A container whose creation failed once its record
+//! was saved still gets its own MCP endpoint.
 use super::*;
 use crate::api::build;
 use crate::test_support::{app, spec};
@@ -459,4 +460,83 @@ esac
     assert_eq!(done.status, "completed", "{}", done.log);
     assert_eq!(calls(), "container inspect thoric-e\nstop c0ffee\n");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+async fn a_container_whose_creation_failed_after_its_record_still_gets_its_endpoint() {
+    let app = app(false);
+    let job = model::Job {
+        id: "create".into(),
+        kind: "create".into(),
+        resource: Some("container:e".into()),
+        status: "running".into(),
+        created_at: 1,
+        finished_at: None,
+        log: String::new(),
+        result: None,
+        progress: None,
+        stages: Vec::new(),
+        script: None,
+        name: None,
+    };
+    app.db.put("job", "create", &job).unwrap();
+    let endpoints = || {
+        app.db
+            .list::<crate::desktop_mcp::Endpoint>(crate::desktop_mcp::ENDPOINTS)
+            .unwrap()
+            .into_iter()
+            .map(|endpoint| (endpoint.name, endpoint.grants[0].container_id.clone()))
+            .collect::<Vec<_>>()
+    };
+    let unready = || Err(anyhow::anyhow!("The desktop stopped before it was ready"));
+
+    // Refused before its record was saved: nothing to make an endpoint for.
+    let error = creation_finished(&app, "e", unready(), true, "create")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "The desktop stopped before it was ready");
+    assert!(endpoints().is_empty());
+
+    // Saved, but its desktop was not ready: the job still fails, and a retry that repairs the
+    // container finds the endpoint there.
+    let env = model::Container {
+        id: "e".into(),
+        container: "thoric-e".into(),
+        private_network: "thoric-e-private".into(),
+        egress_network: "thoric-e-egress".into(),
+        source_image_id: "sha256:source".into(),
+        created_at: 0,
+        spec: spec(),
+        last_error: None,
+        desktop: None,
+        working_image: None,
+        setup: None,
+    };
+    app.db.put(model::CONTAINERS, "e", &env).unwrap();
+    let error = creation_finished(&app, "e", unready(), false, "create")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "The desktop stopped before it was ready");
+    assert!(endpoints().is_empty(), "none was asked for");
+    let error = creation_finished(&app, "e", unready(), true, "create")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "The desktop stopped before it was ready");
+    assert_eq!(endpoints(), [("unity".to_owned(), "e".to_owned())]);
+    assert!(
+        app.db
+            .job("create")
+            .unwrap()
+            .log
+            .contains("Created the MCP endpoint /mcp/unity for this container.\n")
+    );
+
+    // A creation that succeeded names its endpoint in its result.
+    let done = creation_finished(&app, "e", Ok(json!({"container_id": "e"})), true, "create")
+        .await
+        .unwrap();
+    assert_eq!(
+        done,
+        json!({"container_id": "e", "mcp_endpoint": "unity-2"})
+    );
 }

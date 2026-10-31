@@ -241,15 +241,21 @@ impl App {
     async fn provision(&self, env: &Container, manager: &str) -> Result<()> {
         self.provision_and(env, manager, true).await
     }
-    /// Wait for the desktop of a container this job has provisioned, and record on the container
-    /// why it is not ready, as a failed provisioning is recorded. The job shares the container
+    /// Wait for the desktop of a container this job has provisioned. The job shares the container
     /// while it waits, beside input, files and scripts, unless a compose setup follows, which
-    /// runs with the container alone.
+    /// runs with the container alone. A desktop that is not ready fails the job, and the job's
+    /// error says why; the container keeps it only when its compose setup was due, since that did
+    /// not run and a retry runs it. Any other such error would outlive a desktop that comes up
+    /// later.
     async fn provisioned_ready(&self, env: &Container, job_id: &str) -> Result<()> {
         if !crate::compose::setup_due(env) {
             crate::jobs::share_from_here();
+            return self.desktop_ready(env, job_id).await.map(drop);
         }
-        let ready = self.desktop_ready(env, job_id).await;
+        let ready = self
+            .desktop_ready(env, job_id)
+            .await
+            .context("The compose setup did not run");
         if let Err(error) = &ready {
             let mut failed: Container = self.db.get(CONTAINERS, &env.id)?;
             failed.last_error = Some(format!("{error:#}"));
