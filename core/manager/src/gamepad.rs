@@ -17,6 +17,9 @@ use std::{sync::Arc, time::Duration};
 const DAEMON: &str = include_str!("../helpers/gamepad_daemon.py");
 const CONTROL: &str = include_str!("../helpers/gamepad_control.py");
 const DIRECTORY: &str = "/tmp/thoric-gamepad";
+/// How long a request waits while another one starts the desktop's daemon, which polls its
+/// status for five seconds, each poll a `docker exec`.
+const START_WAIT: Duration = Duration::from_secs(20);
 const BUTTONS: [&str; 11] = [
     "a", "b", "x", "y", "lb", "rb", "back", "start", "guide", "ls", "rs",
 ];
@@ -148,6 +151,45 @@ async fn control(
     }
     serde_json::from_slice(&output.stdout).map_err(|e| anyhow::anyhow!(e).into())
 }
+/// Start the desktop's gamepad daemon unless it runs. Gamepad requests share the container, so
+/// the check and the start take turns: two daemons would make two controllers that read one FIFO.
+/// A request that waits for its turn waits about as long as a start takes, then answers 409.
+async fn start_daemon(app: &App, id: &str, container: &str) -> Result<()> {
+    let _turn = tokio::time::timeout(
+        START_WAIT,
+        app.resource_lock(&format!("gamepad:{id}")).lock_owned(),
+    )
+    .await
+    .map_err(|_| {
+        Error(
+            StatusCode::CONFLICT,
+            "Another request is still starting this desktop's gamepad; retry shortly".into(),
+        )
+    })?;
+    let mut status = control(app, container, "status", None).await?;
+    if status["state"] == "running" {
+        return Ok(());
+    }
+    app.docker(&[
+        "exec", "--detach", "--user", "root", container, "python3", "-c", DAEMON, DIRECTORY,
+    ])
+    .await?;
+    for _ in 0..25 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        status = control(app, container, "status", None).await?;
+        if status["state"] == "running" {
+            return Ok(());
+        }
+        if status["state"] == "failed" {
+            return Err(anyhow::anyhow!(
+                "Gamepad device could not be created: {}",
+                status["error"].as_str().unwrap_or("unknown error")
+            )
+            .into());
+        }
+    }
+    Err(anyhow::anyhow!("Gamepad device did not start; check that /dev/uinput is available").into())
+}
 /// Feed a virtual controller; the device is created on first use and persists until the desktop restarts.
 pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Result<Value> {
     body.validate()?;
@@ -174,33 +216,7 @@ pub async fn gamepad_input(app: &Arc<App>, id: &str, body: &GamepadInput) -> Res
         ));
     }
     let container = info["Id"].as_str().context("Missing container ID")?;
-    let mut status = control(app, container, "status", None).await?;
-    if status["state"] != "running" {
-        app.docker(&[
-            "exec", "--detach", "--user", "root", container, "python3", "-c", DAEMON, DIRECTORY,
-        ])
-        .await?;
-        for _ in 0..25 {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            status = control(app, container, "status", None).await?;
-            if status["state"] == "running" {
-                break;
-            }
-            if status["state"] == "failed" {
-                return Err(anyhow::anyhow!(
-                    "Gamepad device could not be created: {}",
-                    status["error"].as_str().unwrap_or("unknown error")
-                )
-                .into());
-            }
-        }
-        if status["state"] != "running" {
-            return Err(anyhow::anyhow!(
-                "Gamepad device did not start; check that /dev/uinput is available"
-            )
-            .into());
-        }
-    }
+    start_daemon(app, id, container).await?;
     let payload = serde_json::to_vec(&body.payload()).map_err(|e| anyhow::anyhow!(e))?;
     let mut result = control(app, container, "send", Some(payload)).await?;
     result["container_id"] = json!(id);

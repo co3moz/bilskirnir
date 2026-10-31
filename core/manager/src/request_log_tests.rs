@@ -4,23 +4,9 @@
 //! desktop service's own path. The tests' own subscriber also sees a line that another test's
 //! thread reached first.
 use super::*;
+use crate::test_support::capture;
 use axum::body::Body;
-use std::sync::{Arc, LazyLock, Mutex};
 use tower::ServiceExt;
-
-/// What the log wrote while a request was answered.
-#[derive(Clone, Default)]
-struct Written(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for Written {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 
 /// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and the
 /// request's line.
@@ -32,26 +18,6 @@ async fn logged(uri: &str, id: Option<&str>) -> (String, String) {
         .unwrap_or_else(|| panic!("no line for {uri} in {log:?}"))
         .to_owned();
     (answered, line)
-}
-
-/// Log everything from debug up into the returned buffer on this thread until the guard drops.
-fn capture() -> (Written, tracing::subscriber::DefaultGuard) {
-    // While a single dispatcher is registered, tracing asks only the default of the thread that
-    // reaches a line first whether it is wanted, and remembers the answer. Another test's thread,
-    // which has none, would turn a line off for this subscriber, such as the request's own, which
-    // no test reaches until a subscriber raises the level. A second one kept for the whole run
-    // has every line asked of all of them.
-    static SECOND: LazyLock<tracing::Dispatch> =
-        LazyLock::new(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()));
-    LazyLock::force(&SECOND);
-    let written = Written::default();
-    let writer = written.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_ansi(false)
-        .with_max_level(tracing::Level::DEBUG)
-        .with_writer(move || writer.clone())
-        .finish();
-    (written, tracing::subscriber::set_default(subscriber))
 }
 
 /// Answer `GET uri` with `id` as the client's `X-Request-Id`, and return the answer's ID and all
@@ -68,7 +34,7 @@ async fn log_of(uri: &str, id: Option<&str>) -> (String, String) {
         .await
         .unwrap();
     let answered = response.headers()[&REQUEST_ID].to_str().unwrap().to_owned();
-    let log = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
+    let log = written.text();
     (answered, log)
 }
 
@@ -81,7 +47,7 @@ fn a_line_first_logged_on_another_thread_still_reaches_the_test() {
     // Another test's thread, which has no subscriber, reaches the line first.
     std::thread::spawn(line).join().unwrap();
     line();
-    let log = String::from_utf8(written.0.lock().unwrap().clone()).unwrap();
+    let log = written.text();
     assert!(log.contains("first logged elsewhere"), "{log:?}");
 }
 

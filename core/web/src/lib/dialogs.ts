@@ -10,6 +10,7 @@ export type Dialog =
   | { kind: "settings"; id: string }
   | { kind: "snapshot"; id: string }
   | { kind: "delete"; id: string }
+  | { kind: "reset"; id: string }
   /** Containers to connect to a network group: `group`, or a new one named in the dialog. */
   | { kind: "group-connect"; group?: string }
   | { kind: "upload"; id: string; files?: File[] }

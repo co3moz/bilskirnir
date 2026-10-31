@@ -213,6 +213,7 @@ export const en = {
   "containers.stop": "Stop",
   "containers.start": "Start",
   "containers.restart": "Restart",
+  "containers.reset": "Reset container",
   "containers.settings": "Settings",
   "containers.snapshot": "Snapshot",
   "containers.logs": "Logs",
@@ -354,6 +355,7 @@ export const en = {
   "stage.record": "Saving the image record",
   "stage.stop": "Stopping the container",
   "stage.create": "Creating the new container",
+  "stage.start": "Starting the new container",
   "stage.plan": "Reading the installation",
   "stage.images": "Transferring the saved images",
   "stage.files": "Transferring the containers' files",
@@ -1359,6 +1361,9 @@ export const en = {
   "desktop.micOff": "Disable mic",
   "desktop.micPermission": "Waiting for permission…",
   "desktop.reconnect": "Reconnect",
+  "desktop.resize": "Resize to window",
+  "desktop.resizeHint":
+    "Off, the view scales the desktop and its resolution stays. On, the desktop's resolution changes to fit this window, for agents and other viewers too, and keeps that size until the desktop restarts.",
   "desktop.lost.failed": "The connection to the desktop was lost. Reconnect to continue.",
   "desktop.lost.disconnected": "The desktop closed the connection.",
   "desktop.exitFullscreen": "Exit fullscreen",
@@ -1387,6 +1392,15 @@ export const en = {
   "delete.descriptionVolumes":
     "The container, its unsaved changes and the volumes created for it are deleted. Other volumes and snapshots are kept.",
   "delete.volumes": "Also delete the volumes created for this container",
+  "reset.titleOf": "Reset {name}?",
+  "reset.title": "Reset this container?",
+  "reset.description":
+    "The container is created again from the image it started from. What was saved in it outside its volumes, such as installed programs and changed files, is discarded, and its open programs end. Its volumes, settings and machine identity stay.",
+  "reset.setup": "Its compose setup runs again.",
+  "reset.snapshot": "To keep a copy of its files, take a snapshot first.",
+  "reset.volumes": "Volumes that stay",
+  "reset.noVolumes": "It has no volumes, so none of its files stay.",
+  "reset.confirm": "Reset",
 
   "create.description":
     "A container from any image. A catalog image that is not downloaded yet downloads first.",

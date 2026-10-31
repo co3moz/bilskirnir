@@ -211,6 +211,7 @@ export const de: Messages = {
   "containers.stop": "Stoppen",
   "containers.start": "Starten",
   "containers.restart": "Neu starten",
+  "containers.reset": "Container zurücksetzen",
   "containers.settings": "Einstellungen",
   "containers.snapshot": "Snapshot",
   "containers.logs": "Protokolle",
@@ -350,6 +351,7 @@ export const de: Messages = {
   "stage.record": "Image-Eintrag speichern",
   "stage.stop": "Container stoppen",
   "stage.create": "Neuen Container erstellen",
+  "stage.start": "Neuen Container starten",
   "stage.plan": "Installation lesen",
   "stage.images": "Gespeicherte Images übertragen",
   "stage.files": "Dateien der Container übertragen",
@@ -1359,6 +1361,9 @@ export const de: Messages = {
   "desktop.micOff": "Mikrofon deaktivieren",
   "desktop.micPermission": "Warten auf Berechtigung…",
   "desktop.reconnect": "Neu verbinden",
+  "desktop.resize": "An Fenster anpassen",
+  "desktop.resizeHint":
+    "Aus: Die Ansicht skaliert den Desktop, seine Auflösung bleibt. An: Die Auflösung des Desktops passt sich diesem Fenster an, auch für Agenten und andere Betrachter, und bleibt so, bis der Desktop neu startet.",
   "desktop.lost.failed":
     "Die Verbindung zum Desktop ist abgebrochen. Verbinden Sie sich neu, um fortzufahren.",
   "desktop.lost.disconnected": "Der Desktop hat die Verbindung beendet.",
@@ -1387,6 +1392,16 @@ export const de: Messages = {
   "delete.descriptionVolumes":
     "Der Container, seine ungespeicherten Änderungen und die dafür erstellten Volumes werden gelöscht. Andere Volumes und Snapshots bleiben erhalten.",
   "delete.volumes": "Auch die für diesen Container erstellten Volumes löschen",
+  "reset.titleOf": "{name} zurücksetzen?",
+  "reset.title": "Diesen Container zurücksetzen?",
+  "reset.description":
+    "Der Container wird aus dem Image, mit dem er gestartet wurde, neu erstellt. Was außerhalb seiner Volumes in ihm gespeichert wurde, etwa installierte Programme und geänderte Dateien, wird verworfen, und seine offenen Programme werden beendet. Seine Volumes, Einstellungen und Maschinenidentität bleiben erhalten.",
+  "reset.setup": "Seine Compose-Einrichtung läuft erneut.",
+  "reset.snapshot":
+    "Um eine Kopie seiner Dateien zu behalten, erstellen Sie zuerst einen Snapshot.",
+  "reset.volumes": "Volumes, die erhalten bleiben",
+  "reset.noVolumes": "Er hat keine Volumes, daher bleibt keine seiner Dateien erhalten.",
+  "reset.confirm": "Zurücksetzen",
   "create.description":
     "Ein Container aus einem beliebigen Image. Ein noch nicht heruntergeladenes Katalog-Image wird zuerst heruntergeladen.",
   "create.namePlaceholder": "Unity-Arbeitsbereich",

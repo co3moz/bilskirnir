@@ -1,7 +1,7 @@
 //! Pins down how a script build's configuration is kept: the configuration route hands back the
 //! exact request that built the image, image lists and job results leave the script out, and
 //! records saved before the configuration existed still load. Also that only a catalog image is
-//! built or pulled.
+//! built or pulled, and that a build cleaned up without its record leaves no image tag behind.
 use super::*;
 use crate::test_support::app;
 use crate::{model, router};
@@ -287,4 +287,50 @@ async fn only_catalog_images_are_built_or_pulled() {
         assert_eq!(response.status(), StatusCode::NOT_FOUND, "{action}");
     }
     assert!(app.db.list::<model::Job>("job").unwrap().is_empty());
+}
+
+/// A build that ends without its record, failed, cancelled or cut short by a restart, leaves no
+/// image tag of its own behind, while one whose record was saved keeps it; the base tag and the
+/// build folder go either way.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_build_cleaned_up_without_its_record_drops_its_image_tag() {
+    let dir = std::env::temp_dir().join(format!(
+        "thoric-build-cleanup-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let (failed, saved) = ("a".repeat(32), "b".repeat(32));
+    std::fs::create_dir_all(dir.join("builds").join(&failed)).unwrap();
+    // Docker has every tag either build made.
+    crate::test_support::write_script(
+        &dir.join("docker"),
+        &format!(
+            "#!/bin/sh\necho \"$*\" >> '{calls}'\ncase \"$*\" in\n  'image ls --format {{{{.Repository}}}}:{{{{.Tag}}}} '*) for last; do :; done; echo \"$last\" ;;\n  'image rm '*) ;;\n  *) exit 1 ;;\nesac\n",
+            calls = dir.join("calls").display()
+        ),
+    );
+    let mut app = app(false);
+    let config = &mut std::sync::Arc::get_mut(&mut app).unwrap().config;
+    config.docker_bin = dir.join("docker").display().to_string();
+    config.data = dir.clone();
+    app.db
+        .put("image", &saved, &record(&saved, "custom", None))
+        .unwrap();
+    app.cleanup_build(&failed).await.unwrap();
+    app.cleanup_build(&saved).await.unwrap();
+    let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
+    let removed: Vec<&str> = calls
+        .lines()
+        .filter(|call| call.starts_with("image rm"))
+        .collect();
+    assert!(!dir.join("builds").join(&failed).exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        removed,
+        [
+            format!("image rm thoric/build-base:{failed}"),
+            format!("image rm thoric/custom:{failed}"),
+            format!("image rm thoric/build-base:{saved}"),
+        ]
+    );
 }

@@ -38,6 +38,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::oneshot;
+use tracing::Instrument;
 use upload::{Input, Load, Sink};
 
 /// `POST /api/backup/check`: compare a backup's manifest with this installation before its upload,
@@ -81,6 +82,7 @@ pub async fn restore(
     let permit = transfer_permit(&app)?;
     let session = token.clone();
     let (accepted, was_accepted) = oneshot::channel();
+    let span = tracing::Span::current();
     let (job_id, outcome) = jobs::start(
         app.clone(),
         "restore",
@@ -90,6 +92,7 @@ pub async fn restore(
             let _guard = guard;
             let _permit = permit;
             app.restore_backup(&job_id, upload.size, body, token, accepted)
+                .instrument(span)
                 .await
         },
     )?;

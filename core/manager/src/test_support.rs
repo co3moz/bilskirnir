@@ -1,7 +1,7 @@
 //! Fixtures the tests of several modules share: an installation without Docker on an in-memory
-//! database, its root MCP channel and a request to it, a container's settings, a writer of the
-//! shell scripts tests run as stand-ins for programs, and a Docker CLI stand-in that answers as
-//! a manager with a data volume of its own.
+//! database, its root MCP channel and a request to it, a container's settings, what the log
+//! writes, a writer of the shell scripts tests run as stand-ins for programs, and a Docker CLI
+//! stand-in that answers as a manager with a data volume of its own.
 use crate::{
     App, config, db, desktop_limits, desktop_mcp, events, human, layers, model, outbound, releases,
     router, transfers, usage,
@@ -161,6 +161,47 @@ pub(crate) async fn mcp_request(
         .await
         .unwrap();
     (status, serde_json::from_slice(&bytes).unwrap())
+}
+
+/// What the log wrote while [`capture`] held it.
+#[derive(Clone, Default)]
+pub(crate) struct Written(Arc<Mutex<Vec<u8>>>);
+
+impl Written {
+    pub(crate) fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+impl std::io::Write for Written {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Log everything from debug up into the returned buffer on this thread until the guard drops.
+pub(crate) fn capture() -> (Written, tracing::subscriber::DefaultGuard) {
+    // While a single dispatcher is registered, tracing asks only the default of the thread that
+    // reaches a line first whether it is wanted, and remembers the answer. Another test's thread,
+    // which has none, would turn a line off for this subscriber, such as the request's own, which
+    // no test reaches until a subscriber raises the level. A second one kept for the whole run
+    // has every line asked of all of them.
+    static SECOND: std::sync::LazyLock<tracing::Dispatch> = std::sync::LazyLock::new(|| {
+        tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default())
+    });
+    std::sync::LazyLock::force(&SECOND);
+    let written = Written::default();
+    let writer = written.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .with_writer(move || writer.clone())
+        .finish();
+    (written, tracing::subscriber::set_default(subscriber))
 }
 
 /// Writes `text` to `path` as an executable script, such as a stand-in for the Docker CLI. A

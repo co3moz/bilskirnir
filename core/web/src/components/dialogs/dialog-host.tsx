@@ -31,6 +31,7 @@ import {
   BuildImageDialog,
   DeleteDialog,
   ImageDeleteDialog,
+  ResetDialog,
   SnapshotDialog,
   VolumeCopyDialog,
   VolumeDeleteDialog,
@@ -122,6 +123,8 @@ function render(dialog: Dialog, open: boolean) {
       return <SnapshotDialog {...props} id={dialog.id} />
     case "delete":
       return <DeleteDialog {...props} id={dialog.id} />
+    case "reset":
+      return <ResetDialog {...props} id={dialog.id} />
     case "upload":
       return <UploadDialog {...props} id={dialog.id} files={dialog.files} />
     case "download":
