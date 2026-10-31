@@ -401,8 +401,12 @@ impl App {
             tokio::pin!(revoked);
             let mut stream = body.into_data_stream();
             let (mut received, mut reported) = (0u64, Instant::now());
+            // Until the filter hands Docker its first bytes, the archive has brought at most
+            // Thoric's own entry, and the image may still be on its way out of `docker save`.
+            let mut limit = stall::START;
             loop {
-                let Some(chunk) = stall::receive(&mut stream, &mut revoked).await? else {
+                let Some(chunk) = stall::receive_within(&mut stream, &mut revoked, limit).await?
+                else {
                     break;
                 };
                 let mut pending = chunk.map_err(interrupted)?;
@@ -419,6 +423,9 @@ impl App {
                     unpacker = back;
                     let (rest, output) = step?;
                     pending = rest;
+                    if !output.is_empty() {
+                        limit = stall::STALL;
+                    }
                     load.write(&output).await?;
                 }
                 if reported.elapsed() >= PROGRESS_INTERVAL {

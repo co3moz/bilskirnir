@@ -1,6 +1,7 @@
 //! A transfer ends once its client takes or sends nothing for [`STALL`], however long the
-//! transfer itself has run, and at once when its session ends; a download's body ends with its
-//! job's error without the job waiting for room to send it. Paused time stands in for the wait.
+//! transfer itself has run, and at once when its session ends; a large chunk is handed over in
+//! pieces, each with its own wait; a download's body ends with its job's error without the job
+//! waiting for room to send it. Paused time stands in for the wait.
 use super::*;
 use tokio::time::Instant;
 
@@ -48,6 +49,40 @@ async fn a_slow_client_keeps_its_download_past_the_stall() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_large_chunk_goes_in_pieces_each_with_its_own_wait() {
+    let (body, mut chunks) = mpsc::channel::<io::Result<Bytes>>(1);
+    // As hyper takes a frame only once it has sent most of the one before, a client this slow
+    // takes a piece just inside the limit, and would take a whole backup chunk far beyond it.
+    let reader = tokio::spawn(async move {
+        let mut pieces = Vec::new();
+        loop {
+            tokio::time::sleep(STALL - Duration::from_secs(1)).await;
+            match chunks.recv().await {
+                Some(piece) => pieces.push(piece.unwrap().len()),
+                None => return pieces,
+            }
+        }
+    });
+    let started = Instant::now();
+    // As large as a backup's chunk.
+    let chunk = Bytes::from(vec![7; 4 << 20]);
+    send(&body, chunk, &mut std::future::pending())
+        .await
+        .unwrap();
+    drop(body);
+    let pieces = reader.await.unwrap();
+    assert_eq!(pieces, vec![PIECE; (4 << 20) / PIECE]);
+    assert!(started.elapsed() > 10 * STALL);
+    // Nothing to hand over sends nothing.
+    let (body, mut chunks) = mpsc::channel(1);
+    send(&body, Bytes::new(), &mut std::future::pending())
+        .await
+        .unwrap();
+    drop(body);
+    assert!(chunks.recv().await.is_none());
+}
+
+#[tokio::test(start_paused = true)]
 async fn an_ended_session_or_a_gone_client_ends_a_download_at_once() {
     let (body, chunks) = mpsc::channel(1);
     body.try_send(Ok(chunk())).unwrap();
@@ -89,6 +124,16 @@ async fn an_upload_that_sends_nothing_stops_after_the_stall() {
         .unwrap_err();
     assert_eq!(error.to_string(), EXPIRED);
     assert_eq!(started.elapsed(), STALL);
+
+    // An image import waits longer for the image's first bytes.
+    let error = receive_within(&mut silent, &mut session, START)
+        .await
+        .unwrap_err();
+    assert_eq!(started.elapsed(), STALL + START);
+    assert_eq!(
+        error.to_string(),
+        "The upload stopped: nothing arrived for 60 minutes"
+    );
 }
 
 #[tokio::test(start_paused = true)]
