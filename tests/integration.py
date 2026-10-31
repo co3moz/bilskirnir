@@ -1383,7 +1383,17 @@ try:
     assert "frame" in set(roles(tree["applications"][0])), set(roles(tree["applications"][0]))
     tool("stop_application", {"container_id":env_id,"application_id":gtk["application_id"]})
     print("PASS accessibility tree inspection of a GTK application", flush=True)
-    pad = tool("gamepad_input", {"container_id":env_id,"actions":[{"type":"reset"}]})["structuredContent"]
+    # Two first calls at once start one daemon between them, so the desktop gets one controller.
+    first_pads = []
+    starters = [threading.Thread(target=lambda: first_pads.append(tool("gamepad_input", {"container_id":env_id,"actions":[{"type":"reset"}]})["structuredContent"])) for _ in range(2)]
+    for starter in starters:
+        starter.start()
+    for starter in starters:
+        starter.join(90)
+    assert len(first_pads) == 2 and all(started["state"] == "running" for started in first_pads), first_pads
+    event_nodes = subprocess.run(["docker", "exec", container, "sh", "-c", "ls /dev/input | grep -c '^event'"], capture_output=True, text=True).stdout.strip()
+    assert event_nodes == "1", event_nodes
+    pad = first_pads[0]
     assert pad["state"] == "running" and pad["device"].startswith("/dev/input/event"), pad
     reader = subprocess.Popen(["docker", "exec", "--user", "desktop", container, "python3", "-c", "import struct,sys,time\nf=open(sys.argv[1],'rb',buffering=0)\nseen=[]\nwhile len(seen)<3:\n    data=f.read(24)\n    if not data: break\n    _,_,t,c,v=struct.unpack('<qqHHi',data)\n    if t in (1,3): seen.append((t,c,v))\nprint(seen)", pad["device"]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(0.5)
