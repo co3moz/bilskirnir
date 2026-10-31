@@ -102,6 +102,8 @@ export const es: Messages = {
   "jobs.copyLog": "Copiar el registro",
   "jobs.retry": "Reintentar",
   "jobs.editRetry": "Editar y reintentar",
+  "jobs.cancel": "Cancelar la tarea",
+  "jobs.cancelling": "Cancelando la tarea.",
   "jobs.archiveProgress": "Progreso del archivo comprimido",
   "jobs.downloadProgress": "Progreso de descarga de la imagen",
   "jobs.scriptProgress": "Progreso del script de configuración",

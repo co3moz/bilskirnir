@@ -5,7 +5,7 @@
 //! output goes into a job's log.
 mod create_args;
 mod lifecycle;
-mod logged;
+pub(crate) mod logged;
 mod networks;
 
 pub(crate) use lifecycle::image_volumes_mounted;

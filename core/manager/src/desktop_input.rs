@@ -803,19 +803,19 @@ async fn send(
 }
 /// Send actions through a shared VNC connection; used by the HTTP route, MCP and act-and-observe.
 pub async fn perform(app: &Arc<App>, id: &str, actions: &[Action]) -> Result<Value> {
-    // A script or an upload can hold the container for an hour. Waiting for it with one of the
-    // four permits taken would leave the other containers without input, so the wait is bounded
-    // and comes first.
-    let lock = app.resource_lock(&format!("container:{id}"));
-    let _guard = tokio::time::timeout(LOCK_WAIT, lock.lock())
-        .await
-        .map_err(|_| {
-            Error(
-                StatusCode::CONFLICT,
-                "Another operation on the container is still running; retry when it has finished"
-                    .into(),
-            )
-        })?;
+    // Input shares the container with a script, an upload or an application, and waits only for
+    // work that changes or replaces it, such as a reset or a snapshot. Waiting for that with one
+    // of the four permits taken would leave the other containers without input, so the wait is
+    // bounded and comes first. Two input requests to one desktop still take turns, so the keys
+    // one holds never reach the other's typing.
+    let container = format!("container:{id}");
+    let _guards = tokio::time::timeout(LOCK_WAIT, async {
+        let shared = app.resource_lock(&container).share_owned().await;
+        let turn = app.resource_lock(&format!("input:{id}")).lock_owned().await;
+        (shared, turn)
+    })
+    .await
+    .map_err(|_| crate::jobs::busy(&container))?;
     let _permit = app.desktop_inputs.try_acquire().map_err(|_| {
         Error(
             StatusCode::TOO_MANY_REQUESTS,

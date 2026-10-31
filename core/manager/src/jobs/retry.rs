@@ -3,7 +3,8 @@
 //!
 //! A job that can be retried keeps its request in a record of its own beside the job, since the
 //! job's record is read and written again with every line of its log and lists and events carry
-//! no request. A completed job drops it, and it goes with its job when the history is pruned.
+//! no request. A completed job drops it, a retry hands it to the job it starts, and it goes with
+//! its job when the history is pruned.
 //! Only requests that hold all the job needs are kept: a script build, a snapshot and a catalog
 //! image's download or source build. A container's creation can carry secret values, which live
 //! only in its `environment-setup` record, and an upload's body is gone once it has been read.
@@ -53,31 +54,58 @@ pub(crate) fn retryable(app: &App, job: &Job) -> bool {
     unfinished(job) && app.db.contains(REQUESTS, &job.id).unwrap_or(false)
 }
 
-/// The request `job` can be started again with.
-fn kept(app: &App, job: &Job) -> Result<Request> {
+/// Refuse a job that did not fail and was not interrupted.
+fn ended_without_result(job: &Job) -> Result<()> {
     if !unfinished(job) {
         return Err(Error(
             StatusCode::CONFLICT,
             "Only a failed or interrupted job can be retried".into(),
         ));
     }
+    Ok(())
+}
+
+/// Why `job` has no request to start it again with.
+fn none_kept(job: &Job) -> Error {
+    Error(
+        StatusCode::CONFLICT,
+        format!(
+            "This {} job keeps no request to retry, or it was retried already; start it again where it was started",
+            job.kind
+        ),
+    )
+}
+
+/// The request `job` can be started again with.
+fn kept(app: &App, job: &Job) -> Result<Request> {
+    ended_without_result(job)?;
     if !app.db.contains(REQUESTS, &job.id)? {
-        return Err(Error(
-            StatusCode::CONFLICT,
-            format!(
-                "A {} job keeps no request to retry; start it again where it was started",
-                job.kind
-            ),
-        ));
+        return Err(none_kept(job));
     }
     Ok(app.db.get(REQUESTS, &job.id)?)
 }
 
 /// `POST /api/jobs/{id}/retry`: start a failed or interrupted job again. The request goes through
-/// its route as it did the first time, checked again, and makes a new job of the same kind.
+/// its route as it did the first time, checked again, and makes a new job of the same kind,
+/// which keeps it from then on: the job retried is not retried again, so a second click starts
+/// no second build. A route that refuses it leaves it with the job.
 pub async fn retry(State(app): State<Arc<App>>, Path(id): Path<String>) -> Result<Json<Value>> {
     let job: Job = app.db.get("job", &id)?;
-    match kept(&app, &job)? {
+    ended_without_result(&job)?;
+    // Taken, not read, so of two retries at once only one finds it.
+    let request: Request = app.db.take(REQUESTS, &id)?.ok_or_else(|| none_kept(&job))?;
+    let started = start(app.clone(), request.clone()).await;
+    if started.is_err()
+        && let Err(error) = app.db.put(REQUESTS, &id, &request)
+    {
+        tracing::warn!("Job {id} lost the request it could be retried with: {error:#}");
+    }
+    started
+}
+
+/// Send `request` through its route as a new job.
+async fn start(app: Arc<App>, request: Request) -> Result<Json<Value>> {
+    match request {
         Request::Build(body) => crate::api::build(State(app), Json(body)).await,
         Request::Snapshot {
             container_id,

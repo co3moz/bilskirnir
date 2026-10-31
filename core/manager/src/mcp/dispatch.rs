@@ -4,8 +4,8 @@
 use super::ThoricMcp;
 use crate::{
     api, apps, audio, capture, compose, desktop_input, desktop_mcp, error, exec, files, gamepad,
-    human, image_removal, layers, ocr, recordings, terminal, transfers, uploads, usage, volumes,
-    waits, windows,
+    human, image_removal, jobs, layers, ocr, recordings, terminal, transfers, uploads, usage,
+    volumes, waits, windows,
 };
 use axum::{
     Json,
@@ -97,6 +97,13 @@ impl ThoricMcp {
         mut args: Value,
         caller: human::Caller,
     ) -> error::Result<CallToolResult> {
+        if name == "get_job" {
+            // A wait for the job reports progress and ends when the client gives the call up.
+            let (id, read) = jobs::read::mcp_arguments(args)?;
+            return Ok(structured(
+                Box::pin(jobs::read::answer(&self.app, &id, &read, Some(&caller))).await?,
+            ));
+        }
         if name != "request_human" {
             return self.dispatch(name, args).await;
         }
@@ -220,7 +227,15 @@ impl ThoricMcp {
             }
             "get_usage" => usage::summary(&self.app, id.as_deref(), &parse(args)?)?,
             "list_jobs" => api::jobs(state).await?.0,
-            "get_job" => api::job(state, Path(string(&args, "job_id")?)).await?.0,
+            "cancel_job" => {
+                jobs::cancel::cancel(state, Path(string(&args, "job_id")?))
+                    .await?
+                    .0
+            }
+            "get_job" => {
+                let (id, read) = jobs::read::mcp_arguments(args)?;
+                jobs::read::answer(&self.app, &id, &read, None).await?
+            }
             "create_transfer" => {
                 // The link binds its container like every other argument.
                 if let Some(id) = id {

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { RiAddLine, RiPencilLine, RiResetLeftLine } from "@remixicon/react"
+import { RiAddLine, RiPencilLine, RiResetLeftLine, RiStopCircleLine } from "@remixicon/react"
 
 import { ConceptIcon } from "@/components/concept"
 import { CopyButton } from "@/components/copy-button"
@@ -14,7 +14,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Skeleton } from "@/components/ui/skeleton"
-import { attempt, editBuildJob, retryJob } from "@/lib/actions"
+import { attempt, cancelJob, editBuildJob, retryJob } from "@/lib/actions"
 import { closeDialog, openDialog } from "@/lib/dialogs"
 import { date, jobLogText, jobName, jobProgress, jobTone } from "@/lib/format"
 import { t } from "@/lib/i18n"
@@ -129,6 +129,12 @@ export function JobDrawer({ id, ...props }: DialogProps & { id: string }) {
           >
             <ConceptIcon concept="container" data-icon="inline-start" />
             {t("jobs.viewContainers")}
+          </Button>
+        )}
+        {data?.cancellable && (
+          <Button variant="outline" disabled={busy} onClick={run(() => cancelJob(id))}>
+            <RiStopCircleLine data-icon="inline-start" />
+            {t("jobs.cancel")}
           </Button>
         )}
         {data?.retryable && data.kind === "build" && (

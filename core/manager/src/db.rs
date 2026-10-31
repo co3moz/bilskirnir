@@ -2,7 +2,7 @@
 //! logs ([`job_log`]) and what the numbered [`migrations`] bring, which every start runs before
 //! anything reads.
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::HashSet, path::Path, sync::Mutex};
 
@@ -20,7 +20,11 @@ pub struct Db {
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
         let mut conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+        // In WAL mode NORMAL syncs at checkpoints rather than at every commit, which a job's log
+        // makes often; a power loss can lose the last commits, never the database.
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
+        )?;
         migrations::run(&mut conn)
             .with_context(|| format!("Could not open the database {}", path.display()))?;
         crate::activity::opened(&conn)?;
@@ -157,6 +161,19 @@ impl Db {
         )?;
         transaction.commit()?;
         Ok(removed)
+    }
+    /// Remove a record and return it, or `None` when there is none: of two callers that take the
+    /// same record, only one gets it.
+    pub fn take<T: DeserializeOwned>(&self, kind: &str, id: &str) -> Result<Option<T>> {
+        let text: Option<String> = self
+            .connection()
+            .query_row(
+                "DELETE FROM records WHERE kind=?1 AND id=?2 RETURNING data",
+                params![kind, id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(text.map(|text| serde_json::from_str(&text)).transpose()?)
     }
     /// Whether a record of `kind` is saved under `id`, without reading it.
     pub fn contains(&self, kind: &str, id: &str) -> Result<bool> {

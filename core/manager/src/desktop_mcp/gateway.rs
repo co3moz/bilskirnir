@@ -217,8 +217,9 @@ impl EndpointMcp {
                 })
             }
             Target::Job { containers } => {
-                let id = args["job_id"].as_str().unwrap_or_default();
-                let job = self.app.db.job(id).map_err(|_| error::missing())?;
+                let (id, read) = crate::jobs::read::mcp_arguments(args)?;
+                let job: crate::model::Job =
+                    self.app.db.get("job", &id).map_err(|_| error::missing())?;
                 // Only jobs of the endpoint's own containers, whatever the id guesses.
                 if !job.resource.as_deref().is_some_and(|resource| {
                     containers
@@ -227,7 +228,8 @@ impl EndpointMcp {
                 }) {
                     return Err(error::missing());
                 }
-                Ok(CallToolResult::structured(json!(job)))
+                let job = crate::jobs::read::answer(&self.app, &id, &read, Some(&caller));
+                Ok(CallToolResult::structured(Box::pin(job).await?))
             }
             Target::Server {
                 container_id,

@@ -403,7 +403,8 @@ ThreadingHTTPServer(("127.0.0.1", 8931), Handler).serve_forever()
 
 def mcp_job(response, success=True):
     jid = response["structuredContent"]["job_id"]
-    result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid})["structuredContent"])["status"] not in ("queued","running") else None), 180)
+    # A wait answers as soon as the job ends, and the whole log is what the checks read.
+    result = wait_for(lambda: (j if (j := tool("get_job", {"job_id":jid,"wait_seconds":10,"log_tail_bytes":262144})["structuredContent"])["status"] not in ("queued","running") else None), 180)
     assert result["status"] == ("completed" if success else "failed"), result
     if success and result["result"] and result["result"].get("reference") and result["result"].get("kind") != "catalog":
         image_refs.append(result["result"]["reference"])
@@ -529,7 +530,7 @@ try:
     except urllib.error.HTTPError as error:
         assert error.code == 401
     assert mcp("initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"acceptance","version":"1"}})["serverInfo"]["name"] == "thoric"
-    assert len(mcp("tools/list")["tools"]) == 78
+    assert len(mcp("tools/list")["tools"]) == 79
     assert tool("get_system")["structuredContent"]["connected"]
     assert stdio_tool("get_system")["structuredContent"]["connected"]
     print("PASS MCP authentication, negotiation and discovery", flush=True)
@@ -1047,10 +1048,22 @@ try:
     assert docker("exec",container,"cat","/opt/agent-install") == b"agent-install"
     failure = mcp_job(tool("exec_container", {"container_id":env_id,"script":"echo EXPECTED_EXEC_FAILURE\nexit 17"}), success=False)
     assert "EXPECTED_EXEC_FAILURE" in failure["log"] and "17" in failure["log"]
+    assert failure["result"]["exit_code"] == 17 and not failure["result"]["timed_out"], failure["result"]
+    assert failure["result"]["output_tail"] == "EXPECTED_EXEC_FAILURE\n", failure["result"]
     timeout = mcp_job(tool("exec_container", {"container_id":env_id,"script":"sleep 5\nprintf must-not-exist > /home/desktop/after-timeout","timeout_seconds":1}), success=False)
-    assert "124" in timeout["log"]
+    assert "124" in timeout["log"] and timeout["result"]["timed_out"] is True, timeout["result"]
     time.sleep(1)
     assert docker("exec",container,"test","!","-e","/home/desktop/after-timeout") == b""
+    # A cancelled script stops inside its desktop too, and input reaches the desktop meanwhile.
+    script = tool("exec_container", {"container_id":env_id,"script":"sleep 60\nprintf must-not-exist > /home/desktop/after-cancel"})["structuredContent"]["job_id"]
+    wait_for(lambda: tool("get_job", {"job_id":script})["structuredContent"]["status"] == "running", 30)
+    assert not tool("desktop_input", {"container_id":env_id,"actions":[{"type":"move","x":5,"y":5}]}).get("isError")
+    assert tool("cancel_job", {"job_id":script})["structuredContent"]["cancelled"] is True
+    cancelled = wait_for(lambda: (j if (j := tool("get_job", {"job_id":script,"wait_seconds":10})["structuredContent"])["status"] != "running" else None), 60)
+    assert cancelled["status"] == "failed" and "Cancelled by request" in cancelled["log"], cancelled
+    wait_for(lambda: docker("exec",container,"pgrep","-f",f"thoric-exec-{script}",check=False) == b"", 15)
+    assert docker("exec",container,"test","!","-e","/home/desktop/after-cancel") == b""
+    print("PASS a cancelled script stops in its desktop, which took input while it ran", flush=True)
     written = stdio_tool("write_file", {"container_id":env_id,"path":"/home/desktop/agent-files/hello.txt","data":"Hello from MCP\n"})["structuredContent"]
     assert written["bytes"] == 15 and written["download_url"] == f"/api/containers/{env_id}/files/download?path=/home/desktop/agent-files/hello.txt", written
     read = api(f"containers/{env_id}/files/read", {"path":written["path"]})
