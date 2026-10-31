@@ -9,6 +9,7 @@ import {
   RiStethoscopeLine,
   RiDeleteBinLine,
   RiDownloadLine,
+  RiEraserLine,
   RiUploadLine,
 } from "@remixicon/react"
 
@@ -163,6 +164,10 @@ export function ContainerDrawer({ id, ...props }: DialogProps & { id: string }) 
               {t("containers.stop")}
             </Button>
           )}
+          <Button variant="destructive" onClick={() => openDialog({ kind: "reset", id })}>
+            <RiEraserLine data-icon="inline-start" />
+            {t("reset.confirm")}
+          </Button>
           <Button variant="destructive" onClick={() => openDialog({ kind: "delete", id })}>
             <RiDeleteBinLine data-icon="inline-start" />
             {t("common.delete")}
